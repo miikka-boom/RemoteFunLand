@@ -1,0 +1,1019 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Lissajous Nocturne</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="description" content="A 77-second audio-visual piece: two tones draw Lissajous figures on a simulated X–Y oscilloscope.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=Martian+Mono:wdth,wght@75..112.5,100..800&display=swap">
+<style>
+/* Layout: one bench instrument. CRT and FFT strip on the left, readouts and transport on the right, cue sheet beneath. */
+:root {
+  --page: #dce0e2;
+  --panel: #c3c9ce;
+  --panel-hi: #d5dade;
+  --panel-lo: #a7afb6;
+  --ink: #1a2025;
+  --ink-soft: #4a5560;
+  --rule: rgba(26, 32, 37, .16);
+  --tint: rgba(43, 82, 184, .08);
+  --frame: #232c34;
+  --frame-ink: #94a2ad;
+  --accent: #2b52b8;
+  --accent-ink: #f4f6ff;
+  --lamp-off: #7d878f;
+  --lamp-run: #6fcf3f;
+  --lamp-hold: #e3a33b;
+  /* The CRT looks the same in both themes. */
+  --glass: #050908;
+  --glass-hi: #0d1513;
+  --beam: #d4dfff;
+  --beam-dim: rgba(212, 223, 255, .55);
+  --beam-faint: rgba(212, 223, 255, .3);
+  --f-wide: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-data: "Martian Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --page: #111518; --panel: #1f262b; --panel-hi: #283036; --panel-lo: #161b1f;
+    --ink: #d5dce1; --ink-soft: #8f9ba5; --rule: rgba(213, 220, 225, .13); --tint: rgba(143, 176, 255, .09);
+    --frame: #0a0e11; --frame-ink: #7c8a95;
+    --accent: #8fb0ff; --accent-ink: #0d1530; --lamp-off: #4f585f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --page: #111518; --panel: #1f262b; --panel-hi: #283036; --panel-lo: #161b1f;
+  --ink: #d5dce1; --ink-soft: #8f9ba5; --rule: rgba(213, 220, 225, .13); --tint: rgba(143, 176, 255, .09);
+  --frame: #0a0e11; --frame-ink: #7c8a95;
+  --accent: #8fb0ff; --accent-ink: #0d1530; --lamp-off: #4f585f;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box }
+html, body { margin: 0 }
+[hidden] { display: none !important }
+body {
+  background: var(--page);
+  color: var(--ink);
+  font: 400 15px/1.5 var(--f-wide);
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: 1140px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 56px;
+  display: grid;
+  gap: 28px;
+}
+
+header { display: grid; gap: 10px }
+.back {
+  justify-self: start;
+  margin-bottom: 6px;
+  font: 500 12px/1.4 var(--f-data);
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  text-decoration: none;
+}
+.back:hover { color: var(--accent) }
+.back:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px }
+.eyebrow {
+  margin: 0;
+  font: 500 11px/1.4 var(--f-data);
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+h1 {
+  margin: 0;
+  font-weight: 800;
+  font-stretch: 125%;
+  font-size: clamp(30px, 5.4vw, 56px);
+  line-height: .95;
+  letter-spacing: -.01em;
+  text-transform: uppercase;
+  text-wrap: balance;
+}
+.lede { margin: 0; max-width: 62ch; color: var(--ink-soft); font-size: 16px }
+
+/* Instrument */
+.inst {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 18px;
+  padding: 18px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, var(--panel-hi), var(--panel));
+  box-shadow: inset 0 1px 0 var(--panel-hi), 0 0 0 1px var(--panel-lo), 0 18px 40px -22px rgba(0, 0, 0, .5);
+}
+.bezel {
+  min-width: 0;
+  display: grid;
+  gap: 10px;
+  padding: 14px 14px 12px;
+  border-radius: 12px;
+  background: var(--frame);
+}
+.crt {
+  position: relative;
+  isolation: isolate;
+  width: 100%;
+  max-width: 100%;
+  aspect-ratio: 5 / 4;
+  border-radius: 18px / 22px;
+  overflow: hidden;
+  background: radial-gradient(ellipse at 50% 45%, var(--glass-hi), var(--glass) 72%);
+}
+.crt canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+#glow, #beam { mix-blend-mode: screen }
+.crt::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 28% 8%, rgba(255, 255, 255, .05), transparent 42%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .04), inset 0 0 60px 10px rgba(0, 0, 0, .85);
+}
+.crt-tag {
+  position: absolute;
+  top: 14px;
+  left: 16px;
+  z-index: 3;
+  font: 500 11px/1 var(--f-data);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--beam-dim);
+  pointer-events: none;
+}
+.crt-tag.right { left: auto; right: 16px }
+
+.bigplay {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 4;
+  transform: translate(-50%, -50%);
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  padding: 16px 24px;
+  border: 1px solid var(--beam-faint);
+  border-radius: 12px;
+  background: rgba(5, 9, 8, .6);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  color: var(--beam);
+  font-family: var(--f-wide);
+  cursor: pointer;
+}
+.bigplay:hover { background: rgba(5, 9, 8, .75); border-color: var(--beam-dim) }
+.bigplay:focus-visible { outline: 2px solid var(--beam); outline-offset: 3px }
+.bp-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-stretch: 112%;
+  font-size: 18px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.bp-sub { font: 400 11px/1 var(--f-data); letter-spacing: .08em; color: var(--beam-dim) }
+
+.bezel-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 14px;
+  font: 500 10.5px/1.3 var(--f-data);
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--frame-ink);
+}
+.fft { position: relative; height: 64px; border-radius: 6px; overflow: hidden; background: var(--glass) }
+.fft canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+
+/* Side panel */
+.side { min-width: 0; display: grid; gap: 18px; align-content: start }
+.status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font: 600 11px/1 var(--f-data);
+  letter-spacing: .14em;
+  text-transform: uppercase;
+}
+.lamp {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--lamp-off);
+  box-shadow: 0 0 0 2px var(--panel-lo);
+}
+.status[data-state="run"] .lamp { background: var(--lamp-run); box-shadow: 0 0 0 2px var(--panel-lo), 0 0 10px var(--lamp-run) }
+.status[data-state="hold"] .lamp { background: var(--lamp-hold); box-shadow: 0 0 0 2px var(--panel-lo), 0 0 8px var(--lamp-hold) }
+
+.readouts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  border-top: 1px solid var(--rule);
+}
+.readouts dt, .readouts dd { padding: 8px 0; border-bottom: 1px solid var(--rule) }
+.readouts dt, .knob label {
+  font-weight: 600;
+  font-stretch: 75%;
+  font-size: 12.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.readouts dt { padding-right: 14px }
+.readouts dd {
+  margin: 0;
+  font: 400 13px/1.5 var(--f-data);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.transport { display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 8px }
+.btn {
+  appearance: none;
+  border: 0;
+  border-radius: 8px;
+  padding: 11px 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font: 600 13px/1 var(--f-wide);
+  font-stretch: 87.5%;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--panel-hi);
+  box-shadow: 0 0 0 1px var(--panel-lo), 0 2px 0 var(--panel-lo);
+  cursor: pointer;
+}
+.btn:hover { background: var(--panel) }
+.btn:active { transform: translateY(1px); box-shadow: 0 0 0 1px var(--panel-lo) }
+.btn.primary { color: var(--accent-ink); background: var(--accent); box-shadow: 0 2px 0 var(--panel-lo) }
+.btn.primary:hover { filter: brightness(1.08) }
+.btn:focus-visible, .cue:focus-visible, input[type="range"]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+
+.knob { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 4px 12px }
+.knob output { font: 400 12px/1 var(--f-data); font-variant-numeric: tabular-nums; color: var(--ink-soft) }
+.knob input { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; accent-color: var(--accent) }
+.hint { margin: 0; font-size: 13px; color: var(--ink-soft) }
+
+/* Cue sheet */
+.cues { display: grid; gap: 12px }
+.cues-head { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 6px 16px }
+.cues h2, .notes h2 {
+  margin: 0;
+  font-weight: 800;
+  font-stretch: 125%;
+  font-size: 15px;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+.cues-head p { margin: 0; font-size: 13px; color: var(--ink-soft) }
+.cue-list { list-style: none; margin: 0; padding: 0; display: grid; border-top: 1px solid var(--rule) }
+.cue {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 56px 150px minmax(0, 1fr) 84px;
+  align-items: baseline;
+  gap: 4px 18px;
+  padding: 14px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cue:hover { background: var(--tint) }
+.cue[aria-current="true"] { background: var(--tint) }
+.cue[aria-current="true"] .cue-time { color: var(--accent) }
+.cue[aria-current="true"] .cue-name::after { content: " ●"; color: var(--accent); font-size: 10px; vertical-align: 2px }
+.cue-time { font: 500 12px/1.5 var(--f-data); font-variant-numeric: tabular-nums; color: var(--ink-soft) }
+.cue-name { font-weight: 700; font-stretch: 112%; font-size: 16px; line-height: 1.3 }
+.cue-desc { font-size: 14px; color: var(--ink-soft); max-width: 64ch }
+.cue-bars { font: 400 11px/1.5 var(--f-data); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); text-align: right }
+
+/* Notes */
+.notes { display: grid; gap: 14px; padding-top: 20px; border-top: 1px solid var(--rule) }
+.notes-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 18px 28px }
+.notes h3 { margin: 0 0 6px; font-weight: 700; font-size: 15px }
+.notes p { margin: 0; font-size: 14px; color: var(--ink-soft); max-width: 46ch }
+
+/* Full screen: the bezel alone, centred */
+.bezel:fullscreen { display: flex; flex-direction: column; justify-content: center; align-items: center; padding: 24px; border-radius: 0 }
+.bezel:fullscreen > * { width: min(100%, calc((100vh - 170px) * 1.25)) }
+
+@media (max-width: 880px) {
+  .inst { grid-template-columns: minmax(0, 1fr) }
+}
+@media (max-width: 640px) {
+  .inst { padding: 12px; gap: 14px }
+  .bezel { padding: 10px 10px 10px }
+  .cue { grid-template-columns: 48px minmax(0, 1fr); padding: 12px 6px }
+  .cue-desc, .cue-bars { grid-column: 2 }
+  .cue-bars { text-align: left }
+  .crt-tag { top: 11px; left: 12px; font-size: 10px }
+  .crt-tag.right { right: 12px }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <a class="back" href="../">← RemoteFunLand</a>
+    <p class="eyebrow">X–Y mode · 100 BPM · 32 bars · 1:17</p>
+    <h1>Lissajous Nocturne</h1>
+    <p class="lede">Two tones steer one beam across a simulated oscilloscope. The left channel pushes it sideways and the right channel lifts it, so every interval in the music draws its own figure. Turn the sound on; headphones help.</p>
+  </header>
+
+  <section class="inst" aria-label="Oscilloscope">
+    <div class="bezel" id="bezel">
+      <div class="crt" id="crt">
+        <canvas id="glow" aria-hidden="true"></canvas>
+        <canvas id="beam" aria-hidden="true"></canvas>
+        <canvas id="grat" aria-hidden="true"></canvas>
+        <div class="crt-tag" id="crtTag" aria-hidden="true">Standby · preview 2 : 3</div>
+        <div class="crt-tag right" aria-hidden="true">X–Y</div>
+        <button class="bigplay" id="bigPlay" type="button">
+          <span class="bp-main"><svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg><span id="bpLabel">Play</span></span>
+          <span class="bp-sub" id="bpSub">1:17 · sound on</span>
+        </button>
+      </div>
+      <div class="bezel-row"><span>CH1 → X · left ear</span><span>CH2 → Y · right ear</span><span>10 × 8 div</span></div>
+      <div class="fft"><canvas id="fft" aria-hidden="true"></canvas></div>
+      <div class="bezel-row"><span>Math · FFT of the full mix</span><span>30 Hz – 12 kHz · log</span></div>
+    </div>
+
+    <div class="side">
+      <div class="status" id="status" data-state="standby"><span class="lamp"></span><span id="statusText">Standby</span></div>
+      <dl class="readouts">
+        <dt>CH1 · X</dt><dd id="rCh1">110.00 Hz</dd>
+        <dt>CH2 · Y</dt><dd id="rCh2">165.20 Hz</dd>
+        <dt>Ratio</dt><dd id="rRatio">2 : 3</dd>
+        <dt>Interval</dt><dd id="rInterval">perfect fifth</dd>
+        <dt>Bar · beat</dt><dd id="rBar">01 · 1</dd>
+        <dt>Time</dt><dd id="rTime">0:00 / 1:17</dd>
+      </dl>
+      <div class="transport">
+        <button class="btn primary" id="playBtn" type="button"><svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg><span>Play</span></button>
+        <button class="btn" id="restartBtn" type="button">Restart</button>
+        <button class="btn" id="fsBtn" type="button" aria-label="Full screen" title="Full screen"><svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4" fill="none" stroke="currentColor" stroke-width="1.6"/></svg></button>
+      </div>
+      <div class="knob">
+        <label for="pos">Position</label><output id="posOut" for="pos">bar 01</output>
+        <input type="range" id="pos" min="0" max="511" step="1" value="0">
+      </div>
+      <div class="knob">
+        <label for="persist">Persistence</label><output id="persistOut" for="persist">62</output>
+        <input type="range" id="persist" min="0" max="100" step="1" value="62">
+      </div>
+      <div class="knob">
+        <label for="intensity">Intensity</label><output id="intensityOut" for="intensity">70</output>
+        <input type="range" id="intensity" min="0" max="100" step="1" value="70">
+      </div>
+      <p class="hint">Space plays and pauses. Persistence sets how long the phosphor glows after the beam moves on.</p>
+    </div>
+  </section>
+
+  <section class="cues" aria-labelledby="cuesTitle">
+    <div class="cues-head">
+      <h2 id="cuesTitle">Cue sheet</h2>
+      <p>Select a cue to play from there.</p>
+    </div>
+    <ol class="cue-list">
+      <li><button class="cue" type="button" data-bar="0"><span class="cue-time">0:00</span><span class="cue-name">Warm-up</span><span class="cue-desc">One beam, then two. Both channels play A at 110 Hz, and a 0.2 Hz offset turns the line into a slowly rolling ellipse.</span><span class="cue-bars">Bars 1–4</span></button></li>
+      <li><button class="cue" type="button" data-bar="4"><span class="cue-time">0:09</span><span class="cue-name">Just intervals</span><span class="cue-desc">The right channel walks through small whole-number ratios over a held A: octave, fifth, fourth, thirds, sixth, harmonic seventh.</span><span class="cue-bars">Bars 5–12</span></button></li>
+      <li><button class="cue" type="button" data-bar="12"><span class="cue-time">0:28</span><span class="cue-name">Pulse</span><span class="cue-desc">Kick and bass enter on a bus the scope never sees. Each kick ducks the beam, so the figure breathes on the beat.</span><span class="cue-bars">Bars 13–20</span></button></li>
+      <li><button class="cue" type="button" data-bar="20"><span class="cue-time">0:48</span><span class="cue-name">Arpeggio</span><span class="cue-desc">The right channel arpeggiates in sixteenths through A minor, F, C and G. Persistence layers four figures into one flickering bloom.</span><span class="cue-bars">Bars 21–28</span></button></li>
+      <li><button class="cue" type="button" data-bar="28"><span class="cue-time">1:07</span><span class="cue-name">Afterglow</span><span class="cue-desc">The drums drop out, both channels slide back to unison and the beam shrinks to a dot.</span><span class="cue-bars">Bars 29–32</span></button></li>
+    </ol>
+  </section>
+
+  <section class="notes" aria-labelledby="notesTitle">
+    <h2 id="notesTitle">How the picture is made</h2>
+    <div class="notes-grid">
+      <div><h3>Left is X, right is Y</h3><p>The left channel’s waveform sets the beam’s horizontal position, sample by sample, and the right channel sets the vertical. The trace is read straight from the audio graph; nothing is drawn by hand.</p></div>
+      <div><h3>Small ratios close the shape</h3><p>When the two frequencies sit at a whole-number ratio such as 2 : 3, the beam returns to where it started and the figure closes. The 0.2 Hz offset makes each figure roll.</p></div>
+      <div><h3>The drums skip the beam</h3><p>Kick, snare, hats and bass reach your speakers through a separate bus. You see them only as the duck on each kick and in the FFT strip under the screen.</p></div>
+    </div>
+  </section>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+
+  // ---- Score ---------------------------------------------------------------
+  const BPM = 100, STEP = 60 / BPM / 4, BARS = 32, STEPS = BARS * 16;
+  const LENGTH = STEPS * STEP, A = 110, DETUNE = 0.2;
+  const SECTIONS = [
+    { name: 'Warm-up', bar: 0 },
+    { name: 'Just intervals', bar: 4 },
+    { name: 'Pulse', bar: 12 },
+    { name: 'Arpeggio', bar: 20 },
+    { name: 'Afterglow', bar: 28 },
+  ];
+  const NAMES = {
+    '1:1': 'unison', '1:2': 'octave', '2:3': 'perfect fifth', '3:4': 'perfect fourth',
+    '4:5': 'major third', '5:6': 'minor third', '3:5': 'major sixth', '4:7': 'harmonic seventh',
+  };
+  // X:Y ratios, one per bar, over a held A
+  const WALK = [[1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [3, 5], [4, 7], [2, 3]];
+  // A minor, F, C, G in just intonation against A = 110 Hz; two bars each
+  const PROG = [
+    { root: 110, pair: [[2, 3], [5, 6]], third: [5, 6] },
+    { root: 88, pair: [[2, 3], [4, 5]], third: [4, 5] },
+    { root: 132, pair: [[2, 3], [3, 4]], third: [4, 5] },
+    { root: 99, pair: [[2, 3], [1, 2]], third: [4, 5] },
+  ];
+  const ARP = [0, 1, 2, 3, 2, 1, 2, 3, 0, 2, 1, 3, 2, 3, 1, 2];
+  const BASS = [1, 0, 0, 1, 0, 0, 1, 0, 1, 0, 0, 1, 0, 0, 1, 0];
+
+  function sectionOf(bar) {
+    let i = 0;
+    for (let k = 0; k < SECTIONS.length; k++) if (bar >= SECTIONS[k].bar) i = k;
+    return i;
+  }
+
+  function scoreAt(step) {
+    const bar = Math.floor(step / 16), s = step % 16, sec = sectionOf(bar);
+    const o = {
+      step, bar, s, sec, root: A, r: [1, 1], gl: .5, gr: .5, tri: 0, glide: .07,
+      kick: false, hat: 0, snare: false, bass: false, riser: false, crash: false,
+    };
+    if (sec === 0) {
+      const ramp = Math.min(1, (s + 1) / 12);
+      o.gl = bar === 0 ? .5 * ramp : .5;
+      o.gr = bar === 0 ? 0 : bar === 1 ? .5 * ramp : .5;
+    } else if (sec === 1) {
+      o.r = WALK[bar - 4];
+      o.riser = bar === 11 && s === 0;
+    } else if (sec === 2 || sec === 3) {
+      const k = bar - SECTIONS[sec].bar, ch = PROG[Math.floor(k / 2)];
+      o.root = ch.root;
+      o.kick = s % 4 === 0;
+      o.bass = BASS[s] === 1;
+      if (sec === 2) {
+        o.r = ch.pair[k % 2];
+        o.tri = .55;
+        o.hat = s % 4 === 2 ? 1 : 0;
+        o.snare = bar === 19 && s >= 12;
+      } else {
+        o.r = [[1, 1], ch.third, [2, 3], [1, 2]][ARP[s]];
+        o.tri = .3;
+        o.glide = .006;
+        o.hat = s % 2 ? .45 : .8;
+        o.snare = s === 4 || s === 12;
+        o.riser = bar === 27 && s === 0;
+      }
+    } else {
+      const p = Math.min(1, (step - 28 * 16) / 60);
+      o.gl = o.gr = .5 * (1 - p);
+      o.glide = .6;
+      o.crash = o.kick = step === 28 * 16;
+    }
+    o.fl = o.root;
+    o.fr = o.root * o.r[1] / o.r[0] + DETUNE;
+    return o;
+  }
+
+  // ---- Audio graph ------------------------------------------------------------
+  let ctx = null, nodes = null, noise = null;
+  let live = [], last = {};
+
+  function makeNoise(sec) {
+    const len = Math.floor(ctx.sampleRate * sec), buf = ctx.createBuffer(1, len, ctx.sampleRate), d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+  function makeImpulse(sec) {
+    const len = Math.floor(ctx.sampleRate * sec), buf = ctx.createBuffer(2, len, ctx.sampleRate);
+    for (let c = 0; c < 2; c++) {
+      const d = buf.getChannelData(c);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+    }
+    return buf;
+  }
+
+  function build() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    ctx = new AC({ latencyHint: 'playback' });
+    const master = ctx.createGain(); master.gain.value = .7;
+    const comp = ctx.createDynamicsCompressor();
+    comp.threshold.value = -18; comp.knee.value = 8; comp.ratio.value = 4; comp.attack.value = .004; comp.release.value = .2;
+    master.connect(comp); comp.connect(ctx.destination);
+    const anaF = ctx.createAnalyser(); anaF.fftSize = 2048; anaF.smoothingTimeConstant = .72;
+    comp.connect(anaF);
+
+    const verb = ctx.createConvolver(); verb.buffer = makeImpulse(2.8);
+    const verbOut = ctx.createGain(); verbOut.gain.value = .3;
+    verb.connect(verbOut); verbOut.connect(master);
+
+    // Two voices per channel (sine + triangle) so sections can morph the waveform.
+    const merger = ctx.createChannelMerger(2);
+    const voice = (ch) => {
+      const sine = ctx.createOscillator(), tri = ctx.createOscillator();
+      tri.type = 'triangle';
+      const sg = ctx.createGain(), tg = ctx.createGain(), g = ctx.createGain();
+      sg.gain.value = 1; tg.gain.value = 0; g.gain.value = 0;
+      sine.connect(sg); tri.connect(tg); sg.connect(g); tg.connect(g);
+      g.connect(merger, 0, ch);
+      sine.start(); tri.start();
+      return { oscs: [sine, tri], sg, tg, g };
+    };
+    const L = voice(0), R = voice(1);
+    const pump = ctx.createGain();
+    merger.connect(pump);
+    const split = ctx.createChannelSplitter(2);
+    pump.connect(split);
+    // The scope taps the pure channels.
+    const anaX = ctx.createAnalyser(), anaY = ctx.createAnalyser();
+    anaX.fftSize = anaY.fftSize = N;
+    split.connect(anaX, 0); split.connect(anaY, 1);
+    // What you hear: the same channels, narrowed a little so hard panning is easier on headphones.
+    const mix = ctx.createChannelMerger(2);
+    const cross = (from, to, amt) => { const g = ctx.createGain(); g.gain.value = amt; split.connect(g, from); g.connect(mix, 0, to); };
+    cross(0, 0, .78); cross(0, 1, .22); cross(1, 1, .78); cross(1, 0, .22);
+    const scopeOut = ctx.createGain(); scopeOut.gain.value = .7;
+    mix.connect(scopeOut); scopeOut.connect(master);
+    const scopeSend = ctx.createGain(); scopeSend.gain.value = .5;
+    scopeOut.connect(scopeSend); scopeSend.connect(verb);
+
+    // Rhythm buses bypass the scope entirely.
+    const drums = ctx.createGain(); drums.gain.value = .5; drums.connect(master);
+    const drumSend = ctx.createGain(); drumSend.gain.value = .14; drums.connect(drumSend); drumSend.connect(verb);
+    const bassBus = ctx.createGain(); bassBus.gain.value = .45; bassBus.connect(master);
+
+    noise = makeNoise(1);
+    nodes = { L, R, pump, anaX, anaY, anaF, drums, bassBus, verb };
+  }
+
+  function track(src, end) { live.push({ src, end }); }
+  function killLive(now) {
+    for (const v of live) if (v.end > now) { try { v.src.stop(now); } catch (e) { /* already stopped */ } }
+    live = [];
+  }
+
+  function setParam(p, v, t, tau, now) {
+    if (now) { p.cancelScheduledValues(t); p.setValueAtTime(v, t); }
+    else p.setTargetAtTime(v, t, tau);
+  }
+  function applyScore(o, t, now) {
+    const { L, R } = nodes;
+    if (now || o.fl !== last.fl) for (const osc of L.oscs) setParam(osc.frequency, o.fl, t, o.glide, now);
+    if (now || o.fr !== last.fr) for (const osc of R.oscs) setParam(osc.frequency, o.fr, t, o.glide, now);
+    if (now || o.gl !== last.gl) setParam(L.g.gain, o.gl, t, .05, now);
+    if (now || o.gr !== last.gr) setParam(R.g.gain, o.gr, t, .05, now);
+    if (now || o.tri !== last.tri) {
+      for (const v of [L, R]) { setParam(v.sg.gain, 1 - o.tri, t, .4, now); setParam(v.tg.gain, o.tri, t, .4, now); }
+    }
+    last = o;
+  }
+
+  function kick(t) {
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.frequency.setValueAtTime(150, t);
+    o.frequency.exponentialRampToValueAtTime(44, t + .11);
+    g.gain.setValueAtTime(1, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .38);
+    o.connect(g); g.connect(nodes.drums);
+    o.start(t); o.stop(t + .4); track(o, t + .4);
+    // Sidechain: duck the scope voices, which shrinks the figure on screen.
+    const p = nodes.pump.gain;
+    p.setTargetAtTime(.32, t, .006);
+    p.setTargetAtTime(1, t + .05, .11);
+  }
+  function noiseHit(t, type, freq, q, peak, dur, dest) {
+    const s = ctx.createBufferSource(); s.buffer = noise;
+    const f = ctx.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(peak, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + dur);
+    s.connect(f); f.connect(g); g.connect(dest || nodes.drums);
+    s.start(t, Math.random() * .5); s.stop(t + dur + .02); track(s, t + dur + .02);
+  }
+  function hat(t, v) { noiseHit(t, 'highpass', 7500, .7, .22 * v, .05); }
+  function snare(t) {
+    noiseHit(t, 'bandpass', 1900, .7, .7, .2);
+    const o = ctx.createOscillator(), g = ctx.createGain();
+    o.type = 'triangle';
+    o.frequency.setValueAtTime(190, t);
+    o.frequency.exponentialRampToValueAtTime(140, t + .08);
+    g.gain.setValueAtTime(.4, t);
+    g.gain.exponentialRampToValueAtTime(.001, t + .12);
+    o.connect(g); g.connect(nodes.drums);
+    o.start(t); o.stop(t + .14); track(o, t + .14);
+  }
+  function crash(t) {
+    noiseHit(t, 'highpass', 2600, .5, .35, 2.2);
+    noiseHit(t, 'highpass', 2600, .5, .3, 2.2, nodes.verb);
+  }
+  function riser(t, dur) {
+    const s = ctx.createBufferSource(); s.buffer = noise; s.loop = true;
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.Q.value = 2.5;
+    f.frequency.setValueAtTime(300, t);
+    f.frequency.exponentialRampToValueAtTime(7000, t + dur);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(.45, t + dur * .96);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    s.connect(f); f.connect(g); g.connect(nodes.drums);
+    s.start(t); s.stop(t + dur); track(s, t + dur);
+  }
+  function bass(t, freq) {
+    const d = STEP * 1.7;
+    const saw = ctx.createOscillator(), sub = ctx.createOscillator();
+    saw.type = 'sawtooth';
+    saw.frequency.setValueAtTime(freq, t);
+    sub.frequency.setValueAtTime(freq, t);
+    const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 5;
+    f.frequency.setValueAtTime(1400, t);
+    f.frequency.exponentialRampToValueAtTime(140, t + d);
+    const g = ctx.createGain(), sg = ctx.createGain();
+    g.gain.setValueAtTime(.0001, t);
+    g.gain.exponentialRampToValueAtTime(.5, t + .01);
+    g.gain.exponentialRampToValueAtTime(.001, t + d);
+    sg.gain.setValueAtTime(.35, t);
+    sg.gain.exponentialRampToValueAtTime(.001, t + d);
+    saw.connect(f); f.connect(g); g.connect(nodes.bassBus);
+    sub.connect(sg); sg.connect(nodes.bassBus);
+    for (const o of [saw, sub]) { o.start(t); o.stop(t + d + .02); track(o, t + d + .02); }
+  }
+
+  // ---- Sequencer ----------------------------------------------------------------
+  const LOOKAHEAD = .2;
+  let state = 'standby'; // standby | run | hold | end
+  let nextStep = 0, nextTime = 0, timer = 0, queue = [], shown = null;
+
+  function scheduleStep(step, t, late) {
+    const o = scoreAt(step);
+    applyScore(o, t, false);
+    if (!late) {
+      if (o.kick) kick(t);
+      if (o.hat) hat(t, o.hat);
+      if (o.snare) snare(t);
+      if (o.bass) bass(t, o.root / 2);
+      if (o.riser) riser(t, 16 * STEP);
+      if (o.crash) crash(t);
+    }
+    queue.push({ step, time: t, kick: o.kick && !late });
+  }
+  function tick() {
+    if (!ctx || state !== 'run') return;
+    const now = ctx.currentTime;
+    while (nextStep < STEPS && nextTime < now + LOOKAHEAD) {
+      // A throttled background tab can fall behind; catch up without a pile of drum hits.
+      const late = nextTime < now - .03;
+      scheduleStep(nextStep, Math.max(nextTime, now), late);
+      nextStep++;
+      nextTime += STEP;
+    }
+    if (live.length > 96) live = live.filter((v) => v.end > now);
+  }
+  function seekTo(step) {
+    const now = ctx.currentTime;
+    killLive(now);
+    const p = nodes.pump.gain;
+    p.cancelScheduledValues(now); p.setValueAtTime(1, now);
+    applyScore(scoreAt(step), now, true);
+    queue = [];
+    nextStep = step;
+    nextTime = now + .06;
+    shown = { step, time: nextTime };
+    showStep(step);
+  }
+
+  let wake = null;
+  async function holdWake() {
+    try { wake = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (e) { wake = null; }
+  }
+  function dropWake() {
+    try { if (wake) wake.release(); } catch (e) { /* ignore */ }
+    wake = null;
+  }
+
+  function play(fromStep) {
+    if (!ctx) {
+      try { build(); } catch (e) {
+        $('bpLabel').textContent = 'No Web Audio';
+        $('bpSub').textContent = 'This browser cannot generate sound';
+        return;
+      }
+    }
+    // resume() has to start inside the click handler for Safari, so nothing above awaits.
+    const resumed = ctx.resume();
+    if (typeof fromStep === 'number') seekTo(fromStep);
+    else if (state === 'standby' || state === 'end') seekTo(0);
+    state = 'run';
+    ui();
+    Promise.resolve(resumed).catch(() => {}).then(() => {
+      if (!timer) timer = setInterval(tick, 25);
+      tick();
+    });
+    holdWake();
+  }
+  function pause() {
+    if (state !== 'run') return;
+    state = 'hold';
+    ctx.suspend();
+    dropWake();
+    ui();
+  }
+  function finish() {
+    state = 'end';
+    ctx.suspend();
+    dropWake();
+    ui();
+  }
+  const toggle = () => (state === 'run' ? pause() : play());
+
+  // ---- Readouts -------------------------------------------------------------------
+  const el = {
+    ch1: $('rCh1'), ch2: $('rCh2'), ratio: $('rRatio'), interval: $('rInterval'), bar: $('rBar'), time: $('rTime'),
+    status: $('status'), statusText: $('statusText'), play: $('playBtn'), big: $('bigPlay'), bpLabel: $('bpLabel'),
+    tag: $('crtTag'), pos: $('pos'), posOut: $('posOut'),
+  };
+  const cues = Array.from(document.querySelectorAll('.cue'));
+  const ICON_PLAY = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4.5 2.8v10.4L13 8z" fill="currentColor"/></svg>';
+  const ICON_PAUSE = '<svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true"><path d="M4 3h3v10H4zM9 3h3v10H9z" fill="currentColor"/></svg>';
+  const pad2 = (n) => String(n).padStart(2, '0');
+  const fmt = (t) => `${Math.floor(t / 60)}:${pad2(Math.floor(t % 60))}`;
+  const TOTAL = fmt(Math.round(LENGTH));
+  const set = (node, text) => { if (node.textContent !== text) node.textContent = text; };
+  let dragging = false, lastSec = -1, lastClock = '';
+
+  function showStep(step) {
+    const o = scoreAt(Math.min(step, STEPS - 1));
+    const solo = o.gr === 0;
+    set(el.ch1, `${o.fl.toFixed(2)} Hz`);
+    set(el.ch2, solo ? 'off' : `${o.fr.toFixed(2)} Hz`);
+    set(el.ratio, solo ? '—' : `${o.r[0]} : ${o.r[1]}`);
+    set(el.interval, solo ? 'X only' : NAMES[o.r.join(':')]);
+    set(el.bar, `${pad2(o.bar + 1)} · ${Math.floor(o.s / 4) + 1}`);
+    set(el.tag, `${SECTIONS[o.sec].name} · bar ${pad2(o.bar + 1)}`);
+    if (!dragging) { el.pos.value = String(step); set(el.posOut, `bar ${pad2(o.bar + 1)}`); }
+    if (o.sec !== lastSec) {
+      cues.forEach((c, i) => c.setAttribute('aria-current', i === o.sec ? 'true' : 'false'));
+      lastSec = o.sec;
+    }
+  }
+  function clock() {
+    if (!shown) return;
+    const t = state === 'end' ? Math.round(LENGTH) : shown.step * STEP + Math.max(0, Math.min(STEP, ctx.currentTime - shown.time));
+    const text = `${fmt(t)} / ${TOTAL}`;
+    if (text !== lastClock) { el.time.textContent = text; lastClock = text; }
+  }
+  function ui() {
+    el.status.dataset.state = state;
+    set(el.statusText, { standby: 'Standby', run: 'Running', hold: 'Hold', end: 'End of piece' }[state]);
+    const label = state === 'run' ? 'Pause' : state === 'hold' ? 'Resume' : state === 'end' ? 'Play again' : 'Play';
+    el.play.innerHTML = (state === 'run' ? ICON_PAUSE : ICON_PLAY) + `<span>${label}</span>`;
+    el.big.hidden = !(state === 'standby' || state === 'end');
+    set(el.bpLabel, state === 'end' ? 'Play again' : 'Play');
+    if (state === 'end') set(el.tag, 'End · beam off');
+  }
+
+  // ---- Display ----------------------------------------------------------------------
+  const N = 4096, NB = 6;
+  const X = new Float32Array(N), Y = new Float32Array(N), X2 = new Float32Array(N);
+  const crt = $('crt'), cG = $('glow'), cB = $('beam'), cR = $('grat'), cF = $('fft');
+  const g = cG.getContext('2d', { alpha: false }), b = cB.getContext('2d'), gr = cR.getContext('2d'), f = cF.getContext('2d');
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let W = 1, H = 1, dpr = 1, div = 1, cx = 0, cy = 0, FW = 1, FH = 1;
+  let baseFade = .14, fade = .14, gain = 1.28, flash = 0, previewPhase = .6;
+  const fbins = new Uint8Array(1024);
+
+  function resize() {
+    dpr = Math.min(2, window.devicePixelRatio || 1);
+    const r = crt.getBoundingClientRect();
+    W = Math.max(1, Math.round(r.width * dpr));
+    H = Math.max(1, Math.round(r.height * dpr));
+    for (const c of [cG, cB, cR]) { c.width = W; c.height = H; }
+    g.fillStyle = '#000'; g.fillRect(0, 0, W, H);
+    div = Math.min(W / 10, H / 8) * .94;
+    cx = W / 2; cy = H / 2;
+    drawGrat();
+    const fr = cF.parentElement.getBoundingClientRect();
+    FW = cF.width = Math.max(1, Math.round(fr.width * dpr));
+    FH = cF.height = Math.max(1, Math.round(fr.height * dpr));
+    drawFFT(false);
+    if (!ctx) for (let i = 0; i < 4; i++) drawPreview();
+  }
+
+  function drawGrat() {
+    gr.clearRect(0, 0, W, H);
+    const x0 = cx - 5 * div, y0 = cy - 4 * div, lw = Math.max(1, dpr);
+    gr.lineWidth = lw;
+    gr.strokeStyle = 'rgba(170, 196, 184, .13)';
+    gr.beginPath();
+    for (let i = 0; i <= 10; i++) { const x = Math.round(x0 + i * div); gr.moveTo(x, y0); gr.lineTo(x, y0 + 8 * div); }
+    for (let j = 0; j <= 8; j++) { const y = Math.round(y0 + j * div); gr.moveTo(x0, y); gr.lineTo(x0 + 10 * div, y); }
+    gr.stroke();
+    // Minor ticks on the centre axes, five per division.
+    gr.strokeStyle = 'rgba(170, 196, 184, .28)';
+    gr.beginPath();
+    const t = div * .07;
+    for (let i = 0; i <= 50; i++) { const x = Math.round(x0 + i * div / 5); gr.moveTo(x, cy - t); gr.lineTo(x, cy + t); }
+    for (let j = 0; j <= 40; j++) { const y = Math.round(y0 + j * div / 5); gr.moveTo(cx - t, y); gr.lineTo(cx + t, y); }
+    gr.stroke();
+  }
+
+  function fadeGlow() {
+    g.globalCompositeOperation = 'source-over';
+    g.fillStyle = `rgba(0, 0, 0, ${fade})`;
+    g.fillRect(0, 0, W, H);
+    // A small subtraction stops 8-bit rounding from leaving a permanent ghost.
+    g.globalCompositeOperation = 'difference';
+    g.fillStyle = 'rgb(2, 2, 2)';
+    g.fillRect(0, 0, W, H);
+    g.globalCompositeOperation = 'source-over';
+  }
+
+  // Brightness follows beam speed: slow parts of the trace glow, fast sweeps stay faint.
+  function strokeTrace(xs, ys, n, amt, boost) {
+    const sc = div * 6.4, k = 1.4 * dpr;
+    const paths = [];
+    for (let i = 0; i < NB; i++) paths.push(new Path2D());
+    let px = cx + xs[0] * sc, py = cy - ys[0] * sc;
+    for (let i = 1; i < n; i++) {
+      const x = cx + xs[i] * sc, y = cy - ys[i] * sc, dx = x - px, dy = y - py;
+      let bk = (NB * k / (Math.sqrt(dx * dx + dy * dy) + k)) | 0;
+      if (bk >= NB) bk = NB - 1;
+      paths[bk].moveTo(px, py);
+      paths[bk].lineTo(x, y);
+      px = x; py = y;
+    }
+    b.clearRect(0, 0, W, H);
+    g.globalCompositeOperation = b.globalCompositeOperation = 'lighter';
+    g.lineCap = b.lineCap = 'round';
+    g.lineWidth = 1.7 * dpr;
+    for (let i = 0; i < NB; i++) {
+      const a = Math.pow((i + 1) / NB, 1.5) * amt;
+      g.strokeStyle = `rgba(185, 227, 92, ${Math.min(1, a * .42)})`;
+      g.stroke(paths[i]);
+      b.lineWidth = 6 * dpr;
+      b.strokeStyle = `rgba(140, 168, 255, ${Math.min(1, a * .1 * (1 + boost))})`;
+      b.stroke(paths[i]);
+      b.lineWidth = 1.3 * dpr;
+      b.strokeStyle = `rgba(224, 233, 255, ${Math.min(1, a * .8 * (1 + boost * .6))})`;
+      b.stroke(paths[i]);
+    }
+    g.globalCompositeOperation = b.globalCompositeOperation = 'source-over';
+  }
+
+  function drawPreview() {
+    const n = 2048, tau = Math.PI * 2;
+    for (let i = 0; i < n; i++) {
+      const u = i / (n - 1);
+      X[i] = .5 * Math.sin(tau * 2 * u + previewPhase);
+      Y[i] = .5 * Math.sin(tau * 3 * u);
+    }
+    fadeGlow();
+    strokeTrace(X, Y, n, gain * .8, 0);
+  }
+
+  function readScope() {
+    const ax = nodes.anaX, ay = nodes.anaY;
+    // Re-read if the audio thread moved on between the two channel reads.
+    for (let i = 0; i < 3; i++) {
+      ax.getFloatTimeDomainData(X);
+      ay.getFloatTimeDomainData(Y);
+      ax.getFloatTimeDomainData(X2);
+      if (X[0] === X2[0] && X[N >> 1] === X2[N >> 1] && X[N - 1] === X2[N - 1]) return;
+    }
+  }
+
+  const FLO = 30, FHI = 12000, FLR = Math.log(FHI / FLO);
+  const FTICKS = [[100, '100'], [1000, '1k'], [10000, '10k']].map(([hz, label]) => [Math.log(hz / FLO) / FLR, label]);
+  function drawFFT(liveData) {
+    f.clearRect(0, 0, FW, FH);
+    f.fillStyle = 'rgba(170, 196, 184, .12)';
+    for (const [p] of FTICKS) f.fillRect(Math.round(p * FW), 0, Math.max(1, dpr), FH);
+    if (liveData && nodes) drawBars();
+    f.font = `500 ${9 * dpr}px "Martian Mono", ui-monospace, monospace`;
+    f.textBaseline = 'top';
+    f.fillStyle = 'rgba(170, 196, 184, .6)';
+    for (const [p, label] of FTICKS) {
+      const x = Math.round(p * FW), w = f.measureText(label).width;
+      f.fillText(label, x + 4 * dpr + w > FW ? x - 4 * dpr - w : x + 4 * dpr, 4 * dpr);
+    }
+  }
+  function drawBars() {
+    const an = nodes.anaF, bins = an.frequencyBinCount, hzPer = ctx.sampleRate / an.fftSize;
+    an.getByteFrequencyData(fbins);
+    const bars = Math.max(24, Math.floor(FW / (6 * dpr))), bw = FW / bars;
+    for (let i = 0; i < bars; i++) {
+      const f0 = FLO * Math.exp(FLR * i / bars), f1 = FLO * Math.exp(FLR * (i + 1) / bars);
+      const lo = Math.floor(f0 / hzPer), hi = Math.max(lo + 1, Math.ceil(f1 / hzPer));
+      let m = 0;
+      for (let j = lo; j < hi && j < bins; j++) if (fbins[j] > m) m = fbins[j];
+      const v = Math.pow(m / 255, 1.6), h = v * (FH - 6 * dpr);
+      if (h < 1) continue;
+      const x = i * bw + dpr, w = Math.max(1, bw - 2 * dpr);
+      f.fillStyle = `rgba(185, 227, 92, ${.22 + .6 * v})`;
+      f.fillRect(x, FH - h, w, h);
+      f.fillStyle = 'rgba(224, 233, 255, .9)';
+      f.fillRect(x, FH - h, w, Math.max(1, dpr));
+    }
+  }
+
+  let lastFrame = performance.now();
+  function loop(now) {
+    requestAnimationFrame(loop);
+    const dt = Math.min(100, Math.max(1, now - lastFrame));
+    lastFrame = now;
+    fade = 1 - Math.pow(1 - baseFade, dt / 16.67);
+    if (!ctx) {
+      if (!calm) { previewPhase += dt * .0005; drawPreview(); }
+      return;
+    }
+    const t = ctx.currentTime;
+    while (queue.length && queue[0].time <= t) {
+      const q = queue.shift();
+      if (q.kick) flash = 1;
+      if (!shown || q.step !== shown.step) { shown = q; showStep(q.step); }
+    }
+    if (state === 'run' && nextStep >= STEPS && t > nextTime + 2.4) finish();
+    fadeGlow();
+    if (state === 'end') b.clearRect(0, 0, W, H);
+    else { readScope(); strokeTrace(X, Y, N, gain, calm ? 0 : flash); }
+    flash *= Math.pow(.86, dt / 16.67);
+    drawFFT(state !== 'end');
+    clock();
+  }
+
+  // ---- Controls ------------------------------------------------------------------------
+  el.play.addEventListener('click', toggle);
+  el.big.addEventListener('click', () => play());
+  $('restartBtn').addEventListener('click', () => play(0));
+  cues.forEach((c) => c.addEventListener('click', () => play(Number(c.dataset.bar) * 16)));
+
+  el.pos.addEventListener('pointerdown', () => { dragging = true; });
+  el.pos.addEventListener('input', () => {
+    dragging = true;
+    set(el.posOut, `bar ${pad2(Math.floor(Number(el.pos.value) / 16) + 1)}`);
+  });
+  el.pos.addEventListener('change', () => {
+    dragging = false;
+    const step = Math.floor(Number(el.pos.value) / 16) * 16;
+    if (state === 'hold') seekTo(step); else play(step);
+  });
+
+  const persist = $('persist'), intensity = $('intensity');
+  const readKnobs = () => {
+    baseFade = .32 - .29 * Number(persist.value) / 100;
+    gain = .3 + 1.4 * Number(intensity.value) / 100;
+    set($('persistOut'), persist.value);
+    set($('intensityOut'), intensity.value);
+  };
+  persist.addEventListener('input', readKnobs);
+  intensity.addEventListener('input', readKnobs);
+  readKnobs();
+
+  const fsBtn = $('fsBtn'), bezel = $('bezel');
+  if (!document.fullscreenEnabled || !bezel.requestFullscreen) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else bezel.requestFullscreen().catch(() => {});
+  });
+
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || e.repeat) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'TEXTAREA') return;
+    e.preventDefault();
+    toggle();
+  });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state === 'run') holdWake();
+  });
+
+  new ResizeObserver(resize).observe(crt);
+  resize();
+  requestAnimationFrame(loop);
+})();
+</script>
+</html>

@@ -1,38 +1,30 @@
 # RemoteFunLand
 
-## Lissajous Nocturne
+A playground of small browser demos, each built in a Claude Code cloud session and
+published as a single static page.
 
-A 77-second audio-visual demo in a single file: [`index.html`](index.html).
+**Live gallery:** https://miikka-boom.github.io/RemoteFunLand/
 
-Two tones play on the left and right channels and steer the beam of a simulated
-X–Y oscilloscope. The left channel moves it sideways and the right moves it up and
-down, so each musical interval (2 : 3, 3 : 4, 4 : 5 …) draws its own Lissajous figure.
-Kick, snare, hats and bass go to the speakers on a separate bus, so they appear only
-as a duck in the figure on each kick and in the FFT strip.
+## Demos
 
-Everything is generated live with the Web Audio API and drawn on `<canvas>`. There
-are no audio files and no dependencies apart from two Google Fonts.
+| No. | Demo | What it is |
+| --- | ---- | ---------- |
+| 001 | [Lissajous Nocturne](https://miikka-boom.github.io/RemoteFunLand/lissajous-nocturne/) | A 77-second Web Audio piece whose left and right channels steer a simulated X–Y oscilloscope, so each musical interval draws its own Lissajous figure. |
 
-### Run it
+## How it works
 
-Open `index.html` in a browser and press **Play**. Turn the sound on; headphones help.
+- Each demo lives in its own folder with an `index.html` and is served at
+  `/RemoteFunLand/<folder>/`. The root `index.html` is the gallery.
+- GitHub Pages publishes the `main` branch. A new demo is built on a session branch
+  and merged into `main` through a pull request; Pages republishes about a minute
+  after the merge.
+- The conventions for new demos are in [`CLAUDE.md`](CLAUDE.md).
 
-You can also serve the folder if you prefer:
+## Run locally
+
+Open any `index.html` directly in a browser, or serve the repo:
 
 ```sh
 python3 -m http.server 8000
 # then open http://localhost:8000
 ```
-
-### Structure of the piece
-
-| Time | Section        | Bars  | What happens                                                    |
-| ---- | -------------- | ----- | --------------------------------------------------------------- |
-| 0:00 | Warm-up        | 1–4   | One channel, then both, in unison at 110 Hz                     |
-| 0:09 | Just intervals | 5–12  | Right channel walks through whole-number ratios over a held A   |
-| 0:28 | Pulse          | 13–20 | Kick and bass enter; each kick ducks the beam                   |
-| 0:48 | Arpeggio       | 21–28 | Sixteenth-note arpeggio on the right channel                    |
-| 1:07 | Afterglow      | 29–32 | Drums drop out, the figure collapses to a dot                   |
-
-Controls: play/pause (Space), restart, jump to any cue, scrub by bar, phosphor
-persistence, beam intensity and full screen.
