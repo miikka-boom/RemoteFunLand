@@ -1,0 +1,1193 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Antenna Aerobics</title>
+<meta name="description" content="Sixteen radio-headed robots from a Blender file take a 90-second aerobics class to an original Hi-NRG score, ending in a PARTY under the disco ball.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Monoton&family=Barlow+Condensed:wght@500;700&family=Barlow:wght@400;600&display=swap">
+<style>
+/* Layout: a TV studio. The stage first, the control strip under it, then the programme and credits. */
+:root {
+  --night: #0b0916;
+  --panel: #151229;
+  --ink: #f1eefb;
+  --ink-soft: #a9a3c4;
+  --rule: rgba(241, 238, 251, .14);
+  --magenta: #ff3ea5;
+  --cyan: #2de2e6;
+  --sun: #ffd23f;
+  --f-neon: "Monoton", "Arial Black", Impact, sans-serif;
+  --f-cond: "Barlow Condensed", "Arial Narrow", Arial, sans-serif;
+  --f-text: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  color-scheme: dark;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box }
+html, body { margin: 0 }
+[hidden] { display: none !important }
+body {
+  background: var(--night);
+  color: var(--ink);
+  font: 400 16px/1.55 var(--f-text);
+  -webkit-font-smoothing: antialiased;
+}
+a { color: var(--cyan) }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--sun); outline-offset: 3px }
+
+.wrap {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 14px 64px;
+  display: grid;
+  gap: 14px;
+}
+.back { font: 500 15px/1 var(--f-cond); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); text-decoration: none; justify-self: start; padding: 6px 0 }
+.back:hover { color: var(--ink) }
+
+/* Stage */
+.stage {
+  position: relative;
+  width: 100%;
+  height: min(78vh, 56.25vw);
+  min-height: 300px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #05040b;
+  box-shadow: 0 0 0 1px var(--rule);
+}
+@media (max-aspect-ratio: 1/1) { .stage { height: min(118vw, 78vh) } }
+.stage canvas { display: block; width: 100%; height: 100% }
+.flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; mix-blend-mode: screen }
+
+.hud { position: absolute; inset: 0; pointer-events: none; display: grid; grid-template-rows: auto 1fr auto; padding: 14px 16px }
+.hud-top { display: flex; justify-content: space-between; gap: 12px; font: 700 13px/1 var(--f-cond); letter-spacing: .14em; text-transform: uppercase; color: rgba(241,238,251,.8); text-shadow: 0 1px 3px #000 }
+.hud-top .live { color: var(--magenta) }
+.callout {
+  align-self: end; justify-self: center; margin-bottom: 18px; text-align: center;
+  font: 700 clamp(30px, 7vw, 76px)/1 var(--f-cond); letter-spacing: .02em; text-transform: uppercase;
+  color: var(--sun); text-shadow: 0 0 18px rgba(255, 62, 165, .75), 0 3px 0 #000;
+  opacity: 0; transform: scale(.92); transition: opacity .12s, transform .12s;
+}
+.callout.on { opacity: 1; transform: scale(1) }
+.counts { display: flex; gap: 6px; justify-content: center; margin: 0; padding: 0; list-style: none }
+.counts li {
+  width: 30px; height: 30px; display: grid; place-items: center; border-radius: 50%;
+  font: 700 15px/1 var(--f-cond); color: rgba(241,238,251,.55); background: rgba(11,9,22,.55);
+  border: 1px solid rgba(241,238,251,.18); font-variant-numeric: tabular-nums;
+}
+.counts li.on { color: #0b0916; background: var(--cyan); border-color: var(--cyan); box-shadow: 0 0 14px var(--cyan) }
+.counts li.on.down { background: var(--magenta); border-color: var(--magenta); box-shadow: 0 0 14px var(--magenta) }
+
+.overlay {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 14px; text-align: center;
+  padding: 24px max(16px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(ellipse at 50% 60%, rgba(11,9,22,.25), rgba(11,9,22,.82));
+}
+.overlay .kicker { margin: 0; font: 700 13px/1 var(--f-cond); letter-spacing: .2em; text-transform: uppercase; color: var(--cyan) }
+.overlay h1 {
+  margin: 0; font: 400 clamp(34px, 8.4vw, 96px)/1.02 var(--f-neon); color: var(--magenta);
+  text-shadow: 0 0 10px rgba(255,62,165,.8), 0 0 34px rgba(255,62,165,.5); text-wrap: balance;
+}
+.overlay p { margin: 0; max-width: 46ch; color: var(--ink-soft) }
+.begin {
+  pointer-events: auto; cursor: pointer; display: grid; gap: 2px; justify-items: center;
+  padding: 14px 30px; border: 0; border-radius: 999px; background: var(--sun); color: #120f22;
+  font: 700 22px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase;
+  box-shadow: 0 0 0 4px rgba(255,210,63,.25), 0 8px 30px rgba(255,62,165,.35);
+}
+.begin small { font: 500 12px/1.2 var(--f-cond); letter-spacing: .12em; opacity: .75 }
+.begin:hover { transform: translateY(-1px) }
+.begin:disabled { opacity: .5; cursor: progress }
+.load { font: 500 13px/1 var(--f-cond); letter-spacing: .12em; text-transform: uppercase }
+
+/* Control strip */
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px }
+.btn {
+  cursor: pointer; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--rule); background: var(--panel); color: var(--ink);
+  font: 700 14px/1 var(--f-cond); letter-spacing: .1em; text-transform: uppercase;
+}
+.btn:hover { border-color: var(--ink-soft) }
+.btn.primary { background: var(--magenta); border-color: var(--magenta); color: #fff }
+.btn[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan) }
+.clock { margin-left: auto; font: 500 15px/1 var(--f-cond); letter-spacing: .08em; color: var(--ink-soft); font-variant-numeric: tabular-nums }
+.bar { flex-basis: 100%; height: 4px; border-radius: 2px; background: var(--rule); position: relative; overflow: hidden }
+.bar span { position: absolute; inset: 0 auto 0 0; width: 0; background: linear-gradient(90deg, var(--magenta), var(--sun)) }
+
+/* Notes */
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 28px 40px; padding-top: 24px }
+.notes section { min-width: 0 }
+.notes h2 { margin: 0 0 10px; font: 700 22px/1.1 var(--f-cond); letter-spacing: .06em; text-transform: uppercase; color: var(--sun) }
+.notes p { margin: 0 0 10px; color: var(--ink-soft); max-width: 62ch }
+.notes strong { color: var(--ink) }
+.prog { margin: 0; padding: 0; list-style: none; display: grid; gap: 0 }
+.prog li { display: grid; grid-template-columns: 3.4em 1fr; gap: 12px; padding: 7px 0; border-bottom: 1px solid var(--rule); color: var(--ink-soft) }
+.prog li b { color: var(--ink); font-weight: 600 }
+.prog time { font: 500 15px/1.5 var(--f-cond); color: var(--cyan); font-variant-numeric: tabular-nums }
+.prog li.now { background: linear-gradient(90deg, rgba(255,62,165,.16), transparent) }
+code { font: 400 .9em/1 ui-monospace, Menlo, Consolas, monospace }
+
+@media (prefers-reduced-motion: reduce) {
+  .callout, .begin { transition: none }
+}
+</style>
+
+<div class="wrap">
+  <a class="back" href="../">← RemoteFunLand</a>
+
+  <div class="stage" id="stage">
+    <canvas id="c" aria-label="Robots dancing an aerobics routine on a disco stage"></canvas>
+    <div class="flash" id="flash"></div>
+    <div class="hud" id="hud" hidden>
+      <div class="hud-top"><span id="secLabel">Warm-up</span><span><span class="live">●</span> <span id="barLabel">Bar 1</span></span></div>
+      <div class="callout" id="callout"></div>
+      <ol class="counts" id="counts" aria-hidden="true"><li>1</li><li>2</li><li>3</li><li>4</li><li>5</li><li>6</li><li>7</li><li>8</li></ol>
+    </div>
+    <div class="overlay" id="overlay">
+      <p class="kicker">No. 003 · RemoteFunLand</p>
+      <h1>Antenna Aerobics</h1>
+      <p>The robots from <code>robot_CameraWork.blend</code> take a 90-second class, then throw a party.</p>
+      <button class="begin" id="begin" type="button" disabled><span id="beginLabel">Loading robots…</span><small>1:30 · sound on</small></button>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button class="btn primary" id="playBtn" type="button" disabled>Start</button>
+    <button class="btn" id="motionBtn" type="button" aria-pressed="false">Motion: stepped</button>
+    <button class="btn" id="fsBtn" type="button">Full screen</button>
+    <span class="clock" id="clock">0:00 / 1:30</span>
+    <div class="bar" aria-hidden="true"><span id="progress"></span></div>
+  </div>
+
+  <div class="notes">
+    <section>
+      <h2>Programme</h2>
+      <ol class="prog" id="prog"></ol>
+    </section>
+    <section>
+      <h2>The dancers</h2>
+      <p>Every robot is the one from <strong>robot_CameraWork.blend</strong>: its 334-vertex mesh, its 20-joint rig and the hand-keyed <strong>AerobicBlocking</strong> routine, exported from Blender and baked for the browser. The routine is 32 counts long, the standard aerobics block, so each pass starts on a downbeat.</p>
+      <p>The file keys most poses with stepped interpolation, so the limbs snap from pose to pose. That is the default here. <strong>Motion: smooth</strong> switches to a version where the same keys are joined by curves.</p>
+      <p>In <strong>Human mode</strong> the soloist plays the raw motion capture <code>miikka_dance_long</code> from the same file, retargeted onto the robot and slowed to the half-time groove. The trio walks off with the file’s <code>KristaWalk</code> cycle, and the hidden “PARTY” letters and sphere become the sign and the disco ball.</p>
+    </section>
+    <section>
+      <h2>Sound</h2>
+      <p>The score is original and synthesized live with Web Audio at 150 BPM in A minor: drum machine, octave bass, house stabs, an arpeggiator and a lead hook. No samples and no recorded music. The track the Blender file was timed to is not part of this repo.</p>
+      <p>Built for laptops and phones. On slower devices the stage lowers its own resolution. With reduced motion set, the camera cuts less and the flashes are off.</p>
+    </section>
+  </div>
+</div>
+
+<script src="three-bundle.js"></script>
+<script src="robots.js"></script>
+<script>
+(() => {
+'use strict';
+const T = window.THREE;
+const $ = (id) => document.getElementById(id);
+const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// ---------- Timeline ----------
+const BPM = 150, SPB = 60 / BPM, BAR = 4 * SPB;
+const SECTIONS = [
+  { id: 'intro', bars: 4, label: 'Warm-up' },
+  { id: 'solo', bars: 8, label: 'Solo' },
+  { id: 'trio', bars: 8, label: 'Trio joins' },
+  { id: 'canon', bars: 8, label: 'Canon' },
+  { id: 'human', bars: 8, label: 'Human mode' },
+  { id: 'party', bars: 16, label: 'PARTY' },
+  { id: 'outro', bars: 4, label: 'Cool-down' },
+];
+let acc = 0;
+for (const s of SECTIONS) { s.start = acc; acc += s.bars; }
+const TOTAL_BARS = acc, SHOW_LEN = TOTAL_BARS * BAR, END_LEN = SHOW_LEN + 2.5;
+const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+const prog = $('prog');
+const progBlurb = {
+  intro: 'Count-in. The soloist warms up on the pedestal.',
+  solo: 'One robot, one 32-count routine.',
+  trio: 'Three more join in unison.',
+  canon: 'Each dancer one count behind the last; the right one mirrored.',
+  human: 'Half time. The soloist dances the raw motion capture.',
+  party: 'Twelve more rise from the floor. Disco ball down.',
+  outro: 'Everyone leaves but the soloist.',
+};
+SECTIONS.forEach((s) => {
+  const li = document.createElement('li');
+  li.dataset.id = s.id;
+  li.innerHTML = `<time>${fmt(s.start * BAR)}</time><span><b>${s.label}</b> · ${progBlurb[s.id]}</span>`;
+  prog.appendChild(li);
+});
+
+function sectionAt(beat) {
+  const bar = Math.floor(beat / 4);
+  let s = SECTIONS[SECTIONS.length - 1];
+  for (const x of SECTIONS) if (bar >= x.start && bar < x.start + x.bars) { s = x; break; }
+  if (bar < 0) s = SECTIONS[0];
+  return s;
+}
+
+// ---------- Renderer & scene ----------
+const canvas = $('c'), stageEl = $('stage');
+const renderer = new T.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
+renderer.toneMapping = T.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.15;
+const lowEnd = matchMedia('(pointer: coarse)').matches || Math.min(screen.width, screen.height) < 700;
+renderer.shadowMap.enabled = !lowEnd;
+renderer.shadowMap.type = T.PCFSoftShadowMap;
+let pixelRatio = Math.min(devicePixelRatio || 1, lowEnd ? 1.5 : 2);
+renderer.setPixelRatio(pixelRatio);
+
+const scene = new T.Scene();
+const FOG = new T.Color(0x0a0716);
+scene.background = FOG.clone();
+scene.fog = new T.FogExp2(FOG.clone(), 0.045);
+
+const camera = new T.PerspectiveCamera(38, 16 / 9, 0.1, 120);
+camera.position.set(0, 2.4, 9);
+
+// Environment for reflections (robots and the disco ball): a few coloured light panels.
+(() => {
+  const env = new T.Scene();
+  const panel = (c, x, y, z, w, h) => {
+    const m = new T.Mesh(new T.PlaneGeometry(w, h), new T.MeshBasicMaterial({ color: c, side: T.DoubleSide }));
+    m.position.set(x, y, z); m.lookAt(0, 0, 0); env.add(m);
+  };
+  env.background = new T.Color(0x07060c);
+  panel(0xffffff, 0, 6, 0, 6, 6);
+  panel(0xff3ea5, -6, 1, 1, 3, 5);
+  panel(0x2de2e6, 6, 1, -1, 3, 5);
+  panel(0xffd23f, 0, 1, 6, 4, 2);
+  panel(0x6a4cff, 0, 2, -6, 6, 3);
+  const pm = new T.PMREMGenerator(renderer);
+  scene.environment = pm.fromScene(env, 0.03).texture;
+  pm.dispose();
+})();
+
+// Lights
+const hemi = new T.HemisphereLight(0x8a7cff, 0x120a1e, 0.2);
+scene.add(hemi);
+const key = new T.SpotLight(0xfff3e6, 0, 0, 0.32, 0.55, 1);
+key.position.set(0, 9.5, 5.5);
+key.castShadow = true;
+key.shadow.mapSize.set(1024, 1024);
+key.shadow.bias = -0.0004;
+scene.add(key, key.target);
+const fill = new T.DirectionalLight(0x9fb7ff, 0.0);
+fill.position.set(-4, 5, 8);
+scene.add(fill);
+
+// Moving heads on the truss, with visible beams
+const BEAM_COLORS = [0xff3ea5, 0x2de2e6, 0xffd23f, 0x8b5cff];
+const heads = [];
+const beamGeo = new T.CylinderGeometry(0.04, 1.1, 1, 28, 1, true);
+beamGeo.translate(0, -0.5, 0);
+beamGeo.rotateX(-Math.PI / 2); // apex at the origin, opening along +Z, which lookAt() aims at the target
+const beamMatBase = new T.ShaderMaterial({
+  uniforms: { color: { value: new T.Color() }, strength: { value: 0 } },
+  vertexShader: 'varying float vA; void main(){ vA = uv.y; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+  fragmentShader: 'uniform vec3 color; uniform float strength; varying float vA; void main(){ float a = strength * pow(vA, 1.6) * 0.16; gl_FragColor = vec4(color * a, a); }',
+  transparent: true, depthWrite: false, blending: T.AdditiveBlending, side: T.DoubleSide,
+});
+const truss = new T.Mesh(new T.BoxGeometry(12, 0.18, 0.18), new T.MeshStandardMaterial({ color: 0x24203a, metalness: 0.8, roughness: 0.4 }));
+truss.position.set(0, 7.2, -2.6);
+scene.add(truss);
+[-4.5, -1.5, 1.5, 4.5].forEach((x, i) => {
+  const light = new T.SpotLight(BEAM_COLORS[i], 0, 0, 0.2, 0.4, 1);
+  light.position.set(x, 7.0, -2.6);
+  scene.add(light, light.target);
+  const mat = beamMatBase.clone();
+  mat.uniforms.color.value = new T.Color(BEAM_COLORS[i]);
+  const beam = new T.Mesh(beamGeo, mat);
+  beam.position.copy(light.position);
+  beam.frustumCulled = false;
+  scene.add(beam);
+  const can = new T.Mesh(new T.CylinderGeometry(0.16, 0.2, 0.36, 12), new T.MeshStandardMaterial({ color: 0x1a1726, metalness: 0.6, roughness: 0.5 }));
+  can.position.set(x, 7.0, -2.6);
+  scene.add(can);
+  heads.push({ light, beam, mat, x });
+});
+
+// LED dance floor: dark lit tiles plus an additive glow layer
+const TILE_X = 12, TILE_Z = 10, TILE = 1.0;
+const tileGeo = new T.BoxGeometry(TILE * 0.96, 0.08, TILE * 0.96);
+const floorTiles = new T.InstancedMesh(tileGeo, new T.MeshStandardMaterial({ color: 0x1a1630, metalness: 0.35, roughness: 0.28 }), TILE_X * TILE_Z);
+const glowTiles = new T.InstancedMesh(new T.PlaneGeometry(TILE * 0.9, TILE * 0.9), new T.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false }), TILE_X * TILE_Z);
+floorTiles.receiveShadow = true;
+const tilePos = [];
+{
+  const m = new T.Matrix4(), q = new T.Quaternion().setFromEuler(new T.Euler(-Math.PI / 2, 0, 0));
+  let i = 0;
+  for (let ix = 0; ix < TILE_X; ix++) for (let iz = 0; iz < TILE_Z; iz++) {
+    const x = (ix - (TILE_X - 1) / 2) * TILE, z = (iz - (TILE_Z - 1) / 2) * TILE - 0.3;
+    m.makeTranslation(x, -0.04, z); floorTiles.setMatrixAt(i, m);
+    m.compose(new T.Vector3(x, 0.002, z), q, new T.Vector3(1, 1, 1)); glowTiles.setMatrixAt(i, m);
+    glowTiles.setColorAt(i, new T.Color(0, 0, 0));
+    tilePos.push({ x, z, ix, iz, r: Math.hypot(x, z + 0.8) });
+    i++;
+  }
+}
+scene.add(floorTiles, glowTiles);
+const backWall = new T.Mesh(new T.PlaneGeometry(40, 16), new T.MeshStandardMaterial({ color: 0x120e22, roughness: 0.9 }));
+backWall.position.set(0, 6, -6.2);
+scene.add(backWall);
+
+// Glow sprite texture
+const glowTex = (() => {
+  const c = document.createElement('canvas'); c.width = c.height = 128;
+  const g = c.getContext('2d');
+  const grd = g.createRadialGradient(64, 64, 0, 64, 64, 64);
+  grd.addColorStop(0, 'rgba(255,255,255,1)'); grd.addColorStop(0.25, 'rgba(255,255,255,.55)'); grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 128, 128);
+  const t = new T.CanvasTexture(c); t.colorSpace = T.SRGBColorSpace; return t;
+})();
+const glowMat = (color) => new T.SpriteMaterial({ map: glowTex, color, transparent: true, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false });
+
+// ---------- Load the Blender assets ----------
+const DOME_COLORS = [0xff3ea5, 0x2de2e6, 0xffd23f];
+const mats = {
+  body: new T.MeshStandardMaterial({ color: 0xd8dbe6, metalness: 0.45, roughness: 0.38, envMapIntensity: 0.9 }),
+  knob: new T.MeshStandardMaterial({ color: 0x2a2840, metalness: 0.7, roughness: 0.3 }),
+  tip: new T.MeshStandardMaterial({ color: 0x220810, emissive: new T.Color(0xff2a3c), emissiveIntensity: 1 }),
+  dome: DOME_COLORS.map((c) => new T.MeshStandardMaterial({ color: 0x15121f, emissive: new T.Color(c), emissiveIntensity: 0.4, metalness: 0.2, roughness: 0.25 })),
+  domeGlow: DOME_COLORS.map((c) => glowMat(c)),
+  tipGlow: glowMat(0xff2a3c),
+};
+
+let proto = null, clips = {}, domeLocal = null, tipLocal = null, headWorldScale = 1;
+let pedestal = null, letters = [], disco = null, flecks = null;
+const robots = [];
+let assetsReady = false;
+
+function b64ToBuffer(b64) {
+  const bin = atob(b64), n = bin.length, u = new Uint8Array(n);
+  for (let i = 0; i < n; i++) u[i] = bin.charCodeAt(i);
+  return u.buffer;
+}
+
+function loadAssets() {
+  return new Promise((resolve, reject) => {
+    new window.GLTFLoader().parse(b64ToBuffer(window.ROBOTS_GLB), '', resolve, reject);
+  }).then((gltf) => {
+    gltf.animations.forEach((c) => { clips[c.name] = c; });
+    const hips = gltf.scene.getObjectByName('__Hips');
+    proto = hips.parent;
+    gltf.scene.updateMatrixWorld(true);
+    const head = proto.getObjectByName('__Head');
+    headWorldScale = head.getWorldScale(new T.Vector3()).x;
+    proto.traverse((o) => {
+      if (!o.isSkinnedMesh) return;
+      const n = o.material.name;
+      if (n === 'rb_dome' || n === 'rb_tip') {
+        // primitives share one vertex buffer, so average only the vertices this part indexes
+        // and skin each vertex, because the loader binds with an identity bind matrix
+        const idx = o.geometry.index, seen = new Set(), p = new T.Vector3(), v3 = new T.Vector3();
+        for (let k = 0; k < idx.count; k++) seen.add(idx.getX(k));
+        for (const v of seen) p.add(o.getVertexPosition(v, v3));
+        p.divideScalar(seen.size).applyMatrix4(o.matrixWorld);
+        if (n === 'rb_dome') p.z += 0.12; // sit the glow just in front of the dome
+        const local = head.worldToLocal(p);
+        if (n === 'rb_dome') domeLocal = local; else tipLocal = local;
+      }
+    });
+    proto.removeFromParent();
+
+    // Pedestal: the file's cylinder, sunk so its top sits at 1.36 like in the Blender scene
+    pedestal = gltf.scene.getObjectByName('Circle');
+    pedestal.material = new T.MeshStandardMaterial({ color: 0x2a2546, metalness: 0.6, roughness: 0.35 });
+    pedestal.castShadow = false; pedestal.receiveShadow = true;
+    // the glTF node keeps the cylinder's base at y=0 and its top at y=2.301
+    const pg = new T.Group(); pg.add(pedestal); pg.position.set(0, 1.36 - 2.301, -0.8);
+    scene.add(pg);
+    pedestal.userData.group = pg;
+    // Ring light on the pedestal rim
+    const ring = new T.Mesh(new T.TorusGeometry(1.0, 0.025, 8, 64), new T.MeshBasicMaterial({ color: 0xff3ea5, toneMapped: false }));
+    ring.rotation.x = Math.PI / 2; ring.position.set(0, 1.37, -0.8);
+    scene.add(ring); pedestal.userData.ring = ring;
+
+    // PARTY letters, rebuilt as a neon sign
+    const sign = new T.Group();
+    ['Text001', 'Text002', 'Text003', 'Text004', 'Text'].forEach((n, i) => {
+      const m = gltf.scene.getObjectByName(n);
+      m.material = new T.MeshStandardMaterial({ color: 0x1b1530, emissive: new T.Color(0xff3ea5), emissiveIntensity: 0, metalness: 0.3, roughness: 0.4 });
+      const g = new T.Sprite(glowMat(0xff3ea5)); g.scale.set(1.1, 1.1, 1); g.position.copy(m.position).add(new T.Vector3(0, 0.33, 0.2)); g.material.opacity = 0;
+      sign.add(m, g);
+      letters.push({ mesh: m, glow: g, i });
+    });
+    letters.sort((a, b) => a.mesh.position.x - b.mesh.position.x);
+    sign.scale.setScalar(2.4);
+    sign.position.set(0, 4.7, -5.6);
+    scene.add(sign);
+
+    // Disco ball: the file's low-poly sphere, faceted chrome
+    disco = gltf.scene.getObjectByName('Sphere');
+    disco.geometry = disco.geometry.toNonIndexed(); disco.geometry.computeVertexNormals();
+    disco.material = new T.MeshStandardMaterial({ color: 0xe8ecff, metalness: 1, roughness: 0.12, flatShading: true, envMapIntensity: 1.6 });
+    disco.scale.setScalar(0.6);
+    disco.position.set(0, 9.5, -0.6);
+    scene.add(disco);
+    const n = 520, pos = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) {
+      const u = Math.random() * 2 - 1, a = Math.random() * Math.PI * 2, r = 9 + Math.random() * 4;
+      const y = -Math.abs(u) * 0.8 - 0.1;
+      const s = Math.sqrt(1 - y * y);
+      pos.set([Math.cos(a) * s * r, y * r * 0.9, Math.sin(a) * s * r], i * 3);
+    }
+    const fg = new T.BufferGeometry(); fg.setAttribute('position', new T.BufferAttribute(pos, 3));
+    flecks = new T.Points(fg, new T.PointsMaterial({ size: 0.16, map: glowTex, color: 0xffffff, transparent: true, opacity: 0, blending: T.AdditiveBlending, depthWrite: false, toneMapped: false }));
+    scene.add(flecks);
+
+    buildCast();
+    assetsReady = true;
+  });
+}
+
+// ---------- The cast ----------
+function makeRobot(opts) {
+  const root = new T.Group();
+  const rig = window.SkeletonUtils.clone(proto);
+  root.add(rig);
+  const domeIdx = opts.dome || 0;
+  rig.traverse((o) => {
+    if (!o.isSkinnedMesh) return;
+    o.frustumCulled = false;
+    o.castShadow = true;
+    const n = o.material.name;
+    o.material = n === 'rb_dome' ? mats.dome[domeIdx] : n === 'rb_tip' ? mats.tip : n === 'rb_knob' ? mats.knob : mats.body;
+  });
+  const head = rig.getObjectByName('__Head');
+  const dg = new T.Sprite(mats.domeGlow[domeIdx]);
+  dg.position.copy(domeLocal); dg.scale.setScalar(0.9 / headWorldScale);
+  const tg = new T.Sprite(mats.tipGlow);
+  tg.position.copy(tipLocal); tg.scale.setScalar(0.35 / headWorldScale);
+  head.add(dg, tg);
+  const mixer = new T.AnimationMixer(rig);
+  const actions = {};
+  for (const name in clips) {
+    const a = mixer.clipAction(clips[name]);
+    a.setLoop(T.LoopRepeat, Infinity);
+    actions[name] = a;
+  }
+  const hips = rig.getObjectByName('__Hips');
+  const r = { root, rig, mixer, actions, cur: null, hips, hipsRest: hips.position.clone(), home: opts.pos.clone(), ...opts };
+  root.position.copy(opts.pos);
+  if (opts.rotY) root.rotation.y = opts.rotY;
+  scene.add(root);
+  robots.push(r);
+  return r;
+}
+
+let soloist, trio = [], extras = [];
+function buildCast() {
+  soloist = makeRobot({ name: 'solo', pos: new T.Vector3(0, 1.36, -0.8), dome: 0 });
+  trio = [
+    makeRobot({ name: 'L', pos: new T.Vector3(-2.15, 0, 0.55), dome: 1 }),
+    makeRobot({ name: 'C', pos: new T.Vector3(0, 0, 1.75), dome: 2 }),
+    makeRobot({ name: 'R', pos: new T.Vector3(2.15, 0, 0.55), dome: 1 }),
+  ];
+  const ang = [-105, -90, -75, -60, -45, -30, 30, 45, 60, 75, 90, 105];
+  extras = ang.map((d, i) => {
+    const a = d * Math.PI / 180;
+    const pos = new T.Vector3(Math.sin(a) * 4.3, 0, -0.8 + Math.cos(a) * 4.3);
+    const r = makeRobot({ name: 'x' + i, pos, dome: i % 2 ? 2 : 0 });
+    r.wave = Math.abs(d) <= 30 ? 0 : Math.round((Math.abs(d) - 30) / 15); // 0..5 from centre outward
+    return r;
+  });
+}
+
+// ---------- Choreography ----------
+let smooth = false;
+const FPS = 24, PHRASE_FRAMES = 253;
+function routineTime(count) {
+  const c = ((count % 32) + 32) % 32;
+  return Math.min(c * 8, PHRASE_FRAMES - 0.01) / FPS;
+}
+function setPose(r, clip, t) {
+  const a = r.actions[clip];
+  if (r.cur !== a) {
+    if (r.cur) r.cur.stop();
+    a.reset(); a.play(); r.cur = a;
+  }
+  const d = a.getClip().duration;
+  a.time = Math.min(((t % d) + d) % d, d - 1e-4);
+  r.mixer.update(0);
+}
+const routine = () => (smooth ? 'aerobics_smooth' : 'aerobics_stepped');
+// March in place: the knee lifts at frames 0-16, two counts per cycle
+const march = (beat, countsPerCycle) => (((beat / countsPerCycle) % 1 + 1) % 1) * 16 / FPS;
+const MOCAP_START = 110.5, MOCAP_RATE = 0.78;
+const PEAK = 80 / FPS;
+
+function choreograph(beat, sec) {
+  const sb = beat - sec.start * 4; // beats into the section
+  const all = robots;
+  for (const r of all) { r.root.visible = true; r.root.scale.set(1, 1, 1); r.root.rotation.y = 0; r.root.position.copy(r.home); }
+  for (const r of extras) r.root.visible = false;
+  const showTrio = !['intro', 'solo'].includes(sec.id);
+  for (const r of trio) r.root.visible = showTrio;
+
+  switch (sec.id) {
+    case 'intro':
+      if (sb < 12) setPose(soloist, 'aerobics_stepped', 0);
+      else setPose(soloist, 'aerobics_stepped', march(sb, 2));
+      break;
+    case 'solo':
+      setPose(soloist, routine(), routineTime(sb));
+      break;
+    case 'trio':
+      for (const r of [soloist, ...trio]) setPose(r, routine(), routineTime(sb));
+      break;
+    case 'canon':
+      setPose(soloist, routine(), routineTime(sb));
+      trio.forEach((r, i) => setPose(r, routine(), routineTime(sb - (i + 1))));
+      trio[2].root.scale.x = -1;
+      break;
+    case 'human': {
+      setPose(soloist, 'mocap', MOCAP_START + sb * SPB * MOCAP_RATE);
+      // keep the captured dancer on the pedestal: damp the travel, keep the bounce
+      const h = soloist.hips, rest = soloist.hipsRest;
+      h.position.x = rest.x + (h.position.x - rest.x) * 0.25;
+      h.position.z = rest.z + (h.position.z - rest.z) * 0.25;
+      h.position.y = rest.y + (h.position.y - rest.y) * 0.6;
+      trio.forEach((r) => setPose(r, 'aerobics_stepped', march(sb, 4)));
+      break;
+    }
+    case 'party': {
+      const second = sb >= 32;
+      setPose(soloist, routine(), routineTime(sb));
+      trio.forEach((r) => setPose(r, routine(), routineTime(sb)));
+      const rise = Math.min(1, sb / 4);
+      extras.forEach((r) => {
+        r.root.visible = true;
+        const e = 1 - Math.pow(1 - rise, 3);
+        r.root.position.y = -1.9 * (1 - e);
+        setPose(r, routine(), routineTime(second ? sb : sb - r.wave * 0.5));
+      });
+      break;
+    }
+    case 'outro': {
+      setPose(soloist, 'aerobics_stepped', PEAK);
+      // extras sink back into the floor over the first bar
+      const sink = Math.min(1, sb / 4);
+      extras.forEach((r) => {
+        r.root.visible = sink < 1;
+        r.root.position.y = -1.9 * sink * sink;
+        setPose(r, 'aerobics_stepped', PEAK);
+      });
+      // the trio walks off into the wings
+      trio.forEach((r, i) => {
+        const dir = i === 0 ? -1 : i === 2 ? 1 : 0;
+        const walkT = sb * SPB;
+        if (dir === 0) r.root.position.z = r.home.z + walkT * 0.55; // the centre robot walks out towards the audience
+        else { r.root.rotation.y = dir * Math.PI / 2; r.root.position.x = r.home.x + dir * walkT * 0.55; }
+        setPose(r, 'walk', walkT * 1.1);
+      });
+      break;
+    }
+  }
+}
+
+// ---------- Camera director ----------
+const V = (x, y, z) => new T.Vector3(x, y, z);
+const ease = (u) => 0.5 - 0.5 * Math.cos(Math.PI * Math.min(1, Math.max(0, u)));
+const SOLO_CHEST = V(0, 2.35, -0.8), SOLO_HEAD = V(0, 2.75, -0.8), STAGE = V(0, 1.1, 0.2);
+const move = (p0, t0, p1, t1, fov = 38) => (u) => { const e = ease(u); return { p: p0.clone().lerp(p1, e), t: t0.clone().lerp(t1, e), fov }; };
+const orbit = (c, r, h, a0, a1, look, fov = 38) => (u) => {
+  const a = (a0 + (a1 - a0) * ease(u)) * Math.PI / 180;
+  return { p: V(c.x + Math.sin(a) * r, h, c.z + Math.cos(a) * r), t: look.clone(), fov };
+};
+const SHOTS = {
+  intro: [[4, move(V(0, 2.2, 15), SOLO_CHEST, V(0, 2.5, 6.2), SOLO_CHEST)]],
+  solo: [
+    [2, move(V(0.5, 2.3, 4.8), SOLO_CHEST, V(-0.4, 2.3, 4.4), SOLO_CHEST)],
+    [3, orbit(SOLO_CHEST, 4.4, 1.2, -40, 40, SOLO_CHEST.clone().setY(2.5))],
+    [1, move(V(0.25, 2.9, 1.6), SOLO_HEAD, V(0.1, 2.85, 1.2), SOLO_HEAD, 34)],
+    [2, move(V(0, 1.3, 5.2), SOLO_CHEST, V(0, 3.9, 5.6), SOLO_CHEST)],
+  ],
+  trio: [
+    [2, move(V(0, 6.2, 12), STAGE, V(0, 5.0, 10), STAGE)],
+    [2, move(V(6.2, 1.3, 5.0), V(0, 1.2, 0.4), V(5.0, 1.6, 6.2), V(0, 1.2, 0.4))],
+    [2, move(V(0, 2.0, 8.2), V(0, 1.5, 0), V(0, 2.2, 7.4), V(0, 1.6, 0))],
+    [2, orbit(STAGE, 8, 3.2, 35, -35, STAGE)],
+  ],
+  canon: [
+    [2, move(V(-6.5, 0.8, 3.5), STAGE, V(-5.2, 1.2, 4.8), STAGE)],
+    [2, move(V(0.01, 11, 1.8), V(0, 0, 0.2), V(0.4, 10.5, 1.4), V(0, 0, 0.2), 42)],
+    [2, move(V(0, 1.8, 8.5), V(0, 1.5, 0.3), V(0, 1.9, 7.6), V(0, 1.5, 0.3))],
+    [1, move(V(0.3, 1.2, 4.0), V(0, 1.1, 1.75), V(0.1, 1.2, 3.6), V(0, 1.1, 1.75), 34)],
+    [1, orbit(STAGE, 6, 2.2, -70, 110, STAGE)],
+  ],
+  human: [
+    [4, move(V(0, 2.6, 8), SOLO_CHEST, V(0, 2.7, 4.6), SOLO_CHEST)],
+    [3, orbit(SOLO_CHEST, 4.8, 2.0, 25, -60, SOLO_CHEST)],
+    [1, move(V(0, 2.4, 9.5), V(0, 4.4, -2), V(0, 2.2, 10.5), V(0, 4.8, -3), 44)],
+  ],
+  party: [
+    [2, move(V(0, 4.2, 12.5), V(0, 2.4, -0.5), V(0, 3.4, 11), V(0, 2.2, -0.5), 46)],
+    [2, orbit(SOLO_CHEST, 5.2, 1.0, -30, 30, SOLO_CHEST.clone().setY(2.8), 42)],
+    [2, move(V(-7.5, 1.4, 6), STAGE, V(-4, 1.6, 7.8), STAGE, 44)],
+    [2, move(V(0.01, 13, 2.5), V(0, 0, -0.2), V(0.01, 12, 2), V(0, 0, -0.2), 48)],
+    [1, move(V(0, 2.0, 6.0), V(0, 1.4, 1.8), V(0, 2.0, 5.4), V(0, 1.4, 1.8))],
+    [1, orbit(V(0, 0, -0.8), 7.5, 1.0, 60, 30, V(0, 2.4, -1), 44)],
+    [1, move(V(0, 1.0, 9), V(0, 5.5, -4), V(0, 1.2, 8.2), V(0, 5.5, -4), 50)],
+    [1, orbit(V(0, 0, -0.8), 7.5, 1.0, -60, -30, V(0, 2.4, -1), 44)],
+    [1, move(V(0.3, 2.9, 1.6), SOLO_HEAD, V(0.1, 2.85, 1.25), SOLO_HEAD, 34)],
+    [1, move(V(5, 6, 9), STAGE, V(4.4, 5.6, 8.4), STAGE, 46)],
+    [1, move(V(-5, 6, 9), STAGE, V(-4.4, 5.6, 8.4), STAGE, 46)],
+    [1, orbit(STAGE, 7, 2.4, 160, 200, STAGE, 46)],
+  ],
+  outro: [[4, move(V(0, 2.5, 5.2), SOLO_CHEST, V(0, 5.5, 17), V(0, 2.6, -1), 40)]],
+};
+const CALM_SHOTS = {
+  intro: SHOTS.intro,
+  solo: [[8, move(V(0.6, 2.4, 5.6), SOLO_CHEST, V(-0.6, 2.4, 5.2), SOLO_CHEST)]],
+  trio: [[8, move(V(0, 4.0, 10), STAGE, V(0, 3.4, 9), STAGE, 40)]],
+  canon: [[8, orbit(STAGE, 8.5, 3.0, 20, -20, STAGE)]],
+  human: [[8, move(V(0, 2.6, 7.6), SOLO_CHEST, V(0, 2.7, 5.6), SOLO_CHEST)]],
+  party: [[8, move(V(0, 4.2, 12.5), V(0, 2.4, -0.5), V(0, 3.6, 11.4), V(0, 2.3, -0.5), 46)], [8, orbit(STAGE, 10, 3.6, 15, -15, V(0, 2.2, -0.5), 46)]],
+  outro: SHOTS.outro,
+};
+function shotAt(beat, sec) {
+  const list = (calm ? CALM_SHOTS : SHOTS)[sec.id];
+  const sbar = beat / 4 - sec.start;
+  let accb = 0;
+  for (const [bars, fn] of list) {
+    if (sbar < accb + bars) return fn((sbar - accb) / bars);
+    accb += bars;
+  }
+  return list[list.length - 1][1](1);
+}
+function fitFov(fov) {
+  const aspect = camera.aspect, ref = 16 / 9;
+  if (aspect >= ref) return fov;
+  const h = 2 * Math.atan(Math.tan((fov * Math.PI / 180) / 2) * ref / aspect) * 180 / Math.PI;
+  return Math.min(h, 78);
+}
+
+// ---------- Lights & stage look per moment ----------
+const flashEl = $('flash');
+const col = new T.Color();
+function stageLook(beat, sec, kick) {
+  const sb = beat - sec.start * 4;
+  const bf = beat % 1;
+  let keyI = 0, hemiI = 0.12, beams = 0, floor = 0, signOn = 0, ball = 9.5, fleck = 0, ring = 0.2;
+  switch (sec.id) {
+    case 'intro': keyI = 160 * ease(sb / 14); hemiI = 0.1; ring = ease(sb / 16); break;
+    case 'solo': keyI = 160; hemiI = 0.2; ring = 0.6 + kick * 0.4; break;
+    case 'trio': keyI = 120; hemiI = 0.55; beams = 0.6; floor = 0.25; ring = 0.7; break;
+    case 'canon': keyI = 120; hemiI = 0.5; beams = 0.9; floor = 0.45; ring = 0.7; break;
+    case 'human': keyI = 190; hemiI = 0.08; ring = 0.4; ball = 9.5 - 3.5 * ease((sb - 12) / 16); signOn = sb >= 28 ? 1 : 0; break;
+    case 'party': keyI = 90; hemiI = 0.45; beams = 1; floor = 1; signOn = 2; ball = 6.0; fleck = 1; ring = 1; break;
+    case 'outro': keyI = 160 * (1 - ease((sb - 10) / 6)); hemiI = 0.15 * (1 - sb / 16); signOn = sb < 12 ? 2 : 0; ball = 6.0 + 4 * ease(sb / 16); fleck = 1 - sb / 8; ring = 1 - sb / 16; break;
+  }
+  key.intensity = keyI;
+  key.target.position.set(0, 1.36, -0.8);
+  hemi.intensity = hemiI;
+  fill.intensity = hemiI * 1.2;
+
+  // Moving heads: sweep patterns locked to the bar
+  heads.forEach((h, i) => {
+    const ph = beat * Math.PI / 4 + i * 1.7;
+    const tx = Math.sin(ph) * 3.2 + (i - 1.5) * 0.8;
+    const tz = 1 + Math.cos(ph * 0.75 + i) * 2.4;
+    const strobe = sec.id === 'party' && !calm ? (0.65 + 0.35 * Math.max(0, 1 - bf * 3)) : 1;
+    h.light.target.position.set(tx, 0, tz);
+    h.light.intensity = 140 * beams * strobe;
+    h.beam.lookAt(tx, 0, tz);
+    const len = h.light.position.distanceTo(h.light.target.position);
+    h.beam.scale.set(1, 1, len);
+    h.mat.uniforms.strength.value = beams * strobe;
+  });
+
+  // Dance floor
+  const bar = Math.floor(beat / 4);
+  for (let i = 0; i < tilePos.length; i++) {
+    const tp = tilePos[i];
+    let v = 0, c = 0;
+    if (floor > 0) {
+      if (sec.id === 'party') {
+        const pattern = Math.floor(sb / 16) % 4;
+        if (pattern === 0) { v = ((tp.ix + tp.iz + Math.floor(beat)) % 2) ? 1 : 0.08; c = (tp.ix + Math.floor(beat)) % 3; }
+        else if (pattern === 1) { const w = Math.abs(tp.r - (bf * 7)); v = Math.max(0.08, 1 - w); c = Math.floor(tp.r) % 3; }
+        else if (pattern === 2) { v = ((tp.ix + Math.floor(beat * 2)) % 4 === 0) ? 1 : 0.06; c = tp.iz % 3; }
+        else { v = Math.max(0.08, Math.sin(tp.x * 0.9 + beat * 1.6) * Math.cos(tp.z * 0.9 - beat) ); c = (tp.ix * 7 + tp.iz * 3 + bar) % 3; }
+        v *= calm ? 0.55 : (0.75 + 0.25 * kick);
+      } else {
+        v = tp.r < 1.8 + (Math.floor(beat) % 4) * 0.9 && tp.r > 0.9 + (Math.floor(beat) % 4) * 0.9 ? 0.6 : 0.05;
+        c = 1;
+      }
+      v *= floor;
+    }
+    col.set(DOME_COLORS[c] ?? DOME_COLORS[0]).multiplyScalar(Math.max(0, v) * 0.9);
+    glowTiles.setColorAt(i, col);
+  }
+  glowTiles.instanceColor.needsUpdate = true;
+
+  // Robot lights: dome speakers pump with the kick, antennas blink on the beat
+  const domeBase = sec.id === 'human' ? 0.6 : 0.5;
+  mats.dome.forEach((m, i) => { m.emissiveIntensity = domeBase + kick * 3.2; });
+  mats.domeGlow.forEach((m) => { m.opacity = 0.18 + kick * 0.6; });
+  const blink = bf < 0.18 ? 1 : 0.15;
+  mats.tip.emissiveIntensity = 0.4 + blink * 3;
+  mats.tipGlow.opacity = 0.15 + blink * 0.75;
+
+  // Pedestal ring
+  if (pedestal) pedestal.userData.ring.material.color.set(0xff3ea5).multiplyScalar(Math.max(0.05, ring));
+
+  // PARTY sign: letters switch on one per eighth note in the last bar of Human mode, then pulse
+  letters.forEach((L, i) => {
+    let on = 0;
+    if (signOn === 1) on = sb >= 28 + i * 0.5 ? 1 : 0;
+    else if (signOn === 2) on = calm ? 1 : 0.7 + 0.3 * Math.max(kick, (Math.floor(beat * 2) + i) % 5 === 0 ? 1 : 0);
+    L.mesh.material.emissiveIntensity = on * 2.6;
+    L.glow.material.opacity = on * 0.55;
+  });
+
+  // Disco ball and its flecks
+  if (disco) {
+    disco.position.y = ball;
+    disco.rotation.y = beat * 0.25;
+    flecks.position.copy(disco.position);
+    flecks.rotation.y = beat * 0.25;
+    flecks.material.opacity = Math.max(0, fleck) * 0.9;
+  }
+
+  // Fog warms up for the party
+  const target = sec.id === 'party' ? 0x1a0b2a : 0x0a0716;
+  scene.fog.color.lerp(col.set(target), 0.05);
+  scene.background.copy(scene.fog.color);
+
+  // White flash on the drop and every 4 bars of the party
+  let flash = 0;
+  if (!calm) {
+    if (sec.id === 'party' && sb % 16 < 0.5) flash = 0.55 * (1 - (sb % 16) / 0.5);
+  }
+  flashEl.style.opacity = flash.toFixed(3);
+}
+
+// ---------- Music ----------
+const NOTE = (m) => 440 * Math.pow(2, (m - 69) / 12);
+const CH = { Am: [57, 60, 64], F: [53, 57, 60], G: [55, 59, 62], Em: [52, 55, 59], E: [52, 56, 59] };
+const ROOT = { Am: 45, F: 41, G: 43, Em: 40, E: 40 };
+const PROG8 = ['Am', 'Am', 'F', 'F', 'G', 'G', 'Em', 'E'];
+const LEAD = [ // [beat in the 8-bar loop, midi, length in beats]
+  [0, 76, 1], [1, 76, .5], [1.5, 74, .5], [2, 72, 1], [3, 69, 1],
+  [4, 72, .5], [4.5, 74, .5], [5, 76, 1], [6, 79, 1], [7, 76, 1],
+  [8, 77, 1], [9, 76, .5], [9.5, 72, .5], [10, 69, 2],
+  [13, 69, .5], [13.5, 72, .5], [14, 74, 1], [15, 72, 1],
+  [16, 74, 1], [17, 74, .5], [17.5, 76, .5], [18, 79, 1], [19, 74, 1],
+  [20, 71, .5], [20.5, 72, .5], [21, 74, 1], [22, 71, 1], [23, 67, 1],
+  [24, 76, 1], [25, 74, .5], [25.5, 71, .5], [26, 67, 1], [27, 71, 1],
+  [28, 68, 1], [29, 71, 1], [30, 76, 2],
+];
+
+class Band {
+  constructor(ctx) {
+    const ac = this.ac = ctx || new (window.AudioContext || window.webkitAudioContext)();
+    this.master = ac.createGain(); this.master.gain.value = 0.9;
+    const comp = ac.createDynamicsCompressor();
+    comp.threshold.value = -14; comp.ratio.value = 4; comp.attack.value = 0.004; comp.release.value = 0.2;
+    this.master.connect(comp).connect(ac.destination);
+    this.drums = ac.createGain(); this.drums.gain.value = 0.9; this.drums.connect(this.master);
+    this.duck = ac.createGain(); this.duck.gain.value = 1;
+    this.musicLP = ac.createBiquadFilter(); this.musicLP.type = 'lowpass'; this.musicLP.frequency.value = 18000; this.musicLP.Q.value = 0.7;
+    this.music = ac.createGain(); this.music.gain.value = 0.8;
+    this.music.connect(this.duck).connect(this.musicLP).connect(this.master);
+    // reverb send
+    this.verb = ac.createConvolver(); this.verb.buffer = this.impulse(2.4);
+    this.verbSend = ac.createGain(); this.verbSend.gain.value = 0.32;
+    this.verbSend.connect(this.verb).connect(this.master);
+    // ping-pong-ish delay for arp and lead
+    this.delay = ac.createDelay(1); this.delay.delayTime.value = SPB * 0.75;
+    this.fb = ac.createGain(); this.fb.gain.value = 0.32;
+    const dl = ac.createBiquadFilter(); dl.type = 'lowpass'; dl.frequency.value = 3200;
+    this.delaySend = ac.createGain(); this.delaySend.gain.value = 0.22;
+    this.delaySend.connect(this.delay).connect(dl).connect(this.fb).connect(this.delay);
+    dl.connect(this.duck);
+    this.noise = this.noiseBuffer();
+  }
+  impulse(sec) {
+    const ac = this.ac, n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(2, n, ac.sampleRate);
+    for (let ch = 0; ch < 2; ch++) { const d = b.getChannelData(ch); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3); }
+    return b;
+  }
+  noiseBuffer() {
+    const ac = this.ac, n = ac.sampleRate, b = ac.createBuffer(1, n, ac.sampleRate), d = b.getChannelData(0);
+    for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    return b;
+  }
+  env(g, t, a, peak, dcy, end = 0.0001) {
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(peak, t + a);
+    g.gain.exponentialRampToValueAtTime(end, t + a + dcy);
+  }
+  kick(t, v = 1, duck = true) {
+    const ac = this.ac, o = ac.createOscillator(), g = ac.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(46, t + 0.11);
+    this.env(g, t, 0.002, 0.95 * v, 0.34);
+    o.connect(g).connect(this.drums); o.start(t); o.stop(t + 0.4);
+    const c = ac.createBufferSource(), cg = ac.createGain(), hp = ac.createBiquadFilter();
+    c.buffer = this.noise; hp.type = 'highpass'; hp.frequency.value = 2500;
+    this.env(cg, t, 0.001, 0.12 * v, 0.02);
+    c.connect(hp).connect(cg).connect(this.drums); c.start(t, Math.random() * 0.5); c.stop(t + 0.03);
+    if (duck) { this.duck.gain.setValueAtTime(0.4, t); this.duck.gain.linearRampToValueAtTime(1, t + 0.2); }
+  }
+  clap(t, v = 1) {
+    const ac = this.ac, s = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = this.noise; bp.type = 'bandpass'; bp.frequency.value = 1400; bp.Q.value = 0.9;
+    g.gain.setValueAtTime(0.0001, t);
+    [0, 0.011, 0.022].forEach((o) => { g.gain.setValueAtTime(0.5 * v, t + o); g.gain.exponentialRampToValueAtTime(0.05, t + o + 0.009); });
+    g.gain.setValueAtTime(0.42 * v, t + 0.032); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24);
+    s.connect(bp).connect(g); g.connect(this.drums); g.connect(this.verbSend);
+    s.start(t, Math.random() * 0.5); s.stop(t + 0.26);
+  }
+  hat(t, open = false, v = 1) {
+    const ac = this.ac, s = ac.createBufferSource(), hp = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = this.noise; hp.type = 'highpass'; hp.frequency.value = open ? 7000 : 8500;
+    this.env(g, t, 0.001, (open ? 0.18 : 0.13) * v, open ? 0.2 : 0.035);
+    s.connect(hp).connect(g).connect(this.drums); s.start(t, Math.random() * 0.5); s.stop(t + (open ? 0.25 : 0.06));
+  }
+  snare(t, v = 1) {
+    const ac = this.ac, s = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = this.noise; bp.type = 'bandpass'; bp.frequency.value = 2200; bp.Q.value = 0.6;
+    this.env(g, t, 0.001, 0.38 * v, 0.14);
+    s.connect(bp).connect(g).connect(this.drums); s.start(t, Math.random() * 0.5); s.stop(t + 0.18);
+    const o = ac.createOscillator(), og = ac.createGain(); o.type = 'triangle'; o.frequency.setValueAtTime(220, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.08);
+    this.env(og, t, 0.001, 0.25 * v, 0.09); o.connect(og).connect(this.drums); o.start(t); o.stop(t + 0.12);
+  }
+  crash(t, v = 1) {
+    const ac = this.ac, s = ac.createBufferSource(), hp = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = this.noise; s.loop = true; hp.type = 'highpass'; hp.frequency.value = 4500;
+    this.env(g, t, 0.003, 0.3 * v, 2.2);
+    s.connect(hp).connect(g); g.connect(this.drums); g.connect(this.verbSend); s.start(t); s.stop(t + 2.4);
+  }
+  bass(t, m, dur, v = 1) {
+    const ac = this.ac, o = ac.createOscillator(), o2 = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = 'sawtooth'; o2.type = 'square'; o.frequency.value = NOTE(m); o2.frequency.value = NOTE(m - 12);
+    f.type = 'lowpass'; f.Q.value = 6; f.frequency.setValueAtTime(220, t); f.frequency.exponentialRampToValueAtTime(1500, t + 0.02); f.frequency.exponentialRampToValueAtTime(260, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.24 * v, t + 0.006); g.gain.setValueAtTime(0.24 * v, t + dur * 0.7); g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    const g2 = ac.createGain(); g2.gain.value = 0.35;
+    o.connect(f); o2.connect(g2).connect(f); f.connect(g).connect(this.music);
+    o.start(t); o2.start(t); o.stop(t + dur + 0.02); o2.stop(t + dur + 0.02);
+  }
+  stab(t, notes, dur = 0.22, v = 1, bright = 3200) {
+    const ac = this.ac, f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'lowpass'; f.Q.value = 3; f.frequency.setValueAtTime(bright, t); f.frequency.exponentialRampToValueAtTime(500, t + dur);
+    this.env(g, t, 0.004, 0.11 * v, dur);
+    f.connect(g); g.connect(this.music); g.connect(this.verbSend);
+    for (const n of notes) for (const d of [-9, 9]) {
+      const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = NOTE(n); o.detune.value = d;
+      o.connect(f); o.start(t); o.stop(t + dur + 0.05);
+    }
+  }
+  pad(t, notes, dur, v = 1) {
+    const ac = this.ac, f = ac.createBiquadFilter(), g = ac.createGain();
+    f.type = 'lowpass'; f.frequency.value = 1300;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.07 * v, t + dur * 0.35); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.6);
+    f.connect(g); g.connect(this.music); g.connect(this.verbSend);
+    for (const n of notes) for (const d of [-12, 0, 12]) {
+      const o = ac.createOscillator(); o.type = d ? 'sawtooth' : 'triangle'; o.frequency.value = NOTE(n); o.detune.value = d;
+      o.connect(f); o.start(t); o.stop(t + dur + 0.7);
+    }
+  }
+  pluck(t, m, dur = 0.12, v = 1, type = 'square', cut = 2600) {
+    const ac = this.ac, o = ac.createOscillator(), f = ac.createBiquadFilter(), g = ac.createGain();
+    o.type = type; o.frequency.value = NOTE(m);
+    f.type = 'lowpass'; f.Q.value = 2; f.frequency.setValueAtTime(cut, t); f.frequency.exponentialRampToValueAtTime(400, t + dur);
+    this.env(g, t, 0.003, 0.07 * v, dur);
+    o.connect(f).connect(g); g.connect(this.music); g.connect(this.delaySend);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+  lead(t, m, dur, v = 1) {
+    const ac = this.ac, f = ac.createBiquadFilter(), g = ac.createGain(), lfo = ac.createOscillator(), lg = ac.createGain();
+    f.type = 'lowpass'; f.frequency.value = 3800; f.Q.value = 1;
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.085 * v, t + 0.01); g.gain.setValueAtTime(0.085 * v, t + dur * 0.8); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.08);
+    lfo.frequency.value = 5.5; lg.gain.value = 9; lfo.connect(lg);
+    f.connect(g); g.connect(this.music); g.connect(this.delaySend); g.connect(this.verbSend);
+    for (const [type, d] of [['sawtooth', -6], ['square', 6]]) {
+      const o = ac.createOscillator(); o.type = type; o.frequency.value = NOTE(m); o.detune.value = d; lg.connect(o.detune);
+      o.connect(f); o.start(t); o.stop(t + dur + 0.1);
+    }
+    lfo.start(t); lfo.stop(t + dur + 0.1);
+  }
+  blip(t, m, v = 1) {
+    const ac = this.ac, o = ac.createOscillator(), g = ac.createGain();
+    o.type = 'sine'; o.frequency.value = NOTE(m);
+    this.env(g, t, 0.002, 0.22 * v, 0.16);
+    o.connect(g); g.connect(this.music); g.connect(this.verbSend); o.start(t); o.stop(t + 0.2);
+  }
+  riser(t, dur, v = 1) {
+    const ac = this.ac, s = ac.createBufferSource(), bp = ac.createBiquadFilter(), g = ac.createGain();
+    s.buffer = this.noise; s.loop = true; bp.type = 'bandpass'; bp.Q.value = 4;
+    bp.frequency.setValueAtTime(400, t); bp.frequency.exponentialRampToValueAtTime(7000, t + dur);
+    g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.16 * v, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.02);
+    s.connect(bp).connect(g).connect(this.master); s.start(t); s.stop(t + dur + 0.05);
+  }
+
+  // One bar of the arrangement
+  bar(barIndex, t) {
+    const sec = SECTIONS.find((s) => barIndex >= s.start && barIndex < s.start + s.bars);
+    if (!sec) return;
+    const lb = barIndex - sec.start; // bar within section
+    const chord = PROG8[lb % 8], notes = CH[chord], root = ROOT[chord];
+    const at = (b) => t + b * SPB;
+    const fourFloor = (v = 1) => { for (let b = 0; b < 4; b++) this.kick(at(b), v); };
+    const octBass = (v = 1) => { for (let e = 0; e < 8; e++) this.bass(at(e / 2), root + (e % 2 ? 12 : 0), SPB * 0.45, v); };
+    const hats8 = (v = 1) => { for (let b = 0; b < 4; b++) this.hat(at(b + 0.5), false, v); };
+    const hats16 = (v = 1) => { for (let s = 0; s < 16; s++) this.hat(at(s / 4), false, (s % 2 ? 0.55 : 0.85) * v); };
+    const claps = (v = 1) => { this.clap(at(1), v); this.clap(at(3), v); };
+    const offStabs = (v = 1) => { for (let b = 0; b < 4; b++) this.stab(at(b + 0.5), notes.map((n) => n + 12), 0.2, v); };
+    const arp = (v = 1, oct = 24) => { const seq = [0, 1, 2, 1, 2, 0, 2, 1]; for (let s = 0; s < 16; s++) this.pluck(at(s / 4), notes[seq[s % 8]] + oct, 0.1, v); };
+
+    switch (sec.id) {
+      case 'intro': {
+        const ic = ['Am', 'F', 'G', 'E'][lb];
+        this.pad(t, CH[ic], BAR, 1);
+        this.bass(t, ROOT[ic], BAR * 0.95, 0.6);
+        if (lb >= 2) for (let b = 0; b < 4; b++) this.kick(at(b), lb === 2 ? 0.55 : 0.75, false);
+        if (lb === 2) this.riser(t, BAR * 2, 0.8);
+        if (lb === 3) { hats16(0.8); [72, 74, 76, 79].forEach((m, i) => this.blip(at(i), m)); }
+        break;
+      }
+      case 'solo':
+        fourFloor(); octBass(); hats8(); claps(0.9);
+        if (lb % 2 === 0) this.stab(t, notes.map((n) => n + 12), 0.5, 0.9);
+        if (lb === 0) this.crash(t, 0.8);
+        break;
+      case 'trio':
+        fourFloor(); octBass(); hats8(); claps(); offStabs();
+        for (let b = 0; b < 4; b++) this.hat(at(b + 0.5), true, 0.6);
+        if (lb === 0) this.crash(t);
+        break;
+      case 'canon':
+        fourFloor(); octBass(); hats16(0.8); claps(); offStabs(0.8); arp(0.9);
+        if (lb === 0) this.crash(t);
+        if (lb === 7) this.riser(t, BAR, 0.6);
+        break;
+      case 'human': {
+        // half time: kick on 1 and the "and" of 3, snare on 3
+        this.kick(at(0), 0.95); this.kick(at(2.5), 0.7);
+        this.snare(at(2), 1);
+        for (let b = 0; b < 8; b++) this.hat(at(b / 2), false, b % 2 ? 0.5 : 0.8);
+        this.bass(t, root, BAR * 0.9, 0.8);
+        this.pad(t, notes, BAR, 1.2);
+        for (let b = 0; b < 4; b++) this.pluck(at(b), notes[(b + lb) % 3] + 24, 0.18, 0.8, 'triangle', 3500);
+        if (lb === 0) { this.crash(t, 0.6); this.musicLP.frequency.setValueAtTime(18000, t); this.musicLP.frequency.exponentialRampToValueAtTime(900, t + BAR * 2); }
+        if (lb === 4) { this.musicLP.frequency.setValueAtTime(900, t); this.musicLP.frequency.exponentialRampToValueAtTime(16000, t + BAR * 4); }
+        if (lb === 6) this.riser(t, BAR * 2, 1);
+        if (lb === 7) {
+          [64, 67, 69, 72, 76].forEach((m, i) => this.blip(at(i * 0.5), m, 1.1)); // P A R T Y
+          for (let s = 10; s < 16; s++) this.snare(at(s / 4), 0.5 + (s - 10) * 0.1);
+        }
+        break;
+      }
+      case 'party': {
+        fourFloor(); octBass(); hats16(); claps();
+        for (let b = 0; b < 4; b++) this.hat(at(b + 0.5), true, 0.7);
+        offStabs(0.9); arp(0.7, lb >= 8 ? 36 : 24);
+        const loopBeat = (lb % 8) * 4;
+        for (const [b, m, d] of LEAD) if (b >= loopBeat && b < loopBeat + 4) this.lead(at(b - loopBeat), m + (lb >= 8 ? 12 : 0), d * SPB * 0.92, lb >= 8 ? 0.85 : 1);
+        if (lb === 0 || lb === 8) { this.crash(t, 1.1); this.stab(t, [45, 57, 60, 64, 69, 72], 0.9, 1.4, 5000); }
+        if (lb === 15) this.riser(t, BAR, 0.5);
+        break;
+      }
+      case 'outro': {
+        const oc = ['Am', 'F', 'G', 'Am'][lb];
+        if (lb < 3) {
+          this.pad(t, CH[oc], BAR, 1);
+          this.kick(at(0), 0.8, false); this.kick(at(2), 0.6, false);
+          this.bass(t, ROOT[oc], BAR * 0.9, 0.6);
+          for (let b = 0; b < 4; b++) this.pluck(at(b), CH[oc][b % 3] + 24, 0.2, 0.6, 'triangle', 3000);
+        } else {
+          this.kick(t, 0.85, false); this.crash(t, 0.8);
+          this.stab(t, [45, 57, 60, 64, 69, 72, 76], 2.2, 0.9, 4000);
+          this.pad(t, CH.Am, BAR * 1.2, 1.4);
+        }
+        break;
+      }
+    }
+  }
+}
+
+// ---------- Playback ----------
+let band = null, playing = false, t0 = 0, nextBar = 0, schedTimer = 0, wallStart = 0;
+// #at=<seconds> freezes the show at that moment, silent, for thumbnails and visual checks
+let previewAt = null;
+{
+  const m = /^#at=(\d+(?:\.\d+)?)$/.exec(location.hash);
+  if (m) previewAt = parseFloat(m[1]);
+}
+
+function songTime() {
+  if (!playing) return -1;
+  if (band) return band.ac.currentTime - t0 - (band.ac.outputLatency || band.ac.baseLatency || 0);
+  return (performance.now() - wallStart) / 1000;
+}
+function schedule() {
+  if (!band) return;
+  const ahead = band.ac.currentTime + 0.35;
+  while (nextBar < TOTAL_BARS && t0 + nextBar * BAR < ahead) { band.bar(nextBar, t0 + nextBar * BAR); nextBar++; }
+}
+async function start() {
+  if (!assetsReady) return;
+  stop(true);
+  try {
+    if (!band) band = new Band();
+    if (band.ac.state === 'suspended') await band.ac.resume();
+    band.master.gain.cancelScheduledValues(band.ac.currentTime);
+    band.master.gain.setValueAtTime(0.9, band.ac.currentTime);
+    band.musicLP.frequency.cancelScheduledValues(band.ac.currentTime);
+    band.musicLP.frequency.setValueAtTime(18000, band.ac.currentTime);
+    t0 = band.ac.currentTime + 0.15;
+  } catch (e) { band = null; }
+  wallStart = performance.now() + 150;
+  nextBar = 0; playing = true;
+  schedule(); schedTimer = setInterval(schedule, 60);
+  $('overlay').hidden = true; $('hud').hidden = false;
+  $('playBtn').textContent = 'Stop';
+}
+function stop(silent, ended) {
+  clearInterval(schedTimer);
+  if (band && playing) {
+    const now = band.ac.currentTime;
+    band.master.gain.cancelScheduledValues(now);
+    band.master.gain.setValueAtTime(band.master.gain.value, now);
+    band.master.gain.linearRampToValueAtTime(0, now + 0.08);
+    // drop everything already scheduled by swapping in a fresh band
+    const old = band; band = null;
+    setTimeout(() => old.ac.close(), 200);
+  }
+  playing = false;
+  if (!silent) {
+    $('overlay').hidden = false; $('hud').hidden = true;
+    $('beginLabel').textContent = ended ? 'Take the class again' : 'Start the class';
+  }
+  $('playBtn').textContent = 'Start';
+}
+
+$('begin').addEventListener('click', start);
+$('playBtn').addEventListener('click', () => (playing ? stop() : start()));
+$('motionBtn').addEventListener('click', () => {
+  smooth = !smooth;
+  $('motionBtn').setAttribute('aria-pressed', String(smooth));
+  $('motionBtn').textContent = smooth ? 'Motion: smooth' : 'Motion: stepped';
+});
+$('fsBtn').addEventListener('click', () => {
+  const el = stageEl;
+  if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  else if (el.requestFullscreen) el.requestFullscreen().catch(() => {});
+  else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+});
+if (!(stageEl.requestFullscreen || stageEl.webkitRequestFullscreen)) $('fsBtn').hidden = true;
+
+// ---------- HUD ----------
+const countsEls = [...document.querySelectorAll('#counts li')];
+const progEls = [...document.querySelectorAll('#prog li')];
+const callEl = $('callout');
+const MOVES = [[0, 'Knee lifts!'], [3, 'Hop & pump!'], [10, 'Turn it around'], [19, 'High knees!'], [22, 'Wide squat!'], [28, 'Tuck jump!']];
+let lastCall = '';
+function hud(beat, sec, T) {
+  const sb = beat - sec.start * 4;
+  const c8 = Math.floor(sb) % 8;
+  countsEls.forEach((el, i) => { el.classList.toggle('on', i === c8); el.classList.toggle('down', i === 0 && c8 === 0); });
+  $('secLabel').textContent = sec.label;
+  $('barLabel').textContent = `Bar ${Math.min(TOTAL_BARS, Math.floor(beat / 4) + 1)} / ${TOTAL_BARS}`;
+  progEls.forEach((el) => el.classList.toggle('now', el.dataset.id === sec.id && T >= 0));
+  let text = '';
+  if (sec.id === 'intro' && sb >= 12) text = String(5 + Math.floor(sb - 12));
+  else if (sec.id === 'intro' && sb < 6) text = 'Warm-up';
+  else if (['solo', 'trio', 'canon'].includes(sec.id) || (sec.id === 'party' && sb >= 4)) {
+    const c = sb % 32;
+    for (const [at, name] of MOVES) if (c >= at && c < at + 2) text = name;
+    if (sec.id === 'trio' && sb < 2) text = 'Trio joins!';
+    if (sec.id === 'canon' && sb < 2) text = 'Canon: follow the leader';
+  } else if (sec.id === 'human') {
+    if (sb < 3) text = 'Human mode';
+    else if (sb >= 28) text = 'PARTY'.slice(0, Math.min(5, Math.floor((sb - 28) * 2) + 1));
+  } else if (sec.id === 'party' && sb < 4) text = 'PARTY!';
+  else if (sec.id === 'outro' && sb >= 12) text = 'Great class';
+  if (text !== lastCall) {
+    callEl.textContent = text;
+    callEl.classList.toggle('on', !!text);
+    lastCall = text;
+  }
+  $('clock').textContent = `${fmt(Math.max(0, Math.min(T, SHOW_LEN)))} / ${fmt(Math.round(SHOW_LEN))}`;
+  $('progress').style.width = `${(Math.max(0, Math.min(1, T / SHOW_LEN)) * 100).toFixed(2)}%`;
+}
+
+// ---------- Frame loop ----------
+function resize() {
+  const w = stageEl.clientWidth, h = stageEl.clientHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stageEl);
+resize();
+
+let slowFrames = 0, lastNow = performance.now();
+const shake = new T.Vector3();
+function frame(now) {
+  requestAnimationFrame(frame);
+  const dt = now - lastNow; lastNow = now;
+  // adaptive resolution for slow devices
+  if (dt > 40) slowFrames++; else slowFrames = Math.max(0, slowFrames - 1);
+  if (slowFrames > 45 && pixelRatio > 0.7) { pixelRatio = Math.max(0.7, pixelRatio - 0.35); renderer.setPixelRatio(pixelRatio); resize(); slowFrames = 0; if (pixelRatio < 1.2) renderer.shadowMap.enabled = false; }
+  if (!assetsReady) { renderer.render(scene, camera); return; }
+
+  let T = songTime();
+  if (previewAt !== null) T = previewAt;
+  if (playing && T > END_LEN) { stop(false, true); T = -1; }
+
+  if (T < 0 && previewAt === null) {
+    // Idle: the soloist marches on the pedestal under a slow orbit
+    const beat = now / 1000 / SPB;
+    const sec = SECTIONS[0];
+    for (const r of robots) r.root.visible = r === soloist;
+    setPose(soloist, 'aerobics_stepped', march(beat, 2));
+    const a = now / 1000 * 0.12;
+    camera.position.set(Math.sin(a) * 6.4, 2.6, -0.8 + Math.cos(a) * 6.4);
+    camera.lookAt(SOLO_CHEST);
+    camera.fov = fitFov(38); camera.updateProjectionMatrix();
+    stageLook(1, SECTIONS[1], Math.exp(-(beat % 1) * 6));
+    key.intensity = 110; hemi.intensity = 0.16;
+    renderer.render(scene, camera);
+    return;
+  }
+  const beat = Math.max(0, T) / SPB;
+  const sec = sectionAt(Math.min(beat, TOTAL_BARS * 4 - 0.001));
+  const kickOn = sec.id === 'human' ? (beat % 4 < 1 || (beat % 4 >= 2.5 && beat % 4 < 3.5)) : sec.id !== 'intro' || Math.floor(beat / 4) >= 2;
+  const kickPhase = sec.id === 'human' ? (beat % 4 >= 2.5 ? beat % 4 - 2.5 : beat % 4) : beat % 1;
+  const kick = kickOn ? Math.exp(-kickPhase * 6) : 0;
+  choreograph(Math.min(beat, TOTAL_BARS * 4 - 0.001), sec);
+  const shot = shotAt(Math.min(beat, TOTAL_BARS * 4 - 0.001), sec);
+  if (!calm && sec.id === 'party') shake.set((Math.random() - 0.5) * 0.04, (Math.random() - 0.5) * 0.04, 0).multiplyScalar(kick);
+  else shake.set(0, 0, 0);
+  camera.position.copy(shot.p).add(shake);
+  camera.lookAt(shot.t);
+  camera.fov = fitFov(shot.fov);
+  camera.updateProjectionMatrix();
+  stageLook(beat, sec, kick);
+  hud(beat, sec, T);
+  renderer.render(scene, camera);
+}
+
+loadAssets().then(() => {
+  $('begin').disabled = false; $('playBtn').disabled = false;
+  $('beginLabel').textContent = 'Start the class';
+  if (previewAt !== null) { $('overlay').hidden = true; $('hud').hidden = false; }
+  window.__antennaReady = true;
+  window.__antenna = { Band, TOTAL_BARS, BAR }; // used by the offline audio check
+}).catch((e) => {
+  console.error(e);
+  $('beginLabel').textContent = 'Could not load the robots';
+});
+requestAnimationFrame(frame);
+})();
+</script>
+</html>
