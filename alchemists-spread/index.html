@@ -1,0 +1,1432 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Alchemist’s Spread</title>
+<meta name="description" content="Three random Tarot de Marseille cards become a two-and-a-half-minute audio-visual ritual after Jodorowsky’s The Holy Mountain.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&family=IM+Fell+English:ital@0;1&display=swap">
+<style>
+/* Layout: a dark theatre. The stage first, controls under it, the three-card reading below, credits last. */
+:root {
+  --night: #0e0a0b;
+  --paper: #efe3c6;
+  --paper-dim: #b3a588;
+  --cinnabar: #e04a3a;
+  --gold: #e7b63b;
+  --gold-ink: #1a0f0f;
+  --rule: rgba(239, 227, 198, .16);
+  --f-title: "IM Fell English SC", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  --f-text: "IM Fell English", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+  color-scheme: dark;
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+* { box-sizing: border-box }
+html, body { margin: 0 }
+[hidden] { display: none !important }
+body {
+  background: var(--night);
+  color: var(--paper);
+  font: 400 18px/1.55 var(--f-text);
+  -webkit-font-smoothing: antialiased;
+}
+
+.page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 22px 64px;
+  display: grid;
+  gap: 28px;
+}
+.back {
+  justify-self: start;
+  font: 16px/1.3 var(--f-title);
+  letter-spacing: .06em;
+  color: var(--paper-dim);
+  text-decoration: none;
+}
+.back:hover { color: var(--gold) }
+
+header { display: grid; gap: 10px }
+.eyebrow { margin: 0; font: 15px/1.3 var(--f-title); letter-spacing: .12em; color: var(--cinnabar) }
+h1 { margin: 0; font: 400 clamp(38px, 7vw, 84px)/.95 var(--f-title); letter-spacing: .01em; text-wrap: balance }
+.lede { margin: 0; max-width: 62ch; font-size: 19px; color: var(--paper-dim) }
+.lede cite { color: var(--paper) }
+
+/* Stage */
+.theatre { display: grid; gap: 14px }
+.stage {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  max-height: 80svh;
+  overflow: hidden;
+  border-radius: 3px;
+  background: #000;
+  box-shadow: 0 0 0 1px var(--rule), 0 30px 80px -30px rgba(208, 55, 43, .45);
+}
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+.stage:fullscreen { aspect-ratio: auto; width: 100vw; height: 100vh; max-height: none; border-radius: 0 }
+.cap {
+  position: absolute;
+  z-index: 2;
+  margin: 0;
+  pointer-events: none;
+  color: var(--paper);
+  text-shadow: 0 1px 14px rgba(0, 0, 0, .85), 0 0 2px rgba(0, 0, 0, .9);
+  transition: opacity .9s ease;
+}
+.cap.off { opacity: 0 }
+.cap-stage { top: 14px; left: 18px; right: 18px; font: 16px/1.3 var(--f-title); letter-spacing: .14em }
+.cap-title { left: 16px; right: 16px; bottom: 28px; text-align: center; font: clamp(22px, 3.6vw, 40px)/1.1 var(--f-title); letter-spacing: .06em; text-wrap: balance }
+.cap-big { inset: 0; display: grid; place-items: center; padding: 24px; text-align: center; font: italic clamp(28px, 6vw, 68px)/1.1 var(--f-text) }
+.begin {
+  position: absolute;
+  z-index: 3;
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  padding: 12px 26px;
+  border: 1px solid rgba(239, 227, 198, .55);
+  border-radius: 2px;
+  background: rgba(14, 10, 11, .74);
+  color: var(--paper);
+  font: 22px/1.1 var(--f-title);
+  letter-spacing: .08em;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.begin small { font: italic 14px/1.2 var(--f-text); letter-spacing: 0; color: var(--paper-dim) }
+.begin:hover { border-color: var(--gold); color: var(--gold) }
+.progress { position: absolute; z-index: 2; left: 0; right: 0; bottom: 0; height: 3px; background: rgba(239, 227, 198, .1) }
+.progress div { height: 100%; background: var(--gold); transform-origin: left; transform: scaleX(0) }
+
+.controls { display: flex; flex-wrap: wrap; align-items: center; gap: 10px }
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 2px;
+  background: transparent;
+  color: var(--paper);
+  font: 16px/1 var(--f-title);
+  letter-spacing: .08em;
+  cursor: pointer;
+}
+.btn:hover { border-color: var(--paper-dim) }
+.btn.primary { background: var(--gold); border-color: var(--gold); color: var(--gold-ink) }
+.btn.primary:hover { filter: brightness(1.08) }
+.btn:focus-visible, .begin:focus-visible, .back:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px }
+.note { font: italic 15px/1.3 var(--f-text); color: var(--paper-dim) }
+
+/* Reading */
+.reading { display: grid; gap: 18px; padding-top: 18px; border-top: 1px solid var(--rule) }
+.reading h2, footer h2 { margin: 0; font: 400 28px/1.2 var(--f-title); letter-spacing: .04em }
+.spread { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 28px }
+.spread li { min-width: 0; display: grid; align-content: start; gap: 8px }
+.face { display: block; width: 100%; max-width: 210px; height: auto; aspect-ratio: 21 / 40; border-radius: 3px }
+.pos { margin: 6px 0 0; font: 15px/1.3 var(--f-title); letter-spacing: .1em; color: var(--cinnabar) }
+.spread h3 { margin: 0; font: 400 25px/1.15 var(--f-title) }
+.en { margin: 0; font-style: italic; color: var(--paper-dim) }
+.word { margin: 0; max-width: 34ch }
+
+footer { display: grid; gap: 10px; padding-top: 18px; border-top: 1px solid var(--rule); color: var(--paper-dim); font-size: 16px }
+footer p { margin: 0; max-width: 72ch }
+footer cite { color: var(--paper) }
+
+@media (max-width: 700px) {
+  .stage { aspect-ratio: 4 / 5 }
+  .cap-title { bottom: 22px }
+  .begin { font-size: 19px; padding: 10px 18px }
+  .spread { grid-template-columns: minmax(0, 1fr); gap: 22px }
+  .spread li { grid-template-columns: 92px minmax(0, 1fr); column-gap: 16px; row-gap: 4px }
+  .spread li .face { grid-row: 1 / span 5 }
+  .spread li > :not(.face) { grid-column: 2 }
+  .pos { margin-top: 0 }
+}
+</style>
+
+<div class="page">
+  <a class="back" href="../">← RemoteFunLand</a>
+  <header>
+    <p class="eyebrow">No. 002 · A reading in three cards · 2:24</p>
+    <h1>The Alchemist’s Spread</h1>
+    <p class="lede">Three cards from the Tarot de Marseille, drawn at random, open into three painted tableaux in the manner of Jodorowsky’s <cite>The Holy Mountain</cite>: the past in black, the present in white, the future in red, then the climb to gold.</p>
+  </header>
+
+  <section class="theatre" aria-label="The performance">
+    <div class="stage" id="stage">
+      <canvas id="view" aria-hidden="true"></canvas>
+      <p class="cap cap-stage" id="capStage">Your draw</p>
+      <p class="cap cap-title off" id="capTitle"></p>
+      <p class="cap cap-big off" id="capBig"></p>
+      <button class="begin" id="begin" type="button"><span id="beginLabel">Begin the reading</span><small>2:24 · sound on</small></button>
+      <div class="progress" aria-hidden="true"><div id="prog"></div></div>
+    </div>
+    <div class="controls">
+      <button class="btn primary" id="playBtn" type="button">Begin</button>
+      <button class="btn" id="drawBtn" type="button">Draw three new cards</button>
+      <button class="btn" id="shareBtn" type="button">Copy link to this draw</button>
+      <button class="btn" id="fsBtn" type="button">Full screen</button>
+      <span class="note" id="note" role="status"></span>
+    </div>
+  </section>
+
+  <section class="reading" aria-labelledby="readingTitle">
+    <h2 id="readingTitle">The reading</h2>
+    <ol class="spread" id="spread"></ol>
+  </section>
+
+  <footer>
+    <h2>About the piece</h2>
+    <p>After Alejandro Jodorowsky’s <cite>The Holy Mountain</cite> (1973) and the Tarot de Marseille, which he later helped restore. The three cards follow the alchemical order of nigredo, albedo and rubedo; the ascent ends in gold, and then the camera pulls back.</p>
+    <p>Every image and sound is made in your browser while you watch: a 2D canvas at 30 frames a second with no images, video or samples, which lowers its own resolution if your device falls behind. Each draw is one of 9,240 and can be shared by its link.</p>
+  </footer>
+</div>
+
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const clamp = (v, a = 0, b = 1) => Math.min(b, Math.max(a, v));
+  const lerp = (a, b, p) => a + (b - a) * p;
+  const ease = (p) => (p < .5 ? 2 * p * p : 1 - Math.pow(-2 * p + 2, 2) / 2);
+  const hash = (i) => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  function mulberry(seed) {
+    let a = seed >>> 0;
+    return () => {
+      a = (a + 0x6D2B79F5) >>> 0;
+      let t = a;
+      t = Math.imul(t ^ (t >>> 15), t | 1);
+      t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  // ---- Drawing kit -----------------------------------------------------------------
+  // Scene units: y runs from -1 (top) to 1 (bottom); a card is 1.05 wide and 2 tall.
+  const P = {
+    red: '#c9302c', blue: '#25499b', sky: '#8dbfe1', yellow: '#f2c232', flesh: '#f1c7a0', green: '#3a8a55',
+    black: '#140f10', paper: '#efe3c6', magenta: '#c42f7d', orange: '#e7762b', violet: '#55358c', gold: '#e8b931',
+    grey: '#8a8580', night: '#15204a',
+  };
+  let X = null;   // current 2D context
+  let LW = .012;  // outline width in scene units
+  let EXT = 1;    // half-width of the visible area in scene units
+
+  function fs(fill, line) {
+    if (fill) { X.fillStyle = fill; X.fill(); }
+    if (line !== false) { X.lineWidth = LW; X.strokeStyle = P.black; X.stroke(); }
+  }
+  function poly(p, fill, line) {
+    X.beginPath(); X.moveTo(p[0], p[1]);
+    for (let i = 2; i < p.length; i += 2) X.lineTo(p[i], p[i + 1]);
+    X.closePath(); fs(fill, line);
+  }
+  function circ(x, y, r, fill, line) { X.beginPath(); X.arc(x, y, Math.max(0, r), 0, TAU); fs(fill, line); }
+  function ell(x, y, rx, ry, rot, fill, line) { X.beginPath(); X.ellipse(x, y, Math.max(0, rx), Math.max(0, ry), rot, 0, TAU); fs(fill, line); }
+  function rect(x, y, w, h, fill, line) { X.beginPath(); X.rect(x, y, w, h); fs(fill, line); }
+  function seg(x0, y0, x1, y1, w, col) {
+    X.beginPath(); X.moveTo(x0, y0); X.lineTo(x1, y1);
+    X.lineWidth = w; X.lineCap = 'round'; X.strokeStyle = col || P.black; X.stroke();
+  }
+  function limb(x0, y0, x1, y1, w, col) { seg(x0, y0, x1, y1, w + LW * 2, P.black); seg(x0, y0, x1, y1, w, col); }
+  function dot(x, y, r, col) { X.beginPath(); X.arc(x, y, r, 0, TAU); X.fillStyle = col || P.black; X.fill(); }
+  function bg(col) { X.fillStyle = col; X.fillRect(-6, -3, 12, 6); }
+  function rays(x, y, n, r0, r1, cols, rot, line) {
+    for (let i = 0; i < n; i++) {
+      const a0 = rot + i * TAU / n, a1 = a0 + TAU / n;
+      poly([x + Math.cos(a0) * r0, y + Math.sin(a0) * r0, x + Math.cos(a0) * r1, y + Math.sin(a0) * r1,
+        x + Math.cos(a1) * r1, y + Math.sin(a1) * r1, x + Math.cos(a1) * r0, y + Math.sin(a1) * r0], cols[i % cols.length], line);
+    }
+  }
+  function star(x, y, n, r0, r1, rot, fill) {
+    const p = [];
+    for (let i = 0; i < n * 2; i++) { const r = i & 1 ? r0 : r1, a = rot + i * Math.PI / n; p.push(x + Math.cos(a) * r, y + Math.sin(a) * r); }
+    poly(p, fill);
+  }
+  function hill(y0, amp, freq, phase, col) {
+    X.beginPath(); X.moveTo(-EXT - .3, 3);
+    for (let x = -EXT - .3; x <= EXT + .35; x += .05) X.lineTo(x, y0 + amp * Math.sin(x * freq + phase));
+    X.lineTo(EXT + .35, 3); X.closePath(); fs(col);
+  }
+  function stripes(w, cols, off) {
+    const n = Math.ceil((EXT + .4) / w);
+    for (let i = -n; i <= n; i++) rect(i * w - w / 2 + off, -3, w, 6, cols[((i % cols.length) + cols.length) % cols.length], false);
+  }
+  function twinkle(n, t, seed, col) {
+    for (let i = 0; i < n; i++) {
+      const x = (hash(i + seed * 100) * 2 - 1) * 1.9, y = hash(i * 3.1 + seed) * 1.5 - .98;
+      dot(x, y, .005 + .007 * (.5 + .5 * Math.sin(t * 2 + i)), col || P.yellow);
+    }
+  }
+  // A perspective floor of alternating tiles; `scroll` moves the rows toward the viewer.
+  function floorChecker(y0, c1, c2, scroll, rows, cols) {
+    rows = rows || 7; cols = cols || 18;
+    const vy = y0 - .6, yb = 1.1, span = 2.4, off = scroll - Math.floor(scroll), F = Math.floor(scroll);
+    const yAt = (k) => y0 + (yb - y0) * Math.pow(clamp(k / rows), 1.7);
+    const xAt = (xb, y) => xb * (y - vy) / (yb - vy);
+    for (let k = -1; k < rows; k++) {
+      const ya = yAt(k + off), yz = yAt(k + 1 + off);
+      if (yz - ya < 1e-4) continue;
+      for (let j = 0; j < cols; j++) {
+        const x0 = -span + j * 2 * span / cols, x1 = x0 + 2 * span / cols;
+        X.beginPath(); X.moveTo(xAt(x0, ya), ya); X.lineTo(xAt(x1, ya), ya); X.lineTo(xAt(x1, yz), yz); X.lineTo(xAt(x0, yz), yz); X.closePath();
+        X.fillStyle = ((j + k - F) & 1) ? c1 : c2; X.fill();
+      }
+    }
+  }
+
+  // A robed figure in the Marseille manner. Feet at (x, y); about one unit tall at s = 1.
+  // Arm angles are measured from hanging straight down; positive swings outward, negative crosses the body.
+  function figure(o) {
+    X.save();
+    X.translate(o.x || 0, o.y || 0);
+    if (o.rot) X.rotate(o.rot);
+    const s = o.s || 1, lw = LW;
+    X.scale(s, s); LW = lw / s;
+    if (o.wings) for (const d of [-1, 1]) ell(d * .19, -.5, .22, .085, d * -.75, o.wings);
+    if (o.bat) for (const d of [-1, 1]) poly([d * .1, -.6, d * .45, -.86, d * .4, -.63, d * .5, -.56, d * .36, -.49, d * .42, -.38, d * .12, -.45], o.bat);
+    if (o.halo) circ(0, -.72, .17, o.halo);
+    if (o.veil) poly([-.17, -.42, -.15, -.8, 0, -.9, .15, -.8, .17, -.42], o.veil);
+    if (o.head === 'hood') poly([-.15, -.58, -.14, -.8, 0, -.93, .14, -.8, .15, -.58], o.hood || o.robe);
+    poly([-.16, -.62, .16, -.62, .27, 0, -.27, 0], o.robe);
+    if (o.cloak) poly([-.17, -.62, -.03, -.62, -.1, 0, -.28, 0], o.cloak);
+    if (o.trim) poly([-.2, -.4, .2, -.4, .21, -.33, -.21, -.33], o.trim);
+    if (o.collar) poly([-.15, -.62, .15, -.62, 0, -.5], o.collar);
+    arm(-1, o); arm(1, o);
+    circ(0, -.72, .1, o.skin || P.flesh);
+    dot(-.035, -.73, .012); dot(.035, -.73, .012);
+    if (o.hair) poly([-.1, -.74, -.09, -.83, 0, -.85, .09, -.83, .1, -.74, .06, -.8, -.06, -.8], o.hair);
+    if (o.beard) poly([-.08, -.69, .08, -.69, .05, -.58, 0, -.55, -.05, -.58], o.beard);
+    hat(o);
+    LW = lw;
+    X.restore();
+  }
+  function arm(side, o) {
+    const ang = o.arms ? o.arms[side < 0 ? 0 : 1] : .2, a = side * ang;
+    const sx = side * .15, sy = -.58, hx = sx + Math.sin(a) * .3, hy = sy + Math.cos(a) * .3;
+    limb(sx, sy, hx, hy, .06, o.sleeve || o.robe);
+    const hold = o.hold && o.hold[side < 0 ? 0 : 1];
+    if (hold) { X.save(); X.translate(hx, hy); hold(side); X.restore(); }
+    circ(hx, hy, .035, o.skin || P.flesh);
+  }
+  function handPos(o, side) {
+    const s = o.s || 1, ang = o.arms ? o.arms[side < 0 ? 0 : 1] : .2, a = side * ang;
+    return [(o.x || 0) + (side * .15 + Math.sin(a) * .3) * s, (o.y || 0) + (-.58 + Math.cos(a) * .3) * s];
+  }
+  function hat(o) {
+    switch (o.head) {
+      case 'crown': poly([-.1, -.78, -.11, -.9, -.055, -.84, 0, -.95, .055, -.84, .11, -.9, .1, -.78], P.yellow); break;
+      case 'hat': ell(0, -.8, .22, .045, 0, o.hatc || P.yellow); poly([-.09, -.82, -.07, -.92, .07, -.92, .09, -.82], o.hatc2 || P.red); break;
+      case 'tiara': rect(-.08, -.86, .16, .06, P.yellow); rect(-.065, -.92, .13, .06, P.red); rect(-.05, -.98, .1, .06, P.yellow); circ(0, -1.0, .022, P.red); break;
+      case 'jester':
+        poly([-.1, -.79, -.21, -.93, -.045, -.85, 0, -.99, .045, -.85, .21, -.93, .1, -.79], P.red);
+        for (const [x, y] of [[-.21, -.93], [0, -.99], [.21, -.93]]) circ(x, y, .025, P.yellow);
+        break;
+      case 'horns': for (const d of [-1, 1]) poly([d * .05, -.8, d * .2, -.99, d * .23, -.9, d * .12, -.8], P.yellow); break;
+      case 'flower': circ(0, -.85, .045, P.red); circ(0, -.85, .018, P.yellow); break;
+      case 'laurel': ell(-.06, -.82, .055, .02, -.5, P.green); ell(.06, -.82, .055, .02, .5, P.green); break;
+    }
+  }
+  function dog(x, y, s, ph, col, up, mouth) {
+    X.save(); X.translate(x, y); X.scale(s, s);
+    const lw = LW; LW = lw / s;
+    for (let i = 0; i < 4; i++) { const lx = [-.18, -.1, .1, .18][i]; limb(lx, .02, lx + .05 * Math.sin(ph + i * 1.7), .2, .04, col); }
+    limb(-.24, -.02, -.36, -.16 + .04 * Math.sin(ph * 2), .035, col);
+    ell(0, 0, .26, .1, 0, col);
+    X.save(); X.translate(.2, -.05); X.rotate(-(up || 0));
+    poly([0, -.02, .1, -.08, .24, -.05, .24, -.01, .08, .02], col);
+    poly([.07, -.07, .1, -.17, .13, -.07], col);
+    dot(.14, -.045, .013);
+    X.save(); X.translate(.08, .01); X.rotate(mouth || 0); poly([0, 0, .15, -.005, .13, .035, .01, .04], col); X.restore();
+    X.restore();
+    LW = lw; X.restore();
+  }
+  function horse(x, y, d, t, col) {
+    X.save(); X.translate(x, y); X.scale(d, 1);
+    for (let i = 0; i < 2; i++) limb(-.04 + i * .08, .05, -.04 + i * .08 + .05 * Math.sin(t * 6 + i * 2.5 + d), .26, .035, col);
+    ell(0, 0, .1, .13, 0, col);
+    poly([-.02, -.08, .1, -.32, .17, -.3, .1, -.08], col);
+    poly([.08, -.34, .22, -.38, .25, -.3, .14, -.26], col);
+    poly([.1, -.34, .11, -.42, .14, -.35], col);
+    dot(.17, -.335, .012);
+    X.restore();
+  }
+  function eagle(x, y, s) {
+    poly([x - .08 * s, y, x, y - .03 * s, x + .08 * s, y, x + .04 * s, y + .05 * s, x, y + .03 * s, x - .04 * s, y + .05 * s], P.red);
+    circ(x, y - .045 * s, .02 * s, P.red);
+  }
+  function lionFace(x, y, r, rot, open) {
+    rays(x, y, 14, r * .7, r * 1.45, [P.yellow, P.orange], rot);
+    circ(x, y, r, P.yellow);
+    dot(x - r * .35, y - r * .25, r * .1); dot(x + r * .35, y - r * .25, r * .1);
+    poly([x - r * .15, y, x + r * .15, y, x, y + r * .18], P.red);
+    X.save(); X.translate(x, y + r * .3); X.rotate(open || 0);
+    poly([-r * .45, 0, r * .45, 0, r * .3, r * .45, -r * .3, r * .45], P.red);
+    X.restore();
+  }
+  function vessel(x, y, col) {
+    poly([x - .05, y - .07, x + .05, y - .07, x + .065, y + .05, x - .065, y + .05], col);
+    rect(x - .03, y - .1, .06, .03, col);
+  }
+  function stream(x0, y0, x1, y1, bend, t) {
+    X.beginPath(); X.moveTo(x0, y0); X.quadraticCurveTo((x0 + x1) / 2 + bend, Math.min(y0, y1) - Math.abs(bend), x1, y1);
+    X.setLineDash([.035, .02]); X.lineDashOffset = -t * .5;
+    X.lineWidth = .022; X.lineCap = 'round'; X.strokeStyle = P.paper; X.stroke();
+    X.setLineDash([]);
+  }
+  function drop(x, y, r, col, down) {
+    const d = down ? 1 : -1;
+    X.beginPath(); X.moveTo(x, y - d * r * 2.2); X.quadraticCurveTo(x + r * 1.2, y, x, y + d * r); X.quadraticCurveTo(x - r * 1.2, y, x, y - d * r * 2.2); fs(col);
+  }
+  function bricks(x0, y0, w, h, rh) {
+    X.beginPath();
+    for (let k = 0, y = y0; y < y0 + h - 1e-6; k++, y += rh) {
+      X.moveTo(x0, y); X.lineTo(x0 + w, y);
+      for (let x = x0 + (k & 1 ? rh * 1.2 : 0); x < x0 + w; x += rh * 2.4) { X.moveTo(x, y); X.lineTo(x, Math.min(y + rh, y0 + h)); }
+    }
+    X.lineWidth = LW * .6; X.strokeStyle = P.black; X.stroke();
+  }
+
+  // ---- The 22 trumps ----------------------------------------------------------------------
+  const MODES = {
+    hijaz: [0, 1, 4, 5, 7, 8, 10], dorian: [0, 2, 3, 5, 7, 9, 10], lydian: [0, 2, 4, 6, 7, 9, 11],
+    aeolian: [0, 2, 3, 5, 7, 8, 10], locrian: [0, 1, 3, 5, 6, 8, 10], penta: [0, 2, 4, 7, 9],
+    minpent: [0, 3, 5, 7, 10], mixo: [0, 2, 4, 5, 7, 9, 10], phryg: [0, 1, 3, 5, 7, 8, 10], whole: [0, 2, 4, 6, 8, 10],
+  };
+  const BEATS = {
+    walk: 'x...o...x...o...', ritual: 'x..o..x.x..o.o..', march: 'x.o.x.o.x.o.xoo.', heart: 'x..x......x..x..',
+    storm: 'xoxox.oxx.oxoxox', still: 'x...............', dance: 'x.ox.ox.x.ox.oxo', toll: 'x.......o.......',
+  };
+  const card = (num, fr, en, word, col, mode, root, beat, bells, energy, draw) =>
+    ({ num, fr, en, word, col, mode: MODES[mode], root, beat: BEATS[beat], bells, energy, draw });
+
+  const CARDS = [
+    card('', 'LE MAT', 'The Fool', 'Set out with nothing and trust the road.', P.yellow, 'mixo', 65.41, 'walk', .25, .5, (t) => {
+      bg(P.sky);
+      rays(.3, -.55, 14, .12, 4, [P.yellow, P.sky], t * .25, false);
+      circ(.3, -.55, .11, P.yellow);
+      hill(.3, .05, 5, t * .6, P.green);
+      hill(.5, .05, 4, t * 1.1 + 2, P.yellow);
+      hill(.7, .045, 6, t * 1.7 + 4, P.red);
+      const st = t * 3.4, bob = Math.abs(Math.sin(st)) * .025;
+      figure({ x: .04, y: .66 - bob, s: .92, robe: P.yellow, sleeve: P.red, trim: P.blue, collar: P.blue, head: 'jester', arms: [.2 + .25 * Math.sin(st), 2.6],
+        hold: [null, () => { seg(0, 0, -.42, .16, .03, P.black); circ(-.44, .17, .08, P.blue); }] });
+      dog(-.3, .6, .5, st * 2, P.paper, .3, .25 + .2 * Math.sin(st * 2));
+    }),
+    card('I', 'LE BATELEUR', 'The Magician', 'Every tool is on the table. Begin.', P.red, 'lydian', 73.42, 'dance', .3, .6, (t, b) => {
+      stripes(.16, [P.red, P.yellow], Math.sin(t * .3) * .05);
+      floorChecker(.4, P.blue, P.paper, 0, 6, 18);
+      figure({ x: 0, y: .5, s: .95, robe: P.blue, sleeve: P.red, trim: P.yellow, collar: P.red, head: 'hat', arms: [2.5, .85 + .15 * Math.sin(t * 2)],
+        hold: [() => { limb(0, 0, .02, -.3, .025, P.yellow); circ(.02, -.31, .03, P.paper); }, () => circ(0, -.06, .05, P.yellow)] });
+      for (const lx of [-.33, .33]) limb(lx, .34, lx, .72, .035, P.flesh);
+      rect(-.42, .26, .84, .09, P.flesh);
+      poly([-.3, .26, -.27, .14, -.19, .14, -.16, .26], P.yellow);
+      rect(.08, .17, .09, .09, P.paper); dot(.105, .2, .012); dot(.145, .235, .012);
+      circ(.28, .22, .04, P.yellow);
+      const cols = [P.yellow, P.red, P.sky, P.green, P.magenta];
+      for (let i = 0; i < 5; i++) {
+        const a = t * 1.7 + i * TAU / 5, d = 1 + Math.sin(a) ** 2;
+        circ(.36 * Math.cos(a) / d, -.62 + .36 * Math.sin(a) * Math.cos(a) / d - .02 * b, .045, cols[i]);
+      }
+    }),
+    card('II', 'LA PAPESSE', 'The High Priestess', 'Something is still being written in silence.', P.blue, 'aeolian', 55, 'still', .2, .2, (t) => {
+      bg(P.night);
+      twinkle(30, t, 2);
+      for (const d of [-1, 1]) { rect(d * .4 - .06, -.68, .12, 1.5, P.paper); rect(d * .4 - .08, -.74, .16, .07, P.yellow); }
+      for (let i = 0; i < 8; i++) {
+        const x0 = -.32 + i * .08;
+        X.beginPath();
+        for (let y = -.72; y <= .63; y += .12) X.lineTo(x0 + .02 * Math.sin(y * 5 + t * 1.4 + i), y);
+        for (let y = .63; y >= -.73; y -= .12) X.lineTo(x0 + .08 + .02 * Math.sin(y * 5 + t * 1.4 + i + 1), y);
+        X.closePath(); fs(i & 1 ? P.red : P.flesh);
+      }
+      figure({ x: 0, y: .74, s: 1.02, robe: P.red, cloak: P.blue, trim: P.yellow, veil: P.paper, head: 'tiara', arms: [-.5, -.5] });
+      poly([-.2, .35, 0, .39, 0, .49, -.2, .45], P.paper); poly([0, .39, .2, .35, .2, .45, 0, .49], P.paper);
+      X.beginPath();
+      for (let k = 0; k < 3; k++) { X.moveTo(-.17, .38 + k * .03); X.lineTo(-.03, .405 + k * .03); X.moveTo(.03, .405 + k * .03); X.lineTo(.17, .38 + k * .03); }
+      X.lineWidth = .006; X.strokeStyle = P.black; X.stroke();
+    }),
+    card('III', 'L’IMPÉRATRICE', 'The Empress', 'Growth that does not ask permission.', P.green, 'penta', 61.74, 'heart', .25, .4, (t) => {
+      bg(P.green);
+      rays(0, -.15, 18, 0, 4, [P.green, '#4f9e63'], t * .12, false);
+      for (let i = 0; i < 12; i++) {
+        const a = i * TAU / 12 + t * .05, x = Math.cos(a) * .82, y = -.1 + Math.sin(a) * .66, g = .5 + .5 * Math.sin(t * .9 + i * 1.3);
+        for (let k = 0; k < 5; k++) { const pa = k * TAU / 5 + t * .3; circ(x + Math.cos(pa) * .035 * g, y + Math.sin(pa) * .035 * g, .028 * g + .006, [P.red, P.yellow, P.magenta][i % 3]); }
+        circ(x, y, .016, P.yellow);
+      }
+      figure({ x: 0, y: .74, s: 1.05, robe: P.red, cloak: P.blue, trim: P.yellow, collar: P.yellow, wings: P.sky, head: 'crown', hair: P.yellow, arms: [.75, 1.9 + .1 * Math.sin(t)],
+        hold: [() => { circ(-.04, .06, .11, P.yellow); eagle(-.04, .06, 1); }, () => { limb(0, 0, 0, -.32, .025, P.yellow); circ(0, -.35, .045, P.yellow); }] });
+    }),
+    card('IIII', 'L’EMPEREUR', 'The Emperor', 'Build the walls, then learn to live inside them.', P.red, 'mixo', 49, 'march', .15, .6, (t, b) => {
+      bg(P.red);
+      const cols = [P.yellow, P.red, P.blue, P.paper];
+      for (let i = 0; i < 9; i++) {
+        const s = 2.6 * (1 - i / 9) * (1 + .02 * b), r = (i & 1 ? 1 : -1) * t * .06 * (1 + i * .3) + Math.PI / 4;
+        X.save(); X.translate(0, -.1); X.rotate(r); rect(-s / 2, -s / 2, s, s, cols[i % 4]); X.restore();
+      }
+      rect(-4, .72, 8, 3, P.green);
+      rect(-.25, -.5, .5, 1.22, P.blue); rect(-.28, -.56, .56, .08, P.yellow);
+      figure({ x: 0, y: .74, s: 1.05, robe: P.red, cloak: P.blue, trim: P.yellow, collar: P.yellow, head: 'crown', beard: P.paper, arms: [.35, 2.0],
+        hold: [null, () => { limb(0, .02, 0, -.36, .03, P.yellow); circ(0, -.4, .055, P.yellow); seg(0, -.46, 0, -.52, .02, P.yellow); }] });
+      circ(-.33, .62, .1, P.yellow); eagle(-.33, .62, 1);
+    }),
+    card('V', 'LE PAPE', 'The Pope', 'A teacher, a bridge, a tradition handed on.', P.violet, 'dorian', 58.27, 'toll', .3, .3, (t) => {
+      bg(P.violet);
+      const cols = [P.red, P.orange, P.yellow, P.green, P.sky, P.blue, P.violet];
+      for (let i = 0; i < 7; i++) { X.beginPath(); X.arc(0, .35, 1.7 - i * .2, Math.PI, 0); X.closePath(); fs(cols[i], false); }
+      for (const d of [-1, 1]) { rect(d * .38 - .05, -.6, .1, 1.5, P.sky); circ(d * .38, -.63, .07, P.yellow); }
+      figure({ x: 0, y: .64, s: 1, robe: P.red, cloak: P.blue, trim: P.yellow, collar: P.paper, head: 'tiara', beard: P.paper, arms: [2.4, .4],
+        hold: [() => limb(0, 0, 0, -.1, .02, P.flesh), () => {
+          limb(0, .3, 0, -.5, .025, P.yellow);
+          for (let k = 0; k < 3; k++) seg(-.06 + k * .012, -.42 + k * .07, .06 - k * .012, -.42 + k * .07, .02, P.yellow);
+        }] });
+      for (const d of [-1, 1]) {
+        const bow = Math.max(0, Math.sin(t * 1.4 + (d > 0 ? 1.2 : 0)));
+        ell(d * .24, .88, .14, .2, 0, d < 0 ? P.red : P.blue);
+        circ(d * .24, .64 + bow * .08, .075, P.black); circ(d * .24, .64 + bow * .08, .045, P.flesh, false);
+      }
+    }),
+    card('VI', 'L’AMOUREUX', 'The Lover', 'A choice that is really a question of the heart.', P.magenta, 'lydian', 69.3, 'heart', .3, .4, (t) => {
+      bg(P.magenta);
+      rays(0, -.55, 22, .2, 4, [P.magenta, '#d9558f'], t * .15, false);
+      rect(-4, .66, 8, 3, P.green);
+      rays(0, -.55, 16, .19, .27, [P.yellow, P.red], -t * .4);
+      circ(0, -.55, .19, P.yellow);
+      figure({ x: 0, y: -.42, s: .3, robe: P.sky, wings: P.blue, hair: P.yellow, arms: [1.6, 1.6] });
+      const ph = (t * .45) % 1, ay = lerp(-.4, .1, ph);
+      if (ph < .85) { limb(0, ay - .13, 0, ay, .01, P.yellow); poly([-.025, ay, .025, ay, 0, ay + .05], P.red); }
+      figure({ x: -.3, y: .8, s: .78, robe: P.blue, cloak: P.red, trim: P.yellow, head: 'crown', arms: [.3, -.9] });
+      figure({ x: .3, y: .8, s: .78, robe: P.red, cloak: P.yellow, trim: P.blue, head: 'laurel', hair: P.yellow, arms: [-.9, .3] });
+      figure({ x: 0, y: .82, s: .8, robe: P.yellow, sleeve: P.red, trim: P.red, collar: P.blue, hair: P.yellow, arms: [.5 + .1 * Math.sin(t), .5 - .1 * Math.sin(t)] });
+    }),
+    card('VII', 'LE CHARIOT', 'The Chariot', 'Forward, holding two horses to one road.', P.blue, 'mixo', 55, 'march', .2, .8, (t) => {
+      bg(P.sky);
+      floorChecker(.12, P.yellow, P.green, t * 1.6, 8, 18);
+      for (const d of [-1, 1]) limb(d * .26, .12, d * .26, -.6, .03, P.yellow);
+      poly([-.33, -.63, .33, -.63, .31, -.52, .2, -.47, .1, -.52, 0, -.47, -.1, -.52, -.2, -.47, -.31, -.52], P.blue);
+      figure({ x: 0, y: .3, s: .78, robe: P.blue, trim: P.yellow, collar: P.yellow, head: 'crown', arms: [.5, 2.2],
+        hold: [null, () => { limb(0, 0, 0, -.25, .025, P.yellow); circ(0, -.27, .035, P.yellow); }] });
+      for (const d of [-1, 1]) ell(d * .3, .44, .05, .14, 0, P.yellow);
+      rect(-.28, .12, .56, .42, P.red); rect(-.12, .22, .24, .2, P.yellow); circ(0, .32, .06, P.red);
+      for (const d of [-1, 1]) horse(d * .2, .64, d, t, d < 0 ? P.blue : P.red);
+    }),
+    card('VIII', 'LA JUSTICE', 'Justice', 'Weigh it honestly, then cut.', P.yellow, 'dorian', 61.74, 'ritual', .15, .4, (t) => {
+      bg(P.red);
+      floorChecker(.42, P.paper, P.black, 0, 7, 18);
+      for (const d of [-1, 1]) { rect(d * .36 - .06, -.7, .12, 1.15, P.yellow); circ(d * .36, -.74, .07, P.yellow); }
+      rect(-.3, -.72, .6, .1, P.blue);
+      const tilt = .16 * Math.sin(t * 1.3);
+      figure({ x: 0, y: .76, s: 1.05, robe: P.red, cloak: P.blue, trim: P.yellow, collar: P.yellow, head: 'crown', arms: [2.75, .55],
+        hold: [() => { limb(0, .04, 0, -.5, .035, P.paper); seg(-.07, -.02, .07, -.02, .03, P.yellow); }, () => {
+          limb(0, 0, 0, -.12, .015, P.yellow);
+          const ex = .2 * Math.cos(tilt), ey = .2 * Math.sin(tilt);
+          limb(-ex, -.12 - ey, ex, -.12 + ey, .018, P.yellow);
+          for (const [x, y] of [[-ex, -.12 - ey], [ex, -.12 + ey]]) {
+            seg(x, y, x - .04, y + .12, .006); seg(x, y, x + .04, y + .12, .006);
+            X.beginPath(); X.arc(x, y + .12, .06, 0, Math.PI); X.closePath(); fs(P.yellow);
+          }
+        }] });
+    }),
+    card('VIIII', 'L’HERMITE', 'The Hermit', 'Walk slowly and carry your own light.', P.night, 'minpent', 49, 'walk', .15, .2, (t) => {
+      bg(P.night);
+      twinkle(24, t, 9, P.paper);
+      hill(.62, .06, 2.2, .6, '#2b3f6b');
+      const o = { x: -.04 + .02 * Math.sin(t * .6), y: .76, s: 1.05, robe: P.blue, cloak: P.red, head: 'hood', hood: P.blue, beard: P.paper, arms: [.12, 1.95] };
+      const [lx, ly] = handPos(o, 1);
+      const g = X.createRadialGradient(lx, ly + .1, 0, lx, ly + .1, .75);
+      g.addColorStop(0, 'rgba(242,194,50,.55)'); g.addColorStop(1, 'rgba(242,194,50,0)');
+      X.fillStyle = g; X.fillRect(lx - .8, ly - .7, 1.6, 1.6);
+      o.hold = [() => limb(0, -.25, 0, .3, .03, P.yellow), () => {
+        seg(0, 0, 0, .06, .01); rect(-.045, .06, .09, .1, P.yellow); poly([-.05, .06, 0, .02, .05, .06], P.red);
+        dot(0, .11, .02 + .006 * Math.sin(t * 9), P.paper);
+      }];
+      figure(o);
+      for (let i = 0; i < 26; i++) {
+        const x = (hash(i) * 2 - 1) * 1.9 + .05 * Math.sin(t + i), y = ((hash(i + 50) + t * .05 * (1 + hash(i + 9))) % 1) * 2 - 1;
+        dot(x, y, .006 + .006 * hash(i + 7), P.paper);
+      }
+    }),
+    card('X', 'LA ROUE DE FORTUNE', 'The Wheel of Fortune', 'What rises turns, and what falls turns back.', P.orange, 'whole', 65.41, 'dance', .3, .7, (t) => {
+      bg(P.yellow);
+      rays(0, -.05, 24, 0, 4, [P.yellow, P.orange], -t * .1, false);
+      poly([-.42, .62, .42, .62, .3, .84, -.3, .84], P.green);
+      for (const d of [-1, 1]) limb(d * .14, .62, d * .02, -.05, .04, P.flesh);
+      const r = t * .55, cy = -.05;
+      circ(0, cy, .44, P.red); circ(0, cy, .37, P.sky);
+      for (let i = 0; i < 6; i++) { const a = r + i * TAU / 6; limb(0, cy, Math.cos(a) * .37, cy + Math.sin(a) * .37, .03, P.yellow); }
+      circ(0, cy, .07, P.yellow);
+      limb(0, cy, .5, cy + .12, .03, P.flesh); circ(.5, cy + .12, .03, P.yellow);
+      for (let i = 0; i < 2; i++) {
+        const a = r + Math.PI / 2 + i * Math.PI, x = Math.cos(a) * .44, y = cy + Math.sin(a) * .44;
+        X.save(); X.translate(x, y); X.rotate(a + Math.PI / 2); X.scale(.45, .45);
+        const lw = LW; LW = lw / .45;
+        ell(0, -.08, .16, .1, 0, i ? P.blue : P.flesh); circ(.14, -.16, .08, i ? P.blue : P.flesh);
+        poly([.16, -.22, .2, -.3, .22, -.21], i ? P.blue : P.flesh); dot(.17, -.17, .015);
+        limb(-.14, -.08, -.26, -.18, .03, i ? P.blue : P.flesh);
+        LW = lw; X.restore();
+      }
+      figure({ x: 0, y: -.47, s: .38, robe: P.blue, wings: P.red, head: 'crown', arms: [.9, .9], hold: [null, () => limb(0, 0, 0, -.25, .03, P.paper)] });
+    }),
+    card('XI', 'LA FORCE', 'Strength', 'Calm hands open the lion’s mouth.', P.orange, 'hijaz', 58.27, 'ritual', .2, .6, (t, b) => {
+      bg(P.orange);
+      rays(0, -.3, 18, 0, 4, [P.orange, P.yellow], t * .18, false);
+      hill(.7, .03, 3, 0, P.green);
+      figure({ x: -.08, y: .8, s: 1.05, robe: P.blue, cloak: P.red, trim: P.yellow, collar: P.yellow, head: 'hat', hair: P.yellow, arms: [-1.0, 1.15] });
+      lionFace(.22, .46, .12, t * .2, .25 + .25 * b + .12 * Math.sin(t * 1.5));
+    }),
+    card('XII', 'LE PENDU', 'The Hanged Man', 'Hang still and see the world upside down.', P.green, 'phryg', 51.91, 'still', .25, .2, (t) => {
+      bg(P.sky);
+      rect(-4, .72, 8, 3, P.green);
+      for (const d of [-1, 1]) {
+        poly([d * .36 - .05, .76, d * .36 + .05, .76, d * .36 + .04, -.66, d * .36 - .04, -.66], P.yellow);
+        for (let k = 0; k < 4; k++) { const y = -.5 + k * .3; poly([d * .36 + d * .04, y, d * .36 + d * .1, y - .04, d * .36 + d * .04, y + .05], P.red); }
+      }
+      limb(-.42, -.64, .42, -.64, .05, P.green);
+      const sw = .14 * Math.sin(t * 1.1);
+      X.save(); X.translate(0, -.62); X.rotate(sw);
+      seg(0, 0, 0, .1, .012);
+      limb(0, .1, 0, .38, .06, P.red);
+      limb(0, .2, .13, .28, .055, P.blue); limb(.13, .28, .02, .37, .055, P.blue);
+      poly([-.13, .38, .13, .38, .16, .7, -.16, .7], P.blue);
+      rect(-.15, .44, .3, .05, P.yellow);
+      for (const d of [-1, 1]) limb(d * .13, .66, d * .05, .5, .045, P.red);
+      circ(0, .79, .095, P.flesh); dot(-.035, .8, .012); dot(.035, .8, .012);
+      poly([-.09, .84, .09, .84, .05, .95, 0, .92, -.05, .95], P.yellow);
+      X.restore();
+      for (let i = 0; i < 6; i++) {
+        const p = (t * .4 + i / 6) % 1;
+        X.globalAlpha = 1 - p; circ(.06 * Math.sin(i * 2.3) + sw * .6, .25 + p * .45, .02, P.yellow); X.globalAlpha = 1;
+      }
+    }),
+    card('XIII', '', 'The Nameless Arcanum', 'Clear the field so something new can grow.', P.black, 'locrian', 55, 'toll', .1, .5, (t) => {
+      bg(P.black);
+      rect(-4, .62, 8, 3, '#3a2a1c');
+      const sweep = Math.sin(t * 1.1);
+      for (let i = -12; i <= 12; i++) {
+        const x = i * .13 + .03, cut = Math.abs(x - sweep * .5) < .08;
+        const h = cut ? .03 : .06 + .1 * (.5 + .5 * Math.sin(t * .7 + i * 1.9));
+        limb(x, .64, x, .64 - h, .012, P.green);
+        if (!cut) circ(x, .64 - h, .025, [P.red, P.blue, P.yellow][(i + 12) % 3]);
+      }
+      X.save(); X.translate(-.08, .62);
+      const B = P.flesh;
+      limb(0, -.36, -.12, 0, .035, B); limb(0, -.36, .14, -.02, .035, B);
+      limb(0, -.36, .02, -.7, .04, B);
+      for (let k = 0; k < 4; k++) limb(-.07, -.62 + k * .055, .08, -.62 + k * .055, .014, B);
+      const hx = .2 + .1 * sweep, hy = -.5;
+      limb(.02, -.66, hx, hy, .03, B); limb(.02, -.66, hx - .12, hy + .08, .03, B);
+      X.save(); X.translate(hx, hy); X.rotate(-.9 + sweep * .5);
+      limb(0, -.15, 0, .55, .025, P.yellow);
+      poly([0, .5, .2, .62, .42, .6, .2, .55, .02, .58], P.paper);
+      X.restore();
+      circ(.02, -.78, .09, B); dot(-.01, -.79, .022); dot(.05, -.79, .022); seg(-.005, -.725, .05, -.725, .008);
+      X.restore();
+    }),
+    card('XIIII', 'TEMPÉRANCE', 'Temperance', 'Pour between the extremes until they mix.', P.sky, 'penta', 69.3, 'walk', .35, .3, (t) => {
+      bg(P.sky);
+      hill(.68, .04, 3, 1, P.green);
+      for (let i = -6; i <= 6; i++) { const x = i * .26; circ(x, .82, .03, [P.red, P.yellow, P.blue][(i + 6) % 3]); }
+      const k = Math.sin(t * .7);
+      const o = { x: 0, y: .8, s: 1.05, robe: P.blue, cloak: P.red, trim: P.yellow, collar: P.yellow, wings: P.red, head: 'flower', hair: P.yellow, arms: [.95 + .35 * k, .95 - .35 * k] };
+      figure(o);
+      const [ax, ay] = handPos(o, -1), [bx, by] = handPos(o, 1);
+      vessel(ax, ay, P.blue); vessel(bx, by, P.red);
+      const hi = ay < by ? [ax, ay] : [bx, by], lo = ay < by ? [bx, by] : [ax, ay];
+      stream(hi[0], hi[1] - .08, lo[0], lo[1] - .08, .12, t);
+    }),
+    card('XV', 'LE DIABLE', 'The Devil', 'Desire is both the chain and the key.', P.black, 'hijaz', 49, 'storm', .15, .9, (t, b) => {
+      bg(P.black);
+      for (let i = -14; i <= 14; i++) {
+        const x = i * .12, h = .25 + .15 * Math.sin(t * 5 + i * 1.7) + .1 * b;
+        poly([x - .08, 1.1, x, .95 - h * 1.8, x + .08, 1.1], P.red, false);
+        poly([x - .05, 1.1, x + .01, 1 - h * 1.1, x + .05, 1.1], P.orange, false);
+      }
+      rect(-.16, .3, .32, .22, P.red); circ(0, .34, .03, P.yellow);
+      figure({ x: 0, y: .32, s: .95, robe: P.flesh, trim: P.blue, bat: P.blue, head: 'horns', arms: [2.5, .7],
+        hold: [() => {
+          limb(0, .05, -.02, -.25, .03, P.yellow);
+          const f = .05 * Math.sin(t * 11);
+          poly([-.08, -.25, -.02, -.45 - f, .05, -.25], P.orange); poly([-.05, -.25, -.01, -.36 + f, .03, -.25], P.yellow);
+        }, null] });
+      for (const d of [-1, 1]) {
+        const ix = d * .27, iy = .8 + .02 * Math.sin(t * 3 + d);
+        seg(0, .34, ix, iy - .38, .008);
+        limb(ix + d * .1, iy - .08, ix + d * .2, iy - .24, .015, P.red);
+        figure({ x: ix, y: iy, s: .5, robe: d < 0 ? P.red : P.flesh, trim: P.yellow, head: 'horns', arms: [.4, .4] });
+      }
+    }),
+    card('XVI', 'LA MAISON DIEU', 'The Tower', 'Lightning frees what was walled in.', P.flesh, 'locrian', 51.91, 'storm', .2, 1, (t) => {
+      const strike = (t * .45) % 1;
+      bg(!calm && strike < .06 ? P.paper : P.sky);
+      rect(-4, .7, 8, 3, P.green);
+      if (strike < .35) poly([2.2, -1.3, .3, -.62, .12, -.48, .26, -.58, .1, -.4, .3, -.66, 2.3, -1.1], strike < .18 ? P.yellow : P.red);
+      rect(-.18, -.42, .36, 1.12, P.flesh);
+      bricks(-.18, -.42, .36, 1.12, .085);
+      rect(-.06, .48, .12, .22, P.blue);
+      rect(-.09, -.1, .06, .1, P.blue); rect(.04, .1, .06, .1, P.blue);
+      const lift = strike < .5 ? ease(strike / .5) : 1 - ease((strike - .5) / .5);
+      X.save(); X.translate(.06 * lift, -.42 - .3 * lift); X.rotate(-.7 * lift);
+      poly([-.22, 0, .22, 0, .22, -.1, .14, -.1, .14, -.16, .05, -.16, .05, -.1, -.05, -.1, -.05, -.16, -.14, -.16, -.14, -.1, -.22, -.1], P.yellow);
+      X.restore();
+      for (let i = 0; i < 2; i++) {
+        const p = (t * .35 + i * .5) % 1, d = i ? 1 : -1;
+        figure({ x: d * (.34 + p * .05), y: -.35 + p * 1.0, s: .42, rot: d * (p * 3 + 2), robe: i ? P.red : P.blue, trim: P.yellow, head: i ? 'crown' : '', arms: [2.3, 2.3] });
+      }
+      for (let i = 0; i < 24; i++) {
+        const x = (hash(i) * 2 - 1) * 1.9, y = ((hash(i + 40) + t * (.12 + .1 * hash(i + 3))) % 1) * 1.9 - 1;
+        circ(x, y, .022, [P.red, P.yellow, P.blue, P.paper][i & 3]);
+      }
+    }),
+    card('XVII', 'L’ÉTOILE', 'The Star', 'Give freely; the river refills.', P.blue, 'lydian', 61.74, 'still', .45, .3, (t) => {
+      bg(P.blue);
+      hill(.5, .05, 3, 2, P.green);
+      rect(-4, .78, 8, 3, P.sky);
+      X.beginPath();
+      for (let k = 0; k < 2; k++) for (let x = -2; x <= 2; x += .05) { const y = .84 + k * .07 + .012 * Math.sin(x * 14 + t * 2 + k); if (x === -2) X.moveTo(x, y); else X.lineTo(x, y); }
+      X.lineWidth = .008; X.strokeStyle = P.paper; X.stroke();
+      limb(-.38, .54, -.38, .2, .035, P.yellow); circ(-.38, .14, .1, P.green); circ(-.31, .06, .07, P.green);
+      const flap = .4 * Math.sin(t * 8);
+      ell(-.34, .0, .04, .022, 0, P.black, false); ell(-.35, -.015, .035, .012, -.5 + flap, P.black, false);
+      star(0, -.55, 8, .1, .24, t * .2, P.yellow); star(0, -.55, 8, .05, .14, -t * .3 + .2, P.red);
+      for (let i = 0; i < 7; i++) {
+        const a = Math.PI * (1.08 + .84 * i / 6), x = Math.cos(a) * .42, y = -.42 + Math.sin(a) * .36;
+        star(x, y, 8, .02, .055 * (.8 + .3 * Math.sin(t * 3 + i)), t * .4, i & 1 ? P.yellow : P.paper);
+      }
+      const o = { x: 0, y: .78, s: .82, robe: P.flesh, trim: P.sky, hair: P.blue, arms: [1.1, .85] };
+      figure(o);
+      const [ax, ay] = handPos(o, -1), [bx, by] = handPos(o, 1);
+      vessel(ax, ay, P.red); vessel(bx, by, P.red);
+      stream(ax - .05, ay - .06, ax - .2, .84, -.06, t);
+      stream(bx + .05, by - .06, bx + .18, .84, .06, t);
+    }),
+    card('XVIII', 'LA LUNE', 'The Moon', 'Trust instinct where reason cannot see.', P.sky, 'aeolian', 58.27, 'ritual', .3, .5, (t, b) => {
+      bg('#2a3d6e');
+      rays(0, -.55, 24, .19, .29, [P.yellow, P.red], t * .1);
+      circ(0, -.55, .19, P.yellow); circ(.07, -.55, .16, P.sky, false);
+      dot(-.1, -.59, .014); seg(-.13, -.5, -.08, -.49, .008);
+      for (let i = 0; i < 14; i++) {
+        const p = (t * .18 + hash(i)) % 1;
+        drop((hash(i + 7) * 2 - 1) * .5, .42 - p * .8, .022, [P.red, P.yellow, P.green][i % 3], false);
+      }
+      for (const d of [-1, 1]) {
+        rect(d * .42 - .08, -.18, .16, .62, P.flesh);
+        for (let k = 0; k < 3; k++) rect(d * .42 - .08 + k * .06, -.23, .04, .05, P.flesh);
+        rect(d * .42 - .025, .0, .05, .08, P.blue);
+      }
+      hill(.44, .03, 4, 0, P.green);
+      for (const d of [-1, 1]) {
+        X.save(); X.translate(d * .2, .46); X.scale(-d, 1);
+        dog(0, 0, .55, 0, d < 0 ? P.paper : P.yellow, .9, .25 + .4 * b);
+        X.restore();
+      }
+      ell(0, .84, .5, .12, 0, P.blue);
+      const cy = .82 + .02 * Math.sin(t * 2);
+      ell(0, cy, .1, .045, 0, P.red);
+      for (const d of [-1, 1]) { limb(d * .08, cy - .02, d * .14, cy - .08, .02, P.red); ell(d * .15, cy - .1, .03, .02, 0, P.red); }
+    }),
+    card('XVIIII', 'LE SOLEIL', 'The Sun', 'Two together in plain light.', P.yellow, 'penta', 65.41, 'dance', .35, .7, (t, b) => {
+      bg(P.sky);
+      const cols = [P.red, P.yellow, P.green, P.yellow];
+      for (let i = 0; i < 16; i++) {
+        const a = t * .2 + i * TAU / 16, r1 = i & 1 ? .42 : .56 + .03 * b;
+        poly([Math.cos(a - .1) * .2, -.45 + Math.sin(a - .1) * .2, Math.cos(a) * r1, -.45 + Math.sin(a) * r1, Math.cos(a + .1) * .2, -.45 + Math.sin(a + .1) * .2], cols[i & 3]);
+      }
+      circ(0, -.45, .2, P.yellow);
+      dot(-.07, -.48, .015); dot(.07, -.48, .015);
+      X.beginPath(); X.arc(0, -.42, .08, .2 * Math.PI, .8 * Math.PI); X.lineWidth = .012; X.strokeStyle = P.black; X.stroke();
+      for (let i = 0; i < 16; i++) {
+        const p = (t * .25 + hash(i)) % 1;
+        drop((hash(i + 3) * 2 - 1) * .5, -.16 + p * .4, .02, [P.red, P.green, P.yellow][i % 3], true);
+      }
+      rect(-4, .22, 8, .22, P.yellow); bricks(-2.4, .22, 4.8, .22, .073);
+      rect(-4, .44, 8, 3, P.green);
+      figure({ x: -.14, y: .82, s: .65, robe: P.sky, trim: P.yellow, hair: P.yellow, arms: [.3, .75] });
+      figure({ x: .14, y: .82, s: .65, robe: P.red, trim: P.yellow, hair: P.yellow, arms: [.75, .3] });
+    }),
+    card('XX', 'LE JUGEMENT', 'Judgement', 'Wake up; you are being called by name.', P.red, 'mixo', 55, 'toll', .3, .6, (t) => {
+      bg(P.sky);
+      for (let i = 0; i < 14; i++) {
+        const a = Math.PI * (.12 + .76 * i / 13);
+        limb(0, -.5, Math.cos(a) * 1.6, -.5 + Math.sin(a) * 1.6, .02, [P.red, P.yellow, P.blue][i % 3]);
+      }
+      figure({ x: 0, y: -.12, s: .7, robe: P.sky, wings: P.red, halo: P.yellow, hair: P.yellow, arms: [1.3, 2.4],
+        hold: [null, () => { limb(0, 0, -.38, .12, .03, P.yellow); poly([-.36, .1, -.47, .02, -.47, .22], P.yellow); }] });
+      for (let i = -9; i <= 9; i++) circ(i * .12, -.2 + .03 * Math.sin(i * 1.7 + t), .1, i & 1 ? P.blue : P.paper);
+      rect(-4, .6, 8, 3, P.green);
+      const rise = .5 + .5 * Math.sin(t * .8);
+      figure({ x: 0, y: .86 - .2 * rise, s: .55, robe: P.flesh, hair: P.blue, arms: [2.5, 2.5] });
+      rect(-.22, .6, .44, .3, P.green); rect(-.22, .6, .44, .04, P.yellow);
+      for (const d of [-1, 1]) {
+        const w = .15 * Math.sin(t * 2 + d);
+        figure({ x: d * .36, y: .88, s: .55, robe: P.flesh, hair: d < 0 ? P.yellow : P.blue, arms: [2.4 + w, 2.4 - w] });
+      }
+    }),
+    card('XXI', 'LE MONDE', 'The World', 'The dance is complete, and it starts again.', P.violet, 'lydian', 73.42, 'dance', .4, .8, (t, b) => {
+      bg(P.violet);
+      rays(0, 0, 20, 0, 4, [P.violet, P.blue, P.violet, P.magenta], t * .1, false);
+      for (let i = 0; i < 30; i++) {
+        const a = i * TAU / 30 + t * .15, x = Math.cos(a) * .3, y = .02 + Math.sin(a) * .55;
+        ell(x, y, .06, .028, a + Math.PI / 2, [P.green, P.red, P.blue][i % 3]);
+      }
+      X.save(); X.translate(0, .02); X.rotate(.08 * Math.sin(t * 1.2)); X.translate(0, -.02);
+      figure({ x: 0, y: .42, s: .75 * (1 + .03 * b), robe: P.sky, cloak: P.red, hair: P.yellow, arms: [2.3, .7],
+        hold: [() => limb(0, 0, .03, -.2, .02, P.yellow), () => circ(0, .05, .04, P.yellow)] });
+      X.restore();
+      const cx = .4, cy = .7;
+      for (const d of [-1, 1]) ell(-cx + d * .08, -cy, .08, .03, d * -.5, P.blue);
+      circ(-cx, -cy, .07, P.flesh); poly([-cx - .07, -cy - .02, -cx, -cy - .1, -cx + .07, -cy - .02], P.yellow);
+      dot(-cx - .025, -cy, .01); dot(-cx + .025, -cy, .01);
+      circ(cx, -cy, .08, P.yellow); eagle(cx, -cy + .02, 1.2);
+      circ(-cx, cy, .08, P.paper); for (const d of [-1, 1]) poly([-cx + d * .05, cy - .05, -cx + d * .13, cy - .13, -cx + d * .08, cy - .04], P.yellow);
+      dot(-cx - .03, cy - .01, .01); dot(-cx + .03, cy - .01, .01); ell(-cx, cy + .04, .035, .02, 0, P.flesh);
+      lionFace(cx, cy, .065, t * .2, .2);
+    }),
+  ];
+
+  // ---- Cards on the table -------------------------------------------------------------
+  function label(str, x, y, size, maxW) {
+    if (!str) return;
+    X.save();
+    X.font = '64px "IM Fell English SC", Georgia, serif';
+    X.textAlign = 'center'; X.textBaseline = 'middle';
+    let k = size / 64;
+    const w = X.measureText(str).width * k;
+    if (maxW && w > maxW) k *= maxW / w;
+    X.translate(x, y); X.scale(k, k);
+    X.fillStyle = P.black; X.fillText(str, 0, 0);
+    X.restore();
+  }
+  function cardFace(ci, w, h, t) {
+    const m = w * .06, bh = h * .085;
+    rect(-w / 2, -h / 2, w, h, P.paper, false);
+    X.save(); X.beginPath(); X.rect(-w / 2 + m, -h / 2 + m, w - 2 * m, h - 2 * m); X.clip();
+    X.save(); X.scale(h / 2, h / 2);
+    const e = EXT, lw = LW; EXT = .63; LW = .012;
+    CARDS[ci].draw(t, 0);
+    EXT = e; LW = lw;
+    X.restore(); X.restore();
+    X.lineWidth = h * .006; X.strokeStyle = P.black;
+    rect(-w / 2 + m, -h / 2 + m, w - 2 * m, bh, P.paper, false); X.stroke();
+    rect(-w / 2 + m, h / 2 - m - bh, w - 2 * m, bh, P.paper, false); X.stroke();
+    X.beginPath(); X.rect(-w / 2 + m, -h / 2 + m, w - 2 * m, h - 2 * m); X.stroke();
+    label(CARDS[ci].num, 0, -h / 2 + m + bh * .56, bh * .62);
+    label(CARDS[ci].fr, 0, h / 2 - m - bh * .44, bh * .55, w - 2 * m - w * .08);
+  }
+  function cardBack(w, h) {
+    rect(-w / 2, -h / 2, w, h, P.blue, false);
+    X.save(); X.beginPath(); X.rect(-w / 2, -h / 2, w, h); X.clip();
+    X.beginPath();
+    const st = w / 4;
+    for (let k = -12; k <= 12; k++) { X.moveTo(k * st, -h / 2); X.lineTo(k * st + h, h / 2); X.moveTo(k * st, -h / 2); X.lineTo(k * st - h, h / 2); }
+    X.lineWidth = h * .008; X.strokeStyle = P.red; X.stroke();
+    X.restore();
+    ell(0, 0, w * .3, h * .2, 0, P.paper, false);
+    ell(0, 0, w * .2, h * .055, 0, P.yellow, false);
+    circ(0, 0, h * .04, P.blue, false); dot(0, 0, h * .018);
+    X.lineWidth = h * .01; X.strokeStyle = P.paper; X.strokeRect(-w / 2 + w * .05, -h / 2 + w * .05, w * .9, h - w * .1);
+  }
+  function drawCard(ci, x, y, h, o) {
+    o = o || {};
+    const w = h * .525;
+    X.save(); X.translate(x, y); X.scale(o.sx == null ? 1 : o.sx, 1);
+    if (o.glow) { X.fillStyle = `rgba(242,194,50,${.45 * o.glow})`; X.fillRect(-w / 2 - h * .035, -h / 2 - h * .035, w + h * .07, h + h * .07); }
+    if (!o.flat) { X.fillStyle = 'rgba(0,0,0,.45)'; X.fillRect(-w / 2 + h * .02, -h / 2 + h * .025, w, h); }
+    if (o.back) cardBack(w, h); else cardFace(ci, w, h, o.t || 0);
+    X.restore();
+  }
+  function layout() {
+    const hc = Math.min(1, (2 * EXT * .88 - .16) / (3 * .525)), w = hc * .525, gap = Math.min(.12, w * .25);
+    return [-1, 0, 1].map((k) => ({ x: k * (w + gap), y: 0, h: hc }));
+  }
+  function altar(u, a) {
+    bg('#120b0d');
+    const cols = [P.red, P.orange, P.yellow, P.green, P.sky, P.blue, P.violet];
+    X.globalAlpha = .5 * a;
+    for (let i = 0; i < 7; i++) circ(0, -.2, 1.55 - i * .2 + .02 * Math.sin(u * .8 + i), cols[i], false);
+    X.globalAlpha = a;
+    rays(0, -.72, 24, .28, 1.2, ['rgba(242,194,50,.22)', 'rgba(0,0,0,0)'], u * .1, false);
+    poly([0, -.97, .25, -.55, -.25, -.55], P.yellow);
+    ell(0, -.68, .1, .045, 0, P.paper); circ(0, -.68, .035, P.blue); dot(0, -.68, .015);
+    rect(-4, .5, 8, 3, P.red);
+    X.beginPath();
+    for (let x = -3; x < 3; x += .06) { X.moveTo(x, .5); X.lineTo(x + .03, .56); X.lineTo(x + .06, .5); }
+    X.fillStyle = P.yellow; X.fill();
+    X.globalAlpha = 1;
+  }
+
+  // ---- Timeline ---------------------------------------------------------------------
+  const BPM = 90, STEP = 60 / BPM / 4, BAR = STEP * 16;
+  const STAGES = [
+    { name: 'Nigredo', pos: 'the past', cut: 380, choir: .6 },
+    { name: 'Albedo', pos: 'the present', cut: 950, choir: 1 },
+    { name: 'Rubedo', pos: 'the future', cut: 1600, choir: .9 },
+  ];
+  let acc = 0;
+  const SECTS = [['pro', 6], ['card', 12], ['card', 12], ['card', 12], ['asc', 8], ['end', 4]].map(([k, bars], i) => {
+    const s = { k, i, bars, step0: acc * 16, t0: acc * BAR, D: bars * BAR };
+    acc += bars;
+    return s;
+  });
+  const STEPS = acc * 16, LENGTH = acc * BAR;
+  const sectAt = (T) => { for (let i = SECTS.length - 1; i > 0; i--) if (T >= SECTS[i].t0) return SECTS[i]; return SECTS[0]; };
+  const sectOfStep = (n) => { for (let i = SECTS.length - 1; i > 0; i--) if (n >= SECTS[i].step0) return SECTS[i]; return SECTS[0]; };
+
+  let draw = [16, 17, 18], seed = 1;
+
+  function drawPrologue(u) {
+    altar(u, clamp(u / 3));
+    if (u < 3) { X.fillStyle = `rgba(0,0,0,${1 - u / 3})`; X.fillRect(-4, -2, 8, 4); }
+    const L = layout();
+    for (let k = 0; k < 3; k++) {
+      const deal = clamp((u - 3.5 - k * .6) / 1.1);
+      if (deal <= 0) continue;
+      const c = L[k], fp = clamp((u - (8 + k * 2)) / .6);
+      drawCard(draw[k], c.x, lerp(-1.9, c.y, ease(deal)), c.h, { back: fp < .5, sx: Math.max(.02, Math.abs(Math.cos(fp * Math.PI))), t: 2, glow: k === 0 ? clamp(u - 14) : 0 });
+    }
+  }
+  const Z = 1.12;
+  function tableau(ci, t, b) {
+    X.save(); X.scale(Z, Z);
+    const e = EXT; EXT = EXT / Z;
+    CARDS[ci].draw(t, b);
+    EXT = e; X.restore();
+  }
+  function iris(p) {
+    const r = p * Math.hypot(EXT, 1) * 1.05;
+    X.beginPath(); X.rect(-EXT - .1, -1.1, 2 * EXT + .2, 2.2); X.arc(0, 0, Math.max(1e-4, r), 0, TAU, true);
+    X.fillStyle = '#000'; X.fill('evenodd');
+  }
+  function drawCardSect(u, sc, b) {
+    const k = sc.i - 1, ci = draw[k], L = layout(), c = L[k], tt = Math.max(0, u - 1);
+    if (u < 2.6) {
+      const p = u < 1 ? 0 : ease(clamp((u - 1) / 1.6));
+      altar(u + 40, 1);
+      X.globalAlpha = 1 - p;
+      for (let j = 0; j < 3; j++) if (j !== k) drawCard(draw[j], L[j].x, L[j].y, L[j].h, { t: 2 });
+      X.globalAlpha = 1;
+      const lift = .06 * ease(clamp(u));
+      drawCard(ci, lerp(c.x, 0, p), lerp(c.y - lift, 0, p), c.h * Math.pow((2 * Z) / c.h, p), { t: tt, glow: 1 - p });
+    } else {
+      tableau(ci, tt, b);
+      if (u < 3.6) { X.globalAlpha = 1 - ease(clamp(u - 2.6)); drawCard(ci, 0, 0, 2 * Z, { t: tt, flat: true }); X.globalAlpha = 1; }
+    }
+    const close = clamp((u - (sc.D - 1.6)) / 1.6);
+    if (close > 0) iris(1 - ease(close));
+  }
+  function along(pts, q) {
+    let total = 0;
+    const lens = [];
+    for (let i = 2; i < pts.length; i += 2) { const l = Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]); lens.push(l); total += l; }
+    let d = q * total;
+    for (let i = 0; i < lens.length; i++) {
+      if (d <= lens[i]) { const f = d / lens[i]; return [lerp(pts[i * 2], pts[i * 2 + 2], f), lerp(pts[i * 2 + 1], pts[i * 2 + 3], f)]; }
+      d -= lens[i];
+    }
+    return [pts[pts.length - 2], pts[pts.length - 1]];
+  }
+  function drawAscent(u, D) {
+    const p = clamp(u / D);
+    bg(P.night);
+    const cols = [P.red, P.orange, P.yellow, P.green, P.sky, P.blue, P.violet];
+    X.globalAlpha = .85;
+    for (let i = 0; i < 7; i++) { X.beginPath(); X.arc(0, 1.3, 2.5 - i * .13, Math.PI, 0); X.closePath(); fs(cols[i], false); }
+    X.globalAlpha = 1;
+    bg2(1.3, 2.5 - 7 * .13);
+    twinkle(40, u, 5, P.paper);
+    const sc = .75 + .55 * ease(p), ty = lerp(.9, 1.55, ease(p));
+    X.save(); X.translate(0, ty); X.scale(sc, sc);
+    const bands = [CARDS[draw[0]].col, CARDS[draw[1]].col, CARDS[draw[2]].col, P.paper], nb = 9, H0 = 1.55;
+    for (let j = 0; j < nb; j++) {
+      const y0 = -j * H0 / nb, y1 = -(j + 1) * H0 / nb, w0 = 1.4 * (1 - j / nb), w1 = 1.4 * (1 - (j + 1) / nb);
+      poly([-w0, y0, w0, y0, w1, y1, -w1, y1], bands[j % 4]);
+    }
+    const pts = [];
+    for (let j = 0; j <= nb; j++) { const y = -j * H0 / nb - .02, w = 1.4 * (1 - j / nb) * .7; pts.push(j === nb ? 0 : (j & 1 ? w : -w), y); }
+    X.beginPath(); X.moveTo(pts[0], pts[1]); for (let i = 2; i < pts.length; i += 2) X.lineTo(pts[i], pts[i + 1]);
+    X.setLineDash([.04, .03]); X.lineDashOffset = -u * .2; X.lineWidth = .012; X.strokeStyle = P.paper; X.stroke(); X.setLineDash([]);
+    for (let i = 0; i < 9; i++) {
+      const [x, y] = along(pts, clamp(p * 1.25 - i * .035));
+      poly([x - .035, y, x + .035, y, x, y - .1], [P.red, P.blue, P.yellow][i % 3]); circ(x, y - .1, .022, P.flesh);
+    }
+    const eyeA = clamp((p - .55) / .2);
+    if (eyeA > 0) {
+      X.globalAlpha = eyeA;
+      rays(0, -H0 - .07, 16, .08, .55, [P.yellow, 'rgba(0,0,0,0)'], u * .3, false);
+      ell(0, -H0 - .07, .13, .055, 0, P.paper); circ(0, -H0 - .07, .045, P.blue); dot(0, -H0 - .07, .02);
+      X.globalAlpha = 1;
+    }
+    X.restore();
+    const g = clamp((p - .62) / .25);
+    if (g > 0) {
+      X.globalCompositeOperation = 'multiply'; X.fillStyle = `rgba(232,185,49,${.85 * g})`; X.fillRect(-4, -2, 8, 4);
+      X.globalCompositeOperation = 'screen'; X.fillStyle = `rgba(255,214,120,${.3 * g})`; X.fillRect(-4, -2, 8, 4);
+      X.globalCompositeOperation = 'source-over';
+    }
+  }
+  function bg2(cy, r) { X.beginPath(); X.arc(0, cy, r, Math.PI, 0); X.closePath(); fs(P.night, false); }
+  function drawEnd(u, D) {
+    const z = ease(clamp((u - .6) / 4));
+    bg('#171312');
+    rect(-4, .58, 8, 3, '#0d0b0a', false);
+    X.globalAlpha = z;
+    for (const d of [-1, 1]) {
+      const lx = d * EXT * .82;
+      poly([lx, -.55, lx - d * EXT * .9, .7, lx - d * EXT * .35, .9], 'rgba(255,236,190,.06)', false);
+      limb(lx, -.5, lx, .78, .02, '#2a2523'); ell(lx, -.55, .09, .06, d * .4, '#2a2523');
+    }
+    X.globalAlpha = 1;
+    const s = 1 - .62 * z;
+    X.save(); X.translate(0, -.08 * z); X.scale(s, s);
+    X.save(); X.beginPath(); X.rect(-EXT, -1, 2 * EXT, 2); X.clip();
+    drawAscent(SECTS[4].D + u, SECTS[4].D);
+    X.restore();
+    X.lineWidth = .02 / s; X.strokeStyle = P.paper; X.strokeRect(-EXT, -1, 2 * EXT, 2);
+    X.restore();
+    X.globalAlpha = z;
+    const cx = -EXT * .5, cy = .5;
+    for (const d of [-1, 0, 1]) seg(cx, cy + .05, cx + d * .16, .98, .015, '#3a3330');
+    rect(cx - .16, cy - .1, .32, .16, '#070606'); circ(cx - .07, cy - .17, .07, '#070606'); circ(cx + .09, cy - .17, .07, '#070606');
+    rect(cx + .16, cy - .07, .1, .08, '#070606');
+    X.lineWidth = .006; X.strokeStyle = '#3a3330';
+    X.strokeRect(cx - .16, cy - .1, .32, .16);
+    X.globalAlpha = 1;
+  }
+
+  // ---- Stage canvas ------------------------------------------------------------------
+  const stage = $('stage'), cv = $('view'), ctx = cv.getContext('2d', { alpha: false });
+  let W = 2, H = 2, res = 1, vig = null, grain = null;
+  function makeGrain() {
+    const g = document.createElement('canvas'); g.width = g.height = 96;
+    const gx = g.getContext('2d'), img = gx.createImageData(96, 96);
+    for (let i = 0; i < img.data.length; i += 4) { const v = Math.random() * 255; img.data[i] = img.data[i + 1] = img.data[i + 2] = v; img.data[i + 3] = 255; }
+    gx.putImageData(img, 0, 0);
+    return ctx.createPattern(g, 'repeat');
+  }
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    const scale = Math.min(res, 1280 / Math.max(1, r.width));
+    W = Math.max(2, Math.round(r.width * scale)); H = Math.max(2, Math.round(r.height * scale));
+    cv.width = W; cv.height = H;
+    vig = document.createElement('canvas'); vig.width = W; vig.height = H;
+    const vx = vig.getContext('2d'), g = vx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * .35, W / 2, H / 2, Math.hypot(W, H) * .6);
+    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(0,0,0,.6)');
+    vx.fillStyle = g; vx.fillRect(0, 0, W, H);
+    dirty = true;
+  }
+  function post(grade) {
+    X.setTransform(1, 0, 0, 1, 0, 0);
+    if (grade === 0) {
+      X.globalCompositeOperation = 'saturation'; X.fillStyle = 'rgba(128,128,128,.45)'; X.fillRect(0, 0, W, H);
+      X.globalCompositeOperation = 'multiply'; X.fillStyle = 'rgba(135,122,150,.45)'; X.fillRect(0, 0, W, H);
+    } else if (grade === 1) {
+      X.globalCompositeOperation = 'saturation'; X.fillStyle = 'rgba(128,128,128,.25)'; X.fillRect(0, 0, W, H);
+      X.globalCompositeOperation = 'screen'; X.fillStyle = 'rgba(255,248,236,.2)'; X.fillRect(0, 0, W, H);
+    } else if (grade === 2) {
+      X.globalCompositeOperation = 'multiply'; X.fillStyle = 'rgba(255,165,140,.4)'; X.fillRect(0, 0, W, H);
+      X.globalCompositeOperation = 'screen'; X.fillStyle = 'rgba(200,40,30,.1)'; X.fillRect(0, 0, W, H);
+    }
+    X.globalCompositeOperation = 'source-over';
+    if (vig) X.drawImage(vig, 0, 0);
+    if (!calm) {
+      if (!grain) grain = makeGrain();
+      X.globalAlpha = .07; X.fillStyle = grain;
+      const ox = (Math.random() * 96) | 0, oy = (Math.random() * 96) | 0;
+      X.translate(-ox, -oy); X.fillRect(ox, oy, W, H); X.setTransform(1, 0, 0, 1, 0, 0);
+      X.globalAlpha = 1;
+    }
+  }
+  function render(T, b) {
+    X = ctx;
+    X.setTransform(H / 2, 0, 0, H / 2, W / 2, H / 2);
+    EXT = W / H; LW = .012;
+    let grade = -1;
+    if (state === 'rest' || state === 'end' || T < 0) {
+      altar(T, 1);
+      const L = layout();
+      for (let k = 0; k < 3; k++) drawCard(draw[k], L[k].x, L[k].y, L[k].h, { t: 2 });
+    } else {
+      const sc = sectAt(T), u = T - sc.t0;
+      if (sc.k === 'pro') drawPrologue(u);
+      else if (sc.k === 'card') { drawCardSect(u, sc, b); grade = sc.i - 1; }
+      else if (sc.k === 'asc') drawAscent(u, sc.D);
+      else drawEnd(u, sc.D);
+    }
+    post(grade);
+  }
+
+  // ---- Sound ---------------------------------------------------------------------------
+  let AC = null, A = null;
+  const fq = (root, mode, deg) => { const n = mode.length, o = Math.floor(deg / n), d = ((deg % n) + n) % n; return root * Math.pow(2, (mode[d] + 12 * o) / 12); };
+  function buildAudio() {
+    const Ctor = window.AudioContext || window.webkitAudioContext;
+    AC = new Ctor({ latencyHint: 'playback' });
+    const sr = AC.sampleRate;
+    const master = AC.createGain(); master.gain.value = .8;
+    const comp = AC.createDynamicsCompressor(); comp.threshold.value = -16; comp.ratio.value = 3.5; comp.attack.value = .01; comp.release.value = .25;
+    master.connect(comp); comp.connect(AC.destination);
+    const ir = AC.createBuffer(2, Math.floor(sr * 3.6), sr);
+    for (let c = 0; c < 2; c++) { const d = ir.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / d.length, 2.6); }
+    const verb = AC.createConvolver(); verb.buffer = ir;
+    const wet = AC.createGain(); wet.gain.value = .45; verb.connect(wet); wet.connect(master);
+    const noise = AC.createBuffer(1, sr * 2, sr), nd = noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const bus = (level, send) => { const g = AC.createGain(); g.gain.value = level; g.connect(master); const s = AC.createGain(); s.gain.value = send; g.connect(s); s.connect(verb); return g; };
+    // Drone: two saws a fifth apart, a sub sine and an octave saw through a slowly moving low-pass.
+    const dGain = AC.createGain(); dGain.gain.value = 0;
+    const dFilt = AC.createBiquadFilter(); dFilt.type = 'lowpass'; dFilt.frequency.value = 400; dFilt.Q.value = 3;
+    const lfo = AC.createOscillator(); lfo.frequency.value = .07;
+    const lfoAmt = AC.createGain(); lfoAmt.gain.value = 160; lfo.connect(lfoAmt); lfoAmt.connect(dFilt.frequency); lfo.start();
+    const dOsc = [['sawtooth', 1, 0, .22], ['sawtooth', 1.5, 4, .18], ['sine', .5, 0, .6], ['sawtooth', 2, -5, .1]].map(([type, mul, det, lev]) => {
+      const o = AC.createOscillator(); o.type = type; o.detune.value = det; o.frequency.value = 55 * mul;
+      const g = AC.createGain(); g.gain.value = lev; o.connect(g); g.connect(dFilt); o.start();
+      return { o, mul };
+    });
+    dFilt.connect(dGain); dGain.connect(bus(1, .3));
+    // Choir: three saws through the formants of an open "ah".
+    const cSum = AC.createGain();
+    const cOsc = [0, 1, 2].map(() => { const o = AC.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 220; const g = AC.createGain(); g.gain.value = .2; o.connect(g); g.connect(cSum); o.start(); return o; });
+    const cOut = AC.createGain(); cOut.gain.value = 0;
+    for (const [f, q, g] of [[700, 7, 1], [1150, 9, .5], [2600, 11, .3]]) {
+      const bp = AC.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f; bp.Q.value = q;
+      const gg = AC.createGain(); gg.gain.value = g; cSum.connect(bp); bp.connect(gg); gg.connect(cOut);
+    }
+    cOut.connect(bus(1, .6));
+    // Flute: a triangle with vibrato and a little breath noise.
+    const fOsc = AC.createOscillator(); fOsc.type = 'triangle'; fOsc.frequency.value = 440;
+    const vib = AC.createOscillator(); vib.frequency.value = 5.2;
+    const vibAmt = AC.createGain(); vibAmt.gain.value = 3; vib.connect(vibAmt); vibAmt.connect(fOsc.frequency); vib.start();
+    const fGain = AC.createGain(); fGain.gain.value = 0;
+    fOsc.connect(fGain); fOsc.start();
+    const breath = AC.createBufferSource(); breath.buffer = noise; breath.loop = true;
+    const bF = AC.createBiquadFilter(); bF.type = 'bandpass'; bF.frequency.value = 1800; bF.Q.value = 1.5;
+    const bG = AC.createGain(); bG.gain.value = .07; breath.connect(bF); bF.connect(bG); bG.connect(fGain); breath.start();
+    fGain.connect(bus(.5, .5));
+    A = { master, noise, dOsc, dGain, dFilt, cOsc, cOut, fOsc, fGain, perc: bus(.9, .25), bells: bus(.5, .8) };
+  }
+  function setDrone(root, t, level, cut) {
+    for (const d of A.dOsc) d.o.frequency.setTargetAtTime(root * d.mul, t, .6);
+    A.dGain.gain.setTargetAtTime(level, t, 1.2);
+    A.dFilt.frequency.setTargetAtTime(cut, t, 1.5);
+  }
+  function setChoir(fs3, level, t) {
+    fs3.forEach((f, i) => A.cOsc[i].frequency.setTargetAtTime(f, t, .25));
+    A.cOut.gain.setTargetAtTime(level, t, .8);
+  }
+  function flute(f, t, dur) {
+    A.fOsc.frequency.setTargetAtTime(f, t, .035);
+    A.fGain.gain.setTargetAtTime(.22, t, .04);
+    A.fGain.gain.setTargetAtTime(0, t + dur * .8, .07);
+  }
+  function bell(f, t, v) {
+    const c = AC.createOscillator(), m = AC.createOscillator(), mg = AC.createGain(), g = AC.createGain();
+    c.frequency.value = f; m.frequency.value = f * 3.53;
+    mg.gain.setValueAtTime(f * 2.2, t); mg.gain.exponentialRampToValueAtTime(f * .05, t + 1.6);
+    m.connect(mg); mg.connect(c.frequency);
+    g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v, t + .005); g.gain.exponentialRampToValueAtTime(.0001, t + 3.2);
+    c.connect(g); g.connect(A.bells);
+    c.start(t); m.start(t); c.stop(t + 3.3); m.stop(t + 3.3);
+  }
+  function noiseHit(t, type, f, q, v, d) {
+    const s = AC.createBufferSource(); s.buffer = A.noise;
+    const fl = AC.createBiquadFilter(); fl.type = type; fl.frequency.value = f; fl.Q.value = q;
+    const g = AC.createGain(); g.gain.setValueAtTime(v, t); g.gain.exponentialRampToValueAtTime(.001, t + d);
+    s.connect(fl); fl.connect(g); g.connect(A.perc);
+    s.start(t, Math.random()); s.stop(t + d + .02);
+  }
+  function gong(t, f, v) {
+    [1, 1.47, 2.09, 2.56, 3.18, 4.11].forEach((r, i) => {
+      const o = AC.createOscillator(), g = AC.createGain();
+      o.frequency.value = f * r * (1 + .003 * i);
+      g.gain.setValueAtTime(.0001, t); g.gain.exponentialRampToValueAtTime(v / (1 + i * .8), t + .04 + i * .03);
+      g.gain.exponentialRampToValueAtTime(.0001, t + 7 - i * .6);
+      o.connect(g); g.connect(A.bells); o.start(t); o.stop(t + 7.1);
+    });
+    noiseHit(t, 'lowpass', 400, 1, .4, .6);
+  }
+  function drum(t, v) {
+    const o = AC.createOscillator(), g = AC.createGain();
+    o.frequency.setValueAtTime(150, t); o.frequency.exponentialRampToValueAtTime(58, t + .14);
+    g.gain.setValueAtTime(.9 * v, t); g.gain.exponentialRampToValueAtTime(.001, t + .45);
+    o.connect(g); g.connect(A.perc); o.start(t); o.stop(t + .5);
+    noiseHit(t, 'highpass', 900, .7, .18 * v, .04);
+  }
+  const rattle = (t, v) => noiseHit(t, 'bandpass', 5200, 1.2, .3 * v, .06);
+  const tick = (t, v) => noiseHit(t, 'highpass', 2500, .7, v, .012);
+  const PROG = [0, 3, 4, 0, 5, 3];
+  const chord = (c, d, oct) => [0, 2, 4].map((k) => fq(c.root * (oct || 4), c.mode, d + k));
+
+  let rng = mulberry(1), melody = new Map(), hits = [];
+  function makeMelody(c, salt) {
+    const r = mulberry(seed * 7 + salt * 131), m = new Map();
+    let deg = 4, n = 4 * 16;
+    while (n < 11 * 16) {
+      const len = [2, 2, 4, 4, 6, 8][Math.floor(r() * 6)];
+      if (r() < .22) { n += len; continue; }
+      deg = Math.max(0, Math.min(c.mode.length + 4, deg + [-2, -1, -1, 1, 1, 2, 3, -3][Math.floor(r() * 8)]));
+      m.set(n, { deg, len }); n += len;
+    }
+    return m;
+  }
+  function scheduleStep(n, t, late) {
+    const sc = sectOfStep(n), ls = n - sc.step0, bar = ls >> 4, s = ls & 15;
+    if (sc.k === 'pro') {
+      if (ls === 0) { rng = mulberry(seed); setDrone(55, t, .35, 260); setChoir([110, 165, 220], 0, t); if (!late) gong(t, 41.2, .55); }
+      for (let k = 0; k < 3; k++) {
+        if (ls === Math.round((8 + 2 * k) / STEP) && !late) {
+          const c = CARDS[draw[k]];
+          bell(fq(c.root * 8, c.mode, 0), t, .3); bell(fq(c.root * 8, c.mode, 4), t + .09, .18);
+        }
+      }
+      if (bar >= 1 && s === 0 && !late) bell(fq(440, MODES.aeolian, [0, 4, 2, 5, 1][bar - 1] || 0), t, .08);
+    } else if (sc.k === 'card') {
+      const c = CARDS[draw[sc.i - 1]], st = STAGES[sc.i - 1];
+      if (ls === 0) { melody = makeMelody(c, sc.i); setDrone(c.root, t, .42, st.cut); setChoir(chord(c, 0), 0, t); if (!late) gong(t, c.root, .45); }
+      if (bar >= 2 && s === 0 && !(bar & 1)) setChoir(chord(c, PROG[(bar >> 1) % PROG.length]), .3 * st.choir, t);
+      if (!late) {
+        if (bar >= 1 && bar < sc.bars - 1) {
+          const ch = c.beat[s];
+          if (ch !== '.') { drum(t, ch === 'x' ? 1 : .55); if (ch === 'x') hits.push(t); }
+        }
+        if (bar >= 2 && rng() < c.bells / 16 * (bar >= 8 ? 1.6 : 1)) bell(fq(c.root * 8, c.mode, Math.floor(rng() * 8)), t, .14 + rng() * .14);
+        if (bar >= 8 && bar < sc.bars - 1 && c.energy > .45 && (s & 1)) rattle(t, .3 + .5 * c.energy);
+      }
+      const m = melody.get(ls);
+      if (m) flute(fq(c.root * 4, c.mode, m.deg), t, m.len * STEP);
+      if (ls === sc.bars * 16 - 12) { A.dGain.gain.setTargetAtTime(.1, t, .5); A.cOut.gain.setTargetAtTime(0, t, .4); }
+    } else if (sc.k === 'asc') {
+      const c = CARDS[draw[Math.min(2, bar >> 1)]];
+      if (s === 0 && !(bar & 1)) {
+        if (bar < 6) { setDrone(c.root, t, .45, 900 + bar * 220); setChoir(chord(c, 0), .3, t); if (!late) gong(t, c.root, .35); }
+        else {
+          setDrone(55, t, .5, 2400); setChoir([220, 277.18, 329.63], .42, t);
+          if (!late) { gong(t, 55, .7); bell(880, t, .35); bell(1108.73, t + .06, .28); bell(1318.51, t + .12, .28); }
+        }
+      }
+      if (!late) {
+        const beat = bar < 6 ? 'x..ox..ox..ox.o.' : 'x.x.x.x.x.x.xxxx', ch = beat[s];
+        if (ch !== '.' && !(bar === 7 && s > 11)) { drum(t, ch === 'x' ? 1 : .5); if (ch === 'x') hits.push(t); }
+        if (bar >= 3) rattle(t, .25 + bar * .06);
+      }
+      if (bar >= 3 && bar < 6 && !(s & 1)) flute(fq(c.root * 4, c.mode, (bar - 3) * 3 + (s >> 1)), t, STEP * 2);
+    } else {
+      if (ls === 0) {
+        A.dGain.gain.setTargetAtTime(0, t, .25); A.cOut.gain.setTargetAtTime(0, t, .25); A.fGain.gain.setTargetAtTime(0, t, .05);
+      }
+      if (!late && ls < 150) for (let k = 0; k < 4; k++) tick(t + k * STEP / 4, .02 + .12 * (1 - ls / 150));
+      if (ls === 36 && !late) bell(fq(220, MODES.lydian, 4), t, .2);
+    }
+  }
+
+  // ---- Transport --------------------------------------------------------------------
+  let state = 'rest', t0 = 0, nextStep = 0, timer = 0, pStart = 0, pHeld = 0, wake = null;
+  const songTime = () => {
+    if (state === 'rest' || state === 'end') return -1;
+    if (AC) return AC.currentTime - t0;
+    return state === 'run' ? (performance.now() - pStart) / 1000 : pHeld;
+  };
+  function pump() {
+    if (state !== 'run' || !AC) return;
+    const now = AC.currentTime;
+    while (nextStep < STEPS && t0 + nextStep * STEP < now + .2) {
+      const t = t0 + nextStep * STEP, late = t < now - .03;
+      scheduleStep(nextStep, Math.max(t, now), late);
+      nextStep++;
+    }
+    if (hits.length > 64) hits = hits.filter((h) => h > now - 1);
+  }
+  async function holdWake() { try { wake = navigator.wakeLock ? await navigator.wakeLock.request('screen') : null; } catch (e) { wake = null; } }
+  function dropWake() { try { if (wake) wake.release(); } catch (e) { /* ignore */ } wake = null; }
+  function start() {
+    if (!AC && !noAudio) { try { buildAudio(); } catch (e) { noAudio = true; } }
+    if (state === 'hold') { resume(); return; }
+    if (AC) {
+      AC.resume();
+      const now = AC.currentTime;
+      A.master.gain.cancelScheduledValues(now); A.master.gain.setTargetAtTime(.8, now, .05);
+      t0 = now + .15; nextStep = 0; hits = [];
+      if (!timer) timer = setInterval(pump, 25);
+    } else pStart = performance.now();
+    state = 'run'; ui(); pump(); holdWake();
+  }
+  function pause() {
+    if (state !== 'run') return;
+    state = 'hold';
+    if (AC) AC.suspend(); else pHeld = (performance.now() - pStart) / 1000;
+    dropWake(); ui();
+  }
+  function resume() {
+    if (AC) AC.resume(); else pStart = performance.now() - pHeld * 1000;
+    state = 'run'; ui(); holdWake();
+  }
+  function stop(next) {
+    if (AC && state !== 'rest') {
+      const now = AC.currentTime;
+      A.master.gain.cancelScheduledValues(now); A.master.gain.setTargetAtTime(0, now, .08);
+      for (const p of [A.dGain.gain, A.cOut.gain, A.fGain.gain]) { p.cancelScheduledValues(now); p.setTargetAtTime(0, now, .1); }
+      AC.resume();
+    }
+    state = next; dropWake(); ui();
+  }
+  let noAudio = false;
+
+  // ---- Captions and controls ----------------------------------------------------------
+  const el = { stage: $('capStage'), title: $('capTitle'), big: $('capBig'), begin: $('begin'), beginLabel: $('beginLabel'), play: $('playBtn'), prog: $('prog'), note: $('note') };
+  const nice = (s) => s.toLowerCase().replace(/(^|[\s’'])(\S)/g, (m, a, c) => a + c.toUpperCase()).replace(/ De /g, ' de ');
+  // Arcanum XIII carries no title on the Marseille card; readers call it l’Arcane sans nom.
+  const named = (c) => (c.num ? `${c.num} · ` : '') + (c.fr ? nice(c.fr) : 'L’Arcane sans nom');
+  const caps = { stage: '', title: '', big: '' };
+  function cap(key, text) {
+    if (caps[key] === text) return;
+    caps[key] = text;
+    const node = el[key];
+    if (text) { node.textContent = text; node.classList.remove('off'); } else node.classList.add('off');
+  }
+  function captions(T) {
+    if (state === 'rest' || state === 'end') {
+      cap('stage', state === 'end' ? 'The reading is complete' : 'Your draw');
+      cap('title', ''); cap('big', '');
+      return;
+    }
+    const sc = sectAt(T), u = T - sc.t0;
+    if (sc.k === 'pro') {
+      cap('stage', 'Prologue · the alchemist deals');
+      const k = Math.floor((u - 8) / 2);
+      cap('title', k >= 0 && k < 3 && u - 8 - k * 2 < 1.8 ? named(CARDS[draw[k]]) : '');
+      cap('big', '');
+    } else if (sc.k === 'card') {
+      const st = STAGES[sc.i - 1], c = CARDS[draw[sc.i - 1]];
+      cap('stage', `${['I', 'II', 'III'][sc.i - 1]} · ${st.name} · ${st.pos}`);
+      cap('title', u > 2.6 && u < 9 ? `${named(c)} — ${c.en}` : '');
+      cap('big', '');
+    } else if (sc.k === 'asc') {
+      cap('stage', 'The ascent');
+      cap('title', u / sc.D > .66 && u / sc.D < .95 ? 'Lead into gold' : '');
+      cap('big', '');
+    } else {
+      cap('stage', ''); cap('title', '');
+      cap('big', u > 5.6 ? 'Real life is waiting.' : u > 1.2 ? 'Zoom back.' : '');
+    }
+  }
+  function ui() {
+    const label = state === 'run' ? 'Pause' : state === 'hold' ? 'Resume' : state === 'end' ? 'Read again' : 'Begin';
+    el.play.textContent = label;
+    el.begin.hidden = !(state === 'rest' || state === 'end');
+    el.beginLabel.textContent = state === 'end' ? 'Read these cards again' : 'Begin the reading';
+    if (state === 'rest' || state === 'end') el.prog.style.transform = `scaleX(${state === 'end' ? 1 : 0})`;
+    dirty = true;
+  }
+
+  // ---- The draw ---------------------------------------------------------------------
+  const spreadList = $('spread');
+  function newDraw() {
+    const pool = CARDS.map((_, i) => i);
+    for (let i = pool.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [pool[i], pool[j]] = [pool[j], pool[i]]; }
+    return pool.slice(0, 3);
+  }
+  function fromHash() {
+    const m = /^#(\d{1,2})-(\d{1,2})-(\d{1,2})$/.exec(location.hash);
+    if (!m) return null;
+    const d = [m[1], m[2], m[3]].map(Number);
+    return d.every((v) => v < CARDS.length) && new Set(d).size === 3 ? d : null;
+  }
+  function setDraw(d, writeHash) {
+    draw = d;
+    seed = d[0] * 484 + d[1] * 22 + d[2] + 1;
+    if (writeHash) { try { history.replaceState(null, '', '#' + d.join('-')); } catch (e) { /* file:// or sandbox */ } }
+    spreadList.innerHTML = d.map((ci, k) => {
+      const c = CARDS[ci], st = STAGES[k];
+      return `<li><canvas class="face" data-card="${ci}" role="img" aria-label="${c.en}, Tarot de Marseille card"></canvas>
+        <p class="pos">${['I', 'II', 'III'][k]} · ${st.name} · ${st.pos}</p>
+        <h3>${named(c)}</h3><p class="en">${c.en}</p><p class="word">${c.word}</p></li>`;
+    }).join('');
+    paintFaces();
+    dirty = true;
+  }
+  function paintFaces() {
+    const dpr = Math.min(2, window.devicePixelRatio || 1), prev = X;
+    for (const f of spreadList.querySelectorAll('.face')) {
+      const w = Math.max(20, Math.round(f.getBoundingClientRect().width * dpr)), h = Math.round(w / .525);
+      f.width = w; f.height = h;
+      X = f.getContext('2d');
+      X.setTransform(h / 2, 0, 0, h / 2, w / 2, h / 2);
+      EXT = .525; LW = .012;
+      drawCard(Number(f.dataset.card), 0, 0, 2, { t: 2, flat: true });
+    }
+    X = prev;
+  }
+
+  el.play.addEventListener('click', () => (state === 'run' ? pause() : start()));
+  el.begin.addEventListener('click', start);
+  $('drawBtn').addEventListener('click', () => { stop('rest'); setDraw(newDraw(), true); el.note.textContent = ''; });
+  $('shareBtn').addEventListener('click', () => {
+    const url = location.href.split('#')[0] + '#' + draw.join('-');
+    const done = () => { el.note.textContent = 'Link copied.'; };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => { el.note.textContent = url; });
+    else el.note.textContent = url;
+  });
+  const fsBtn = $('fsBtn');
+  if (!document.fullscreenEnabled || !stage.requestFullscreen) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    else stage.requestFullscreen().catch(() => {});
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.code !== 'Space' || e.repeat) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'BUTTON' || tag === 'INPUT' || tag === 'A') return;
+    e.preventDefault();
+    if (state === 'run') pause(); else start();
+  });
+  window.addEventListener('hashchange', () => { const d = fromHash(); if (d && state !== 'run') { stop('rest'); setDraw(d, false); } });
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && state === 'run') holdWake(); });
+
+  // ---- Frame loop: 30 fps, and lower resolution when frames run long -------------------------
+  let last = 0, cost = 8, since = 0, dirty = true, fixedT = null;
+  function frame(now) {
+    requestAnimationFrame(frame);
+    if (fixedT !== null) {   // held still by the debugging hook below
+      if (!dirty) return;
+      const s = state; state = 'run'; render(fixedT, 0); captions(fixedT); state = s; dirty = false;
+      return;
+    }
+    const live = state === 'run' || state === 'hold';
+    const gap = live ? 33 : 66;
+    if (now - last < gap - 2 && !dirty) return;
+    if (!live && calm && !dirty) return;
+    last = now; dirty = false;
+    const T = live ? songTime() : now / 1000;
+    if (state === 'run' && T > LENGTH + 1.5) { stop('end'); return; }
+    let b = 0;
+    if (AC && live) { const at = AC.currentTime; for (let i = hits.length - 1; i >= 0; i--) if (hits[i] <= at) { b = Math.exp(-(at - hits[i]) * 7); break; } }
+    const c0 = performance.now();
+    render(T, calm ? b * .3 : b);
+    cost = cost * .9 + (performance.now() - c0) * .1;
+    if (live) { captions(T); el.prog.style.transform = `scaleX(${clamp(T / LENGTH)})`; } else captions(0);
+    if (++since > 45 && cost > 20 && res > .45) { res *= .85; since = 0; resize(); }
+  }
+
+  setDraw(fromHash() || newDraw(), !fromHash());
+  new ResizeObserver(() => { resize(); paintFaces(); }).observe(stage);
+  resize();
+  if (document.fonts && document.fonts.load) document.fonts.load('64px "IM Fell English SC"').then(() => { paintFaces(); dirty = true; }, () => {});
+  ui();
+  requestAnimationFrame(frame);
+  // Debugging hook: hold the stage on one moment of the performance, e.g. alchemistsSpread.freeze(60).
+  window.alchemistsSpread = { freeze: (T) => { fixedT = T; dirty = true; }, setDraw: (d) => setDraw(d, false), cards: CARDS.length, length: LENGTH };
+})();
+</script>
+</html>

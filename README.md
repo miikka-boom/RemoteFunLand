@@ -9,6 +9,7 @@ published as a single static page.
 
 | No. | Demo | What it is |
 | --- | ---- | ---------- |
+| 002 | [The Alchemist’s Spread](https://miikka-boom.github.io/RemoteFunLand/alchemists-spread/) | Three random Tarot de Marseille cards become a 2:24 audio-visual ritual after Jodorowsky’s *The Holy Mountain*: three painted tableaux, an ascent to gold and a pull-back to the film set. Canvas 2D at 30 fps, adapting its resolution for low-end devices. |
 | 001 | [Lissajous Nocturne](https://miikka-boom.github.io/RemoteFunLand/lissajous-nocturne/) | A 77-second Web Audio piece whose left and right channels steer a simulated X–Y oscilloscope, so each musical interval draws its own Lissajous figure. |
 
 ## How it works
