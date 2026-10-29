@@ -1367,7 +1367,8 @@ body::before {
 
   const stakeVal = () => STAKES[stakeIdx];
   const liveRound = () => round && !round.over;
-  const rigged = () => (location.hash.match(/rig=(safe|boom)/) || [])[1] || null;
+  // #rig=safe|boom forces the next pick; it only works under automation (navigator.webdriver), for tests.
+  const rigged = () => (navigator.webdriver && (location.hash.match(/rig=(safe|boom)/) || [])[1]) || null;
 
   /* ---------- Crash safety ----------
      Each live round keeps a small record in localStorage (its own key, refreshed every 2 s). pagehide settles

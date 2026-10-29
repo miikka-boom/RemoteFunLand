@@ -50,9 +50,12 @@ body { background: var(--cream); color: var(--navy) }
 @keyframes drift4 { to { translate: 4vw -6vh } }
 .route { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--navy) }
 .route path { fill: none; stroke: var(--navy); stroke-width: 3; stroke-dasharray: 1 13; stroke-linecap: round; opacity: .32 }
-.bg-jet { position: absolute; left: 0; top: 7vh; width: 210px; height: 66px; color: var(--navy); animation: cruise 26s linear infinite; animation-delay: -9s }
+.route-plane { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; color: var(--navy); opacity: 0; will-change: transform }
+.bg-jet { position: absolute; display: block; left: 0; top: 7vh; width: 210px; height: 66px; color: var(--navy); animation: cruise 26s linear infinite; animation-delay: -9s }
 @keyframes cruise { from { translate: -260px 3vh } to { translate: calc(100vw + 60px) -2vh } }
-.cloud { position: absolute; color: #fffaf0; filter: drop-shadow(4px 4px 0 rgba(29, 42, 68, .08)) }
+.cloud { position: absolute; display: block; color: #fffaf0; filter: drop-shadow(4px 4px 0 rgba(29, 42, 68, .08)) }
+/* the drifting/cruising art is wrapped in HTML boxes: animating the <svg> itself ran on the main thread */
+.cloud svg, .bg-jet svg { display: block; width: 100%; height: 100% }
 .cl1 { left: 4vw; top: 7vh; width: 150px; height: 62px; animation: drift1 40s ease-in-out infinite alternate }
 .cl2 { right: 5vw; top: 46vh; width: 200px; height: 84px; animation: drift2 46s ease-in-out infinite alternate }
 .bg-lips { position: absolute; left: 3vw; bottom: 7vh; width: 130px; height: 80px; color: var(--lip); opacity: .22; rotate: -16deg }
@@ -188,14 +191,17 @@ main {
 @keyframes glint { 0%, 62% { translate: 0 0 } 100% { translate: 470% 0 } }
 @keyframes glint-once { 0% { translate: 0 0; opacity: 1 } 99% { opacity: 1 } 100% { translate: 470% 0; opacity: 0 } }
 .cell.rev .prize svg { animation: c-pop .45s var(--ease-back) }
-.cell.pair { animation: pair-glow .9s ease-in-out infinite; z-index: 1 }
-.cell.pair.big { animation-duration: .62s }
-@keyframes pair-glow {
-  0%, 100% { box-shadow: inset 0 0 0 3px var(--tc), 0 0 0 0 transparent; scale: 1 }
-  50% { box-shadow: inset 0 0 0 3px var(--tc), 0 0 20px 5px color-mix(in srgb, var(--tc) 65%, transparent); scale: 1.035 }
-}
+/* Looping glows only animate scale and opacity (compositor work), so a finished ticket can sit on
+   screen without repainting every frame. */
+.cell.pair { z-index: 1; box-shadow: inset 0 0 0 3px var(--tc), 0 0 16px 3px color-mix(in srgb, var(--tc) 45%, transparent) }
+.cell.pair .prize { animation: pair-pulse .9s ease-in-out infinite }
+.cell.pair::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 22px 6px color-mix(in srgb, var(--tc) 55%, transparent); animation: pair-inner .9s ease-in-out infinite }
+.cell.pair.big .prize, .cell.pair.big::before { animation-duration: .62s }
+@keyframes pair-pulse { 50% { scale: 1.07 } }
+@keyframes pair-inner { 0%, 100% { opacity: .15 } 50% { opacity: 1 } }
 .cell.won { z-index: 1; animation: won-bounce .55s var(--ease-back); box-shadow: inset 0 0 0 3px var(--lip), 0 0 22px 4px rgba(215, 38, 61, .35) }
-.cell.won .prize svg { animation: won-wiggle 1.3s ease-in-out infinite }
+.prize .pi { display: block; line-height: 0 }
+.cell.won .prize .pi { animation: won-wiggle 1.3s ease-in-out infinite }
 @keyframes won-bounce { 0% { scale: 1 } 35% { scale: 1.16 } 70% { scale: .96 } 100% { scale: 1 } }
 @keyframes won-wiggle { 0%, 100% { rotate: 0deg } 25% { rotate: -9deg } 75% { rotate: 9deg } }
 .cell.zap::before { content: ""; position: absolute; inset: 0; z-index: 4; border-radius: inherit; background: #fff; pointer-events: none; animation: zap .45s ease-out forwards }
@@ -398,7 +404,9 @@ main {
 .main-btn .mp { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px 4px 5px; border-radius: 999px; background: rgba(0, 0, 0, .22); font-size: 18px }
 .main-btn .mp .cchip-icon { width: 18px; height: 18px; --chip: var(--p-mustard) }
 .main-btn.ready:not(:disabled):not(.c-jelly):not(.c-wobble) { animation: ready 1.5s ease-in-out infinite }
-@keyframes ready { 0%, 100% { scale: 1 } 50% { scale: 1.025; filter: brightness(1.1) } }
+@keyframes ready { 0%, 100% { scale: 1 } 50% { scale: 1.035 } }
+/* scale-only pulse and no filter/scale transitions on this button: keeps the idle pulse on the compositor */
+.main-btn { transition: translate .07s, box-shadow .07s }
 .main-btn:disabled { cursor: progress; filter: saturate(.8) brightness(.95); background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, .16) 0 12px, transparent 12px 24px), linear-gradient(180deg, var(--b1), var(--b2)); background-size: 34px 34px, auto; animation: busy .6s linear infinite }
 @keyframes busy { to { background-position: 34px 0, 0 0 } }
 .help-btn { --b1: #fffaf0; --b2: #efe3c8; --b3: #a8987a; --bt: var(--navy); width: 60px; min-height: 60px; font: 400 26px/1 var(--f-marquee); text-shadow: none }
@@ -480,8 +488,9 @@ main {
 .cdialog-body td.odds { color: var(--ink-soft); font-weight: 500 }
 
 @media (prefers-reduced-motion: reduce) {
-  .blk, .cloud, .bg-jet, .tiles span, .cell::after, .kiss-box::after, .main-btn.ready, .cell.pair, .kiss-box.kissed, .cell.won .prize svg { animation: none !important }
+  .blk, .cloud, .bg-jet, .tiles span, .cell::after, .kiss-box::after, .main-btn.ready, .cell.pair .prize, .cell.pair::before, .kiss-box.kissed, .cell.won .prize .pi { animation: none !important }
   .bg-jet { display: none }
+  .cell.nudge, .cell.tense, .ch-amt.tense, .ticket.punch, .cell.pair.thump, .shock { animation: none !important }
 }
 </style>
 <body>
@@ -609,13 +618,13 @@ main {
 
 <div class="bg" aria-hidden="true">
   <i class="blk b1"></i><i class="blk b2"></i><i class="blk b3"></i><i class="blk b4"></i><i class="blk b5"></i><i class="blk b6"></i>
-  <svg class="cloud cl1"><use href="#i-cloud"/></svg>
-  <svg class="cloud cl2"><use href="#i-cloud"/></svg>
+  <i class="cloud cl1"><svg><use href="#i-cloud"/></svg></i>
+  <i class="cloud cl2"><svg><use href="#i-cloud"/></svg></i>
   <svg class="route" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
     <path id="fp" d="M-60 640C180 330 470 790 740 400S1120 110 1280 170"/>
-    <g><use href="#i-plane" x="-17" y="-17" width="34" height="34"/><animateMotion dur="19s" repeatCount="indefinite" rotate="auto"><mpath href="#fp" xlink:href="#fp"/></animateMotion></g>
   </svg>
-  <svg class="bg-jet"><use href="#i-airliner"/></svg>
+  <svg class="route-plane"><use href="#i-plane"/></svg>
+  <i class="bg-jet"><svg><use href="#i-airliner"/></svg></i>
   <svg class="bg-lips"><use href="#i-lips"/></svg>
 </div>
 
@@ -1218,6 +1227,49 @@ main {
     return { ...t, rev: t.rev.map(Boolean), kiss: !!t.kiss, kissRev: !!t.kissRev, cov, saved: true, claimed: false };
   }
 
+  /* ---------- the little plane on the dotted route ----------
+     A composited Web Animation sampled from the path (re-sampled on resize), instead of SMIL
+     animateMotion, which forced a layout on every frame while the page sat idle. */
+  (() => {
+    const path = document.getElementById('fp');
+    const plane = document.querySelector('.route-plane');
+    if (!path || !plane || !plane.animate || !path.getScreenCTM) return;
+    let anim = null;
+    let queued = 0;
+    function fly() {
+      queued = 0;
+      const m = path.getScreenCTM();
+      if (!m || !innerWidth) return;
+      const L = path.getTotalLength();
+      const k = Math.max(innerWidth / 1200, innerHeight / 800);
+      const frames = [];
+      let prev = null;
+      for (let i = 0; i <= 60; i++) {
+        const d = (L * i) / 60;
+        const p = path.getPointAtLength(d).matrixTransform(m);
+        const q = path.getPointAtLength(Math.min(L, d + 3)).matrixTransform(m);
+        let ang = i === 60 && prev !== null ? prev : (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+        if (prev !== null) {
+          while (ang - prev > 180) ang -= 360;
+          while (ang - prev < -180) ang += 360;
+        }
+        prev = ang;
+        frames.push({ transform: `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) rotate(${ang.toFixed(1)}deg) scale(${k.toFixed(3)})` });
+      }
+      const at = anim ? anim.currentTime : 0;
+      if (anim) anim.cancel();
+      plane.style.opacity = '1';
+      anim = plane.animate(frames, { duration: 19000, iterations: Infinity });
+      anim.currentTime = at || 0;
+    }
+    if (rm()) return; // reduced motion: no plane
+    fly();
+    addEventListener('resize', () => {
+      clearTimeout(queued);
+      queued = setTimeout(fly, 200);
+    });
+  })();
+
   /* ---------- the title tiles ---------- */
   (() => {
     const box = $('.tiles');
@@ -1281,7 +1333,7 @@ main {
       const tier = t ? t.grid[i] : -1;
       const T = TIERS[tier];
       const style = T ? ` style="--tint:${T.tint};--tc:${T.tc};--i:${i}"` : ` style="--i:${i}"`;
-      const prize = T ? `<div class="prize"><svg><use href="#${T.icon}"/></svg><b>${fmt(C.price * C.mults[tier])}</b></div>` : '<div class="prize"></div>';
+      const prize = T ? `<div class="prize"><i class="pi"><svg><use href="#${T.icon}"/></svg></i><b>${fmt(C.price * C.mults[tier])}</b></div>` : '<div class="prize"></div>';
       return `<div class="cell" data-i="${i}" role="img" aria-label="Unscratched panel"${style}>${prize}<canvas class="foil"></canvas></div>`;
     }).join('');
     let kissUnder = '';
