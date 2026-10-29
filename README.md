@@ -9,6 +9,7 @@ published as a single static page.
 
 | No. | Demo | What it is |
 | --- | ---- | ---------- |
+| 007 | [Dance Deck](https://miikka-boom.github.io/RemoteFunLand/dance-deck/) | An interactive dance sequencer for phones: drag 17 robot moves (the original keys, New Moves, Human Mode poses and the motion capture) into an 8-slot, 16-count loop that the crew keeps dancing, with four synthesized beats, three tempos, mirror and canon, and a shareable link. |
 | 006 | [Human Mode](https://miikka-boom.github.io/RemoteFunLand/human-mode/) | A 3:12 music video for the song “Human Mode”, synced to its measured 122 BPM beat grid: sixteen robots rehearse in stepped unison until Unit 04 goes human (the Blender file’s motion capture), then everyone does. Lights follow the track’s own kick and hi-hats. |
 | 005 | [Circumambulatio](https://miikka-boom.github.io/RemoteFunLand/circumambulatio/) | A minute and a half. A little tangram square looks for a shadow that fits, and finds the other six pieces holding open a hole the shape of itself. |
 | 004 | [New Moves](https://miikka-boom.github.io/RemoteFunLand/new-moves/) | Three original 64-count dances (Signal Boost, Static Shuffle, Overdrive) composed with `tools/new_moves.py` by mirroring, mixing and aiming poses sampled from the original Blender keys, staged on the Antenna Aerobics set with a synthesized track for each. |
