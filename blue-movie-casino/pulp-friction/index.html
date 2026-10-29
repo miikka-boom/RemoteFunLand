@@ -1,0 +1,2616 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pulp Friction · Blue Movie Casino</title>
+<meta name="description" content="A pulp-paperback jukebox slot: five reels, twenty lines, a glowing mystery briefcase and a Twist Contest where every win pays double.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;600&family=Bungee&family=Monoton&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="../shared/casino.css">
+<style>
+/* Pulp Friction: a 90s pulp paperback poster with a chrome diner jukebox standing in the middle of it.
+   Layers: worn mustard paper (fixed) -> optional Twist Contest night club (fixed) -> <main> with the jukebox. */
+:root {
+  --accent: #ffc93c;
+  --accent-2: #ff3b30;
+  --pf-ink: #1b120c;
+  --mustard: #edb23a;
+  --blood: #c8161d;
+  --cream: #fbf0d4;
+  --neon-pink: #ff4fb4;
+  --neon-cyan: #48f3ff;
+  --chrome: linear-gradient(90deg, #6f757d 0%, #eef1f4 12%, #a3aab2 26%, #ffffff 45%, #b1b8bf 62%, #f4f6f8 82%, #7c838a 100%);
+  --chrome-v: linear-gradient(180deg, #ffffff 0%, #c4c9cf 32%, #f3f5f7 54%, #949ba3 80%, #dde1e5 100%);
+  --f-pulp: "Anton", Impact, "Arial Narrow", sans-serif;
+  --arch: clamp(58px, 15vw, 84px);
+  --mw: clamp(440px, calc((100dvh - var(--bar-h) - 440px) * 1.6 + 104px), 760px);
+}
+/* clip (not hidden) so screen shake never creates sideways scroll */
+html { background: var(--mustard); overflow-x: clip }
+body.pf { background: var(--mustard); color: var(--pf-ink); overflow-x: clip }
+body.pf .cbar { background: linear-gradient(180deg, rgba(27, 18, 12, .97), rgba(27, 18, 12, .9)); border-bottom: 2px solid #000 }
+
+/* ---------- Paper and night-club backdrops ---------- */
+.bg-paper, .bg-twist { position: fixed; inset: 0; z-index: 0; pointer-events: none }
+.bg-paper {
+  background:
+    radial-gradient(circle at 90% 24%, transparent 0 46px, rgba(110, 55, 0, .2) 47px 50px, rgba(110, 55, 0, .08) 51px 53px, transparent 55px),
+    radial-gradient(120% 85% at 50% 42%, transparent 52%, rgba(95, 42, 0, .5) 100%),
+    radial-gradient(38% 30% at 12% 16%, rgba(255, 255, 255, .22), transparent 70%),
+    radial-gradient(34% 26% at 84% 78%, rgba(140, 70, 0, .2), transparent 70%),
+    linear-gradient(92deg, transparent 49.55%, rgba(255, 250, 230, .3) 49.75%, rgba(90, 45, 0, .22) 50.05%, transparent 50.4%),
+    linear-gradient(180deg, transparent 37.3%, rgba(255, 250, 230, .26) 37.5%, rgba(90, 45, 0, .2) 37.8%, transparent 38.1%),
+    var(--mustard);
+}
+.bg-paper::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  opacity: .55;
+  mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .42 0 0 0 0 .24 0 0 0 0 .05 1.4 0 0 0 -.55'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.bg-paper::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle, rgba(200, 22, 29, .5) 1.5px, transparent 2px) 0 0 / 8px 8px;
+  -webkit-mask: radial-gradient(circle at 0 100%, #000, transparent 34%), radial-gradient(circle at 100% 0, #000, transparent 30%);
+  mask: radial-gradient(circle at 0 100%, #000, transparent 34%), radial-gradient(circle at 100% 0, #000, transparent 30%);
+}
+.bg-twist {
+  opacity: 0;
+  overflow: hidden;
+  transition: opacity .6s ease;
+  background: radial-gradient(90% 60% at 50% 0%, #3a1670, #140a33 60%, #07041a);
+}
+.bg-twist::before, .bg-twist::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: -30%;
+  width: 160vmax;
+  height: 160vmax;
+  translate: -50% 0;
+  background: conic-gradient(from 160deg at 50% 0%, transparent 0deg, rgba(72, 243, 255, .2) 8deg, transparent 18deg, transparent 30deg, rgba(255, 79, 180, .22) 38deg, transparent 48deg);
+  transform-origin: 50% 0;
+  animation: beams 6s ease-in-out infinite alternate;
+}
+.bg-twist::after { animation-duration: 4.4s; animation-direction: alternate-reverse; filter: hue-rotate(60deg) }
+.bg-twist i {
+  position: absolute;
+  left: -20%;
+  right: -20%;
+  bottom: -8%;
+  height: 46%;
+  background: repeating-conic-gradient(#ff4fb4 0 25%, #1c0f45 0 50%) 0 0 / 70px 70px;
+  transform: perspective(300px) rotateX(58deg);
+  transform-origin: 50% 100%;
+  opacity: .55;
+  -webkit-mask: linear-gradient(180deg, transparent, #000 60%);
+  mask: linear-gradient(180deg, transparent, #000 60%);
+  animation: floor 1.6s steps(2) infinite;
+}
+.twist .bg-twist { opacity: 1 }
+@keyframes beams { from { rotate: -22deg } to { rotate: 22deg } }
+@keyframes floor { to { filter: hue-rotate(140deg) brightness(1.2) } }
+
+/* ---------- Layout ---------- */
+.stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
+  align-content: start;
+  padding: 8px max(8px, env(safe-area-inset-right, 0px)) calc(10px + env(safe-area-inset-bottom, 0px)) max(8px, env(safe-area-inset-left, 0px));
+}
+.machine { width: 100%; max-width: 560px; min-width: 0; container: machine / inline-size }
+.side { display: none }
+@media (min-width: 700px) {
+  .machine { max-width: var(--mw) }
+  .stage { min-height: calc(100dvh - var(--bar-h)); align-content: center }
+}
+@media (min-width: 1100px) {
+  .stage { grid-template-columns: minmax(0, 1fr) var(--mw) minmax(0, 1fr); gap: 34px; align-items: center; min-height: calc(100dvh - var(--bar-h)); padding: 6px 24px 10px }
+  .machine { max-width: none }
+  .side { display: block; min-width: 0 }
+}
+
+/* ---------- Poster title ---------- */
+.poster-head { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 2px 0 10px }
+.price {
+  flex: none;
+  display: grid;
+  place-content: center;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  border: 3px solid var(--pf-ink);
+  background: radial-gradient(circle at 40% 35%, #ef3a3a, var(--blood) 60%, #8a0c11);
+  color: #fff2cf;
+  text-align: center;
+  box-shadow: 3px 3px 0 var(--pf-ink);
+  rotate: -14deg;
+  animation: sway 5s ease-in-out infinite;
+}
+.price small { font: 800 9px/1 var(--f-cond); letter-spacing: .22em; text-transform: uppercase }
+.price b { font: 400 25px/.95 var(--f-pulp); letter-spacing: .01em }
+.price b i { font-style: normal; font-size: .62em; vertical-align: .5em }
+.head-text { min-width: 0; text-align: center }
+.logo {
+  margin: 0;
+  display: flex;
+  justify-content: center;
+  align-items: baseline;
+  gap: .16em;
+  font: 400 clamp(38px, 11.6vw, 72px)/.9 var(--f-pulp);
+  letter-spacing: .012em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.logo .w1 { color: var(--blood); -webkit-text-stroke: 1.5px var(--pf-ink); text-shadow: 3px 3px 0 var(--pf-ink) }
+.logo .w2 { position: relative; display: inline-block; color: var(--pf-ink); transform: skewX(-9deg); text-shadow: 3px 3px 0 var(--blood) }
+.logo .w2::after {
+  content: "";
+  position: absolute;
+  right: -.42em;
+  top: 22%;
+  width: .32em;
+  height: 58%;
+  background: repeating-linear-gradient(180deg, var(--blood) 0 3px, transparent 3px 8px);
+  animation: heat 1.1s ease-in-out infinite;
+}
+.tagline { margin: 6px 0 0; font: 700 clamp(12px, 3.5vw, 16px)/1.15 var(--f-cond); letter-spacing: .06em; text-transform: uppercase; color: var(--pf-ink) }
+.tagline em { font-style: normal; color: var(--blood) }
+@keyframes sway { 0%, 100% { rotate: -14deg } 50% { rotate: -6deg } }
+@keyframes heat { 0%, 100% { opacity: .9; translate: 0 0 } 50% { opacity: .35; translate: 4px 0 } }
+
+/* ---------- Jukebox cabinet ---------- */
+.juke {
+  position: relative;
+  padding: 6px;
+  border: 3px solid var(--pf-ink);
+  border-radius: 50% 50% 22px 22px / var(--arch) var(--arch) 22px 22px;
+  background: var(--chrome);
+  box-shadow: 7px 8px 0 var(--pf-ink), 0 30px 50px -12px rgba(70, 30, 0, .45);
+}
+.juke-in {
+  position: relative;
+  overflow: hidden;
+  padding: 0 8px 10px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 50% 50% 15px 15px / calc(var(--arch) - 6px) calc(var(--arch) - 6px) 15px 15px;
+  background: radial-gradient(130% 70% at 50% 0%, #b3171f, #640910 55%, #300306);
+  transition: background .6s;
+}
+.crown { position: relative; display: grid; place-items: end center; height: calc(var(--arch) + 12px); padding-bottom: 2px }
+.sunburst { position: absolute; inset: 0; overflow: hidden; -webkit-mask: radial-gradient(130% 120% at 50% 100%, #000 40%, transparent 78%); mask: radial-gradient(130% 120% at 50% 100%, #000 40%, transparent 78%) }
+.sunburst::before {
+  content: "";
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 300%;
+  aspect-ratio: 1;
+  translate: -50% -50%;
+  background: repeating-conic-gradient(rgba(255, 196, 70, .9) 0 7deg, rgba(255, 110, 30, .55) 7deg 14deg);
+  animation: sunpulse 2.6s ease-in-out infinite;
+}
+@keyframes sunpulse { 0%, 100% { filter: brightness(.9) saturate(1) } 50% { filter: brightness(1.25) saturate(1.2) } }
+.neon {
+  position: relative;
+  max-width: 100%;
+  padding: 5px 16px 6px;
+  border-radius: 14px;
+  background: #170807;
+  text-align: center;
+  box-shadow: inset 0 0 0 2px #000, 0 0 0 3px #d9dde1, 0 0 0 5px var(--pf-ink), 0 0 30px rgba(255, 79, 180, .35);
+}
+.neon.c-bulbs::before { inset: -9px; padding: 6px }
+.neon b { display: block; font: 400 clamp(19px, 5.6vw, 32px)/1.05 var(--f-retro); color: #ffe6f4; white-space: nowrap; text-shadow: 0 0 2px #fff, 0 0 8px var(--neon-pink), 0 0 18px var(--neon-pink), 0 0 32px var(--neon-pink); animation: flicker 7s infinite }
+.neon small { display: block; font: 700 clamp(9px, 2.3vw, 12px)/1.25 var(--f-cond); letter-spacing: .26em; text-transform: uppercase; white-space: nowrap; color: #e4feff; text-shadow: 0 0 6px var(--neon-cyan), 0 0 14px var(--neon-cyan) }
+.neon-twist { display: none }
+@keyframes flicker { 0%, 90%, 92.5%, 95%, 100% { opacity: 1 } 91%, 94% { opacity: .35 } }
+
+.juke-mid { display: flex; align-items: stretch; gap: 5px; margin-top: 10px }
+.tube {
+  flex: none;
+  position: relative;
+  width: 10px;
+  overflow: hidden;
+  border: 2px solid var(--pf-ink);
+  border-radius: 10px;
+  background: linear-gradient(90deg, #7a1200, #ff8a1f 34%, #ffd76a 50%, #ff8a1f 66%, #7a1200);
+  box-shadow: 0 0 14px rgba(255, 140, 30, .6);
+  transition: background .6s;
+}
+.tube i {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle, rgba(255, 255, 255, .95) 0 1.6px, rgba(255, 255, 255, .25) 2.2px, transparent 2.8px) 50% 0 / 100% 26px,
+    radial-gradient(circle, rgba(255, 255, 255, .8) 0 1.1px, transparent 1.9px) 30% 9px / 100% 17px;
+  animation: bubbles 3.2s linear infinite;
+}
+@keyframes bubbles { to { background-position: 50% -260px, 30% -161px } }
+.window { position: relative; flex: 1; min-width: 0; container: reelwin / inline-size; padding: 5px; border: 2px solid var(--pf-ink); border-radius: 14px; background: var(--chrome-v); transition: box-shadow .3s }
+.window canvas { display: block; width: 100%; aspect-ratio: 5 / 3.8; border-radius: 9px; background: #f6e8c4; box-shadow: 0 0 0 2px var(--pf-ink) }
+.glare { position: absolute; inset: 5px; border-radius: 9px; pointer-events: none; background: linear-gradient(162deg, rgba(255, 255, 255, .26) 0 16%, transparent 28%); box-shadow: inset 0 12px 16px -6px rgba(0, 0, 0, .35), inset 0 -12px 16px -6px rgba(0, 0, 0, .35) }
+.window.antic { animation: antic .5s ease-in-out infinite alternate }
+@keyframes antic { from { box-shadow: 0 0 0 0 rgba(255, 196, 50, 0) } to { box-shadow: 0 0 30px 8px rgba(255, 196, 50, .95), 0 0 0 3px #ffe27a } }
+.window.punch { animation: punch .32s var(--ease-back) }
+@keyframes punch { 0% { scale: 1 } 30% { scale: 1.035 } 100% { scale: 1 } }
+/* anticipation: the camera leans in on the jukebox while the last reels decide */
+.juke { transition: scale .3s var(--ease-back) }
+.juke.pushin { scale: 1.028; transition: scale 1.8s cubic-bezier(.25, .1, .2, 1) }
+
+/* Comic-book win stamp slammed over the reels for wins that beat the stake */
+.stamp {
+  --k: .5;
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  z-index: 3;
+  width: calc(var(--k) * 100%);
+  aspect-ratio: 1.3;
+  display: grid;
+  place-items: center;
+  pointer-events: none;
+  translate: -50% -50%;
+  filter: drop-shadow(5px 6px 0 rgba(27, 18, 12, .92));
+}
+.stamp i { position: absolute; inset: 0; clip-path: polygon(50.0% 3.0%, 56.5% 12.9%, 66.4% 5.0%, 67.4% 19.8%, 81.6% 12.3%, 77.7% 26.8%, 91.6% 26.0%, 84.8% 37.3%, 98.5% 41.4%, 86.2% 50.0%, 98.3% 58.5%, 84.3% 62.5%, 92.8% 74.7%, 76.8% 72.5%, 80.9% 86.9%, 68.4% 81.9%, 66.8% 96.1%, 55.9% 83.7%, 50.0% 99.1%, 43.8% 85.3%, 33.0% 96.8%, 31.4% 82.2%, 19.6% 86.3%, 22.4% 73.2%, 6.9% 74.9%, 15.5% 62.6%, 1.8% 58.5%, 13.7% 50.0%, 1.0% 41.4%, 14.6% 37.1%, 8.3% 25.9%, 22.9% 27.3%, 18.2% 12.1%, 32.3% 19.4%, 33.8% 5.4%, 43.9% 15.3%); animation: st-spin 7s linear infinite }
+.stamp .st-ink { background: var(--pf-ink) }
+.stamp .st-fill {
+  inset: 5%;
+  background:
+    radial-gradient(circle, rgba(200, 22, 29, .28) 1.4px, transparent 1.9px) 0 0 / 7px 7px,
+    radial-gradient(circle at 40% 35%, #fff6b0, #ffd84a 45%, #f2a516);
+}
+.stamp[data-tier="1"] .st-fill { background: radial-gradient(circle, rgba(27, 18, 12, .22) 1.4px, transparent 1.9px) 0 0 / 7px 7px, radial-gradient(circle at 40% 35%, #ff8a7a, #ef2433 50%, #a80d17) }
+.stamp[data-tier="2"] .st-fill { background: radial-gradient(circle, rgba(255, 255, 255, .25) 1.4px, transparent 1.9px) 0 0 / 7px 7px, radial-gradient(circle at 40% 35%, #ffb0e2, #ff4fb4 50%, #9a1d8a) }
+.stamp b {
+  position: relative;
+  max-width: 78%;
+  font: 400 calc(var(--k) * 17.5cqi)/.9 var(--f-pulp);
+  text-align: center;
+  text-transform: uppercase;
+  text-wrap: balance;
+  color: var(--blood);
+  -webkit-text-stroke: 1.5px var(--pf-ink);
+  text-shadow: 3px 3px 0 var(--pf-ink);
+  rotate: -7deg;
+}
+.stamp[data-tier="1"] b, .stamp[data-tier="2"] b { color: #fff36a }
+.stamp.go { animation: stamp-in .5s var(--ease-back) both }
+.stamp.out { animation: stamp-out .32s ease-in forwards }
+@keyframes stamp-in { 0% { scale: 2.8; rotate: 16deg; opacity: 0 } 55% { scale: .86; rotate: -6deg; opacity: 1 } 78% { scale: 1.06 } 100% { scale: 1; rotate: -3deg; opacity: 1 } }
+@keyframes stamp-out { to { scale: 1.35; rotate: 4deg; opacity: 0 } }
+@keyframes st-spin { to { rotate: 360deg } }
+
+/* WIN display: black glass with amber neon */
+.display {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  margin-top: 11px;
+  padding: 6px 12px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #140906, #221009);
+  box-shadow: 0 0 0 3px #cfd4d9, 0 0 0 5px var(--pf-ink), inset 0 2px 14px rgba(0, 0, 0, .9);
+}
+.msg { flex: 1; min-width: 0; font: 700 clamp(13px, 3.6vw, 16px)/1.12 var(--f-cond); letter-spacing: .04em; text-transform: uppercase; color: #ffd27f; text-shadow: 0 0 8px rgba(255, 150, 40, .6); text-wrap: balance }
+.msg.in { animation: msgin .35s var(--ease-back) }
+.msg.good { color: #fff0b0; text-shadow: 0 0 8px #ffb000, 0 0 18px rgba(255, 150, 0, .7) }
+.msg.bad { color: #ff9c8a }
+@keyframes msgin { from { opacity: 0; translate: 0 8px } to { opacity: 1; translate: 0 0 } }
+.msg.c-wobble { animation: c-wobble .55s ease-in-out; transform-origin: 0 50% }
+.meter { flex: none; display: grid; justify-items: end; text-align: right }
+.meter small { font: 700 10px/1 var(--f-cond); letter-spacing: .24em; text-transform: uppercase; color: #ff8a5c; white-space: nowrap }
+.meter b { min-width: 3ch; font: 400 clamp(26px, 7.4vw, 36px)/1 var(--f-pulp); color: #fff1c9; text-shadow: 0 0 6px #ff9a3c, 0 0 16px #ff5a1f }
+.meter.hot b { color: #fff; text-shadow: 0 0 6px #fff, 0 0 14px #ffcf4a, 0 0 30px #ff5a1f }
+.streak {
+  position: absolute;
+  left: 12px;
+  top: -12px;
+  padding: 3px 8px 2px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 999px;
+  background: var(--blood);
+  color: #fff3d0;
+  font: 800 11px/1 var(--f-cond);
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  rotate: -3deg;
+  box-shadow: 2px 2px 0 var(--pf-ink);
+}
+
+/* Control deck */
+.deck { position: relative; display: grid; gap: 11px; margin-top: 14px; padding: 10px 10px 12px; border: 2px solid var(--pf-ink); border-radius: 16px; background: var(--chrome-v) }
+.stakes { display: flex; align-items: center; justify-content: center; gap: 6px }
+.deck-label { font: 800 11px/1.05 var(--f-cond); letter-spacing: .18em; text-transform: uppercase; color: #3a2a20; margin-right: 2px; text-align: center }
+.key {
+  flex: 0 1 54px;
+  min-width: 44px;
+  height: 44px;
+  padding: 0 4px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 8px 8px 12px 12px;
+  background: linear-gradient(180deg, #fffaf0, #eadbb6);
+  color: var(--blood);
+  font: 400 20px/1 var(--f-pulp);
+  box-shadow: 0 4px 0 #8b7a5a, 0 5px 0 var(--pf-ink);
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: translate .08s, box-shadow .08s, background .2s, scale .3s var(--ease-back);
+}
+.key[aria-checked="true"] { translate: 0 3px; color: var(--pf-ink); background: linear-gradient(180deg, #fff6c6, #ffc93c); box-shadow: 0 1px 0 #8b7a5a, 0 2px 0 var(--pf-ink), 0 0 18px rgba(255, 180, 40, .95) }
+.key:disabled { cursor: not-allowed; filter: grayscale(.5) brightness(.85) }
+.controls { display: grid; grid-template-columns: 46px minmax(0, 1fr) auto minmax(0, 1fr) 46px; align-items: center; gap: 7px }
+.pill {
+  height: 48px;
+  min-width: 0;
+  padding: 0 8px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 12px;
+  background: linear-gradient(180deg, #33231a, #150c08);
+  color: #ffd98a;
+  font: 800 15px/1 var(--f-cond);
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 4px 0 #000;
+  cursor: pointer;
+  touch-action: manipulation;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  transition: translate .08s, box-shadow .08s, scale .3s var(--ease-back), color .2s;
+}
+.pill svg { width: 14px; height: 14px; flex: none; margin-left: -2px }
+.pill[aria-pressed="true"] { color: var(--pf-ink); background: linear-gradient(180deg, #fff1a8, #ffc93c); box-shadow: 0 2px 0 #000, 0 0 18px rgba(255, 200, 60, .85); translate: 0 2px }
+.pill.on-auto { color: #fff; background: linear-gradient(180deg, #ff5a5a, var(--blood)); box-shadow: 0 2px 0 #000, 0 0 18px rgba(255, 60, 60, .7); translate: 0 2px }
+.roundb { width: 46px; height: 46px; padding: 0; border-radius: 50%; font: 400 22px/1 var(--f-pulp) }
+.lines-badge { display: grid; place-content: center; width: 46px; height: 46px; border: 2px solid var(--pf-ink); border-radius: 50%; background: var(--cream); color: var(--pf-ink); text-align: center; line-height: 1 }
+.lines-badge b { font: 400 19px/1 var(--f-pulp) }
+.lines-badge small { font: 800 8.5px/1 var(--f-cond); letter-spacing: .14em; text-transform: uppercase }
+/* in the contest the badge becomes the free-spin counter */
+.lines-badge { transition: background .3s, color .3s, box-shadow .3s }
+.lines-badge.fs { background: radial-gradient(circle at 38% 32%, #ffb3e4, #ff4fb4 55%, #9a1d8a); color: #fff; box-shadow: 0 0 0 2px #ffe6f4 inset, 0 0 18px rgba(255, 79, 180, .85); text-shadow: 0 1px 0 rgba(0, 0, 0, .4) }
+.lines-badge.fs b { font-size: 22px }
+.spin {
+  position: relative;
+  width: 90px;
+  height: 90px;
+  padding: 0;
+  border: 3px solid var(--pf-ink);
+  border-radius: 50%;
+  background: radial-gradient(circle at 36% 30%, #ff9a8a 0, #ef2433 32%, #a80d17 70%, #5e050a 100%);
+  box-shadow: 0 6px 0 #3d0306, 0 0 0 5px #e9ecef, 0 0 0 8px var(--pf-ink), 0 12px 26px rgba(0, 0, 0, .4);
+  color: #fff3d6;
+  font: 400 27px/1 var(--f-pulp);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  text-shadow: 0 2px 0 #5e050a;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: scale .38s var(--ease-back), translate .1s, box-shadow .1s, filter .2s;
+  animation: breathe 2.4s ease-in-out infinite;
+}
+.spin small { display: block; margin-top: 2px; font: 800 10px/1 var(--f-cond); letter-spacing: .16em }
+.spin.busy { animation: none; filter: saturate(.85) }
+.spin.stopmode { background: radial-gradient(circle at 36% 30%, #fff2b0 0, #ffc93c 34%, #d08a00 72%, #6e4300 100%); color: var(--pf-ink); text-shadow: 0 1px 0 rgba(255, 255, 255, .5) }
+@keyframes breathe { 0%, 100% { box-shadow: 0 6px 0 #3d0306, 0 0 0 5px #e9ecef, 0 0 0 8px var(--pf-ink), 0 12px 26px rgba(0, 0, 0, .4) } 50% { box-shadow: 0 6px 0 #3d0306, 0 0 0 5px #fff, 0 0 0 8px var(--pf-ink), 0 0 34px 6px rgba(255, 60, 60, .55) } }
+[data-squish].squish { scale: .9 .86; transition-duration: .06s }
+.spin.squish { scale: .88 .82; translate: 0 5px; box-shadow: 0 1px 0 #3d0306, 0 0 0 5px #e9ecef, 0 0 0 8px var(--pf-ink) }
+/* the button's own breathing animation would otherwise swallow the shared jelly/wobble classes */
+.spin.c-jelly { animation: c-jelly .6s ease-out }
+.spin.c-wobble { animation: c-wobble .55s ease-in-out }
+.auto-menu {
+  position: absolute;
+  left: 10px;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 2px solid var(--pf-ink);
+  border-radius: 12px;
+  background: #1b120c;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, .5);
+  animation: c-rise .25s var(--ease-back);
+}
+.auto-menu p { margin: 0 2px 2px; font: 700 11px/1 var(--f-cond); letter-spacing: .18em; text-transform: uppercase; color: #ffcf7a }
+.auto-menu .pill { height: 44px; min-width: 120px }
+.fine { margin: 14px 0 0; text-align: center; font: 700 11.5px/1.35 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; color: rgba(27, 18, 12, .78) }
+
+/* ---------- Desktop side panels ---------- */
+.side-l { justify-self: end; max-width: 300px }
+.side-r { justify-self: start; max-width: 290px }
+.dict { font-family: Georgia, "Times New Roman", serif; color: var(--pf-ink) }
+.dict .hw { margin: 0; font-size: 26px; font-weight: 700 }
+.dict .hw i { font-weight: 400; font-size: 17px }
+.dict .pron { margin: 0 0 8px; font-size: 14px; color: #5a3b1a }
+.dict ol { margin: 0; padding-left: 22px; font-size: 16px; line-height: 1.4 }
+.dict li { margin-bottom: 6px }
+.dict .src { margin: 8px 0 0; font-size: 13px; font-style: italic; color: #5a3b1a }
+.cover-blurb { margin-top: 24px; padding: 14px 16px; border: 3px solid var(--pf-ink); background: var(--blood); color: #fff1cc; rotate: -2deg; box-shadow: 6px 6px 0 var(--pf-ink) }
+.cover-blurb .kick { margin: 0; font: 700 13px/1 var(--f-cond); letter-spacing: .22em; text-transform: uppercase }
+.cover-blurb .big { margin: 6px 0 8px; font: 400 30px/.98 var(--f-pulp); text-transform: uppercase; color: #ffd84a; text-shadow: 2px 2px 0 var(--pf-ink) }
+.cover-blurb p { margin: 0; font: 600 15px/1.35 var(--f-text) }
+.menu-card { padding: 0 0 12px; border: 3px solid var(--pf-ink); border-radius: 6px; background: var(--cream); box-shadow: 6px 6px 0 var(--pf-ink); rotate: 1.5deg; overflow: hidden }
+.menu-card h2 { margin: 0; padding: 9px 12px 7px; background: var(--blood); color: #fff1cc; font: 400 26px/1 var(--f-pulp); letter-spacing: .03em; text-transform: uppercase; text-align: center; border-bottom: 3px solid var(--pf-ink) }
+.menu-sub { margin: 6px 12px 4px; text-align: center; font: 700 12px/1.2 var(--f-cond); letter-spacing: .18em; text-transform: uppercase; color: #7a4a20 }
+.menu-list { list-style: none; margin: 0; padding: 0 12px }
+.menu-list li { display: flex; align-items: center; gap: 8px; padding: 3px 0; border-bottom: 1px dashed rgba(27, 18, 12, .25); font: 700 15px/1.1 var(--f-cond); text-transform: uppercase; letter-spacing: .04em }
+.menu-list li svg { width: 34px; height: 34px; flex: none }
+.menu-list .nm { flex: 1; min-width: 0 }
+.menu-list .pr { font: 400 17px/1 var(--f-pulp); color: var(--blood) }
+.menu-foot { margin: 8px 12px 0; text-align: center; font: 600 italic 13px/1.3 Georgia, serif; color: #5a3b1a }
+
+/* ---------- Twist Contest mood ---------- */
+.twist .logo .w1 { color: var(--neon-pink); text-shadow: 3px 3px 0 #000, 0 0 22px var(--neon-pink) }
+.twist .logo .w2 { color: #fff; text-shadow: 3px 3px 0 #7b2cff, 0 0 18px var(--neon-cyan) }
+.twist .tagline, .twist .fine, .twist .dict, .twist .dict .pron, .twist .dict .src { color: #e9dcff }
+.twist .tagline em { color: var(--neon-cyan) }
+.twist .juke-in { background: radial-gradient(130% 70% at 50% 0%, #6b1fb8, #2c0c5e 55%, #12052b) }
+.twist .sunburst::before { background: repeating-conic-gradient(rgba(72, 243, 255, .85) 0 7deg, rgba(255, 79, 180, .65) 7deg 14deg); animation: sunspin 9s linear infinite }
+.twist .tube { background: linear-gradient(90deg, #4a0a6a, #ff4fb4 34%, #ffd1f0 50%, #48f3ff 66%, #0a3a6a); box-shadow: 0 0 16px rgba(255, 79, 180, .75) }
+.twist .neon-base { display: none }
+.twist .neon-twist { display: block }
+.twist .neon-twist b { color: #e8feff; text-shadow: 0 0 2px #fff, 0 0 8px var(--neon-cyan), 0 0 18px var(--neon-cyan), 0 0 34px var(--neon-cyan); animation: flicker 1.3s infinite }
+.twist .neon-twist small { color: #ffe6f4; text-shadow: 0 0 6px var(--neon-pink), 0 0 14px var(--neon-pink) }
+.twist .price { background: radial-gradient(circle at 40% 35%, #6af7ff, #12b7d6 60%, #06627a); color: #0b1030 }
+@keyframes sunspin { to { rotate: 360deg } }
+
+/* Feature cards */
+.card-ovl { position: fixed; inset: 0; z-index: 9350; display: grid; place-items: center; padding: 16px; background: radial-gradient(circle at 50% 45%, rgba(60, 10, 90, .5), rgba(6, 2, 18, .86) 70%); cursor: pointer; animation: c-fade .25s ease-out; -webkit-user-select: none; user-select: none }
+.card-ovl.out { animation: c-fadeout .28s ease-in forwards }
+.card {
+  width: min(430px, 100%);
+  padding: 20px 18px 18px;
+  border: 4px solid var(--pf-ink);
+  border-radius: 14px;
+  background: linear-gradient(160deg, #ff4fb4, #7b2cff 70%);
+  color: #fff;
+  text-align: center;
+  box-shadow: 9px 9px 0 #000, 0 0 70px rgba(255, 79, 180, .75);
+  rotate: -3deg;
+  animation: card-in .65s var(--ease-back) both;
+}
+.card.outro { background: linear-gradient(160deg, #ffc93c, #ff6a1f 70%); color: var(--pf-ink); box-shadow: 9px 9px 0 #000, 0 0 70px rgba(255, 200, 60, .75); rotate: 2deg }
+.card .kick { margin: 0; font: 800 13px/1 var(--f-cond); letter-spacing: .24em; text-transform: uppercase }
+.card h2 { margin: 8px 0 6px; font: 400 clamp(44px, 13vw, 70px)/.9 var(--f-pulp); text-transform: uppercase; color: #fff36a; -webkit-text-stroke: 2px var(--pf-ink); text-shadow: 4px 4px 0 var(--pf-ink) }
+.card.outro h2 { color: #fff }
+.card .big { margin: 4px 0; font: 400 clamp(26px, 7.5vw, 38px)/1 var(--f-pulp); text-transform: uppercase; text-shadow: 2px 2px 0 rgba(0, 0, 0, .35) }
+.card .big b { color: #48f3ff; font-weight: 400 }
+.card.outro .big b { color: #fff }
+.card .sub { margin: 8px 0 0; font: 600 16px/1.3 var(--f-text) }
+.card .tap { margin: 14px 0 0; font: 800 12px/1 var(--f-cond); letter-spacing: .24em; text-transform: uppercase; animation: tapblink 1.1s ease-in-out infinite }
+@keyframes tapblink { 0%, 100% { opacity: .45 } 50% { opacity: 1 } }
+@keyframes card-in { 0% { opacity: 0; scale: 2.2; rotate: 12deg; filter: blur(6px) } 60% { opacity: 1; scale: .94; filter: blur(0) } 100% { opacity: 1; scale: 1 } }
+
+/* Help dialog contents */
+.ht-intro { color: var(--ink) }
+.ht-table td:first-child { display: flex; align-items: center; gap: 8px }
+.ht-table svg { width: 34px; height: 34px; flex: none }
+.ht-note { font-size: 13.5px }
+.ht-lines { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px }
+.ht-lines figure { margin: 0; display: grid; justify-items: center; gap: 2px; font: 700 11px/1 var(--f-cond); color: var(--ink-soft) }
+.ht-lines svg { width: 100%; max-width: 64px; height: auto }
+.ht-fine { font: 700 12px/1.3 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; color: var(--gold) }
+
+@media (max-width: 419px) {
+  .pill svg { display: none }
+}
+@media (max-width: 699px) and (max-height: 760px) {
+  .logo { font-size: 36px }
+  .price { width: 48px; height: 48px }
+  .price b { font-size: 20px }
+  .poster-head { margin-bottom: 6px }
+  .tagline { margin-top: 3px; font-size: 12px }
+  :root { --arch: 54px }
+  .window canvas { aspect-ratio: 5 / 3.3 }
+  .display { min-height: 48px; margin-top: 9px }
+  .deck { margin-top: 10px; gap: 9px }
+  .fine { margin-top: 8px }
+}
+@media (max-width: 380px) {
+  .deck { gap: 14px }
+  .key { font-size: 18px }
+  .controls { gap: 6px; grid-template-columns: 44px minmax(0, 1fr) auto minmax(0, 1fr) 44px }
+  .spin { width: 82px; height: 82px; font-size: 24px }
+  .roundb, .lines-badge { width: 44px; height: 44px }
+}
+@media (min-width: 700px) {
+  .price { width: 68px; height: 68px }
+  .price b { font-size: 29px }
+  .logo { font-size: clamp(40px, 6.6vh, 66px) }
+  .tagline { font-size: clamp(12px, 1.9vh, 16px) }
+  .poster-head { margin-bottom: 8px }
+  .juke { padding: 8px }
+  .juke-in { padding: 0 10px 12px }
+  .tube { width: 15px }
+  .juke-mid { gap: 7px }
+  .window canvas { aspect-ratio: 5 / 2.7 }
+  :root { --arch: clamp(56px, 9vh, 80px) }
+  .display { margin-top: 10px }
+  .deck { margin-top: 12px }
+  .fine { margin-top: 8px }
+}
+/* a wide machine (tablet, desktop, phone landscape): stakes over the small buttons, the big red button on the right */
+@container machine (min-width: 440px) {
+  .deck { grid-template-columns: 46px minmax(0, 1fr) minmax(0, 1fr) 46px auto; grid-template-areas: "stakes stakes stakes stakes spin" "help auto turbo lines spin"; gap: 10px 8px; padding: 10px 12px }
+  .controls { display: contents }
+  .stakes { grid-area: stakes; justify-content: flex-start; gap: 5px }
+  .key { flex: 1 1 54px; max-width: 58px }
+  #help { grid-area: help }
+  #auto { grid-area: auto }
+  #turbo { grid-area: turbo }
+  .lines-badge { grid-area: lines }
+  .spin { grid-area: spin; justify-self: center; width: clamp(84px, 17cqi, 102px); height: clamp(84px, 17cqi, 102px); margin: 0 6px 0 12px; font-size: clamp(25px, 5cqi, 31px) }
+  .pill svg { display: block }
+  .auto-menu { left: 60px }
+}
+@container machine (min-width: 440px) and (max-width: 529px) {
+  .deck-label { display: none }
+}
+/* phone landscape (and very short windows): reels on the left, WIN display and controls on the right, no poster head */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 560px) {
+  :root { --arch: 34px }
+  .stage { grid-template-columns: minmax(0, 1fr); min-height: calc(100dvh - var(--bar-h)); align-content: center; padding-top: 4px; padding-bottom: max(4px, env(safe-area-inset-bottom, 0px)) }
+  .poster-head, .fine, .side { display: none }
+  .machine { max-width: min(900px, calc((100dvh - 164px) * 3.05 + 110px)) }
+  .juke { padding: 5px; box-shadow: 5px 6px 0 var(--pf-ink) }
+  .juke-in { display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); grid-template-rows: auto auto 1fr; grid-template-areas: "crown crown" "mid display" "mid deck"; column-gap: 12px; padding: 0 8px 8px }
+  .crown { grid-area: crown; height: 40px }
+  .neon { padding: 3px 14px 4px }
+  .neon b { font-size: 19px }
+  .neon small { font-size: 9px }
+  .juke-mid { grid-area: mid; margin-top: 5px; align-self: center }
+  .tube { width: 10px }
+  .window canvas { aspect-ratio: 5 / 3 }
+  .display { grid-area: display; margin-top: 7px; min-height: 52px }
+  .deck { grid-area: deck; align-self: start; grid-template-columns: 44px minmax(0, 1fr) minmax(0, 1fr) auto; grid-template-areas: "stakes stakes stakes stakes" "help auto turbo spin"; gap: 8px 7px; padding: 8px 10px; margin-top: 9px }
+  .deck-label, .lines-badge, .deck .pill svg { display: none }
+  .stakes { justify-content: space-between }
+  .key { flex: 1 1 44px; max-width: 64px }
+  .deck .pill { padding: 0 5px; font-size: 13.5px }
+  .deck .roundb { width: 44px; height: 44px; padding: 0; font: 400 22px/1 var(--f-pulp) }
+  .deck .spin { width: clamp(72px, calc(100dvh - 290px), 82px); height: clamp(72px, calc(100dvh - 290px), 82px); margin: 0 2px 0 4px; font-size: 23px }
+  .auto-menu { left: 54px }
+}
+@media (prefers-reduced-motion: reduce) {
+  .price, .logo .w2::after, .sunburst::before, .neon b, .tube i, .bg-twist::before, .bg-twist::after, .bg-twist i, .spin, .twist .neon-twist b, .card .tap, .stamp i { animation: none !important }
+  .stamp.go { animation-duration: .2s }
+  .juke.pushin { scale: 1 }
+  .window.antic { animation: none; box-shadow: 0 0 24px 6px rgba(255, 196, 50, .85) }
+}
+</style>
+<body class="pf">
+<div class="bg-paper" aria-hidden="true"></div>
+<div class="bg-twist" aria-hidden="true"><i></i></div>
+<main data-shake class="stage">
+  <aside class="side side-l" aria-label="From the back cover">
+    <div class="dict">
+      <p class="hw">fric·tion <i>n.</i></p>
+      <p class="pron">/ˈfrik-shən/</p>
+      <ol>
+        <li>The heat that builds when two reels rub each other the right way.</li>
+        <li>What your wallet feels around midnight.</li>
+      </ol>
+      <p class="src">The Jukebox Dictionary, 10¢ edition</p>
+    </div>
+    <div class="cover-blurb">
+      <p class="kick">A steamy tale of</p>
+      <p class="big">Cherries, chrome &amp; considerable friction</p>
+      <p>She had the heels. He had the fuzzy cuffs. Nobody knew what glowed inside the briefcase.</p>
+    </div>
+  </aside>
+
+  <section class="machine" aria-label="Pulp Friction slot machine">
+    <header class="poster-head">
+      <div class="price" aria-hidden="true"><small>only</small><b>10<i>¢</i></b></div>
+      <div class="head-text">
+        <h1 class="logo" aria-label="Pulp Friction"><span class="w1">Pulp</span><span class="w2">Friction</span></h1>
+        <p class="tagline">Say ‘spin’ one more time. <em>I double-dare you.</em></p>
+      </div>
+    </header>
+
+    <div class="juke" id="juke">
+      <div class="juke-in">
+        <div class="crown">
+          <div class="sunburst" aria-hidden="true"></div>
+          <div class="neon c-bulbs" aria-hidden="true">
+            <span class="neon-base"><b>Jackpot Rabbit’s</b><small>diner · dancing · open 24 hrs</small></span>
+            <span class="neon-twist"><b>Twist Contest</b><small id="neonSub">tonight only · every win ×2</small></span>
+          </div>
+        </div>
+        <div class="juke-mid">
+          <div class="tube" aria-hidden="true"><i></i></div>
+          <div class="window" id="window">
+            <canvas id="reels" role="img" aria-label="Five reels"></canvas>
+            <div class="glare" aria-hidden="true"></div>
+            <div class="stamp" id="stamp" aria-hidden="true" hidden><i class="st-ink"></i><i class="st-fill"></i><b id="stampText"></b></div>
+          </div>
+          <div class="tube" aria-hidden="true"><i></i></div>
+        </div>
+        <div class="display" id="display">
+          <span class="streak" id="streak" hidden>Hot streak ×2</span>
+          <div class="msg" id="msg" aria-live="polite">Pick a stake. Hit spin. Try to look cool about it.</div>
+          <div class="meter" id="meter"><small id="meterLabel">Win</small><b id="winAmt">0</b></div>
+        </div>
+        <div class="deck">
+          <div class="stakes" id="stakes" role="radiogroup" aria-label="Stake per spin">
+            <span class="deck-label">Stake</span>
+          </div>
+          <div class="controls">
+            <button class="pill roundb" id="help" type="button" aria-label="Rules, paytable and lines" data-squish>?</button>
+            <button class="pill" id="auto" type="button" aria-haspopup="true" aria-expanded="false" data-squish>Auto</button>
+            <button class="spin" id="spin" type="button" aria-label="Spin (Space)"><span id="spinLabel">Spin</span></button>
+            <button class="pill" id="turbo" type="button" aria-pressed="false" data-squish><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 4 14h6l-1 8 9-12h-6z" fill="currentColor"/></svg>Turbo</button>
+            <span class="lines-badge" id="linesBadge" title="20 fixed lines"><b id="badgeNum">20</b><small id="badgeTxt">lines</small></span>
+          </div>
+          <div class="auto-menu" id="autoMenu" hidden>
+            <p>Autoplay</p>
+            <button class="pill" type="button" data-n="10" data-squish>10 spins</button>
+            <button class="pill" type="button" data-n="25" data-squish>25 spins</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <p class="fine">Parody. Fake chips, no real money. · Space to spin</p>
+  </section>
+
+  <aside class="side side-r" aria-label="Paytable summary">
+    <div class="menu-card">
+      <h2>Tonight’s specials</h2>
+      <p class="menu-sub" id="menuSub">5 in a row, at your stake</p>
+      <ul class="menu-list" id="menuList"></ul>
+      <p class="menu-foot">Three trophies anywhere start the Twist Contest. The briefcase goes with everything.</p>
+    </div>
+  </aside>
+</main>
+
+<script src="../shared/casino.js"></script>
+<script id="pf-math">
+/* Pulp Friction math. Shared verbatim by the page and the node Monte Carlo.
+   5 reels x 3 rows, 20 fixed lines (LINES, row index per reel, 0 = top). Line wins pay left to right, 3/4/5 in a row.
+   Line bet = stake / 20. Every line pay is even, so a line bet of 0.5 (stake 10) or 2.5 (stake 50) still pays whole chips.
+   A spin draws one stop per reel uniformly from a 30-symbol strip (Casino.rng.int(30)); rows show strip[stop], [stop+1], [stop+2].
+   WILD briefcase (W) substitutes for everything except the trophy and also pays on its own; a line takes the better reading.
+   SCATTER trophy (T) is one per strip, so at most one per reel: 3/4/5 anywhere pay 2x/10x/50x the stake
+   and award 8 free spins (the Twist Contest). Free spins replay at the same stake, every win x2, 3+ trophies add 8 more.
+   Exact RTP (independent reels, all 10^5 line symbol combinations, feature as a geometric series):
+     lines 81.94% + trophy pays 2.12% + Twist Contest 12.36% = 96.42%.
+   Monte Carlo, node, 60,000,000 rounds run on this exact block with every contest played out:
+   RTP 96.38% (95% CI +-0.07%), hit frequency 51.1% (any base win, many smaller than the stake),
+   contest 1 in 117 spins (8.6 free spins on average), 10x+ rounds 1 in 78, 50x+ 1 in ~4,400.
+   QA re-check (independent script on this block): exact 96.423%; 3 x 3,000,000 rounds at stakes 10/50/200 gave
+   96.59 / 96.62 / 96.35% (each +-0.31%), hit frequency 51.1%, more-than-stake 20.6%.
+   Top line: 5 briefcases = 2000 x line bet = 100x stake (200x in the contest). */
+const PF = (() => {
+  'use strict';
+  const SYMS = 'CBPELHSXWT';
+  const WILD = 8;
+  const SCAT = 9;
+  const STRIPS = [
+    'HEPBECLSCBHLPLCBHXCBEWEPXBTCSP',
+    'CXWBXLPHCBTBELEBELCHCBPSPWHCSP',
+    'CHCXTLCBCBEHXPLBECLBPBWSEWPSHP',
+    'BELCEHBEWPBHSCBTCLCHCXWPSPLXBP',
+    'WBPEBHCLBCPCECLEBEXHBTSPXLCPSH',
+  ].map((s) => [...s].map((ch) => SYMS.indexOf(ch)));
+  const LINES = [
+    [1, 1, 1, 1, 1], [0, 0, 0, 0, 0], [2, 2, 2, 2, 2], [0, 1, 2, 1, 0], [2, 1, 0, 1, 2],
+    [0, 0, 1, 2, 2], [2, 2, 1, 0, 0], [1, 0, 0, 0, 1], [1, 2, 2, 2, 1], [1, 0, 1, 2, 1],
+    [1, 2, 1, 0, 1], [0, 1, 1, 1, 0], [2, 1, 1, 1, 2], [0, 1, 0, 1, 0], [2, 1, 2, 1, 2],
+    [1, 1, 0, 1, 1], [1, 1, 2, 1, 1], [0, 0, 2, 0, 0], [2, 2, 0, 2, 2], [0, 2, 2, 2, 0],
+  ];
+  // x line bet for 3 / 4 / 5 in a row: cherries, banana, peach, eggplant, kiss, cuffs, stiletto, XXX gold, briefcase
+  const PAYS = [
+    [8, 20, 60], [8, 20, 60], [10, 24, 80], [12, 30, 100], [16, 40, 140],
+    [20, 60, 200], [30, 100, 400], [40, 160, 800], [60, 300, 2000],
+  ];
+  const SCAT_PAY = [0, 0, 0, 2, 10, 50]; // x total stake, by trophies on screen
+  const FREE_SPINS = 8;
+  const FREE_MULT = 2;
+  const MAX_FREE = 400;
+
+  const gridFor = (stops) => stops.map((s, c) => [0, 1, 2].map((r) => STRIPS[c][(s + r) % STRIPS[c].length]));
+  function lineWin(syms) {
+    if (syms[0] === SCAT) return null;
+    let w = 0;
+    while (w < 5 && syms[w] === WILD) w++;
+    const t = w < 5 ? syms[w] : -1;
+    let payT = 0;
+    let n = 0;
+    if (t >= 0 && t !== SCAT) {
+      while (n < 5 && (syms[n] === t || syms[n] === WILD)) n++;
+      if (n >= 3) payT = PAYS[t][n - 3];
+    }
+    const payW = w >= 3 ? PAYS[WILD][w - 3] : 0;
+    if (payW === 0 && payT === 0) return null;
+    return payW >= payT ? { sym: WILD, count: w, base: payW } : { sym: t, count: n, base: payT };
+  }
+  function evaluate(grid, stake, mult = 1) {
+    const lineBet = stake / 20;
+    const lines = [];
+    let win = 0;
+    for (let i = 0; i < LINES.length; i++) {
+      const ln = LINES[i];
+      const w = lineWin(ln.map((r, c) => grid[c][r]));
+      if (!w) continue;
+      const pay = Math.round(w.base * lineBet * mult);
+      lines.push({ i, sym: w.sym, count: w.count, pay, cells: ln.slice(0, w.count).map((r, c) => [c, r]) });
+      win += pay;
+    }
+    const cells = [];
+    grid.forEach((col, c) => col.forEach((s, r) => { if (s === SCAT) cells.push([c, r]); }));
+    const sPay = Math.round(SCAT_PAY[Math.min(5, cells.length)] * stake * mult);
+    win += sPay;
+    return { lines, scatter: { count: cells.length, cells, pay: sPay }, win, trigger: cells.length >= 3, mult };
+  }
+  function spinOnce(int, stake, mult = 1) {
+    const stops = STRIPS.map((s) => int(s.length));
+    const grid = gridFor(stops);
+    return { stops, grid, ...evaluate(grid, stake, mult) };
+  }
+  function playRound(int, stake) {
+    const base = spinOnce(int, stake, 1);
+    const free = [];
+    if (base.trigger) {
+      let left = FREE_SPINS;
+      while (left > 0 && free.length < MAX_FREE) {
+        left--;
+        const r = spinOnce(int, stake, FREE_MULT);
+        if (r.trigger) left += FREE_SPINS;
+        free.push(r);
+      }
+    }
+    const featureWin = free.reduce((a, r) => a + r.win, 0);
+    return { stake, base, free, baseWin: base.win, featureWin, total: base.win + featureWin };
+  }
+  return { SYMS, WILD, SCAT, STRIPS, LINES, PAYS, SCAT_PAY, FREE_SPINS, FREE_MULT, gridFor, lineWin, evaluate, spinOnce, playRound };
+})();
+</script>
+<script>
+(() => {
+  'use strict';
+  const C = window.Casino;
+  const { wallet, sfx, fx, rng } = C;
+  C.init({ id: 'pulp-friction', title: 'Pulp Friction', minBet: 10 });
+
+  const $ = (s) => document.querySelector(s);
+  const clamp = C.clamp;
+  const fmt = C.fmt;
+  const TAU = Math.PI * 2;
+  const INK = '#1b120c';
+  const STAKES = [10, 20, 50, 100, 200];
+  const { WILD, SCAT, LINES, PAYS, SCAT_PAY } = PF;
+  const OPEN = 10; // sprite index of the opened briefcase
+  const NAMES = ['Cherries Jubilee', 'Banana Split', 'Peach Cobbler', 'Eggplant Surprise', 'Lipstick Kiss', 'Fuzzy Cuffs', 'Red-Hot Stiletto', 'Triple-X Gold', 'The Briefcase', 'Twist Trophy'];
+  const PLURAL = ['cherries', 'bananas', 'peaches', 'eggplants', 'kisses', 'cuffs', 'stilettos', 'gold bars', 'briefcases', 'trophies'];
+  const ANIM = ['bounce', 'sway', 'jiggle', 'wobble', 'kiss', 'rattle', 'stomp', 'shine', 'open', 'twirl'];
+  const LINE_COLORS = ['#ff2a3d', '#18c8ff', '#ff4fb4', '#ffb000', '#2fe08a', '#a05cff', '#ff7a1a', '#fff06a'];
+  const RM = () => fx.reducedMotion;
+  // haptics only after the viewer has touched the page (browsers refuse it before that anyway)
+  const buzz = (p) => { if (!navigator.userActivation || navigator.userActivation.hasBeenActive) fx.vibrate(p); };
+
+  const els = {
+    juke: $('#juke'), win: $('#window'), canvas: $('#reels'), msg: $('#msg'), meter: $('#meter'), meterLabel: $('#meterLabel'),
+    winAmt: $('#winAmt'), streak: $('#streak'), stakes: $('#stakes'), spin: $('#spin'), spinLabel: $('#spinLabel'),
+    auto: $('#auto'), autoMenu: $('#autoMenu'), turbo: $('#turbo'), help: $('#help'), menuList: $('#menuList'), linesBadge: $('#linesBadge'),
+    stamp: $('#stamp'), stampText: $('#stampText'), badgeNum: $('#badgeNum'), badgeTxt: $('#badgeTxt'), neonSub: $('#neonSub'),
+  };
+  const ctx = els.canvas.getContext('2d');
+
+  /* ---------- Copy ---------- */
+  const Q = {
+    idle: [
+      'Pick a stake. Hit spin. Try to look cool about it.',
+      'The briefcase is wild. Nobody knows what is inside.',
+      'Three trophies anywhere start the Twist Contest.',
+      'Space bar spins. Give your thumb a break.',
+      'Cherries, chrome and considerable friction.',
+    ],
+    small: [
+      'Mmm-hmm. That is a tasty little payout.',
+      'Peachy. Absolutely peachy.',
+      'Smooth, like silk sheets on a jukebox.',
+      'Ooh. Somebody is warming up.',
+      'A little friction goes a long way.',
+      'Lip service, paid in full.',
+    ],
+    medium: [
+      'Hot damn! The reels like you.',
+      'Royale with cherries, coming right up.',
+      'Rub the reels right and they rub you back.',
+      'That is some serious friction, sugar.',
+      'The jukebox just blushed.',
+    ],
+    wild: [
+      'What is in the briefcase? Your winnings.',
+      'The briefcase opened up. It likes you.',
+    ],
+    lose: [
+      'Friction burn. Walk it off.',
+      'Nobody is getting lucky... yet.',
+      'The briefcase is playing hard to get.',
+      'Not even a peck on the cheek.',
+      'Cold coffee. Spin again.',
+      'Even the banana is embarrassed.',
+      'Keep your heels on. It is only chips.',
+      'Pretty please, with cherries on top?',
+      'Tease. These reels are a tease.',
+      'That one did not rub the right way.',
+    ],
+    tease: [
+      'Two trophies and a heartache.',
+      'So close you could smell the cherries.',
+      'Almost twisted. Almost.',
+    ],
+    spin: ['Rubbing the reels...', 'Here comes the friction...', 'Shake it, jukebox...', 'Feeling lucky, hot shot?'],
+  };
+  const bag = {};
+  function pick(key) {
+    // shuffled bags so a quip never repeats back to back
+    if (!bag[key] || !bag[key].length) {
+      const last = bag[key + '_last'];
+      bag[key] = rng.shuffle(Q[key].slice());
+      if (bag[key].length > 1 && bag[key][bag[key].length - 1] === last) bag[key].unshift(bag[key].pop());
+    }
+    const q = bag[key].pop();
+    bag[key + '_last'] = q;
+    return q;
+  }
+  let msgTimer = 0;
+  function setMsg(text, tone = '') {
+    els.msg.textContent = text;
+    els.msg.className = `msg in ${tone}`;
+    clearTimeout(msgTimer);
+    msgTimer = setTimeout(() => els.msg.classList.remove('in'), 400);
+  }
+
+  /* ---------- Art: every symbol is inline SVG in a 100x100 box, ink outlines, flat pulp colours ---------- */
+  const starPath = (cx, cy, R, r, n = 5, rot = -Math.PI / 2) => {
+    let d = '';
+    for (let i = 0; i < n * 2; i++) {
+      const a = rot + (i * Math.PI) / n;
+      const k = i % 2 ? r : R;
+      d += `${i ? 'L' : 'M'}${(cx + Math.cos(a) * k).toFixed(1)} ${(cy + Math.sin(a) * k).toFixed(1)}`;
+    }
+    return d + 'Z';
+  };
+  function art(k, u, text) {
+    const I = INK;
+    switch (k) {
+      case 0: return `<defs><radialGradient id="${u}g" cx=".34" cy=".3" r=".78"><stop offset="0" stop-color="#ff7a74"/><stop offset=".5" stop-color="#dd1a2e"/><stop offset="1" stop-color="#7a0615"/></radialGradient></defs>
+<g fill="none" stroke-linecap="round"><path d="M31 62C34 42 46 27 62 15M68 66C67 46 65 29 62 15" stroke="${I}" stroke-width="7.5"/><path d="M31 62C34 42 46 27 62 15M68 66C67 46 65 29 62 15" stroke="#7bab35" stroke-width="3.2"/></g>
+<path d="M61 16C66 4 84 1 94 8C87 20 70 24 61 16Z" fill="#4fb84a" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/><path d="M65 15C73 11 81 9 89 9" fill="none" stroke="#1f6e26" stroke-width="2" stroke-linecap="round"/>
+<circle cx="30" cy="70" r="18.5" fill="url(#${u}g)" stroke="${I}" stroke-width="4"/><circle cx="68" cy="73" r="18.5" fill="url(#${u}g)" stroke="${I}" stroke-width="4"/>
+<ellipse cx="23" cy="62" rx="6" ry="3.6" fill="#fff" opacity=".9" transform="rotate(-35 23 62)"/><ellipse cx="61" cy="65" rx="6" ry="3.6" fill="#fff" opacity=".9" transform="rotate(-35 61 65)"/>`;
+      case 1: return `<defs><linearGradient id="${u}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff38a"/><stop offset=".55" stop-color="#ffd21f"/><stop offset="1" stop-color="#e39400"/></linearGradient></defs>
+<path d="M21 20C10 54 34 90 89 77C92 73 90 68 85 68C55 72 35 52 35 22Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M27 27C25 53 45 74 80 72" fill="none" stroke="#c68300" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M22 38C24 58 38 74 58 80" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" opacity=".65"/>
+<path d="M19 9L32 11L35 22L21 20Z" fill="#7a5422" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/>
+<circle cx="88" cy="73" r="3" fill="#3b2508"/>`;
+      case 2: return `<defs><radialGradient id="${u}g" cx=".38" cy=".42" r=".72"><stop offset="0" stop-color="#ffe3ad"/><stop offset=".42" stop-color="#ffa56e"/><stop offset=".85" stop-color="#f0606a"/><stop offset="1" stop-color="#c83c55"/></radialGradient></defs>
+<path d="M50 30C34 14 8 24 9 52C10 78 32 92 50 88C68 92 90 78 91 52C92 24 66 14 50 30Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M50 31C44 46 45 68 53 86" fill="none" stroke="#b5374c" stroke-width="3.6" stroke-linecap="round"/>
+<path d="M51 30C50 24 49 20 47 14" fill="none" stroke="${I}" stroke-width="4.5" stroke-linecap="round"/>
+<path d="M50 24C55 8 74 4 87 9C81 22 64 28 50 24Z" fill="#53b548" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M54 22C62 16 72 12 82 11" fill="none" stroke="#226b22" stroke-width="2" stroke-linecap="round"/>
+<ellipse cx="28" cy="48" rx="9" ry="5.5" fill="#fff" opacity=".55" transform="rotate(-30 28 48)"/><ellipse cx="72" cy="70" rx="7" ry="4" fill="#ff6f8f" opacity=".45" transform="rotate(-30 72 70)"/>`;
+      case 3: return `<defs><linearGradient id="${u}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#b878f0"/><stop offset=".5" stop-color="#7429b5"/><stop offset="1" stop-color="#3a0e63"/></linearGradient></defs>
+<path d="M66 24C83 26 87 45 74 61C61 77 39 93 23 88C9 84 12 65 27 55C41 46 48 26 66 24Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M57 35C49 45 39 55 27 63" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".45"/>
+<path d="M57 25C61 14 73 12 80 18C88 18 93 26 89 35C84 30 78 30 74 35C71 29 64 27 57 25Z" fill="#4fae3c" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M80 18C82 12 86 8 92 5" fill="none" stroke="${I}" stroke-width="7.5" stroke-linecap="round"/><path d="M80 18C82 12 86 8 92 5" fill="none" stroke="#62b03c" stroke-width="3.2" stroke-linecap="round"/>`;
+      case 4: return `<defs><linearGradient id="${u}g" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff4d6a"/><stop offset="1" stop-color="#b0001f"/></linearGradient></defs>
+<g transform="rotate(-9 50 56)">
+<path d="M8 53C18 35 32 29 42 35C46 37 48 40 50 40C52 40 54 37 58 35C68 29 82 35 92 53C78 57 64 55 50 56C36 55 22 57 8 53Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M8 53C22 58 36 58 50 58C64 58 78 58 92 53C82 73 66 83 50 83C34 83 18 73 8 53Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M12 54C30 59 70 59 88 54" fill="none" stroke="#5c0014" stroke-width="3" stroke-linecap="round"/>
+<path d="M30 65L32 73M42 67L43 77M58 67L57 77M70 65L68 73M34 41L36 47M66 41L64 47" stroke="#7a0019" stroke-width="1.6" stroke-linecap="round" opacity=".6"/>
+<ellipse cx="40" cy="69" rx="9" ry="3.4" fill="#fff" opacity=".6"/><ellipse cx="66" cy="43" rx="6" ry="2.4" fill="#fff" opacity=".5" transform="rotate(20 66 43)"/></g>`;
+      case 5: {
+        const ring = (cx) => `<circle cx="${cx}" cy="64" r="18" stroke="${I}" stroke-width="21" stroke-dasharray="0 6" stroke-linecap="round"/><circle cx="${cx}" cy="64" r="18" stroke="${I}" stroke-width="17"/><circle cx="${cx}" cy="64" r="18" stroke="#ff5fb0" stroke-width="16" stroke-dasharray="0 6" stroke-linecap="round"/><circle cx="${cx}" cy="64" r="18" stroke="#ff5fb0" stroke-width="12"/><circle cx="${cx}" cy="64" r="18" stroke="#ffc2e3" stroke-width="4.5" stroke-dasharray="0 5" stroke-linecap="round" stroke-dashoffset="2"/><circle cx="${cx}" cy="64" r="11.5" stroke="#c0357d" stroke-width="1.5"/>`;
+        return `<g fill="none">${ring(29)}${ring(71)}</g>
+<g fill="none" stroke-linecap="round"><ellipse cx="42" cy="37" rx="6" ry="3.8" stroke="${I}" stroke-width="6.5"/><ellipse cx="58" cy="37" rx="6" ry="3.8" stroke="${I}" stroke-width="6.5"/><ellipse cx="50" cy="35.5" rx="2.4" ry="5" stroke="${I}" stroke-width="5.5"/>
+<ellipse cx="42" cy="37" rx="6" ry="3.8" stroke="#e4e8ed" stroke-width="2.8"/><ellipse cx="58" cy="37" rx="6" ry="3.8" stroke="#e4e8ed" stroke-width="2.8"/><ellipse cx="50" cy="35.5" rx="2.4" ry="5" stroke="#c9cfd6" stroke-width="2.2"/></g>
+<rect x="23" y="34" width="13" height="10" rx="2.5" fill="#d9dee4" stroke="${I}" stroke-width="3"/><rect x="64" y="34" width="13" height="10" rx="2.5" fill="#d9dee4" stroke="${I}" stroke-width="3"/>`;
+      }
+      case 6: return `<defs><linearGradient id="${u}g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a5f"/><stop offset=".55" stop-color="#d0101f"/><stop offset="1" stop-color="#7d0610"/></linearGradient></defs>
+<path d="M15 52L29 56L24 93L19 93Z" fill="${I}" stroke="${I}" stroke-width="2.5" stroke-linejoin="round"/><path d="M22 58L25 59L22 90" fill="none" stroke="#ff5a5f" stroke-width="1.4" opacity=".7"/>
+<path d="M12 22C9 33 11 45 17 53C30 58 46 67 62 77C72 83 86 85 94 80C98 76 95 70 89 68C78 64 68 62 60 57C48 51 31 41 23 29C21 25 16 20 12 22Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M22 30C30 42 47 52 60 58C49 56 35 49 26 40Z" fill="#3a0508"/>
+<path d="M18 56C32 62 48 71 62 80C72 86 86 88 95 82" fill="none" stroke="${I}" stroke-width="3.5" stroke-linecap="round"/>
+<path d="M66 64C76 66 84 69 89 72" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" opacity=".75"/><path d="M14 30C13 38 15 45 19 50" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" opacity=".6"/>`;
+      case 7: {
+        const X = (cx) => `<path d="M${cx - 6.5} 57L${cx + 6.5} 73M${cx + 6.5} 57L${cx - 6.5} 73" stroke="${I}" stroke-width="8" stroke-linecap="round"/><path d="M${cx - 6.5} 57L${cx + 6.5} 73M${cx + 6.5} 57L${cx - 6.5} 73" stroke="#c8161d" stroke-width="4.2" stroke-linecap="round"/>`;
+        return `<defs><linearGradient id="${u}a" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6b8"/><stop offset="1" stop-color="#ffd43a"/></linearGradient><linearGradient id="${u}b" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffc21f"/><stop offset=".6" stop-color="#e09400"/><stop offset="1" stop-color="#a86400"/></linearGradient></defs>
+<path d="M21 31L79 31L93 50L7 50Z" fill="url(#${u}a)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M7 50L93 50L87 82L13 82Z" fill="url(#${u}b)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<path d="M26 36L60 36" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".8"/>
+<g fill="none">${X(30)}${X(50)}${X(70)}</g>
+<path d="${starPath(84, 24, 11, 3, 4, 0)}" fill="#fff" stroke="${I}" stroke-width="2" stroke-linejoin="round"/>`;
+      }
+      case 8: case 10: {
+        const open = k === 10;
+        const wild = text ? `<text x="50" y="${open ? 80 : 76}" text-anchor="middle" font-family="Anton, Impact, sans-serif" font-size="16" letter-spacing="1.5" fill="#fff6d0" stroke="${I}" stroke-width="1.2" paint-order="stroke" transform="rotate(-2.6 50 ${open ? 74 : 70})">WILD</text>` : '';
+        const halo = `<defs><radialGradient id="${u}h" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#fff6c0" stop-opacity="${open ? 1 : .9}"/><stop offset=".5" stop-color="#ffc83a" stop-opacity="${open ? .6 : .4}"/><stop offset="1" stop-color="#ffb000" stop-opacity="0"/></radialGradient><linearGradient id="${u}w" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#40404a"/><stop offset="1" stop-color="#121217"/></linearGradient><linearGradient id="${u}r" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#fff8d0" stop-opacity=".95"/><stop offset="1" stop-color="#ffd54a" stop-opacity="0"/></linearGradient></defs>`;
+        if (!open) {
+          return `${halo}<circle cx="50" cy="56" r="49" fill="url(#${u}h)"/>
+<path d="M38 33V25Q38 20 43 20H57Q62 20 62 25V33" fill="none" stroke="${I}" stroke-width="9" stroke-linecap="round"/><path d="M38 33V25Q38 20 43 20H57Q62 20 62 25V33" fill="none" stroke="#62626e" stroke-width="3.5" stroke-linecap="round"/>
+<rect x="10" y="32" width="80" height="55" rx="7" fill="url(#${u}w)" stroke="${I}" stroke-width="4"/>
+<rect x="9" y="44" width="82" height="9" fill="#ffd54a" opacity=".45"/><rect x="12" y="47" width="76" height="3.4" fill="#fff0a0"/>
+<rect x="22" y="42.5" width="10" height="11" rx="2" fill="#ffcf4a" stroke="${I}" stroke-width="2.5"/><rect x="68" y="42.5" width="10" height="11" rx="2" fill="#ffcf4a" stroke="${I}" stroke-width="2.5"/>
+<path d="M6 63L94 59L94 77L6 81Z" fill="#c8161d" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/>${wild}`;
+        }
+        return `${halo}<defs><linearGradient id="${u}l" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a0815"/><stop offset=".55" stop-color="#b3301f"/><stop offset="1" stop-color="#ffd54a"/></linearGradient><linearGradient id="${u}m" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8c1530"/><stop offset="1" stop-color="#fff0a0"/></linearGradient></defs>
+<circle cx="50" cy="50" r="50" fill="url(#${u}h)"/>
+<g><path d="M50 52L10 0H30Z" fill="url(#${u}r)"/><path d="M50 52L40 0H60Z" fill="url(#${u}r)"/><path d="M50 52L70 0H90Z" fill="url(#${u}r)"/><path d="M50 52L0 8V28Z" fill="url(#${u}r)"/><path d="M50 52L100 8V28Z" fill="url(#${u}r)"/></g>
+<path d="M12 51L21 16H79L88 51Z" fill="url(#${u}l)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/><path d="M20 47L27 22H73L80 47Z" fill="url(#${u}m)"/>
+<ellipse cx="50" cy="51" rx="44" ry="10" fill="#ffe27a" opacity=".7"/><ellipse cx="50" cy="51" rx="40" ry="6.5" fill="#fffdf0" stroke="${I}" stroke-width="2"/><ellipse cx="50" cy="51" rx="26" ry="3.2" fill="#ffd54a"/>
+<path d="${starPath(30, 30, 7, 1.8, 4, 0)}" fill="#fff" stroke="${I}" stroke-width="1.5"/><path d="${starPath(73, 24, 5, 1.4, 4, 0)}" fill="#fff" stroke="${I}" stroke-width="1.2"/>
+<rect x="10" y="51" width="80" height="37" rx="6" fill="url(#${u}w)" stroke="${I}" stroke-width="4"/>
+<rect x="22" y="51" width="10" height="9" rx="2" fill="#ffcf4a" stroke="${I}" stroke-width="2.5"/><rect x="68" y="51" width="10" height="9" rx="2" fill="#ffcf4a" stroke="${I}" stroke-width="2.5"/>
+<path d="M6 67L94 63L94 81L6 85Z" fill="#c8161d" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/>${wild}`;
+      }
+      case 9: return `<defs><linearGradient id="${u}g" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#b87a00"/><stop offset=".33" stop-color="#ffe680"/><stop offset=".55" stop-color="#ffc21f"/><stop offset="1" stop-color="#995c00"/></linearGradient></defs>
+<g fill="none" stroke-linecap="round"><path d="M27 25C9 23 9 50 33 50M73 25C91 23 91 50 67 50" stroke="${I}" stroke-width="9"/><path d="M27 25C9 23 9 50 33 50M73 25C91 23 91 50 67 50" stroke="#ffc21f" stroke-width="4"/></g>
+<path d="M23 15H77L73 44C70 56 61 62 50 62C39 62 30 56 27 44Z" fill="url(#${u}g)" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<ellipse cx="50" cy="15" rx="27" ry="4.5" fill="#fff3a0" stroke="${I}" stroke-width="3"/>
+<path d="M44 62H56L55 73H45Z" fill="url(#${u}g)" stroke="${I}" stroke-width="3.5" stroke-linejoin="round"/>
+<path d="M29 73H71L76 89H24Z" fill="#3a1a0c" stroke="${I}" stroke-width="4" stroke-linejoin="round"/>
+<rect x="35" y="77" width="30" height="8.5" rx="1.5" fill="#ffcf4a" stroke="${I}" stroke-width="2"/>
+<path d="${starPath(50, 36, 11, 4.6)}" fill="#c8161d" stroke="${I}" stroke-width="2.5" stroke-linejoin="round"/>
+<path d="M31 21C32 33 35 43 41 51" fill="none" stroke="#fff" stroke-width="3.4" stroke-linecap="round" opacity=".75"/>
+${text ? `<text x="50" y="84" text-anchor="middle" font-family="Anton, Impact, sans-serif" font-size="7.5" letter-spacing=".8" fill="${I}">TWIST</text>` : ''}`;
+      default: return '';
+    }
+  }
+  let uidN = 0;
+  const svgDoc = (k) => `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="200" height="200">${art(k, 's' + k, false)}</svg>`;
+  const svgInline = (k) => `<svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">${art(k, 'i' + (uidN++), true)}</svg>`;
+
+  /* ---------- Sprites: SVG -> bitmap once per size, plus a vertical smear for motion blur ---------- */
+  let imgs = null;
+  let sprites = null;
+  function loadImage(svg) {
+    return new Promise((resolve, reject) => {
+      const im = new Image();
+      im.onload = () => resolve(im);
+      im.onerror = reject;
+      im.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
+    });
+  }
+  let antonOk = !document.fonts;
+  async function loadArt() {
+    const fonts = document.fonts ? Promise.race([document.fonts.load('40px Anton').then(() => { antonOk = document.fonts.check('40px Anton'); }), C.sleep(2000)]).catch(() => {}) : Promise.resolve();
+    const list = await Promise.all([...Array(11).keys()].map((k) => loadImage(svgDoc(k))));
+    await fonts;
+    return list;
+  }
+  function wildLabel(g, S, open) {
+    g.save();
+    g.translate(S * 0.5, S * (open ? 0.742 : 0.702));
+    g.rotate(-0.045);
+    g.font = `${Math.round(S * 0.16)}px Anton, Impact, "Arial Narrow", sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    try { g.letterSpacing = `${Math.round(S * 0.014)}px`; } catch { /* older canvas */ }
+    g.lineJoin = 'round';
+    g.lineWidth = Math.max(2, S * 0.028);
+    g.strokeStyle = INK;
+    g.strokeText('WILD', 0, S * 0.006);
+    g.fillStyle = '#fff6d0';
+    g.fillText('WILD', 0, S * 0.006);
+    g.restore();
+  }
+  function buildSprites(S) {
+    const sharp = [];
+    const blur = [];
+    const m = S * 0.03;
+    const s = S - 2 * m;
+    for (let k = 0; k < 11; k++) {
+      const c = document.createElement('canvas');
+      c.width = c.height = S;
+      const g = c.getContext('2d');
+      if (k !== WILD && k !== OPEN) {
+        // print misregistration: a red ghost of the art, offset down-right
+        const t = document.createElement('canvas');
+        t.width = t.height = S;
+        const tg = t.getContext('2d');
+        tg.drawImage(imgs[k], m, m, s, s);
+        tg.globalCompositeOperation = 'source-in';
+        tg.fillStyle = '#d0161f';
+        tg.fillRect(0, 0, S, S);
+        g.globalAlpha = 0.3;
+        g.drawImage(t, S * 0.03, S * 0.032);
+        g.globalAlpha = 1;
+      }
+      g.drawImage(imgs[k], m, m, s, s);
+      if (k === WILD || k === OPEN) wildLabel(g, S, k === OPEN);
+      sharp.push(c);
+      const b = document.createElement('canvas');
+      b.width = S;
+      b.height = Math.round(S * 1.6);
+      const bg = b.getContext('2d');
+      bg.globalAlpha = 0.24;
+      for (let i = 0; i < 7; i++) bg.drawImage(c, 0, (b.height - S) / 2 + (i / 6 - 0.5) * S * 0.52);
+      blur.push(b);
+    }
+    return { S, sharp, blur };
+  }
+
+  /* ---------- Reel window geometry ---------- */
+  const view = { W: 0, H: 0, dpr: 1, cw: 0, ch: 0 };
+  let bgCache = null;
+  let halftone = null;
+  function resize() {
+    const r = els.canvas.getBoundingClientRect();
+    if (!r.width || !r.height) return;
+    view.dpr = Math.min(2, window.devicePixelRatio || 1);
+    const W = Math.round(r.width * view.dpr);
+    const H = Math.round(r.height * view.dpr);
+    if (W === view.W && H === view.H && sprites) return;
+    view.W = W;
+    view.H = H;
+    els.canvas.width = W;
+    els.canvas.height = H;
+    view.cw = W / 5;
+    view.ch = H / 3;
+    bgCache = null;
+    redraw();
+    if (imgs) {
+      const S = Math.round(Math.min(view.cw * 0.92, view.ch * 0.84));
+      if (!sprites || sprites.S !== S) sprites = buildSprites(S);
+    }
+  }
+  function reelBg() {
+    if (bgCache && bgCache.twist === twistOn) return bgCache.canvas;
+    const { W, H, cw, dpr } = view;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d');
+    const grad = g.createLinearGradient(0, 0, 0, H);
+    const stops = twistOn ? ['#7d5fc0', '#efd6ff', '#fff3fc', '#efd6ff', '#7d5fc0'] : ['#bfa576', '#f2e1b8', '#fcf2d8', '#f2e1b8', '#bfa576'];
+    [0, 0.14, 0.5, 0.86, 1].forEach((o, i) => grad.addColorStop(o, stops[i]));
+    g.fillStyle = grad;
+    g.fillRect(0, 0, W, H);
+    if (!halftone) {
+      const t = document.createElement('canvas');
+      t.width = t.height = 8;
+      const tg = t.getContext('2d');
+      tg.fillStyle = '#000';
+      tg.beginPath();
+      tg.arc(4, 4, 1.25, 0, TAU);
+      tg.fill();
+      halftone = t;
+    }
+    g.globalAlpha = twistOn ? 0.06 : 0.08;
+    g.fillStyle = g.createPattern(halftone, 'repeat');
+    g.fillRect(0, 0, W, H);
+    g.globalAlpha = 1;
+    for (let i = 1; i < 5; i++) {
+      const x = Math.round(i * cw);
+      g.fillStyle = INK;
+      g.fillRect(x - dpr, 0, 2 * dpr, H);
+      g.fillStyle = 'rgba(255,255,255,.5)';
+      g.fillRect(x + dpr, 0, dpr, H);
+    }
+    bgCache = { canvas: c, twist: twistOn };
+    return c;
+  }
+  const cellPt = (c, r) => {
+    const b = els.canvas.getBoundingClientRect();
+    return { x: b.left + ((c + 0.5) * b.width) / 5, y: b.top + ((r + 0.5) * b.height) / 3 };
+  };
+
+  /* ---------- Reels: analytic motion so a paused tab or a slow frame never desyncs a stop ---------- */
+  const CFG = {
+    normal: { tw: 0.13, ta: 0.22, vmax: 22, tn: 0.42, over: 0.3, t2: 0.42, k: 9, w: TAU / 0.26, first: 0.62, stag: 0.19, antic: 1.15, anticTn: 1.05 },
+    turbo: { tw: 0.06, ta: 0.1, vmax: 30, tn: 0.3, over: 0.2, t2: 0.26, k: 13, w: TAU / 0.18, first: 0.26, stag: 0.075, antic: 0.8, anticTn: 0.75 },
+  };
+  const mod = (a, n) => ((a % n) + n) % n;
+  const reels = PF.STRIPS.map((strip, c) => ({
+    c, strip, L: strip.length, p: rng.int(strip.length), oldOff: 0, newOff: 0, split: -Infinity,
+    phase: 'idle', v: 0, landed: true, antic: false, cue: false, flashT: -9, lastIdx: 0,
+  }));
+  const symAt = (R, i) => R.strip[mod(i + (i < R.split ? R.newOff : R.oldOff), R.L)];
+  function runPos(R, t) {
+    const { tw, ta, vmax } = R.cfg;
+    const A = RM() ? 0 : 0.3;
+    const dt = t - R.t0;
+    if (dt <= 0) return { p: R.p0, v: 0 };
+    if (dt < tw) return { p: R.p0 + A * Math.sin((Math.PI / 2) * (dt / tw)), v: -1 };
+    const u = dt - tw;
+    if (u < ta) return { p: R.p0 + A - (0.5 * vmax * u * u) / ta, v: (vmax * u) / ta };
+    return { p: R.p0 + A - 0.5 * vmax * ta - vmax * (u - ta), v: vmax };
+  }
+  function beginStop(R, ts) {
+    const s = runPos(R, ts);
+    const v = R.cfg.vmax;
+    R.ps = s.p;
+    R.pf = Math.floor(R.ps - Math.max(4.5, (v * R.tn) / 2));
+    R.D = R.ps - R.pf;
+    R.o = RM() ? 0.06 : R.cfg.over * (R.antic ? 0.75 : 1);
+    R.td1 = (2 * (R.D + R.o)) / v;
+    R.newOff = R.target - R.pf; // rows pf..pf+2 now show strip[target..target+2]
+    R.split = Math.floor(R.ps) - 1; // only rows still above the window switch to the new strip phase
+    R.ts = ts;
+    R.lastIdx = Math.floor(R.ps);
+    R.phase = 'stop1';
+  }
+  function settleReel(R) {
+    R.phase = 'idle';
+    R.p = mod(R.target, R.L);
+    R.oldOff = 0;
+    R.newOff = 0;
+    R.split = -Infinity;
+    R.v = 0;
+  }
+  let spinResolve = null;
+  let spinGrid = null;
+  let scatSeen = 0;
+  let anticOn = false;
+  let heartTimer = 0;
+  function startReels(res) {
+    const cfg = turbo ? CFG.turbo : CFG.normal;
+    const now = performance.now() / 1000;
+    let count = 0;
+    let extra = 0;
+    spinGrid = res.grid;
+    scatSeen = 0;
+    reels.forEach((R, c) => {
+      if (R.phase !== 'idle') settleReel(R); // still bouncing from the last stop: snap home first
+      R.antic = count >= 2;
+      if (res.grid[c].includes(SCAT)) count++;
+      if (R.antic) extra += cfg.antic;
+      R.cfg = cfg;
+      R.target = res.stops[c];
+      R.t0 = now + c * 0.035;
+      R.p0 = R.p;
+      R.oldOff = 0;
+      R.split = -Infinity;
+      R.tn = R.antic ? cfg.anticTn : cfg.tn;
+      R.stopAt = R.t0 + cfg.first + c * cfg.stag + extra;
+      R.phase = 'run';
+      R.landed = false;
+      R.cue = false;
+    });
+    return new Promise((resolve) => { spinResolve = resolve; });
+  }
+  function quickStop() {
+    const now = performance.now() / 1000;
+    let k = 0;
+    let extra = 0;
+    for (const R of reels) {
+      if (R.phase !== 'run') continue;
+      const cruise = R.t0 + R.cfg.tw + R.cfg.ta;
+      if (R.antic) extra += 0.4;
+      R.stopAt = Math.max(now, cruise) + k * 0.06 + extra;
+      R.tn = R.antic ? 0.6 : R.cfg.tn * 0.8;
+      k++;
+    }
+    if (k) sfx.tone({ freq: 1200, to: 500, type: 'square', dur: 0.05, vol: 0.05 });
+  }
+  function onThunk(R) {
+    R.landed = true;
+    R.flashT = aclock;
+    const col = spinGrid[R.c];
+    sfx.thud(0.92 + R.c * 0.07);
+    sfx.tone({ freq: 900 + R.c * 90, to: 320, type: 'square', dur: 0.03, vol: 0.05, filter: { type: 'lowpass', freq: 2600 } });
+    buzz(8);
+    fx.shake(R.antic ? 5 : 2.2, R.antic ? 220 : 120);
+    const rS = col.indexOf(SCAT);
+    if (rS >= 0) {
+      scatSeen++;
+      [0, 4, 7].forEach((s, i) => sfx.tone({ freq: 784 * 2 ** ((s + scatSeen * 3) / 12), type: 'triangle', dur: 0.32, vol: 0.1, delay: i * 0.05 }));
+      sfx.spark();
+      fx.burst(cellPt(R.c, rS), { type: 'star', count: 10 + scatSeen * 4, speed: [140, 420] });
+      cellAnim[R.c][rS] = { kind: 'twirl', t0: aclock, dur: 0.8, amp: 0.7 };
+    }
+    const rW = col.indexOf(WILD);
+    if (rW >= 0) {
+      sfx.tone({ freq: 110, to: 220, type: 'sawtooth', dur: 0.32, vol: 0.06, filter: { type: 'lowpass', freq: 600, to: 2400 } });
+      sfx.tone({ freq: 1318, dur: 0.45, vol: 0.045, delay: 0.06 });
+      fx.burst(cellPt(R.c, rW), { type: 'spark', count: 12, speed: [200, 520] });
+    }
+    cueAnticipation();
+  }
+  function cueAnticipation() {
+    const next = reels.find((R) => !R.landed);
+    for (const R of reels) R.cue = false;
+    if (next && next.antic && scatSeen >= 2) {
+      next.cue = true;
+      // the trophies already down throb in the spotlight until the round decides
+      for (const R of reels) {
+        if (!R.landed) continue;
+        const r = spinGrid[R.c].indexOf(SCAT);
+        if (r < 0) continue;
+        const a = cellAnim[R.c][r];
+        const throb = { kind: 'throb', t0: aclock, dur: 60, amp: 1 };
+        if (a && a.kind === 'twirl') { throb.t0 = a.t0 + a.dur; a.then = throb; } else if (!a || (a.kind !== 'throb' && !a.then)) cellAnim[R.c][r] = throb;
+      }
+      if (!anticOn) {
+        anticOn = true;
+        els.win.classList.add('antic');
+        if (!RM()) els.juke.classList.add('pushin');
+        setMsg(scatSeen >= 3 ? 'Encore! Can it get any hotter?' : 'Two trophies... one more, don\'t you dare stop now', 'good');
+        sfx.heartbeat();
+        buzz([12, 160, 12]);
+        heartTimer = setInterval(() => { sfx.heartbeat(); buzz(12); }, 560);
+      }
+      const left = Math.max(0.4, next.stopAt - performance.now() / 1000 + next.tn);
+      sfx.riser(Math.min(2.4, left));
+    } else stopAnticipation();
+  }
+  function stopAnticipation() {
+    if (!anticOn) return;
+    anticOn = false;
+    clearInterval(heartTimer);
+    els.win.classList.remove('antic');
+    els.juke.classList.remove('pushin');
+    for (const R of reels) R.cue = false;
+    for (const col of cellAnim) {
+      for (let r = 0; r < 3; r++) {
+        const a = col[r];
+        if (a && (a.kind === 'throb' || (a.then && a.then.kind === 'throb'))) col[r] = null;
+      }
+    }
+  }
+  function updateReels(nowMs) {
+    const now = nowMs / 1000;
+    let spinning = 0;
+    let vsum = 0;
+    for (const R of reels) {
+      if (R.phase === 'idle') continue;
+      if (R.phase === 'run') {
+        const ts = Math.max(R.stopAt, R.t0 + R.cfg.tw + R.cfg.ta);
+        if (now >= ts) beginStop(R, ts);
+        else {
+          const s = runPos(R, now);
+          R.p = s.p;
+          R.v = s.v;
+        }
+      }
+      if (R.phase === 'stop1') {
+        const u = (now - R.ts) / R.td1;
+        if (u >= 1) {
+          R.phase = 'stop2';
+          R.tb = R.ts + R.td1;
+          R.p = R.pf - R.o;
+          onThunk(R);
+        } else {
+          R.p = R.ps - (R.D + R.o) * (1 - (1 - u) ** 2);
+          R.v = (2 * (R.D + R.o) * (1 - u)) / R.td1;
+          const idx = Math.floor(R.p);
+          if (idx !== R.lastIdx) {
+            R.lastIdx = idx;
+            if (R.v < 11) sfx.tone({ freq: 1500 + (11 - R.v) * 60, type: 'square', dur: 0.012, vol: R.antic ? 0.05 : 0.028, filter: { type: 'highpass', freq: 700 } });
+          }
+        }
+      }
+      if (R.phase === 'stop2') {
+        const tau = now - R.tb;
+        if (tau >= R.cfg.t2) settleReel(R);
+        else {
+          R.p = R.pf - R.o * Math.exp(-R.cfg.k * tau) * Math.cos(R.cfg.w * tau);
+          R.v = 0;
+        }
+      }
+      if (R.phase === 'run' || R.phase === 'stop1') {
+        spinning++;
+        vsum += Math.max(0, R.v);
+      }
+    }
+    whirr(spinning ? 0.02 + 0.05 * (spinning / 5) : 0, spinning ? vsum / spinning : 0);
+    if (spinResolve && reels.every((R) => R.landed)) {
+      const done = spinResolve;
+      spinResolve = null;
+      stopAnticipation();
+      done();
+    }
+  }
+
+  /* ---------- Audio beds: reel whirr and the Twist Contest loop ---------- */
+  let whirrNode = null;
+  function whirr(level, speed) {
+    const c = sfx.ctx();
+    if (!c || !sfx.out) return;
+    if (!whirrNode) {
+      if (level <= 0) return;
+      const buf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+      const src = c.createBufferSource();
+      src.buffer = buf;
+      src.loop = true;
+      const f = c.createBiquadFilter();
+      f.type = 'bandpass';
+      f.Q.value = 1.2;
+      const g = c.createGain();
+      g.gain.value = 0;
+      src.connect(f).connect(g).connect(sfx.out);
+      src.start();
+      whirrNode = { src, f, g, level: 0, quietSince: 0 };
+    }
+    if (level === 0) {
+      // silent for a moment: stop the noise source so nothing keeps running while the machine idles
+      if (whirrNode.level === 0) {
+        if (c.currentTime - whirrNode.quietSince > 0.6) {
+          try { whirrNode.src.stop(); } catch { /* already stopped */ }
+          whirrNode.src.disconnect();
+          whirrNode.g.disconnect();
+          whirrNode = null;
+        }
+        return;
+      }
+      whirrNode.quietSince = c.currentTime;
+    }
+    whirrNode.level = level;
+    whirrNode.g.gain.setTargetAtTime(level, c.currentTime, 0.06);
+    whirrNode.f.frequency.setTargetAtTime(260 + speed * 38, c.currentTime, 0.06);
+  }
+  const music = (() => {
+    const BPM = 152;
+    const S8 = 60 / BPM / 2;
+    const ROOT = [45, 45, 50, 52, 45, 45, 52, 50];
+    const WALK = [0, 4, 7, 9, 10, 9, 7, 4];
+    const mtof = (m) => 440 * 2 ** ((m - 69) / 12);
+    let bus = null;
+    let timer = 0;
+    let next = 0;
+    let step = 0;
+    let want = false;
+    function sched() {
+      const c = sfx.ctx();
+      if (!c || !bus) return;
+      if (next < c.currentTime) next = c.currentTime + 0.03;
+      while (next < c.currentTime + 0.22) {
+        const t = next - c.currentTime;
+        const beat = step % 8;
+        const root = ROOT[Math.floor(step / 8) % ROOT.length];
+        sfx.tone({ freq: mtof(root + WALK[beat]), type: 'square', dur: S8 * 0.85, vol: 0.09, delay: t, dest: bus, filter: { type: 'lowpass', freq: 700 } });
+        if (beat === 0 || beat === 4) sfx.tone({ freq: 130, to: 45, dur: 0.14, vol: 0.32, delay: t, dest: bus });
+        if (beat === 2 || beat === 6) {
+          sfx.noise({ type: 'bandpass', freq: 1900, q: 0.8, dur: 0.11, vol: 0.16, delay: t, dest: bus });
+          sfx.tone({ freq: 210, to: 160, type: 'triangle', dur: 0.06, vol: 0.08, delay: t, dest: bus });
+        }
+        sfx.noise({ type: 'highpass', freq: 7500, dur: 0.025, vol: beat % 2 ? 0.05 : 0.03, delay: t, dest: bus });
+        if (beat % 2 === 1) for (const n of [12, 16, 19]) sfx.tone({ freq: mtof(root + n), type: 'triangle', dur: 0.07, vol: 0.028, delay: t, dest: bus });
+        if (step % 32 === 28) [24, 28, 31, 36].forEach((n, i) => sfx.tone({ freq: mtof(root + n), type: 'sawtooth', dur: 0.1, vol: 0.025, delay: t + i * S8 * 0.5, dest: bus, filter: { type: 'lowpass', freq: 2600 } }));
+        next += S8;
+        step++;
+      }
+    }
+    function run() {
+      const c = sfx.ctx();
+      if (!c || !sfx.out || timer) return;
+      if (!bus) {
+        bus = c.createGain();
+        bus.connect(sfx.out);
+      }
+      bus.gain.cancelScheduledValues(c.currentTime);
+      bus.gain.setValueAtTime(0.0001, c.currentTime);
+      bus.gain.exponentialRampToValueAtTime(0.55, c.currentTime + 0.5);
+      next = c.currentTime + 0.05;
+      timer = setInterval(sched, 40);
+      sched();
+    }
+    function halt(fade = 0.5) {
+      clearInterval(timer);
+      timer = 0;
+      const c = sfx.ctx();
+      if (c && bus) {
+        bus.gain.cancelScheduledValues(c.currentTime);
+        bus.gain.setTargetAtTime(0.0001, c.currentTime, fade / 3);
+      }
+    }
+    return {
+      start() { want = true; step = 0; run(); },
+      stop() { want = false; halt(); },
+      pause() { halt(0.1); },
+      resume() { if (want) run(); },
+    };
+  })();
+
+  /* ---------- Symbol sounds and particles ---------- */
+  const SYM_FX = [
+    (at) => { sfx.pop(1.15); setTimeout(() => sfx.pop(1.4), 90); fx.burst(at, { type: 'heart', count: 6, speed: [120, 300] }); },
+    (at) => { sfx.tone({ freq: 480, to: 1500, dur: 0.22, vol: 0.09 }); sfx.tone({ freq: 1500, to: 900, dur: 0.18, vol: 0.07, delay: 0.22 }); fx.burst(at, { type: 'star', count: 7, colors: ['#fff38a', '#ffd21f'] }); },
+    (at) => { sfx.boing(1.15); fx.burst(at, { type: 'heart', count: 7, speed: [140, 320], colors: ['#ff8f8f', '#ffb08a', '#ff5f8f'] }); },
+    (at) => { sfx.boing(0.72); fx.burst(at, { type: 'smoke', count: 5, colors: ['rgba(255,255,255,.55)'] }); },
+    (at) => { sfx.kiss(); setTimeout(() => sfx.kiss(), 260); fx.burst(at, { type: 'kiss', count: 7, speed: [160, 380] }); setTimeout(() => fx.burst(at, { type: 'kiss', count: 5, speed: [140, 320] }), 300); },
+    (at) => { for (let i = 0; i < 5; i++) { sfx.noise({ type: 'highpass', freq: 5000 + Math.random() * 2000, dur: 0.035, vol: 0.09, delay: i * 0.055 }); sfx.tone({ freq: 2600 + Math.random() * 900, dur: 0.06, vol: 0.03, delay: i * 0.055 }); } fx.burst(at, { type: 'heart', count: 6, speed: [120, 300], colors: ['#ff5fb0', '#ffc2e3'] }); },
+    (at) => { setTimeout(() => { sfx.thud(0.8); sfx.tone({ freq: 2800, type: 'square', dur: 0.025, vol: 0.05 }); fx.burst({ x: at.x - 12, y: at.y + 22 }, { type: 'spark', count: 14, angle: -Math.PI / 2, spread: 2.2 }); }, 230); },
+    (at) => { [2093, 2637, 3136, 4186].forEach((f, i) => sfx.tone({ freq: f, dur: 0.4, vol: 0.05, delay: i * 0.04 })); fx.burst(at, { type: 'star', count: 10 }); },
+    (at) => {
+      sfx.tone({ freq: 140, to: 210, type: 'sawtooth', dur: 0.18, vol: 0.05, filter: { type: 'lowpass', freq: 900 } });
+      [523, 659, 784, 988].forEach((f) => sfx.tone({ freq: f, type: 'triangle', dur: 0.9, vol: 0.045, attack: 0.25, delay: 0.1 }));
+      sfx.noise({ type: 'highpass', freq: 6000, dur: 0.8, vol: 0.04, attack: 0.3, delay: 0.1 });
+      fx.burst(at, { type: 'star', count: 14, colors: ['#fff6c8', '#ffcf4a'] });
+      fx.burst(at, { type: 'spark', count: 12 });
+    },
+    (at) => { [523, 659, 784, 1046].forEach((f, i) => sfx.tone({ freq: f, type: 'triangle', dur: 0.2, vol: 0.08, delay: i * 0.08 })); fx.burst(at, { type: 'confetti', count: 14, speed: [200, 500] }); },
+  ];
+
+  /* ---------- Win presentation state (drawn on the canvas) ---------- */
+  const cellAnim = reels.map(() => [null, null, null]);
+  const present = { active: false, lines: [], cells: new Set(), cycle: false, focus: -1, nextCycle: 0, scat: null };
+  function clearPresent() {
+    present.active = false;
+    present.lines = [];
+    present.cells.clear();
+    present.cycle = false;
+    present.focus = -1;
+    present.scat = null;
+    for (const col of cellAnim) col.fill(null);
+    redraw();
+  }
+  function animCell(c, r, kind, delay = 0, amp = 1, dur = 1.15) {
+    cellAnim[c][r] = { kind, t0: aclock + delay, dur, amp };
+  }
+  function linePts(line) {
+    const { cw, ch, W } = view;
+    const pts = line.map((r, c) => [c * cw + cw / 2, r * ch + ch / 2]);
+    return [[2, pts[0][1]], ...pts, [W - 2, pts[4][1]]];
+  }
+
+  /* ---------- Animation clock and hit-stop ---------- */
+  let aclock = 0;
+  let lastFrame = performance.now();
+  let freezeUntil = 0;
+  function hitStop(ms) {
+    freezeUntil = performance.now() + (RM() ? ms * 0.4 : ms);
+    fx.anim(els.win, 'punch');
+  }
+
+  /* ---------- Drawing ---------- */
+  function symTransform(a, t, S) {
+    // returns { sx, sy, rot, dx, dy, pivot, open, glow } for an in-character animation
+    const o = { sx: 1, sy: 1, rot: 0, dx: 0, dy: 0, pivot: 0, open: false, glow: 0, alpha: 1 };
+    if (!a) return o;
+    if (a.then && t - a.t0 > a.dur) a = a.then; // chained: e.g. a landing twirl that turns into a spotlight throb
+    const u = t - a.t0;
+    if (u < 0) return o;
+    if (u > a.dur) {
+      if (a.kind === 'open' && a.stay) { o.open = true; o.glow = 0.55; }
+      if (a.kind === 'droop') { o.sy = 0.8; o.alpha = 0.6; o.pivot = 1; }
+      return o;
+    }
+    const A = a.amp * (RM() ? 0.4 : 1);
+    const e = (1 - u / a.dur) ** 1.4;
+    switch (a.kind) {
+      case 'bounce': {
+        const b = Math.abs(Math.sin(u * Math.PI * 3.2));
+        o.dy = -b * 0.17 * S * e * A;
+        o.sy = 1 + (b - 0.5) * 0.16 * e * A;
+        o.sx = 1 / o.sy;
+        o.pivot = 1;
+        break;
+      }
+      case 'sway': o.rot = 0.34 * Math.sin(u * 9) * e * A; o.pivot = 1; o.sx = 1 + 0.05 * Math.sin(u * 18) * e * A; break;
+      case 'jiggle': {
+        const j = Math.sin(u * 24) * e * A;
+        o.sx = 1 + 0.17 * j;
+        o.sy = 1 - 0.17 * j;
+        o.pivot = 1;
+        break;
+      }
+      case 'wobble': o.rot = 0.4 * Math.sin(u * 11) * e * A; o.sy = 1 + 0.07 * Math.sin(u * 22) * e * A; o.pivot = 1; break;
+      case 'kiss': {
+        const k = Math.max(0, Math.sin(u * 8));
+        o.sx = o.sy = 1 + 0.26 * k * e * A;
+        o.rot = -0.12 * k * e * A;
+        break;
+      }
+      case 'rattle': o.dx = Math.sin(u * 70) * 0.05 * S * e * A; o.rot = 0.13 * Math.sin(u * 53) * e * A; break;
+      case 'stomp': {
+        o.pivot = 1;
+        if (u < 0.2) { const k = u / 0.2; o.dy = -0.2 * S * k * A; o.rot = -0.28 * k * A; }
+        else if (u < 0.26) { const k = 1 - (u - 0.2) / 0.06; o.dy = -0.2 * S * k * A; o.rot = -0.28 * k * A; }
+        else { const v = u - 0.26; const s = Math.exp(-v * 7) * Math.cos(v * 26); o.sy = 1 - 0.2 * s * A; o.sx = 1 + 0.12 * s * A; }
+        break;
+      }
+      case 'shine': o.sx = o.sy = 1 + 0.12 * Math.sin(u * 10) * e * A; o.glow = e * A; break;
+      case 'open': o.open = true; o.sx = o.sy = 1 + 0.18 * Math.max(0, Math.sin(u * 7)) * e * A + 0.04 * A; o.glow = Math.min(1, u * 4) * A; break;
+      case 'twirl': {
+        const f = Math.cos(Math.min(1, u / Math.min(a.dur, 0.9)) * TAU * 2);
+        o.sx = Math.sign(f || 1) * Math.max(0.12, Math.abs(f));
+        o.sy = 1 + 0.12 * Math.sin(u * 12) * e * A;
+        o.glow = e * A * 0.8;
+        break;
+      }
+      case 'wink': o.sx = o.sy = 1 + 0.06 * Math.sin(u * 12) * e; break;
+      case 'throb': { const s = Math.sin(u * 9.5); o.sx = o.sy = 1 + (0.04 + 0.05 * s) * A; o.glow = 0.6 + 0.4 * s; o.rot = 0.05 * Math.sin(u * 4.75) * A; break; }
+      case 'droop': { const k = Math.min(1, u / 0.5); o.sy = 1 - 0.2 * k; o.alpha = 1 - 0.4 * k; o.pivot = 1; o.rot = 0.12 * Math.sin(u * 5) * (1 - k); break; }
+      default: break;
+    }
+    return o;
+  }
+  function drawGlint(g, x, y, s, k) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(k * 1.6);
+    g.scale(s * k, s * k);
+    g.fillStyle = '#fff';
+    g.strokeStyle = INK;
+    g.lineWidth = 0.08;
+    g.beginPath();
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * TAU;
+      const r = i % 2 ? 0.25 : 1;
+      g.lineTo(Math.cos(a) * r, Math.sin(a) * r);
+    }
+    g.closePath();
+    g.fill();
+    g.stroke();
+    g.restore();
+  }
+  function draw() {
+    const g = ctx;
+    const { W, H, cw, ch, dpr } = view;
+    if (!W || !sprites) return;
+    const S = sprites.S;
+    const t = aclock;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalAlpha = 1;
+    g.globalCompositeOperation = 'source-over';
+    g.drawImage(reelBg(), 0, 0);
+
+    // anticipation: the reel still to stop pulses gold
+    for (const R of reels) {
+      if (!R.cue) continue;
+      const pulse = 0.5 + 0.5 * Math.sin(t * 12);
+      const x0 = R.c * cw;
+      const grd = g.createLinearGradient(x0, 0, x0 + cw, 0);
+      grd.addColorStop(0, `rgba(255,190,40,${0.55 + pulse * 0.3})`);
+      grd.addColorStop(0.5, `rgba(255,236,160,${0.15 + pulse * 0.15})`);
+      grd.addColorStop(1, `rgba(255,190,40,${0.55 + pulse * 0.3})`);
+      g.fillStyle = grd;
+      g.fillRect(x0, 0, cw, H);
+    }
+    // just-landed column flash
+    for (const R of reels) {
+      const k = 1 - (t - R.flashT) / 0.22;
+      if (k > 0) {
+        g.fillStyle = `rgba(255,255,255,${0.35 * k})`;
+        g.fillRect(R.c * cw, 0, cw, H);
+      }
+    }
+
+    const showing = present.active;
+    const items = [];
+    for (const R of reels) {
+      const x = R.c * cw + cw / 2;
+      const base = Math.floor(R.p);
+      const mix = R.phase === 'idle' || R.phase === 'stop2' ? 0 : clamp((Math.abs(R.v) - 3) / 11, 0, 1);
+      const rest = R.phase === 'idle' ? R.p : R.phase === 'stop2' ? R.pf : null;
+      for (let i = base - 1; i <= base + 3; i++) {
+        const y = (i - R.p) * ch;
+        if (y > H || y + ch < 0) continue;
+        const k = symAt(R, i);
+        const cy = y + ch / 2;
+        let a = null;
+        let alpha = 1;
+        let row = -1;
+        if (rest !== null) {
+          row = i - Math.round(rest);
+          if (row >= 0 && row < 3) {
+            a = cellAnim[R.c][row];
+            if (showing && !present.cells.has(R.c * 3 + row)) alpha = 0.38;
+          }
+        }
+        items.push({ k, x, y: cy, mix, alpha, a, o: symTransform(a, t, S), still: R.phase === 'idle' || R.phase === 'stop2' });
+      }
+    }
+    // two passes: every briefcase glow first, so a glow never washes over a neighbour drawn earlier
+    for (const it of items) if (it.k === WILD && it.mix < 0.5) drawWildGlow(g, it, S, t);
+    for (const it of items) drawSymbol(g, it, S, t);
+
+    // anticipation: house lights down on the landed reels, spotlight on the trophies
+    if (anticOn && spinGrid) {
+      const k = 0.3 + 0.06 * Math.sin(t * 9.5);
+      g.fillStyle = `rgba(27,12,4,${k})`;
+      for (const R of reels) {
+        if (!R.landed || R.phase === 'stop2') continue;
+        for (let r = 0; r < 3; r++) if (spinGrid[R.c][r] !== SCAT) g.fillRect(R.c * cw, r * ch, cw, ch);
+      }
+    }
+
+    // winning cell frames, then glowing lines on top
+    if (showing) {
+      const pulse = 0.55 + 0.45 * Math.sin(t * 7);
+      const focus = present.cycle ? present.lines[present.focus] : null;
+      g.lineJoin = 'round';
+      for (const L of present.lines) {
+        if (focus && L !== focus) continue;
+        const prog = clamp((t - L.t0) / L.dur, 0, 1);
+        if (prog <= 0) continue;
+        L.cells.forEach(([c, r], j) => {
+          if (j / L.cells.length > prog + 0.2) return;
+          const x0 = c * cw + 4 * dpr;
+          const y0 = r * ch + 4 * dpr;
+          g.save();
+          g.strokeStyle = L.color;
+          g.shadowColor = L.color;
+          g.shadowBlur = 14 * dpr * pulse;
+          g.lineWidth = 3 * dpr;
+          g.beginPath();
+          g.roundRect(x0, y0, cw - 8 * dpr, ch - 8 * dpr, 10 * dpr);
+          g.stroke();
+          g.restore();
+        });
+      }
+      if (present.scat) {
+        for (const [c, r] of present.scat.cells) {
+          g.save();
+          g.strokeStyle = '#ff4fb4';
+          g.shadowColor = '#ff4fb4';
+          g.shadowBlur = 18 * dpr * pulse;
+          g.lineWidth = 3.5 * dpr;
+          g.beginPath();
+          g.roundRect(c * cw + 4 * dpr, r * ch + 4 * dpr, cw - 8 * dpr, ch - 8 * dpr, 12 * dpr);
+          g.stroke();
+          g.restore();
+        }
+      }
+      for (const L of present.lines) {
+        const dim = focus && L !== focus;
+        drawWinLine(g, L, clamp((t - L.t0) / L.dur, 0, 1), dim ? 0.18 : 1, dpr);
+      }
+    }
+  }
+  function drawWildGlow(g, it, S, t) {
+    // the briefcase always glows a little, and blazes while it pays
+    const { x, y, o } = it;
+    const alpha = it.alpha * o.alpha;
+    const r = S * (0.62 + 0.04 * Math.sin(t * 3) + o.glow * 0.25);
+    const grd = g.createRadialGradient(x, y, 0, x, y, r);
+    grd.addColorStop(0, `rgba(255,230,140,${Math.min(0.9, 0.35 + 0.12 * Math.sin(t * 3) + o.glow * 0.5) * alpha})`);
+    grd.addColorStop(1, 'rgba(255,200,60,0)');
+    g.fillStyle = grd;
+    g.fillRect(x - r, y - r, r * 2, r * 2);
+    if (o.open) drawRays(g, x, y, S * (0.95 + 0.2 * o.glow), t, alpha * o.glow);
+  }
+  function drawSymbol(g, it, S, t) {
+    const { k, x, y, mix, a, o, still } = it;
+    let img = sprites.sharp[k];
+    if (k === WILD && o.open) img = sprites.sharp[OPEN];
+    const alpha = it.alpha * o.alpha;
+    const py = o.pivot ? S * 0.42 : 0;
+    g.save();
+    g.globalAlpha = alpha * (1 - mix);
+    g.translate(x + o.dx, y + o.dy + py);
+    if (o.rot) g.rotate(o.rot);
+    if (o.sx !== 1 || o.sy !== 1) g.scale(o.sx, o.sy);
+    if (o.glow > 0.02 && k !== WILD) {
+      g.shadowColor = k === SCAT ? '#ff4fb4' : '#ffcf4a';
+      g.shadowBlur = 22 * view.dpr * o.glow;
+    }
+    if (mix < 1) g.drawImage(img, -S / 2, -S / 2 - py, S, S);
+    g.restore();
+    if (mix > 0) {
+      const b = sprites.blur[k];
+      g.globalAlpha = alpha * mix;
+      g.drawImage(b, x - S / 2, y - b.height / 2);
+      g.globalAlpha = 1;
+    }
+    if (a && a.kind === 'wink' && still) {
+      const u = (t - a.t0) / a.dur;
+      if (u > 0 && u < 1) drawGlint(g, x + S * 0.3, y - S * 0.3, S * 0.2, Math.sin(u * Math.PI));
+    }
+  }
+  function drawRays(g, x, y, R, t, alpha) {
+    if (alpha <= 0.02) return;
+    g.save();
+    g.translate(x, y);
+    g.rotate(t * 0.9);
+    g.globalAlpha = 0.9 * alpha;
+    const grd = g.createRadialGradient(0, 0, R * 0.12, 0, 0, R);
+    grd.addColorStop(0, 'rgba(255,236,150,1)');
+    grd.addColorStop(0.55, 'rgba(255,190,40,.75)');
+    grd.addColorStop(1, 'rgba(255,150,0,0)');
+    g.fillStyle = grd;
+    g.beginPath();
+    for (let i = 0; i < 14; i++) {
+      const a0 = (i / 14) * TAU;
+      g.moveTo(0, 0);
+      g.arc(0, 0, R, a0, a0 + TAU / 34);
+    }
+    g.fill();
+    g.restore();
+  }
+  function drawWinLine(g, L, prog, alpha, dpr) {
+    if (prog <= 0) return;
+    const pts = linePts(LINES[L.i]); // from the live geometry, so a resize mid-payout keeps lines on their cells
+    const e = 1 - (1 - prog) ** 3;
+    let total = 0;
+    const seg = [];
+    for (let i = 1; i < pts.length; i++) {
+      const d = Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+      seg.push(d);
+      total += d;
+    }
+    let left = total * e;
+    const path = new Path2D();
+    path.moveTo(pts[0][0], pts[0][1]);
+    let head = pts[0];
+    for (let i = 1; i < pts.length && left > 0; i++) {
+      const k = Math.min(1, left / seg[i - 1]);
+      head = [pts[i - 1][0] + (pts[i][0] - pts[i - 1][0]) * k, pts[i - 1][1] + (pts[i][1] - pts[i - 1][1]) * k];
+      path.lineTo(head[0], head[1]);
+      left -= seg[i - 1];
+    }
+    g.save();
+    g.globalAlpha = alpha;
+    g.lineCap = 'round';
+    g.lineJoin = 'round';
+    g.strokeStyle = 'rgba(27,18,12,.85)';
+    g.lineWidth = 9 * dpr;
+    g.stroke(path);
+    g.shadowColor = L.color;
+    g.shadowBlur = 16 * dpr;
+    g.strokeStyle = L.color;
+    g.lineWidth = 5.5 * dpr;
+    g.stroke(path);
+    g.shadowBlur = 0;
+    g.strokeStyle = 'rgba(255,255,255,.9)';
+    g.lineWidth = 1.6 * dpr;
+    g.stroke(path);
+    if (prog < 1) {
+      g.fillStyle = '#fff';
+      g.shadowColor = L.color;
+      g.shadowBlur = 20 * dpr;
+      g.beginPath();
+      g.arc(head[0], head[1], 6 * dpr, 0, TAU);
+      g.fill();
+    }
+    // line number tag at the left edge
+    const [bx, by] = [11 * dpr, pts[0][1]];
+    g.shadowBlur = 0;
+    g.fillStyle = L.color;
+    g.strokeStyle = INK;
+    g.lineWidth = 2 * dpr;
+    g.beginPath();
+    g.arc(bx, by, 9 * dpr, 0, TAU);
+    g.fill();
+    g.stroke();
+    g.fillStyle = INK;
+    g.font = `${Math.round(11 * dpr)}px Anton, Impact, sans-serif`;
+    g.textAlign = 'center';
+    g.textBaseline = 'middle';
+    g.fillText(String(L.num), bx, by + 0.5 * dpr);
+    g.restore();
+  }
+
+  /* ---------- Frame loop ---------- */
+  // Full-rate redraws only while something moves; a resting machine repaints at 30 fps (glows, cycling lines) or 4 fps.
+  let nextWink = performance.now() + 2500;
+  let lastDraw = 0;
+  let lastAct = performance.now();
+  let nextHop = lastAct + 9000;
+  const redraw = () => { lastDraw = 0; };
+  function liveAnims(t) {
+    for (const col of cellAnim) {
+      for (const a of col) {
+        if (a && (a.then || a.kind === 'throb' || t - a.t0 <= a.dur + 0.05)) return true;
+      }
+    }
+    return false;
+  }
+  function wildOnScreen() {
+    for (const R of reels) {
+      const base = Math.round(R.p);
+      for (let r = 0; r < 3; r++) if (symAt(R, base + r) === WILD) return true;
+    }
+    return false;
+  }
+  for (const type of ['pointerdown', 'keydown']) addEventListener(type, () => { lastAct = performance.now(); nextHop = lastAct + 9000; }, { passive: true });
+  function frame(now) {
+    const dt = Math.min(0.05, Math.max(0, (now - lastFrame) / 1000));
+    lastFrame = now;
+    if (now >= freezeUntil) aclock += dt;
+    updateReels(now);
+    // idle life: after a while without a tap the big red button does a little come-hither hop
+    if (!busy && ready && !RM() && now - lastAct > 9000 && now > nextHop) {
+      nextHop = now + 6000 + rng.int(3000);
+      fx.anim(els.spin, 'c-jelly');
+    }
+    if (present.cycle && present.lines.length > 1 && now > present.nextCycle) {
+      present.focus = (present.focus + 1) % present.lines.length;
+      present.nextCycle = now + 1500;
+      const L = present.lines[present.focus];
+      L.cells.forEach(([c, r]) => {
+        const wild = spinGrid && spinGrid[c][r] === WILD;
+        animCell(c, r, wild ? 'open' : ANIM[L.sym], 0, 0.45, 0.9);
+        if (wild) cellAnim[c][r].stay = true;
+      });
+    }
+    if (!busy && !present.active && now > nextWink && reels.every((R) => R.phase === 'idle')) {
+      nextWink = now + 2200 + rng.int(2600);
+      const c = rng.int(5);
+      const r = rng.int(3);
+      cellAnim[c][r] = { kind: 'wink', t0: aclock, dur: 0.7, amp: 1 };
+      const R = reels[c];
+      const k = symAt(R, Math.round(R.p) + r);
+      if (rng.chance(0.5)) cellAnim[c][r] = { kind: k === WILD ? 'open' : ANIM[k], t0: aclock, dur: 0.9, amp: 0.4 };
+      setTimeout(() => { if (!busy && cellAnim[c][r] && cellAnim[c][r].kind !== 'wink') cellAnim[c][r] = { kind: 'wink', t0: aclock, dur: 0.6, amp: 1 }; }, 500);
+    }
+    // between rounds even the cycling win lines and winks are capped at 30 fps
+    const hot = !lastDraw || anticOn || now < freezeUntil + 60 || reels.some((R) => R.phase !== 'idle')
+      || (busy && (liveAnims(aclock) || present.lines.some((L) => aclock - L.t0 < L.dur + 0.1)));
+    const gap = hot ? 0 : present.active || liveAnims(aclock) || wildOnScreen() ? 32 : 250;
+    if (now - lastDraw >= gap - 2) {
+      lastDraw = now;
+      draw();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- Waits that a tap can skip ---------- */
+  let skipping = false;
+  const waiters = new Set();
+  function wait(ms) {
+    return new Promise((resolve) => {
+      if (skipping) { resolve(); return; }
+      let tm = 0;
+      const done = () => { clearTimeout(tm); waiters.delete(done); resolve(); };
+      tm = setTimeout(done, ms);
+      waiters.add(done);
+    });
+  }
+  function skipAll() {
+    skipping = true;
+    for (const w of [...waiters]) w();
+    if (meter.run) meter.run.skip();
+  }
+
+  /* ---------- Win meter ---------- */
+  const meter = {
+    shown: 0,
+    run: null,
+    to(v, ms = 300) {
+      if (this.run) this.run.skip();
+      const from = this.shown;
+      this.shown = v;
+      if (from === v || skipping) { this.run = null; els.winAmt.textContent = fmt(v); return; }
+      this.run = fx.countUp(els.winAmt, from, v, { ms });
+      fx.anim(els.winAmt, 'c-pop');
+    },
+    set(v) {
+      if (this.run) this.run.skip();
+      this.run = null;
+      this.shown = v;
+      els.winAmt.textContent = fmt(v);
+    },
+  };
+
+  /* ---------- Comic-book win stamps: the tier between a small win and the big-win overlay ---------- */
+  const STAMPS = [
+    ['Ooh!', 'Peachy!', 'Mmm-hmm!', 'Cheeky!', 'Not bad, sugar!'],
+    ['Sizzle!', 'Hot damn!', 'Smokin’!', 'Ooh la la!', 'Steamy!'],
+    ['Pure friction!', 'Va-va-voom!', 'Scorcher!', 'Too hot to handle!'],
+  ];
+  const stampBag = STAMPS.map(() => []);
+  let stampHide = 0;
+  function stampWin(m) {
+    // m = win / stake. Returns a function that peels the stamp off again.
+    const tier = m >= 6 ? 2 : m >= 3 ? 1 : 0;
+    if (!stampBag[tier].length) stampBag[tier] = rng.shuffle(STAMPS[tier].slice());
+    const el = els.stamp;
+    clearTimeout(stampHide);
+    el.hidden = false;
+    el.dataset.tier = tier;
+    el.style.setProperty('--k', [0.5, 0.62, 0.74][tier]);
+    els.stampText.textContent = stampBag[tier].pop();
+    el.classList.remove('out', 'go');
+    void el.offsetWidth;
+    el.classList.add('go');
+    // POW: a slap of noise, a low thump and a bright stab that climbs with the tier
+    sfx.noise({ type: 'bandpass', freq: 900, to: 300, q: 0.7, dur: 0.18, vol: 0.22 });
+    sfx.thud(1.25 - tier * 0.15);
+    const lift = tier * 2 + Math.min(6, Math.max(0, streak - 1)); // hotter streak, higher stab
+    [0, 4, 7, 12].slice(0, 2 + tier).forEach((n, i) => sfx.tone({ freq: 659 * 2 ** ((n + lift) / 12), type: 'square', dur: 0.14, vol: 0.05, delay: 0.05 + i * 0.045, filter: { type: 'lowpass', freq: 3000 } }));
+    if (tier >= 1) sfx.kiss();
+    fx.shake([3, 6, 10][tier], [180, 300, 420][tier]);
+    if (tier >= 2) fx.flash('#ffe27a', 220, 0.35);
+    // particles fly outward from the burst's flanks so they never cover the words
+    const wr = els.win.getBoundingClientRect();
+    const cy = wr.top + wr.height / 2;
+    const sides = [[{ x: wr.left + wr.width * 0.2, y: cy }, Math.PI], [{ x: wr.right - wr.width * 0.2, y: cy }, 0]];
+    for (const [at, angle] of sides) {
+      fx.burst(at, { type: tier === 2 ? 'kiss' : 'star', count: [5, 8, 11][tier], speed: [220, 620], angle, spread: 1.9 });
+      if (tier >= 1) fx.burst(at, { type: 'heart', count: tier * 3, speed: [160, 420], angle, spread: 1.6 });
+    }
+    buzz([16, 26, 40][tier]);
+    let gone = false;
+    const peel = () => {
+      if (gone) return;
+      gone = true;
+      if (activePeel === peel) activePeel = null;
+      el.classList.add('out');
+      stampHide = setTimeout(() => { el.hidden = true; el.classList.remove('out', 'go'); }, 340);
+    };
+    activePeel = peel;
+    return peel;
+  }
+  let activePeel = null;
+  const peelStamp = () => { if (activePeel) activePeel(); };
+  // the shared overlay's tier names, re-titled for the jukebox
+  const BIG_LABELS = [null, 'BIG WIN!', 'SMOKIN’ HOT!', 'SCANDALOUS!', 'JUKEBOX MELTDOWN!'];
+  const bigLabel = (amount) => BIG_LABELS[Math.max(1, C.winTier(amount, stake))];
+
+  /* ---------- Settings ---------- */
+  let stake = C.store.get('pf.stake', 20);
+  if (!STAKES.includes(stake)) stake = 20;
+  let turbo = !!C.store.get('pf.turbo', false);
+  let twistOn = false;
+
+  /* ---------- Round flow ---------- */
+  let busy = false;
+  let phase = 'idle';
+  let autoLeft = 0;
+  let streak = 0;
+  let pending = null;
+  let cardClose = null;
+  let ready = false;
+
+  function setPhase(p) {
+    phase = p;
+    const spinning = p === 'spin';
+    els.spin.classList.toggle('busy', busy);
+    els.spin.classList.toggle('stopmode', busy && (spinning || p === 'show'));
+    els.spinLabel.innerHTML = !busy ? 'Spin' : spinning ? 'Stop' : p === 'show' ? 'Skip' : twistOn ? 'Free<small>spins</small>' : '···';
+    for (const b of els.stakes.querySelectorAll('.key')) b.disabled = busy || autoLeft > 0;
+  }
+  function deny() {
+    sfx.buzz();
+    fx.anim(els.stakes, 'c-wobble');
+    fx.anim(els.spin, 'c-wobble');
+    buzz([30, 40, 30]);
+    const alt = [...STAKES].reverse().find((v) => v < stake && wallet.canAfford(v));
+    if (alt) {
+      // point at the biggest stake that still works, so the next spin is one tap away
+      const key = els.stakes.querySelector(`[data-stake="${alt}"]`);
+      setTimeout(() => { fx.anim(key, 'c-jelly'); sfx.chip(1.1); }, 260);
+      C.toast(`A ${stake}-chip spin needs ${stake} chips. Try ${alt}.`, 'bad');
+      setMsg(`Short on chips, hot shot. The ${alt} key still loves you.`, 'bad');
+    } else {
+      const bail = document.querySelector('.cbar-bail');
+      if (bail && !bail.hidden) setTimeout(() => fx.anim(bail, 'c-jelly'), 260);
+      C.toast('Out of chips. Your residuals check is waiting up top.', 'bad');
+      setMsg('Flat broke and fabulous. Cash your residuals up top.', 'bad');
+    }
+    stopAuto();
+  }
+  function debugForce() {
+    const m = location.hash.match(/force=(\w+)/);
+    return m ? m[1] : null;
+  }
+  function anticFlags(grid) {
+    let n = 0;
+    return grid.map((col) => { const f = n >= 2; if (col.includes(SCAT)) n++; return f; });
+  }
+  function rollRound() {
+    const int = (n) => rng.int(n);
+    const tests = {
+      lose: (r) => r.total === 0 && r.base.scatter.count < 2,
+      win: (r) => r.baseWin > 0 && r.baseWin < 10 * stake && !r.base.trigger,
+      multi: (r) => r.base.lines.length >= 3 && r.baseWin >= 2 * stake && r.baseWin < 10 * stake && !r.base.trigger,
+      big: (r) => r.baseWin >= 10 * stake && !r.base.trigger,
+      scatter: (r) => r.base.trigger,
+      tease: (r) => !r.base.trigger && anticFlags(r.base.grid).some(Boolean),
+      wild: (r) => !r.base.trigger && r.base.lines.some((l) => l.cells.some(([c, rr]) => r.base.grid[c][rr] === WILD)),
+      thumb: (r) => !r.base.trigger && r.base.lines.length >= 4 && r.baseWin >= 4 * stake && r.baseWin < 10 * stake && tests.wild(r),
+    };
+    const test = tests[debugForce()];
+    if (test) for (let i = 0; i < 400000; i++) { const r = PF.playRound(int, stake); if (test(r)) return r; }
+    return PF.playRound(int, stake);
+  }
+  function creditBase() {
+    if (!pending || pending.base) return;
+    pending.base = true;
+    if (pending.round.baseWin > 0) wallet.win(pending.round.baseWin);
+  }
+  function creditFeature() {
+    if (!pending || pending.feat) return;
+    pending.feat = true;
+    if (pending.round.featureWin > 0) wallet.win(pending.round.featureWin);
+  }
+  function recordRound() {
+    if (!pending || pending.rec) return;
+    pending.rec = true;
+    C.record({ bet: pending.stake, win: pending.round.total });
+  }
+  function settleAll() {
+    // leaving mid-round: pay what the round already decided, exactly once
+    creditBase();
+    creditFeature();
+    recordRound();
+  }
+  addEventListener('pagehide', settleAll);
+
+  async function collectInto(amount, credit, from = els.winAmt) {
+    const n = clamp(Math.round(4 + Math.log2(1 + amount / stake) * 4), 5, 26);
+    const p = fx.collect(from, null, { count: n });
+    const tm = setTimeout(credit, RM() ? 150 : 480);
+    await Promise.race([p, C.sleep(2600)]);
+    clearTimeout(tm);
+    credit();
+    sfx.cash();
+  }
+
+  async function play() {
+    if (busy || !ready) return;
+    if (!wallet.bet(stake)) { deny(); return; }
+    busy = true;
+    if (autoLeft > 0) autoLeft--;
+    updateAutoUI();
+    skipping = false;
+    const round = rollRound();
+    pending = { round, stake, base: false, feat: false, rec: false };
+    try {
+      setPhase('spin');
+      clearPresent();
+      peelStamp();
+      meter.set(0);
+      els.meterLabel.textContent = 'Win';
+      els.meter.classList.remove('hot');
+      setMsg(pick('spin'));
+      sfx.tone({ freq: 2400, to: 1700, type: 'square', dur: 0.03, vol: 0.05 });
+      sfx.tone({ freq: 1900, to: 1500, type: 'triangle', dur: 0.06, vol: 0.06, delay: 0.05 });
+      sfx.thud(1.6);
+      sfx.whoosh(0.32, 0.12);
+      buzz(12);
+      await startReels(round.base);
+      const res = round.base;
+      const teased = anticFlags(res.grid).some(Boolean);
+      setPhase('show');
+      await wait(turbo ? 40 : 110);
+      if (res.win > 0) {
+        streak++;
+        await presentResult(res, 0);
+        const m = res.win / stake;
+        const wildHit = res.lines.some((l) => l.cells.some(([c, r]) => res.grid[c][r] === WILD));
+        if (!res.trigger) setMsg(m >= 3 ? pick('medium') : wildHit ? pick('wild') : pick('small'), 'good');
+        let peel = null;
+        if (res.win >= 10 * stake) {
+          setPhase('bigwin');
+          await C.bigWin(res.win, stake, { label: bigLabel(res.win) });
+        } else if (m >= 1 && !res.trigger) {
+          // a win that beats the stake gets slapped with a comic-book stamp before the coins fly
+          peel = stampWin(m);
+          await wait(turbo ? 160 : 380);
+        }
+        setPhase('collect');
+        await collectInto(res.win, creditBase);
+        if (peel) peel();
+      } else {
+        streak = 0;
+        creditBase();
+        if (teased) {
+          setMsg(pick('tease'), 'bad');
+          sfx.lose();
+          for (const [c, r] of res.scatter.cells) animCell(c, r, 'droop', 0, 1, 0.6);
+          await wait(turbo ? 350 : 700);
+          for (const [c, r] of res.scatter.cells) cellAnim[c][r] = null;
+        } else {
+          setMsg(pick('lose'), 'bad');
+          sfx.tone({ freq: 233, to: 220, type: 'sawtooth', dur: 0.15, vol: 0.05, filter: { type: 'lowpass', freq: 800, to: 1400 } });
+          sfx.tone({ freq: 207, to: 180, type: 'sawtooth', dur: 0.32, vol: 0.05, delay: 0.16, filter: { type: 'lowpass', freq: 1400, to: 500 } });
+          fx.anim(els.msg, 'c-wobble');
+        }
+      }
+      updateStreak();
+      if (res.trigger) {
+        setPhase('feature');
+        await runFeature(round);
+      }
+      recordRound();
+    } catch (err) {
+      console.error(err);
+      settleAll();
+    } finally {
+      creditBase();
+      creditFeature();
+      recordRound();
+      stopAnticipation();
+      if (twistOn) { music.stop(); setTwist(false); counterMode(false); }
+      if (!els.stamp.hidden && !els.stamp.classList.contains('out')) { els.stamp.hidden = true; els.stamp.classList.remove('go'); }
+      lastAct = performance.now();
+      busy = false;
+      skipping = false;
+      setPhase('idle');
+      scheduleAuto();
+    }
+  }
+
+  async function presentResult(res, offset) {
+    const lines = [...res.lines].sort((a, b) => a.pay - b.pay || a.i - b.i);
+    const steps = lines.length + (res.scatter.pay ? 1 : 0);
+    if (!steps) return 0;
+    present.active = true;
+    const mult = res.win / stake;
+    hitStop(mult >= 5 ? 150 : 80);
+    fx.flash(mult >= 5 ? '#fff3b0' : '#ffffff', 220, mult >= 5 ? 0.45 : 0.18);
+    fx.shake(clamp(2 + mult * 0.7, 2, 12), 240 + Math.min(500, mult * 30));
+    buzz(mult >= 5 ? [20, 30, 40] : 16);
+    await wait(turbo ? 60 : 130);
+    const per = turbo ? 190 : clamp(2800 / steps, 300, 520);
+    const boost = Math.min(5, Math.max(0, streak - 1));
+    let acc = 0;
+    let fxBudget = 6;
+    for (let j = 0; j < lines.length; j++) {
+      const w = lines[j];
+      const L = { ...w, num: w.i + 1, color: LINE_COLORS[j % LINE_COLORS.length], t0: aclock, dur: turbo ? 0.16 : 0.24 };
+      present.lines.push(L);
+      w.cells.forEach(([c, r], n) => {
+        present.cells.add(c * 3 + r);
+        const isWild = res.grid[c][r] === WILD;
+        animCell(c, r, isWild ? 'open' : ANIM[w.sym], n * 0.05, 1);
+        if (isWild) cellAnim[c][r].stay = true;
+      });
+      sfx.chime(Math.min(12, j + boost));
+      const last = w.cells[w.cells.length - 1];
+      const at = cellPt(last[0], last[1]);
+      if (fxBudget-- > 0 || j === lines.length - 1) {
+        SYM_FX[w.sym](cellPt(w.cells[0][0], w.cells[0][1]));
+        if (w.cells.some(([c, r]) => res.grid[c][r] === WILD) && w.sym !== WILD) SYM_FX[WILD](cellPt(...w.cells.find(([c, r]) => res.grid[c][r] === WILD)));
+      }
+      fx.floatText(at, `+${fmt(w.pay)}`, { color: '#ffe066', size: clamp(20 + (w.pay / stake) * 3, 22, 44), font: 'Anton, Impact, sans-serif' });
+      acc += w.pay;
+      meter.to(offset + acc, Math.min(per, 380));
+      if (!skipping) setMsg(`Line ${w.i + 1} · ${w.count} ${PLURAL[w.sym]}${res.mult > 1 ? ' ×2' : ''} · ${fmt(w.pay)}`, 'good');
+      await wait(per);
+    }
+    if (res.scatter.pay) {
+      present.scat = res.scatter;
+      for (const [c, r] of res.scatter.cells) {
+        present.cells.add(c * 3 + r);
+        animCell(c, r, 'twirl', 0, 1, 1.4);
+        SYM_FX[SCAT](cellPt(c, r));
+      }
+      sfx.chime(Math.min(12, lines.length + boost + 1));
+      const [c0, r0] = res.scatter.cells[res.scatter.cells.length - 1];
+      fx.floatText(cellPt(c0, r0), `+${fmt(res.scatter.pay)}`, { color: '#ff8fd0', size: 34, font: 'Anton, Impact, sans-serif' });
+      acc += res.scatter.pay;
+      meter.to(offset + acc, 360);
+      setMsg(`${res.scatter.count} trophies · ${fmt(res.scatter.pay)}`, 'good');
+      await wait(per * 1.3);
+    }
+    if (present.lines.length > 1) {
+      // every line stays lit through the stamp and the coin collect, then they take turns from line one
+      present.cycle = true;
+      present.focus = -1;
+      present.nextCycle = performance.now() + 1700;
+    }
+    els.meter.classList.add('hot');
+    sfx.win(mult >= 3 ? 2 : 1);
+    fx.burst(els.winAmt, { type: 'star', count: clamp(Math.round(6 + mult * 2), 6, 24), speed: [120, 380] });
+    if (meter.run) await Promise.race([meter.run, wait(600)]);
+    return acc;
+  }
+
+  /* ---------- Twist Contest (free spins) ---------- */
+  function showCard(kind, data) {
+    return new Promise((resolve) => {
+      const ovl = document.createElement('div');
+      ovl.className = 'card-ovl';
+      ovl.setAttribute('role', 'alert');
+      const outro = kind !== 'intro';
+      ovl.innerHTML = !outro
+        ? `<div class="card"><p class="kick">Jackpot Rabbit’s presents</p><h2>Twist Contest!</h2><p class="big"><b>${data.spins}</b> free spins</p><p class="big">Every win ×2</p><p class="sub">Shoes optional. Dignity optional.</p><p class="tap">tap to hit the floor</p></div>`
+        : `<div class="card outro"><p class="kick">The contest is over</p><h2>${data.total > 0 ? 'You won the trophy!' : 'Nice moves!'}</h2><p class="big"><b>${data.total > 0 ? 0 : fmt(data.total)}</b> chips</p><p class="sub">${data.spins} free spins of pure friction.</p><p class="tap">tap to collect</p></div>`;
+      document.body.appendChild(ovl);
+      let done = false;
+      let tm = 0;
+      let count = null;
+      const close = () => {
+        if (done) return;
+        done = true;
+        clearTimeout(tm);
+        clearTimeout(safety);
+        if (count) count.skip();
+        cardClose = null;
+        sfx.tap();
+        ovl.classList.add('out');
+        setTimeout(() => { ovl.remove(); resolve(); }, 280);
+      };
+      // the outro rolls the contest total up, then lingers; a tap first finishes the count, then closes
+      const advance = () => { if (count && !count.done) count.skip(); else close(); };
+      ovl.addEventListener('pointerdown', (e) => { e.preventDefault(); advance(); });
+      const safety = setTimeout(close, 12000);
+      if (outro && data.total > 0) {
+        const amt = ovl.querySelector('.big b');
+        count = fx.countUp(amt, 0, data.total, { ms: clamp(700 + Math.log10(data.total) * 300, 700, 1800) });
+        count.then(() => {
+          count.done = true;
+          if (done) return;
+          sfx.cash();
+          fx.anim(amt, 'c-pop');
+          fx.burst(amt, { type: 'star', count: 18, speed: [160, 460] });
+          buzz([20, 30, 20]);
+          tm = setTimeout(close, 2200);
+        });
+      } else tm = setTimeout(close, outro ? 3200 : 2800);
+      cardClose = advance;
+    });
+  }
+  /* free-spin counter: the 20-lines badge and the neon sign count the contest down */
+  function counterMode(on) {
+    els.linesBadge.classList.toggle('fs', on);
+    els.linesBadge.title = on ? 'Free spins left' : `20 fixed lines, ${stake / 20} chips each`;
+    if (on) els.badgeTxt.textContent = 'left';
+    else {
+      els.badgeNum.textContent = '20';
+      els.badgeTxt.textContent = 'lines';
+      els.neonSub.textContent = 'tonight only · every win ×2';
+    }
+  }
+  function setCounter(left, jump = false) {
+    els.badgeNum.textContent = left;
+    els.neonSub.textContent = `${left} spin${left === 1 ? '' : 's'} left · every win ×2`;
+    fx.anim(els.linesBadge, jump ? 'c-jelly' : 'c-pop');
+    if (jump) {
+      fx.burst(els.linesBadge, { type: 'star', count: 16, speed: [160, 420], colors: ['#ffffff', '#48f3ff', '#ff4fb4'] });
+      fx.floatText(els.linesBadge, `+${PF.FREE_SPINS}`, { color: '#48f3ff', size: 30, font: 'Anton, Impact, sans-serif', rise: 60 });
+    } else sfx.tick(1.6);
+  }
+  function setTwist(on) {
+    twistOn = on;
+    document.body.classList.toggle('twist', on);
+    bgCache = null;
+    redraw();
+    fx.flash(on ? '#ff4fb4' : '#ffcf4a', 380, 0.5);
+  }
+  async function runFeature(round) {
+    setMsg('Three trophies! The Twist Contest starts NOW', 'good');
+    [523, 659, 784, 1046, 1318].forEach((f, i) => sfx.tone({ freq: f, type: 'square', dur: 0.16, vol: 0.05, delay: i * 0.09, filter: { type: 'lowpass', freq: 3200 } }));
+    fx.shower('confetti', 70);
+    buzz([30, 40, 60]);
+    for (const [c, r] of round.base.scatter.cells) animCell(c, r, 'twirl', 0, 1, 1.4);
+    await C.sleep(turbo ? 400 : 900);
+    setPhase('card');
+    await showCard('intro', { spins: PF.FREE_SPINS });
+    setTwist(true);
+    counterMode(true);
+    setCounter(PF.FREE_SPINS);
+    music.start();
+    fx.shower('feather', 30);
+    let awarded = PF.FREE_SPINS;
+    let total = 0;
+    els.meterLabel.textContent = 'Contest total';
+    meter.set(0);
+    for (let i = 0; i < round.free.length; i++) {
+      const res = round.free[i];
+      skipping = false;
+      clearPresent();
+      peelStamp();
+      setMsg(`Twist Contest · spin ${i + 1} of ${awarded} · every win ×2`);
+      setPhase('spin');
+      setCounter(awarded - i - 1);
+      sfx.whoosh(0.28, 0.1);
+      await startReels(res);
+      setPhase('show');
+      await wait(turbo ? 40 : 100);
+      if (res.win > 0) {
+        await presentResult(res, total);
+        let peel = null;
+        if (res.win >= 25 * stake) {
+          setPhase('bigwin');
+          await C.bigWin(res.win, stake, { label: 'HOT STUFF!' });
+          setPhase('show');
+        } else if (res.win >= 3 * stake && !res.trigger) {
+          peel = stampWin(res.win / stake);
+          await wait(turbo ? 160 : 360);
+        }
+        total += res.win;
+        meter.set(total);
+        fx.collect(els.win, els.winAmt, { count: clamp(Math.round(3 + res.win / stake), 4, 14), jitter: 160 }).then(() => fx.anim(els.meter, 'c-pop'));
+        if (peel) setTimeout(peel, turbo ? 250 : 520);
+      } else {
+        setMsg(pick('lose'));
+        sfx.tone({ freq: 330, to: 300, type: 'triangle', dur: 0.12, vol: 0.05 });
+      }
+      if (res.trigger) {
+        awarded += PF.FREE_SPINS;
+        setCounter(awarded - i - 1, true);
+        setMsg(`Encore! +${PF.FREE_SPINS} free spins`, 'good');
+        fx.floatText(els.win, `+${PF.FREE_SPINS} SPINS!`, { color: '#48f3ff', size: 46, font: 'Anton, Impact, sans-serif', ms: 1500 });
+        sfx.bigwin(1);
+        fx.flash('#48f3ff', 300, 0.4);
+        fx.shower('confetti', 50);
+        await wait(1100);
+      }
+      await wait(res.win > 0 ? (turbo ? 250 : 550) : turbo ? 150 : 320);
+    }
+    music.stop();
+    clearPresent();
+    setPhase('card');
+    sfx.win(2);
+    await showCard('outro', { total, spins: round.free.length });
+    setTwist(false);
+    counterMode(false);
+    els.meterLabel.textContent = 'Contest total';
+    meter.set(total);
+    if (total >= 10 * stake) {
+      setPhase('bigwin');
+      await C.bigWin(total, stake, { label: 'TWIST CHAMPION!' });
+    }
+    if (total > 0) {
+      setPhase('collect');
+      await collectInto(total, creditFeature);
+    } else creditFeature();
+    setMsg(total > 0 ? `Contest total ${fmt(total)}. What a mover.` : 'All twist, no payout. Still looked great.', total > 0 ? 'good' : '');
+  }
+
+  function updateStreak() {
+    const on = streak >= 2;
+    els.streak.hidden = !on;
+    if (on) {
+      els.streak.textContent = `Hot streak ×${streak}`;
+      fx.anim(els.streak, 'c-pop');
+    }
+  }
+
+  /* ---------- Autoplay ---------- */
+  let autoTimer = 0;
+  function updateAutoUI() {
+    const on = autoLeft > 0;
+    els.auto.classList.toggle('on-auto', on);
+    els.auto.textContent = on ? `Stop · ${autoLeft}` : 'Auto';
+    els.auto.setAttribute('aria-label', on ? `Stop autoplay, ${autoLeft} spins left` : 'Autoplay');
+  }
+  function scheduleAuto() {
+    clearTimeout(autoTimer);
+    if (autoLeft <= 0) { updateAutoUI(); return; }
+    autoTimer = setTimeout(() => { if (autoLeft > 0 && !busy) play(); }, turbo ? 200 : 450);
+  }
+  function startAuto(n) {
+    closeAutoMenu();
+    autoLeft = n;
+    updateAutoUI();
+    sfx.chime(4);
+    if (!busy) play();
+  }
+  function stopAuto() {
+    if (autoLeft <= 0) return;
+    autoLeft = 0;
+    clearTimeout(autoTimer);
+    updateAutoUI();
+    setPhase(phase);
+  }
+  function openAutoMenu() {
+    els.autoMenu.hidden = false;
+    els.auto.setAttribute('aria-expanded', 'true');
+    sfx.pop(1.2);
+  }
+  function closeAutoMenu() {
+    if (els.autoMenu.hidden) return;
+    els.autoMenu.hidden = true;
+    els.auto.setAttribute('aria-expanded', 'false');
+  }
+
+  /* ---------- Input ---------- */
+  function mainAction() {
+    if (document.querySelector('dialog[open]')) return;
+    if (phase === 'card') { if (cardClose) cardClose(); return; }
+    if (!busy) { closeAutoMenu(); play(); return; }
+    if (autoLeft > 0) { stopAuto(); C.toast('Autoplay stopped'); }
+    if (phase === 'spin') quickStop();
+    else if (phase === 'show') skipAll();
+  }
+  function squishable(el) {
+    const on = () => el.classList.add('squish');
+    const off = () => el.classList.remove('squish');
+    el.addEventListener('pointerdown', on);
+    for (const ev of ['pointerup', 'pointerleave', 'pointercancel', 'blur']) el.addEventListener(ev, off);
+  }
+  function pressFx(el) {
+    el.classList.add('squish');
+    setTimeout(() => el.classList.remove('squish'), 90);
+  }
+  squishable(els.spin);
+  document.querySelectorAll('[data-squish]').forEach(squishable);
+  // tapping the reels themselves also stops a spin or skips the payout (never starts one)
+  els.win.addEventListener('pointerdown', (e) => {
+    if (!busy || (phase !== 'spin' && phase !== 'show')) return;
+    e.preventDefault();
+    pressFx(els.spin);
+    mainAction();
+  });
+  els.spin.addEventListener('click', () => {
+    buzz(10);
+    if (!busy) sfx.tone({ freq: 620, to: 380, type: 'triangle', dur: 0.06, vol: 0.1 });
+    mainAction();
+  });
+  STAKES.forEach((v, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'key';
+    b.textContent = v;
+    b.dataset.stake = v;
+    b.setAttribute('role', 'radio');
+    b.setAttribute('aria-label', `Stake ${v} chips`);
+    b.setAttribute('data-squish', '');
+    squishable(b);
+    b.addEventListener('click', () => {
+      if (busy || autoLeft > 0) return;
+      stake = v;
+      C.store.set('pf.stake', v);
+      sfx.chip(0.9 + i * 0.08);
+      sfx.tone({ freq: 300 + i * 90, to: 200 + i * 60, type: 'triangle', dur: 0.05, vol: 0.08 });
+      buzz(6);
+      paintStakes();
+      fx.anim(b, 'c-jelly');
+      setMsg(`Stake ${v} · ${v / 20} a line on all 20 lines`);
+    });
+    els.stakes.appendChild(b);
+  });
+  function paintStakes() {
+    for (const b of els.stakes.querySelectorAll('.key')) {
+      const on = Number(b.dataset.stake) === stake;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
+    els.linesBadge.title = `20 fixed lines, ${stake / 20} chips each`;
+    paintMenu();
+  }
+  els.stakes.addEventListener('keydown', (e) => {
+    if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    e.preventDefault();
+    if (busy || autoLeft > 0) return;
+    const i = clamp(STAKES.indexOf(stake) + (e.key === 'ArrowRight' ? 1 : -1), 0, STAKES.length - 1);
+    const b = els.stakes.querySelectorAll('.key')[i];
+    b.click();
+    b.focus();
+  });
+  els.turbo.addEventListener('click', () => {
+    turbo = !turbo;
+    C.store.set('pf.turbo', turbo);
+    els.turbo.setAttribute('aria-pressed', String(turbo));
+    sfx.tone({ freq: turbo ? 300 : 1800, to: turbo ? 1900 : 280, type: 'square', dur: 0.12, vol: 0.05, filter: { type: 'lowpass', freq: 3500 } });
+    buzz(8);
+    if (turbo) fx.burst(els.turbo, { type: 'spark', count: 12 });
+  });
+  els.auto.addEventListener('click', (e) => {
+    e.stopPropagation();
+    sfx.tap();
+    if (autoLeft > 0) { stopAuto(); return; }
+    if (els.autoMenu.hidden) openAutoMenu();
+    else closeAutoMenu();
+  });
+  els.autoMenu.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-n]');
+    if (!b) return;
+    e.stopPropagation();
+    startAuto(Number(b.dataset.n));
+  });
+  document.addEventListener('click', (e) => { if (!els.autoMenu.hidden && !e.target.closest('#autoMenu')) closeAutoMenu(); });
+  els.help.addEventListener('click', () => {
+    sfx.tap();
+    closeAutoMenu();
+    C.dialog({ title: 'House rules', html: helpHtml(), button: 'Back to the reels' });
+  });
+  addEventListener('keydown', (e) => {
+    const tg = e.target;
+    if (tg && (/^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName) || tg.isContentEditable)) return;
+    if (document.querySelector('dialog[open]')) return;
+    if (e.code === 'Space' || e.key === ' ') {
+      e.preventDefault();
+      if (e.repeat) return;
+      pressFx(els.spin);
+      mainAction();
+    } else if (e.key === 'Enter') {
+      if (tg && tg.closest && tg.closest('button, a, [role="radio"]')) return;
+      e.preventDefault();
+      if (e.repeat) return;
+      pressFx(els.spin);
+      mainAction();
+    } else if (e.key === 'Escape') closeAutoMenu();
+  });
+  // a focused button would otherwise also "click" on Space release
+  addEventListener('keyup', (e) => { if ((e.code === 'Space' || e.key === ' ') && !document.querySelector('dialog[open]')) e.preventDefault(); });
+  let pausedAuto = false;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      if (autoLeft > 0) { pausedAuto = true; stopAuto(); }
+      music.pause();
+    } else {
+      music.resume();
+      if (pausedAuto) { pausedAuto = false; C.toast('Autoplay stopped while you were away'); }
+    }
+  });
+
+  /* ---------- Help and the desktop menu card ---------- */
+  const chips = (v) => (Number.isInteger(v) ? fmt(v) : v.toFixed(1));
+  function helpHtml() {
+    const lb = stake / 20;
+    const row = (k) => `<tr><td>${svgInline(k)}<span>${NAMES[k]}</span></td><td>${PAYS[k].map((p) => chips(p * lb)).join(' · ')}</td></tr>`;
+    const lineFig = (ln, i) => {
+      let cells = '';
+      for (let c = 0; c < 5; c++) for (let r = 0; r < 3; r++) cells += `<rect x="${c * 12 + 1}" y="${r * 12 + 1}" width="10" height="10" rx="2" fill="${ln[c] === r ? LINE_COLORS[i % LINE_COLORS.length] : 'rgba(255,255,255,.12)'}"/>`;
+      const pts = ln.map((r, c) => `${c * 12 + 6},${r * 12 + 6}`).join(' ');
+      return `<figure><svg viewBox="0 0 60 36" aria-hidden="true">${cells}<polyline points="${pts}" fill="none" stroke="#fff" stroke-width="1.6" stroke-linejoin="round"/></svg>${i + 1}</figure>`;
+    };
+    return `<p class="ht-intro">Five reels, three rows, 20 fixed lines. Your stake covers every line: at ${fmt(stake)} chips each line rides on ${chips(lb)}.
+      Line wins pay left to right from the first reel, 3, 4 or 5 in a row. Only the best win on each line pays; wins on different lines add up.</p>
+      <table class="ht-table"><tr><th>Symbol</th><th>3 · 4 · 5 in a row</th></tr>
+      ${[8, 7, 6, 5, 4, 3, 2, 1, 0].map(row).join('')}
+      <tr><td>${svgInline(SCAT)}<span>Twist Trophy, anywhere</span></td><td>${SCAT_PAY.slice(3).map((p) => chips(p * stake)).join(' · ')}</td></tr></table>
+      <p class="ht-note"><b>The Briefcase is wild.</b> It stands in for anything except the trophy, and a line of briefcases pays on its own.
+      <b>Three or more Twist Trophies</b> anywhere pay the scatter prize and start the <b>Twist Contest</b>: ${PF.FREE_SPINS} free spins at the same stake where every win pays ×2. Three more trophies during the contest add ${PF.FREE_SPINS} spins.</p>
+      <p class="ht-note">Tap Spin (or press Space) while the reels turn to stop them early, or during the payout to skip ahead. Turbo speeds everything up. Autoplay runs 10 or 25 spins; tap Stop any time.</p>
+      <div class="ht-lines">${LINES.map(lineFig).join('')}</div>
+      <p class="ht-note"><b>Return to player: 96.4%.</b> Measured at 96.38% over 60,000,000 simulated rounds with every contest played out (exact calculation 96.42%).
+      Something pays on about 51% of spins, but only about 21% pay back more than the stake. The contest arrives about once every 117 spins, and a 10× round about once every 78.
+      Outcomes come from your browser's crypto random generator.</p>
+      <p class="ht-fine">Parody. Fake chips, no real money.</p>`;
+  }
+  function paintMenu() {
+    const lb = stake / 20;
+    els.menuList.innerHTML = [8, 7, 6, 5, 4, 3, 2, 1, 0].map((k) => `<li>${svgInline(k)}<span class="nm">${NAMES[k]}</span><span class="pr">${chips(PAYS[k][2] * lb)}</span></li>`).join('')
+      + `<li>${svgInline(SCAT)}<span class="nm">5 Twist Trophies</span><span class="pr">${chips(SCAT_PAY[5] * stake)}</span></li>`;
+  }
+
+  /* ---------- Boot ---------- */
+  els.turbo.setAttribute('aria-pressed', String(turbo));
+  paintStakes();
+  updateAutoUI();
+  setMsg(pick('idle'));
+  new ResizeObserver(() => resize()).observe(els.canvas);
+  addEventListener('orientationchange', () => setTimeout(resize, 200));
+  requestAnimationFrame(frame);
+  loadArt().then((list) => {
+    imgs = list;
+    sprites = null;
+    view.W = 0;
+    resize();
+    ready = true;
+    setPhase('idle');
+    // slow font: the WILD labels were drawn with a fallback, so redraw them once Anton arrives
+    if (!antonOk) document.fonts.load('40px Anton').then(() => { if (sprites && document.fonts.check('40px Anton')) { sprites = buildSprites(sprites.S); redraw(); } }).catch(() => {});
+    if (/auto=1/.test(location.hash)) setTimeout(play, 300);
+  }).catch((err) => {
+    console.error(err);
+    setMsg('The jukebox art failed to load. Try a reload.', 'bad');
+  });
+  setInterval(() => { if (!busy && !present.active && document.visibilityState === 'visible') setMsg(pick('idle')); }, 14000);
+
+  // harmless test hooks: read-only state for automated checks
+  window.PFDBG = {
+    get phase() { return phase; },
+    get busy() { return busy; },
+    get ready() { return ready; },
+    get round() { return pending && pending.round; },
+    get stake() { return stake; },
+    get auto() { return autoLeft; },
+    sheet(size = 160) {
+      const sp = buildSprites(size);
+      const c = document.createElement('canvas');
+      c.width = size * 11;
+      c.height = size;
+      const g = c.getContext('2d');
+      g.fillStyle = '#fcf2d8';
+      g.fillRect(0, 0, c.width, c.height);
+      sp.sharp.forEach((im, i) => g.drawImage(im, i * size, 0));
+      return c.toDataURL();
+    },
+  };
+})();
+</script>
+</body>
+</html>
