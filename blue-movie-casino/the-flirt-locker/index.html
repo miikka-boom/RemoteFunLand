@@ -305,7 +305,7 @@ body::before {
 @media (max-width: 899px) and (max-height: 790px) { :root { --ar: .98 } }
 @media (max-width: 899px) and (max-height: 700px) { :root { --ar: 1.08 } }
 /* single column: the bank gives up width on short screens so START / CASH OUT stay above the fold */
-@media (max-width: 899px) { .fl-board { width: min(100%, max(280px, calc((100dvh - 490px) * var(--ar) + 36px))); justify-self: center } }
+@media (max-width: 899px) { .fl-board { width: min(100%, max(280px, calc((100dvh - var(--chrome, 490px)) * var(--ar) + 36px))); justify-self: center } }
 .lk:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; z-index: 3 }
 .lk-in {
   position: absolute;
@@ -598,6 +598,7 @@ body::before {
 .fl-start, .fl-cash, .fl-rand { min-height: 62px }
 .fl-start { font: 400 30px/1 var(--f-stencil); letter-spacing: .1em }
 .fl-start.is-again { animation: again .5s var(--ease-back) }
+@media (max-width: 400px) { .fl-start small { letter-spacing: .05em } }
 .fl-start small { display: block; font: 700 11px/1 var(--f-cond); letter-spacing: .16em; opacity: .85 }
 .fl-start > span { display: grid; gap: 4px; justify-items: center }
 .fl-rand { --b1: rgba(239, 224, 181, .2); --b2: rgba(239, 224, 181, .08); padding: 8px 10px; font-size: 15px; line-height: 1.05; gap: 6px }
@@ -626,6 +627,24 @@ body::before {
   .c-act { grid-template-columns: 160px minmax(0, 1fr) }
   .fl-start, .fl-cash, .fl-rand { min-height: 70px }
   .fl-cash b { font-size: 26px }
+}
+
+/* ---------- Short phones (iPhone SE class) ----------
+   The top bar already names the game, so the stencil title folds away and "?" joins the radio line; the HUD,
+   spacing and buttons tighten so START and CASH OUT both sit above the fold (checked at 375x667 and 360x640). */
+@media (max-width: 899px) and (max-height: 760px) {
+  :root { --chrome: 420px }
+  .fl { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "hud hud" "quip title" "board board" "ctrl ctrl" "foot foot"; gap: 6px; padding-top: 6px }
+  .fl-title { display: block; align-self: center }
+  .t-name, .t-sub { display: none }
+  .fl-quip { height: 44px }
+  .hud-cell { min-height: 50px; padding: 4px 8px }
+  .hud-val { font-size: 26px }
+  .c-stake { grid-template-rows: 1fr }
+  .c-stake .clabel { display: none }
+  .fl-start, .fl-cash, .fl-rand { min-height: 56px }
+  .fl-start { padding-top: 6px; padding-bottom: 6px }
+  .fl-ctrl { gap: 6px }
 }
 
 /* ---------- Footer ---------- */
@@ -919,6 +938,7 @@ body::before {
   const N = 25;
   const EDGE = 0.97;
   const STAKES = [10, 25, 50, 100, 250, 500, 1000];
+  const BIG_LABELS = ['', 'BIG CRUSH!', 'STEAMY WIN!', 'HEARTBREAKER!', 'BOMBSHELL!!!']; // by Casino.winTier 1-4
   const RTP_NOTE = '96.9% (± 0.6%) over 4,000,000 simulated rounds; the exact expectation is 97.0% (96.8% at the 10-chip stake), and no choice returns more than 98.8%';
   const mult = (m, k) => {
     let x = EDGE;
@@ -1226,7 +1246,7 @@ body::before {
     let lastT = 0;
     let acc = 0;
     const beats = [];
-    const api = { mode: 'live', beat() { beats.push(performance.now()); } };
+    const api = { mode: 'live', beat() { beats.push(performance.now()); if (beats.length > 6) beats.shift(); } };
     const kernel = (s) => {
       const k = (mu, sig, a) => a * Math.exp(-((s - mu) ** 2) / (2 * sig * sig));
       return k(0.04, 0.018, 0.12) + k(0.1, 0.007, -0.16) + k(0.12, 0.009, 1) + k(0.145, 0.01, -0.32) + k(0.3, 0.04, 0.2);
@@ -1251,9 +1271,17 @@ body::before {
       return v + (rand() - 0.5) * 0.025;
     }
     let onScreen = true;
-    function frame(t) {
+    let running = false;
+    function run() {
+      if (running) return;
+      running = true;
+      lastT = 0;
       requestAnimationFrame(frame);
-      if (!lastT || !onScreen) {
+    }
+    function frame(t) {
+      if (!onScreen) { running = false; return; } // scrolled out of view: no frames at all until it is back
+      requestAnimationFrame(frame);
+      if (!lastT) {
         lastT = t;
         return;
       }
@@ -1305,10 +1333,10 @@ body::before {
       g.shadowBlur = 0;
     }
     new ResizeObserver(size).observe(cv);
-    // scrolled out of view: stop drawing (the trace simply resumes when it comes back)
-    new IntersectionObserver((es) => { onScreen = es[es.length - 1].isIntersecting; }).observe(cv);
+    // scrolled out of view: the loop stops; it restarts (skipping the gap) when the monitor is back
+    new IntersectionObserver((es) => { onScreen = es[es.length - 1].isIntersecting; if (onScreen) run(); }).observe(cv);
     size();
-    requestAnimationFrame(frame);
+    run();
     return api;
   })();
 
@@ -2069,7 +2097,8 @@ body::before {
     ui.cashLbl.textContent = `PAID ${fmtC(win)}`;
     await sleep(RM() ? 120 : 420);
     if (tok !== token) return;
-    if (big) await C.bigWin(win, r.stake, clear ? { label: 'FULL CLEARANCE!' } : {});
+    // On-theme tier names (and they keep the overlay on the cheeky side of the content line)
+    if (big) await C.bigWin(win, r.stake, { label: clear ? 'FULL CLEARANCE!' : BIG_LABELS[C.winTier(win, r.stake)] || 'BIG CRUSH!' });
     if (tok !== token) return;
     const count = clamp(Math.round(5 + Math.log2(mult0 + 1) * 4), 6, 26);
     const coins = fx.collect(hud.pay, null, { count });
@@ -2225,7 +2254,7 @@ body::before {
         <table><tr><th>Killers</th><th>1st</th><th>3rd</th><th>5th</th><th>All</th></tr>${rows}</table>
         <p>Yield after k crushes with m mood killers: 0.97 × 25/(25−m) × 24/(24−m) × … (k terms). Payouts round to the nearest whole chip, capped so no choice ever returns more than 99%; minimum stake 10.</p>
         <p><b>RTP 97%</b> by construction for any strategy. Measured ${RTP_NOTE}.</p>
-        <p class="h-small">Keys: Space or Enter starts and cashes out, R opens a random locker, arrows move between lockers. Leave mid-shift and you are cashed out automatically (an untouched stake is refunded).</p>
+        <p class="h-small">Keys: Space or Enter starts and cashes out, R opens a random locker, arrows move between lockers. Leave mid-shift and you are cashed out automatically (an untouched stake is refunded); if the browser kills the tab, your next visit settles it.</p>
         <p class="h-small">Parody. Fake chips, no real money.</p>
       </div>`,
     });
@@ -2273,7 +2302,10 @@ body::before {
     hudRefresh(false);
     heart.target = heart.bpm = bpmFor(mult(m, round.k), round.k);
     quip('Getting steamy. Cash out or push your luck.', 'good');
-    setTimeout(() => pick(18), 650);
+    // keyed to the load event (what the thumbnail tool waits on), so the captured still is reproducible
+    const go = () => setTimeout(() => pick(18), 650);
+    if (document.readyState === 'complete') go();
+    else addEventListener('load', go, { once: true });
   }
 
   window.__flirt = {

@@ -2257,7 +2257,7 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
       sync();
       const q = S.queued;
       S.queued = null;
-      if (q && performance.now() - q.t < 900) act(q.k);
+      if (q && performance.now() - q.t < 900) safe(act(q.k));
       return;
     }
     await dealerTurn();
@@ -2592,6 +2592,26 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
     }
   }
 
+  /* ---------- Safety net ----------
+     Every round flow is async. If one ever throws (a bug, an odd browser), settle the round by the book,
+     pay what is owed exactly once and hand the table back, rather than leaving it stuck. */
+  function safe(p) {
+    if (p && typeof p.catch === 'function') p.catch(recover);
+    return p;
+  }
+  function recover(err) {
+    console.error(err);
+    stopHeartbeat();
+    resolveNow();
+    payout();
+    document.body.classList.remove('hitstop');
+    S.queued = null;
+    S.tableDirty = true;
+    S.busy = false;
+    setPhase('bet');
+    say('Q-Branch rebooted the table. Your chips are safe, Agent.', 'q');
+  }
+
   /* ---------- Input ---------- */
   let idleTimer = 0;
   function poke() {
@@ -2610,14 +2630,14 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
     const b = e.target.closest('.cchip');
     if (b) addChip(Number(b.dataset.v), b);
   });
-  D.clear.addEventListener('click', clearBet);
+  D.clear.addEventListener('click', () => safe(clearBet()));
   D.rebet.addEventListener('click', () => rebet(1));
   D.x2.addEventListener('click', () => rebet(2));
-  D.deal.addEventListener('click', deal);
-  D.hit.addEventListener('click', () => act('H'));
-  D.stand.addEventListener('click', () => act('S'));
-  D.dbl.addEventListener('click', () => act('D'));
-  D.split.addEventListener('click', () => act('P'));
+  D.deal.addEventListener('click', () => safe(deal()));
+  D.hit.addEventListener('click', () => safe(act('H')));
+  D.stand.addEventListener('click', () => safe(act('S')));
+  D.dbl.addEventListener('click', () => safe(act('D')));
+  D.split.addEventListener('click', () => safe(act('P')));
   D.qbtn.addEventListener('click', () => {
     S.q = !S.q;
     Casino.store.set('ltt.q', S.q);
@@ -2645,15 +2665,15 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
       if (t && t.closest && t.closest('button, a')) return; // let a focused control do its own thing
       if (S.phase === 'bet') {
         e.preventDefault();
-        deal();
+        safe(deal());
       } else if (k === ' ') e.preventDefault();
       return;
     }
     const map = { h: 'H', s: 'S', d: 'D', p: 'P' };
-    if (map[k]) return act(map[k]);
+    if (map[k]) return safe(act(map[k]));
     const chipKeys = { 1: 5, 2: 25, 3: 100, 4: 500 };
     if (chipKeys[k]) return addChip(chipKeys[k], rackBtn(chipKeys[k]));
-    if (k === 'c') return clearBet();
+    if (k === 'c') return safe(clearBet());
     if (k === 'r') return rebet(1);
     if (k === 'x') return rebet(2);
     if (k === 'q') return D.qbtn.click();
@@ -2699,7 +2719,9 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
 
   /* ---------- Help ---------- */
   function help() {
-    Casino.dialog({
+    if (document.querySelector('dialog[open]')) return;
+    sfx.tap();
+    const dlg = Casino.dialog({
       title: 'Mission Briefing',
       button: 'Licence accepted',
       html: `
@@ -2719,11 +2741,14 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
           <li>Odd blackjack payouts (half chips) round up in your favour. Table limit ${fmt(TABLE_MAX)}.</li>
         </ul>
         <p><b>Q-Branch</b> lights up the basic-strategy move for these exact rules.</p>
-        <p><b>House edge:</b> about 0.47% of your initial bet with perfect basic strategy, so the RTP is about <b>99.5%</b>. Measured: 100 million simulated rounds of Q-Branch play (two independent simulations) returned 99.53-99.54% of initial bets (99.6% of everything wagered, doubles and splits included). On bets that are odd multiples of 5 the rounded-up blackjack half chip helps you: about 99.65% at 25 and 99.99% at 5. Playing by gut usually costs a couple of percent more.</p>
-        <p><b>Big moments:</b> win both hands of a split and the Double-Oh overlay shows your profit as a multiple of your opening bet.</p>
+        <p><b>House edge:</b> about 0.47% of your initial bet with perfect basic strategy, so the RTP is about <b>99.5%</b> (100 million simulated rounds of Q-Branch play: 99.53-99.54%). On odd multiples of 5 the rounded-up half chip helps you: about 99.65% at 25, 99.99% at 5. Playing by gut usually costs a couple of percent more.</p>
+        <p><b>Big moments:</b> win both hands of a split for the Double-Oh overlay.</p>
         <p><b>Keys:</b> <kbd>Space</kbd>/<kbd>Enter</kbd> deal · <kbd>H</kbd> hit · <kbd>S</kbd> stand · <kbd>D</kbd> double · <kbd>P</kbd> split · <kbd>1</kbd>-<kbd>4</kbd> chips · <kbd>C</kbd> clear · <kbd>R</kbd> rebet · <kbd>X</kbd> ×2 · <kbd>Q</kbd> Q-Branch</p>
         <p>Parody. Fake chips, no real money. Any resemblance to a certain tuxedoed civil servant is purely licensed to thrill.</p>`,
     });
+    // showModal focuses the button at the bottom, which scrolls a long briefing to its end: start at the top.
+    dlg.scrollTop = 0;
+    requestAnimationFrame(() => { dlg.scrollTop = 0; });
   }
 
   /* ---------- Intro: martini-glass iris ---------- */
@@ -2871,7 +2896,7 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
       S.lastChips = null;
       setTimeout(() => {
         placeChips([100, 25, 25, 25, 25]);
-        setTimeout(deal, T(900));
+        setTimeout(() => safe(deal()), T(900));
       }, 250);
     }
   }

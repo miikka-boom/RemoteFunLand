@@ -415,7 +415,7 @@ main {
   .tag small { display: none }
   .tag b .lg { display: none }
   .tag { min-height: 50px }
-  .pa { font-size: 13px; min-height: 36px; padding: 6px 10px }
+  .pa { font-size: 13px; min-height: 45px; padding: 6px 10px } /* two lines reserved: quips never shove the button */
   .main-btn { min-height: 58px; font-size: 21px }
   .help-btn { width: 58px; min-height: 58px }
   main { padding-top: 6px; gap: 7px }
@@ -429,7 +429,7 @@ main {
   .ticket { --stub-w: 214px }
   .tag b { font-size: 15px }
   .tag .tp { font-size: 18px }
-  .pa { min-height: 0; font-size: 13.5px }
+  .pa { min-height: 66px; font-size: 13.5px }
   .main-btn { font-size: 18px; letter-spacing: .05em; padding: 10px; gap: 6px; white-space: nowrap }
   .main-btn .mp { font-size: 16px }
   .help-btn { width: 48px }
@@ -440,7 +440,7 @@ main {
   .side { gap: 6px; top: calc(var(--bar-h) + 8px) }
   .tag { min-height: 46px; padding-top: 5px; padding-bottom: 5px }
   .tag small, .pr-tag, .pr-brand { display: none }
-  .pa { padding: 6px 10px; font-size: 12.5px }
+  .pa { min-height: 59px; padding: 6px 10px; font-size: 12.5px }
   .main-btn { min-height: 54px }
   .help-btn { min-height: 54px }
   .pr-face { padding: 8px 14px }
@@ -455,7 +455,7 @@ main {
   .cell { aspect-ratio: 1.6 }
   .ticket { --stub-h: 98px }
   main, .side { gap: 6px }
-  .pa { min-height: 0; padding: 5px 10px; font-size: 12.5px; line-height: 1.2 }
+  .pa { min-height: 40px; padding: 5px 10px; font-size: 12.5px; line-height: 1.2 }
   .tag { min-height: 46px }
 }
 /* very short phones: the main button docks to the bottom edge */
@@ -759,6 +759,12 @@ main {
     return list[i];
   }
   const race = (p, ms) => Promise.race([p, Casino.sleep(ms)]);
+  // floating text, nudged inwards so long lines never hang off a phone's edge
+  function say(at, text, o = {}) {
+    const p = fx.point(at);
+    const half = Math.min(innerWidth / 2 - 8, text.length * (o.size || 28) * 0.27);
+    return fx.floatText({ x: clamp(p.x, half + 8, innerWidth - half - 8), y: p.y }, text, o);
+  }
   // Haptics only after the visitor has interacted (browsers refuse and log otherwise).
   const buzz = (pattern) => {
     const ua = navigator.userActivation;
@@ -1111,8 +1117,7 @@ main {
     streak: 0,
     hitstop: false,
     rush: false, // second press during Reveal all: same animation, triple speed
-    autoAt: 0,
-    playAt: 0,
+    lastPress: -1e9,
     pairTier: -1, // the visible pair while no trio is out (drives the scratch tension)
     lastTouch: 0,
   };
@@ -1713,9 +1718,9 @@ main {
       buzz(18);
       if (tier >= 4) {
         sfx.heartbeat();
-        fx.floatText(f.el, `Two ${TIERS[tier].pl}...`, { color: TIERS[tier].tc, size: 22, rise: 50, ms: 1300 });
+        say(f.el, `Two ${TIERS[tier].pl}...`, { color: TIERS[tier].tc, size: 22, rise: 50, ms: 1300 });
       } else {
-        fx.floatText(f.el, 'Pair!', { color: TIERS[tier].tc, size: 22, rise: 46 });
+        say(f.el, 'Pair!', { color: TIERS[tier].tc, size: 22, rise: 46 });
       }
     } else if (n === 3) {
       v.legend[tier].classList.remove('hot');
@@ -1785,7 +1790,7 @@ main {
       const base = C.price * C.mults[tier];
       v.amtBox.classList.add('hot');
       fx.anim(v.amtBox, 'c-pop');
-      fx.floatText(v.matched, `+${fmt(base)}`, { color: '#d7263d', size: 34, rise: 90, ms: 1300 });
+      say(v.matched, `+${fmt(base)}`, { color: '#d7263d', size: 34, rise: 90, ms: 1300 });
       await countTo(v.amt, 0, base, 700);
       if (t.kissRev && t.kiss && !S.doubled) await doubleCheque(v, base);
       await sleep(650);
@@ -1818,7 +1823,7 @@ main {
     setTimeout(() => sfx.kiss(), 150);
     fx.burst(v.amtBox, { type: 'kiss', count: 18 });
     fx.anim(v.amtBox, 'c-jelly');
-    fx.floatText(v.amtBox, 'x2 Sealed with a kiss!', { color: '#d7263d', size: 22, rise: 70, ms: 1300 });
+    say(v.amtBox, 'x2 Sealed with a kiss!', { color: '#d7263d', size: 22, rise: 70, ms: 1300 });
     await countTo(v.amt, base, base * 2, 650);
   }
   function onKiss(instant) {
@@ -1832,7 +1837,7 @@ main {
       fx.burst(v.kiss.el, { type: 'kiss', count: 22 });
       fx.burst(v.kiss.el, { type: 'heart', count: 12 });
       buzz([15, 40, 15]);
-      fx.floatText(v.kiss.el, 'x2!', { color: '#d7263d', size: 34, rise: 60 });
+      say(v.kiss.el, 'x2!', { color: '#d7263d', size: 34, rise: 60 });
       if (S.won) {
         const C = CLASSES[t.cls];
         S.chain = S.chain.then(() => doubleCheque(v, C.price * C.mults[t.tier]));
@@ -1922,7 +1927,6 @@ main {
     endStroke();
     S.rush = false;
     S.phase = 'auto';
-    S.autoAt = performance.now();
     clearTimeout(nudgeT);
     updateUI();
     const v = S.view;
@@ -1939,7 +1943,7 @@ main {
       } else if (f.kind === 'cell' && pairTier >= 0 && left <= 2) {
         slow = pairTier >= 4 ? 2.3 : 1.7;
         sfx.heartbeat();
-        fx.floatText(f.el, left === 1 ? 'Last one...' : 'Come on...', { color: '#1d2a44', size: 20, rise: 40, ms: 900 });
+        say(f.el, left === 1 ? 'Last one...' : 'Come on...', { color: '#1d2a44', size: 20, rise: 40, ms: 900 });
         if (pairTier >= 4) {
           sfx.riser(0.8 * SPEED);
           await sleep(220);
@@ -1949,7 +1953,7 @@ main {
       } else if (f.kind === 'kiss' && S.won) {
         slow = 1.8;
         sfx.heartbeat();
-        fx.floatText(f.el, 'Kiss me?', { color: '#d7263d', size: 22, rise: 40, ms: 900 });
+        say(f.el, 'Kiss me?', { color: '#d7263d', size: 22, rise: 40, ms: 900 });
         await sleep(300);
       }
       await autoScratch(v, f, S.rush ? Math.min(slow, 0.35) : slow);
@@ -2074,7 +2078,7 @@ main {
       buzz(40);
       fx.burst(v.stamp, { type: 'ink', count: clamp(Math.round(18 + mult * 1.5), 18, 54), jitter: 120 });
       fx.burst(v.stamp, { type: 'bill', count: clamp(Math.round(5 + mult), 6, 28), speed: [250, 650] });
-      await sleep(320);
+      await sleep(big ? 650 : 320); // let the stamp land before any overlay covers it
       if (!mine) {
         claimTicket(t);
         announce('That cheque was already cashed in another tab. Nice try, forger.', 'bad');
@@ -2089,7 +2093,7 @@ main {
           wallet.win(total);
           Casino.record({ bet: C.price, win: total });
           const pill = document.querySelector('.cbar-bal');
-          fx.floatText(pill || v.amtBox, `+${fmt(total)}`, { color: '#1f8a5b', size: 26, rise: -60 });
+          say(pill || v.amtBox, `+${fmt(total)}`, { color: '#1f8a5b', size: 26, rise: -60 });
           if (pill) fx.burst(pill, { type: 'star', count: clamp(Math.round(6 + mult), 8, 30) });
         }
         S.streak++;
@@ -2102,7 +2106,7 @@ main {
         // near miss: the pair shrugs, a slide whistle falls, then the cheque bounces
         const pair = tally(pt);
         for (const c of pair) fx.anim(c.el, 'nudge');
-        fx.floatText(pair[pair.length - 1].el, 'So close!', { color: TIERS[pt].tc, size: 24, rise: 50, ms: 1100 });
+        say(v.grid, 'So close!', { color: '#d7263d', size: 34, rise: 40, ms: 1200, font: 'var(--f-retro)' });
         sfx.tone({ freq: 1180, to: 300, type: 'sine', dur: 0.45, vol: 0.075 });
         await sleep(rm() ? 60 : 280);
       }
@@ -2188,7 +2192,6 @@ main {
     await printIn(v, sound);
     if (S.view !== v) return;
     S.phase = 'play';
-    S.playAt = performance.now();
     updateUI();
     if (sound) dingDong();
     announce(quip || pick(PRINT_QUIPS));
@@ -2328,9 +2331,10 @@ main {
   wallet.onChange(() => updateUI());
   mainBtn.addEventListener('click', () => {
     if (mainBtn.disabled) return;
+    // A double tap is one press: the second tap of a quick pair never becomes "Reveal all" or "Hurry up".
     const now = performance.now();
-    if (S.phase === 'auto' && now - S.autoAt < 380) return; // a double tap is not a "hurry up"
-    if (S.phase === 'play' && now - S.playAt < 250) return; // nor a "reveal all" the instant a ticket lands
+    if ((S.phase === 'play' || S.phase === 'auto') && now - S.lastPress < 380) return;
+    S.lastPress = now;
     fx.anim(mainBtn, 'c-jelly');
     if (S.phase === 'idle' || S.phase === 'done') {
       sfx.click();
