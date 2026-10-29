@@ -1,0 +1,420 @@
+/* Blue Movie Casino: shared theme for the lobby and every game.
+   Each page links this file after the Google Fonts stylesheet, then layers its own styles on top.
+   Override --accent (and --accent-2) on :root or body to tint the shared components per game. */
+:root {
+  --velvet: #12081f;
+  --velvet-2: #1c0e31;
+  --velvet-3: #2a1747;
+  --ink: #fbf1ff;
+  --ink-soft: #c4b0d8;
+  --rule: rgba(251, 241, 255, .14);
+  --pink: #ff3d9a;
+  --hot: #ff2e63;
+  --gold: #ffcf4a;
+  --gold-2: #e09a00;
+  --cyan: #3ef0ff;
+  --mint: #4dffb0;
+  --good: #4dffb0;
+  --bad: #ff4d6d;
+  --accent: var(--pink);
+  --accent-2: var(--gold);
+  --f-neon: "Monoton", "Arial Black", Impact, sans-serif;
+  --f-retro: "Shrikhand", "Cooper Black", Georgia, serif;
+  --f-marquee: "Bungee", "Arial Black", Impact, sans-serif;
+  --f-cond: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --f-text: "Barlow", "Helvetica Neue", Arial, sans-serif;
+  --bar-h: 52px;
+  --ease-back: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-out: cubic-bezier(.16, 1, .3, 1);
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0 }
+html { -webkit-text-size-adjust: 100% }
+[hidden] { display: none !important }
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--velvet);
+  color: var(--ink);
+  font: 400 15px/1.5 var(--f-text);
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+  overflow-x: hidden;
+}
+a { color: var(--accent-2) }
+button { font: inherit; color: inherit }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 2px;
+}
+
+/* ---------- Top bar (built by Casino.init) ---------- */
+.cbar {
+  position: sticky;
+  top: 0;
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: calc(var(--bar-h) + env(safe-area-inset-top, 0px));
+  padding: env(safe-area-inset-top, 0px) max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));
+  background: linear-gradient(180deg, rgba(18, 8, 31, .96), rgba(18, 8, 31, .82));
+  border-bottom: 1px solid var(--rule);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+.cbar-back {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 2px;
+  font: 700 14px/1 var(--f-cond);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  text-decoration: none;
+  white-space: nowrap;
+}
+.cbar-back:hover { color: var(--ink) }
+.cbar-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 clamp(17px, 4.6vw, 22px)/1.25 var(--f-retro);
+  color: var(--accent);
+  text-shadow: 0 0 14px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+.cbar-bail {
+  flex: none;
+  cursor: pointer;
+  border: 0;
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: linear-gradient(180deg, #8dffcf, var(--mint));
+  color: #07291b;
+  font: 800 13px/1 var(--f-cond);
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  box-shadow: 0 3px 0 #1d8a5b, 0 0 18px rgba(77, 255, 176, .45);
+  animation: c-beg 1.2s ease-in-out infinite;
+}
+.cbar-bail:active { translate: 0 2px; box-shadow: 0 1px 0 #1d8a5b }
+.cbar-bal {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 12px 5px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, .35);
+  box-shadow: inset 0 0 0 1px rgba(255, 207, 74, .35);
+  font: 800 18px/1 var(--f-cond);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: .02em;
+  color: var(--gold);
+  transition: box-shadow .2s, color .2s;
+}
+.cbar-bal.up { color: #fff6c8; box-shadow: inset 0 0 0 1px var(--gold), 0 0 22px rgba(255, 207, 74, .7) }
+.cbar-bal.down { color: #ffd0d8 }
+.cbar-bal b { font-weight: 800; min-width: 3ch; text-align: right }
+.cchip-icon, .cbar-chip {
+  --chip: var(--accent);
+  flex: none;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, var(--chip) 0 42%, #fff 43% 48%, var(--chip) 49%),
+    repeating-conic-gradient(var(--chip) 0 30deg, #fff 30deg 45deg);
+  box-shadow: 0 0 0 1.5px rgba(0, 0, 0, .35), 0 2px 4px rgba(0, 0, 0, .4);
+}
+.cbar-mute {
+  flex: none;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .06);
+  color: var(--ink);
+}
+.cbar-mute svg { width: 20px; height: 20px }
+.cbar-mute[aria-pressed="true"] { color: var(--ink-soft); background: rgba(255, 77, 109, .14) }
+@media (max-width: 480px) {
+  .cbar { gap: 8px }
+  .cbar.broke .cbar-title { display: none }
+  .cbar.broke .cbar-bail { margin-left: auto }
+  .cbar-bal { font-size: 16px; padding-right: 10px }
+}
+
+/* ---------- Buttons ---------- */
+.cbtn {
+  --b1: #ff6db5;
+  --b2: var(--pink);
+  --b3: #a3105a;
+  --bt: #fff;
+  position: relative;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 0;
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--b1), var(--b2));
+  color: var(--bt);
+  font: 800 17px/1 var(--f-cond);
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  text-shadow: 0 1px 0 rgba(0, 0, 0, .25);
+  box-shadow: 0 5px 0 var(--b3), 0 8px 22px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .45);
+  transition: translate .07s, box-shadow .07s, filter .15s, scale .15s var(--ease-back);
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+}
+.cbtn:hover { filter: brightness(1.08) }
+.cbtn:active, .cbtn.is-pressed { translate: 0 4px; box-shadow: 0 1px 0 var(--b3), 0 3px 10px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .35) }
+.cbtn:disabled, .cbtn[aria-disabled="true"] { cursor: not-allowed; filter: grayscale(.85) brightness(.6); translate: 0 2px; box-shadow: 0 3px 0 var(--b3) }
+.cbtn--gold { --b1: #ffe58a; --b2: var(--gold); --b3: #9a6500; --bt: #2b1600; text-shadow: 0 1px 0 rgba(255, 255, 255, .4) }
+.cbtn--mint { --b1: #a6ffd9; --b2: var(--mint); --b3: #12784b; --bt: #062a1a; text-shadow: none }
+.cbtn--cyan { --b1: #a8f8ff; --b2: var(--cyan); --b3: #0a7a86; --bt: #032a30; text-shadow: none }
+.cbtn--hot { --b1: #ff7d98; --b2: var(--hot); --b3: #8a0a2c }
+.cbtn--ghost { --b1: rgba(255, 255, 255, .1); --b2: rgba(255, 255, 255, .05); --b3: rgba(0, 0, 0, .5); --bt: var(--ink); text-shadow: none; box-shadow: 0 4px 0 var(--b3), inset 0 0 0 1px var(--rule) }
+.cbtn--ghost:active { box-shadow: 0 1px 0 var(--b3), inset 0 0 0 1px var(--rule) }
+.cbtn--big { min-height: 60px; padding: 14px 30px; font-size: 24px; border-radius: 18px }
+.cbtn--sm { min-height: 34px; padding: 7px 12px; font-size: 14px; border-radius: 10px; box-shadow: 0 3px 0 var(--b3), inset 0 1px 0 rgba(255, 255, 255, .35) }
+.cbtn--sm:active { translate: 0 2px; box-shadow: 0 1px 0 var(--b3) }
+.cbtn--round { width: 44px; padding: 0; border-radius: 50% }
+
+/* Bet stepper: [-] 50 [+] */
+.cstep { display: inline-flex; align-items: center; gap: 6px; font: 800 20px/1 var(--f-cond); font-variant-numeric: tabular-nums }
+.cstep output { min-width: 4ch; text-align: center; color: var(--gold) }
+.clabel { font: 700 12px/1 var(--f-cond); letter-spacing: .16em; text-transform: uppercase; color: var(--ink-soft) }
+
+/* ---------- Casino chips (selectors and bet stacks) ---------- */
+.cchips { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center }
+.cchip {
+  --chip: #2f7bff;
+  cursor: pointer;
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  font: 800 14px/1 var(--f-cond);
+  text-shadow: 0 1px 1px rgba(0, 0, 0, .6);
+  background:
+    radial-gradient(circle, var(--chip) 0 52%, rgba(255, 255, 255, .9) 53% 56%, var(--chip) 57%),
+    repeating-conic-gradient(var(--chip) 0 30deg, #fff 30deg 45deg);
+  box-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 0 2px rgba(0, 0, 0, .25), inset 0 0 0 3px rgba(0, 0, 0, .12);
+  transition: translate .15s var(--ease-back), box-shadow .15s;
+  touch-action: manipulation;
+}
+.cchip[data-v="1"] { --chip: #8a8f9e }
+.cchip[data-v="5"] { --chip: #e8334a }
+.cchip[data-v="10"] { --chip: #2f7bff }
+.cchip[data-v="25"] { --chip: #1fae5b }
+.cchip[data-v="50"] { --chip: #ff8a1f }
+.cchip[data-v="100"] { --chip: #1c1c24 }
+.cchip[data-v="250"] { --chip: #d43ad6 }
+.cchip[data-v="500"] { --chip: #7b3cff }
+.cchip[data-v="1000"] { --chip: #d4a017 }
+.cchip[aria-pressed="true"] { translate: 0 -6px; box-shadow: 0 9px 0 rgba(0, 0, 0, .35), 0 0 0 3px var(--gold), 0 0 22px rgba(255, 207, 74, .6) }
+
+/* ---------- Panels, dialogs, toasts ---------- */
+.cpanel {
+  border-radius: 18px;
+  background: linear-gradient(180deg, var(--velvet-3), var(--velvet-2));
+  box-shadow: 0 0 0 1px var(--rule), 0 14px 40px rgba(0, 0, 0, .45);
+}
+.cdialog {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 48px);
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  background: linear-gradient(180deg, #2c184b, #170b29);
+  color: var(--ink);
+  box-shadow: 0 0 0 1px var(--rule), 0 30px 80px rgba(0, 0, 0, .7);
+}
+.cdialog::backdrop { background: rgba(8, 2, 16, .72); -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px) }
+.cdialog[open] { animation: c-rise .35s var(--ease-back) }
+.cdialog form { display: grid; gap: 14px; padding: 20px 20px 18px }
+.cdialog h2 { margin: 0; font: 400 28px/1.1 var(--f-retro); color: var(--accent) }
+.cdialog-body { display: grid; gap: 10px; color: var(--ink-soft); font-size: 15px }
+.cdialog-body p { margin: 0 }
+.cdialog-body table { width: 100%; border-collapse: collapse; font: 600 15px/1.3 var(--f-cond) }
+.cdialog-body td, .cdialog-body th { padding: 6px 4px; border-bottom: 1px solid var(--rule); text-align: left }
+.cdialog-body td:last-child, .cdialog-body th:last-child { text-align: right; color: var(--gold); font-variant-numeric: tabular-nums }
+.cdialog .cbtn { justify-self: end }
+.ctoast {
+  position: fixed;
+  left: 50%;
+  top: calc(var(--bar-h) + env(safe-area-inset-top, 0px) + 12px);
+  z-index: 9600;
+  max-width: calc(100vw - 32px);
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(20, 8, 36, .94);
+  box-shadow: 0 0 0 1px var(--rule), 0 10px 30px rgba(0, 0, 0, .5);
+  font: 700 15px/1.2 var(--f-cond);
+  letter-spacing: .04em;
+  text-align: center;
+  pointer-events: none;
+  translate: -50% 0;
+  animation: c-toast 2.4s var(--ease-out) forwards;
+}
+.ctoast.good { color: var(--mint) }
+.ctoast.bad { color: #ff9db0 }
+
+/* ---------- Effects layer (built by Casino.fx) ---------- */
+.cfx-canvas { position: fixed; inset: 0; z-index: 9400; width: 100%; height: 100%; pointer-events: none }
+.cfx-flash { position: fixed; inset: 0; z-index: 9300; pointer-events: none; opacity: 0; animation: c-flash 260ms ease-out forwards }
+.cfx-float {
+  position: fixed;
+  z-index: 9450;
+  pointer-events: none;
+  translate: -50% -50%;
+  font: 800 28px/1 var(--f-cond);
+  letter-spacing: .02em;
+  white-space: nowrap;
+  text-shadow: 0 2px 0 rgba(0, 0, 0, .55), 0 0 18px currentColor;
+  animation: c-float 1.1s var(--ease-out) forwards;
+}
+
+/* Big win overlay */
+.cbig {
+  position: fixed;
+  inset: 0;
+  z-index: 9500;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  cursor: pointer;
+  background: radial-gradient(circle at 50% 45%, rgba(60, 10, 70, .55), rgba(8, 2, 16, .88) 70%);
+  animation: c-fade .25s ease-out;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.cbig.out { animation: c-fadeout .35s ease-in forwards }
+.cbig-rays {
+  position: absolute;
+  left: 50%;
+  top: 45%;
+  width: 240vmax;
+  height: 240vmax;
+  translate: -50% -50%;
+  background: repeating-conic-gradient(from 0deg, rgba(255, 207, 74, .16) 0 9deg, transparent 9deg 18deg);
+  -webkit-mask: radial-gradient(circle, #000 0 12%, transparent 45%);
+  mask: radial-gradient(circle, #000 0 12%, transparent 45%);
+  animation: c-spin 14s linear infinite;
+}
+.cbig[data-level="3"] .cbig-rays, .cbig[data-level="4"] .cbig-rays { background: repeating-conic-gradient(from 0deg, rgba(255, 61, 154, .22) 0 7deg, rgba(255, 207, 74, .16) 7deg 14deg, transparent 14deg 21deg); animation-duration: 8s }
+.cbig-inner { position: relative; display: grid; justify-items: center; gap: 6px; padding: 16px; text-align: center }
+.cbig-label {
+  max-width: 94vw;
+  font: 400 clamp(40px, 12vw, 120px)/.95 var(--f-retro);
+  letter-spacing: .01em;
+  background: linear-gradient(180deg, #fff7c9 10%, var(--gold) 45%, #ff9a3c 70%, var(--pink));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 4px 0 #5a1040) drop-shadow(0 0 30px rgba(255, 61, 154, .6));
+  animation: c-slam .6s var(--ease-back) both;
+  text-wrap: balance;
+}
+.cbig-amt {
+  font: 800 clamp(40px, 11vw, 92px)/1 var(--f-cond);
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  text-shadow: 0 3px 0 rgba(0, 0, 0, .5), 0 0 26px rgba(255, 207, 74, .8);
+  animation: c-rise .5s .15s var(--ease-back) both;
+}
+.cbig-sub { font: 700 14px/1.3 var(--f-cond); letter-spacing: .18em; text-transform: uppercase; color: var(--ink-soft); animation: c-fade .4s .5s both }
+
+/* ---------- Utility animations (retrigger with Casino.fx.anim(el, name)) ---------- */
+.c-pop { animation: c-pop .42s var(--ease-back) }
+.c-jelly { animation: c-jelly .6s ease-out }
+.c-wobble { animation: c-wobble .55s ease-in-out }
+.c-slam { animation: c-slam .5s var(--ease-back) both }
+.c-shine { position: relative; overflow: hidden }
+.c-shine::after {
+  content: "";
+  position: absolute;
+  inset: -20% auto -20% -60%;
+  width: 40%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .55), transparent);
+  rotate: 12deg;
+  animation: c-shine 2.8s ease-in-out infinite;
+  pointer-events: none;
+}
+/* Chasing marquee bulbs around any element with a border radius */
+.c-bulbs { position: relative }
+.c-bulbs::before {
+  content: "";
+  position: absolute;
+  inset: -7px;
+  padding: 7px;
+  border-radius: inherit;
+  background: radial-gradient(circle, #fffbe0 0 2px, var(--gold) 2.6px, rgba(255, 207, 74, .35) 3.6px, transparent 4.6px) 0 0 / 15px 15px;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: c-chase .7s steps(2) infinite;
+  pointer-events: none;
+}
+/* VHS grain and scanlines; opt in with <body class="c-vhs"> */
+.c-vhs::after {
+  content: "";
+  position: fixed;
+  inset: -50%;
+  z-index: 9200;
+  pointer-events: none;
+  opacity: .07;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  animation: c-grain .9s steps(5) infinite;
+}
+.c-vhs::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9201;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(0, 0, 0, .14) 0 1px, transparent 1px 3px);
+  mix-blend-mode: multiply;
+}
+
+@keyframes c-pop { 0% { scale: 1 } 35% { scale: 1.28 } 65% { scale: .94 } 100% { scale: 1 } }
+@keyframes c-jelly { 0% { scale: 1 1 } 25% { scale: 1.25 .78 } 45% { scale: .82 1.18 } 65% { scale: 1.1 .92 } 85% { scale: .97 1.03 } 100% { scale: 1 1 } }
+@keyframes c-wobble { 0%, 100% { rotate: 0deg } 20% { rotate: -9deg } 40% { rotate: 7deg } 60% { rotate: -5deg } 80% { rotate: 3deg } }
+@keyframes c-slam { 0% { scale: 2.6; opacity: 0; filter: blur(6px) } 60% { scale: .92; opacity: 1; filter: blur(0) } 100% { scale: 1; opacity: 1 } }
+@keyframes c-rise { from { translate: 0 30px; opacity: 0 } to { translate: 0 0; opacity: 1 } }
+@keyframes c-fade { from { opacity: 0 } to { opacity: 1 } }
+@keyframes c-fadeout { to { opacity: 0 } }
+@keyframes c-spin { to { rotate: 360deg } }
+@keyframes c-flash { 0% { opacity: var(--o, .7) } 100% { opacity: 0 } }
+@keyframes c-float { 0% { opacity: 0; scale: .4; translate: -50% -50% } 18% { opacity: 1; scale: 1.15 } 30% { scale: 1 } 75% { opacity: 1 } 100% { opacity: 0; translate: -50% calc(-50% + var(--rise, -80px)) } }
+@keyframes c-toast { 0% { opacity: 0; translate: -50% -14px } 10% { opacity: 1; translate: -50% 0 } 85% { opacity: 1 } 100% { opacity: 0; translate: -50% -8px } }
+@keyframes c-shine { 0%, 55% { left: -60% } 100% { left: 130% } }
+@keyframes c-chase { to { background-position: 7.5px 0 } }
+@keyframes c-grain { 0% { translate: 0 0 } 20% { translate: -6% 4% } 40% { translate: 5% -7% } 60% { translate: -3% 8% } 80% { translate: 7% 2% } 100% { translate: 0 0 } }
+@keyframes c-beg { 0%, 100% { box-shadow: 0 3px 0 #1d8a5b, 0 0 10px rgba(77, 255, 176, .3) } 50% { box-shadow: 0 3px 0 #1d8a5b, 0 0 26px rgba(77, 255, 176, .85); filter: brightness(1.12) } }
+
+@media (prefers-reduced-motion: reduce) {
+  .c-shine::after, .c-bulbs::before, .c-vhs::after, .cbig-rays, .cbar-bail { animation: none }
+  .c-pop, .c-jelly, .c-wobble { animation-duration: .01ms }
+}
