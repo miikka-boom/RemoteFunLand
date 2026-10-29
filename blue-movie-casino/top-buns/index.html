@@ -641,8 +641,9 @@ body {
   const crashFrom = (u) => Math.min(CAP_C, Math.max(100, Math.floor(97 / (1 - u)))); // cents
 
   /* Debug hooks (harmless; fake chips): #crash=1.5,3.2 forces crash points in turn, #warp=s starts the flight s seconds in,
-     #speed=k runs the flight clock k times faster, #thumb stages the gallery still, #debug exposes window.TopBuns. */
-  const HP = new URLSearchParams(location.hash.slice(1));
+     #speed=k runs the flight clock k times faster, #thumb stages the gallery still, #debug exposes window.TopBuns.
+     They only work under automation (navigator.webdriver), so visitors can't force results. */
+  const HP = new URLSearchParams(navigator.webdriver ? location.hash.slice(1) : '');
   const DBG = {
     crash: (HP.get('crash') || '').split(',').map(Number).filter((v) => v >= 1).map((v) => Math.min(CAP_C, Math.round(v * 100))),
     warp: Math.max(0, +HP.get('warp') || 0),

@@ -133,7 +133,9 @@ main {
 .sails .bulb { fill: #ffe8a6; animation: bulb 1s steps(1) infinite }
 .sails .bulb.b1 { animation-delay: -.5s }
 .stage.spinning .sails .bulb { animation-duration: .32s }
-.stage.spinning .sails { filter: drop-shadow(0 0 6px rgba(255, 196, 96, .7)) }
+/* a static warm halo behind the spinning sails (a filter on the rotating SVG would re-rasterise every frame) */
+.wheelwrap::before { content: ""; position: absolute; inset: -22%; z-index: -2; border-radius: 50%; pointer-events: none; background: radial-gradient(closest-side, rgba(255, 196, 96, .34), rgba(255, 150, 80, .12) 60%, transparent); opacity: 0; transition: opacity .5s }
+.stage.spinning .wheelwrap::before, .stage.party .wheelwrap::before { opacity: 1 }
 .wheel {
   position: absolute;
   inset: 0;
@@ -402,11 +404,11 @@ body:not(.focus) .stage.compact .medal-sub { visibility: hidden }
 .spin-halo { grid-area: spin; align-self: stretch; margin: -5px; border-radius: 22px; pointer-events: none; opacity: 0; box-shadow: 0 0 0 2px rgba(255, 236, 170, .8), 0 0 28px 6px rgba(255, 196, 80, .6); transition: opacity .3s }
 .dock.ready .spin-halo { animation: halo 1.5s ease-in-out infinite }
 /* win party on the stage: spotlights sweep, the sails' bulbs and the footlights race */
-.spots { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .5s }
+.spots { position: absolute; inset: 0; z-index: 1; pointer-events: none; opacity: 0; transition: opacity .7s }
 .spots i { position: absolute; bottom: -4%; width: 34%; height: 120%; transform-origin: 50% 100%; background: linear-gradient(0deg, rgba(255, 236, 170, .38), rgba(255, 210, 120, .12) 55%, transparent 85%); clip-path: polygon(44% 100%, 56% 100%, 100% 0, 0 0); mix-blend-mode: screen }
 .spots i:first-child { left: 2% }
 .spots i:last-child { right: 2% }
-.stage.party .spots { opacity: 1 }
+.stage.party .spots { opacity: 1; transition-duration: .08s } /* lights snap on, fade off */
 .stage.party .spots i:first-child { animation: sweepL 1.3s ease-in-out infinite alternate }
 .stage.party .spots i:last-child { animation: sweepR 1.3s ease-in-out infinite alternate }
 .stage.party .sails .bulb { animation-duration: .16s }
@@ -928,8 +930,9 @@ body.focus .focus-cap { opacity: 1; translate: 0 0 }
   const TIER_FR = ['', 'OOH LA LA!', 'MAGNIFIQUE!', 'TRÈS CHAUD!', 'LE GRAND FINALE!'];
 
   /* ---------- Debug hooks (URL hash): #force=17,0 queues results, #speed=4 plays spins faster,
-     #demo places a showcase layout and spins it, #freeze=5.2 holds the spin at that plan time. ---------- */
-  const HASH = new URLSearchParams(location.hash.slice(1));
+     #demo places a showcase layout and spins it, #freeze=5.2 holds the spin at that plan time.
+     They only work under automation (navigator.webdriver), so visitors can't force results. ---------- */
+  const HASH = new URLSearchParams(navigator.webdriver ? location.hash.slice(1) : '');
   const DEBUG = {
     force: (HASH.get('force') || '').split(',').filter((s) => s !== '').map(Number).filter((n) => Number.isInteger(n) && n >= 0 && n <= 36),
     speed: Number(HASH.get('speed')) || 0,
@@ -1568,8 +1571,29 @@ body.focus .focus-cap { opacity: 1; translate: 0 0 }
     c.fill();
     return cv;
   }
+  // Sprites are cached per size: the phone wheel flips between its header size and its flown-up size every
+  // spin, and rebuilding the big set (gradients, 37 numbers, frets) mid-flight would stall the fly-in.
+  const spriteCache = new Map();
+  function spritesFor(R) {
+    for (const s of spriteCache.values()) if (Math.abs(s.R - R) < 1.5) return s;
+    const s = { R, rotor: buildRotor(R), stator: buildStator(R), shine: buildShine(R) };
+    spriteCache.set(R, s);
+    if (spriteCache.size > 2) spriteCache.delete(spriteCache.keys().next().value); // the header size + the flown-up size
+    return s;
+  }
+  // Phones: build the flown-up set ahead of the first spin, while the page is idle.
+  const focusSize = () => {
+    const barH = document.querySelector('.cbar')?.getBoundingClientRect().bottom || 52;
+    return Math.min(innerWidth - 40, (innerHeight - barH) * 0.6);
+  };
+  function prewarm() {
+    if (!isPhone() || !wrap.offsetWidth || document.body.classList.contains('focus')) return;
+    const dpr = Math.min(2, devicePixelRatio || 1);
+    const px = Math.max(64, Math.round(focusSize() * dpr));
+    (window.requestIdleCallback || ((f) => setTimeout(f, 50)))(() => spritesFor((px / 2) * 0.985));
+  }
   function buildSprites(R) {
-    sprites = { R, rotor: buildRotor(R), stator: buildStator(R), shine: buildShine(R) };
+    sprites = spritesFor(R);
   }
 
   /* ---------- Wheel state, sizing and render loop ---------- */
@@ -1605,11 +1629,14 @@ body.focus .focus-cap { opacity: 1; translate: 0 0 }
     document.fonts.load('40px Federant').then(() => {
       if (fontsReady || !document.fonts.check('40px Federant')) return;
       fontsReady = true;
+      spriteCache.clear();
       if (canvas.width) buildSprites((canvas.width / 2) * 0.985);
+      setTimeout(prewarm, 400);
     }).catch(() => {});
   };
   tryFont();
   addEventListener('load', tryFont);
+  setTimeout(() => { if (!fontsReady) prewarm(); }, 3000);
   if (document.fonts) document.fonts.ready.then(tryFont);
 
   function draw(now) {
@@ -2344,7 +2371,7 @@ body.focus .focus-cap { opacity: 1; translate: 0 0 }
       const r = wrap.getBoundingClientRect();
       const barH = document.querySelector('.cbar')?.getBoundingClientRect().bottom || 52;
       const avail = innerHeight - barH;
-      const size = Math.min(innerWidth - 40, avail * 0.6);
+      const size = focusSize();
       const cx = innerWidth / 2;
       const cy = barH + avail * 0.44;
       wheel.scale = size / r.width;
@@ -2649,7 +2676,7 @@ body.focus .focus-cap { opacity: 1; translate: 0 0 }
         fx.burst(cells[id].el, { type: 'coin', count: 6 + Math.min(14, pays(id)), speed: [200, 520] });
       }, i * 110);
     });
-    const quip = WIN();
+    const quip = DEBUG.demo ? 'Ooh la la!' : WIN(); // the #demo still (gallery thumbnail) always gets the classic
     callout(streak > 1 ? `${quip} ×${streak}` : quip, 'win');
     winlineEl.textContent = '+0';
     fx.countUp(winlineEl, 0, r.ret, { ms: Math.min(1600, 500 + won.length * 120 + Math.log10(r.ret + 1) * 250), format: (v) => `+${fmt(v)}` });
@@ -2710,6 +2737,7 @@ body.focus .focus-cap { opacity: 1; translate: 0 0 }
   function party(ms, boost) {
     sailBoost = Math.max(sailBoost, fx.reducedMotion ? Math.min(2, boost) : boost);
     snd.whirr(Math.min(1.6, 0.7 + boost * 0.06));
+    if (!stage.classList.contains('party')) S.noise({ type: 'lowpass', freq: 1600, dur: 0.05, vol: 0.14 }); // spotlights clunk on
     stage.classList.add('party');
     clearTimeout(partyTimer);
     partyTimer = setTimeout(() => stage.classList.remove('party'), ms);
