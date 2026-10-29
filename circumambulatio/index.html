@@ -3,56 +3,50 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Circumambulatio</title>
-<meta name="description" content="A 75-second tangram title sequence at 128 BPM. Seven pieces slam through shadow, anima, the night sea and the Self, and lock as a square inside a circle.">
+<meta name="description" content="A little tangram square looks for a shadow that fits, and finds the other six pieces holding open a hole the shape of itself.">
 <meta name="theme-color" content="#07060a">
 <style>
 :root { color-scheme: dark; }
 * { box-sizing: border-box }
 html, body { margin: 0; height: 100%; background: #07060a; overflow: hidden }
 body {
-  color: #f4efe4;
-  font: 16px/1.3 Impact, "Arial Black", "Haettenschweiler", sans-serif;
-  -webkit-font-smoothing: antialiased;
+  color: #f4ecdc;
+  font: 17px/1.4 Palatino, "Palatino Linotype", "Iowan Old Style", Georgia, serif;
   touch-action: none;
 }
 canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block }
 .back {
   position: fixed; z-index: 5;
-  top: max(10px, env(safe-area-inset-top));
-  left: max(12px, env(safe-area-inset-left));
-  color: rgba(244, 239, 228, .72);
-  font: 500 12px/1.2 ui-monospace, Menlo, Consolas, monospace;
+  top: max(12px, env(safe-area-inset-top));
+  left: max(14px, env(safe-area-inset-left));
+  color: rgba(244, 236, 220, .55);
+  font: 500 12px/1 ui-monospace, Menlo, Consolas, monospace;
   letter-spacing: .08em;
   text-decoration: none;
   touch-action: manipulation;
 }
-.back:focus-visible, button:focus-visible { outline: 2px solid #f4efe4; outline-offset: 3px }
+.back:hover { color: #f4ecdc }
+.back:focus-visible, button:focus-visible { outline: 2px solid #f0ddb0; outline-offset: 3px }
 #gate {
-  position: fixed; inset: 0; z-index: 4;
+  position: fixed; z-index: 4; inset: 0;
   display: grid; align-content: end; justify-items: center;
-  padding: 0 20px max(28px, env(safe-area-inset-bottom));
-  background: linear-gradient(to top, rgba(7,6,10,.72), rgba(7,6,10,0) 42%);
-  transition: opacity .12s linear;
+  padding: 0 22px max(26px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(7,6,10,.78), rgba(7,6,10,0) 46%);
 }
 #gate.gone { opacity: 0; pointer-events: none }
 button {
-  min-height: 52px; min-width: 168px;
-  padding: 12px 28px;
-  border: 0; cursor: pointer;
-  background: #f4efe4; color: #07060a;
-  font: inherit; font-size: 22px; letter-spacing: .16em;
-  text-indent: .16em;
-  touch-action: manipulation;
+  min-height: 48px; min-width: 148px;
+  padding: 10px 26px;
+  border: 1px solid rgba(240, 221, 176, .8);
+  background: #f0ddb0; color: #1a140e;
+  font: inherit; font-size: 16px; letter-spacing: .18em; text-indent: .18em;
+  cursor: pointer; touch-action: manipulation;
 }
-button:hover { background: #e24b3a; color: #fff }
+button:hover { background: #fff6e4 }
 .hint {
   margin: 10px 0 0;
   font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace;
-  letter-spacing: .14em;
-  color: rgba(244, 239, 228, .7);
-}
-@media (prefers-reduced-motion: reduce) {
-  #gate { transition: none }
+  letter-spacing: .12em; color: rgba(244, 236, 220, .62);
 }
 </style>
 
@@ -60,19 +54,14 @@ button:hover { background: #e24b3a; color: #fff }
 <canvas id="stage" aria-hidden="true"></canvas>
 <div id="gate">
   <button id="begin" type="button">BEGIN</button>
-  <p class="hint">75 SECONDS · 128 BPM · SOUND ON</p>
+  <p class="hint">A SHORT STORY · SOUND ON</p>
 </div>
 
 <script>
 (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const D = Math.PI / 180;
-  const BPM = 128;
-  const BEAT = 60 / BPM;
-  const BARS = 40;
-  const BEATS = BARS * 4;
-  const END = BEATS * BEAT;
-  const CIRCLE = 4 * Math.SQRT2;
+  const END = 88;
   const SQRT2 = Math.SQRT2;
 
   const centroid = (poly) => {
@@ -98,109 +87,176 @@ button:hover { background: #e24b3a; color: #fff }
     square: centerPoly([[0, 0], [2 * SQRT2, 0], [2 * SQRT2, 2 * SQRT2], [0, 2 * SQRT2]]),
     para: centerPoly([[0, 0], [4, 0], [6, 2], [2, 2]]),
   };
-  const ORDER = ['largeA', 'largeB', 'medium', 'para', 'square', 'smallA', 'smallB'];
+  const ORDER = ['largeA', 'largeB', 'para', 'medium', 'smallA', 'smallB', 'square'];
   const INK = {
-    largeA: '#e8c56b', largeB: '#e24b3a', medium: '#f6f1e6',
-    smallA: '#3d7ec9', smallB: '#e48aa4', square: '#fff8ee', para: '#2f9e86',
-  };
-  const INK_DARK = {
-    largeA: '#8a6a2e', largeB: '#8e261c', medium: '#b7ad96',
-    smallA: '#1c4478', smallB: '#8d4458', square: '#d9cbb0', para: '#14685a',
-  };
-  const DIR = {
-    largeA: [-1, 0.25, 2.4], largeB: [1, -0.15, -2.2], medium: [0.15, 1, 1.7],
-    smallA: [-0.85, -1, -1.9], smallB: [0.9, 0.75, 2.1], square: [0.05, -1, 1.4],
-    para: [-0.35, -0.9, -1.5],
-  };
-  const POSES = {
-    scatter: {
-      largeA: { x: -5.6, y: 3.6, rot: 20 * D }, largeB: { x: 5.8, y: -3.2, rot: 200 * D },
-      medium: { x: 0.2, y: 6.4, rot: -30 * D }, smallA: { x: -6.4, y: -3.4, rot: 80 * D },
-      smallB: { x: 6.2, y: 4, rot: -20 * D }, square: { x: 0.15, y: 0.05, rot: 45 * D },
-      para: { x: 3.4, y: -6.5, rot: 12 * D },
-    },
-    person: {
-      largeA: { x: 0, y: -2.4, rot: 45 * D }, largeB: { x: -6.4, y: -3.6, rot: 18 * D },
-      medium: { x: 0, y: 6.35, rot: 225 * D }, smallA: { x: -5.16, y: 0.24, rot: 45 * D },
-      smallB: { x: 5.16, y: 0.24, rot: 45 * D }, square: { x: 0, y: 3.25, rot: 45 * D },
-      para: { x: 0, y: 0.09, rot: 0 },
-    },
-    bird: {
-      largeA: { x: -0.348, y: 2.625, rot: 225 * D }, largeB: { x: 0.2, y: -2.49, rot: 45 * D },
-      medium: { x: -5.279, y: 1.503, rot: 315 * D }, smallA: { x: 7.864, y: 0.719, rot: 8 * D },
-      smallB: { x: -6.3, y: -2.15, rot: 210 * D }, square: { x: 5.413, y: 0.343, rot: 15 * D },
-      para: { x: 0, y: 0, rot: -6 * D },
-    },
-    boat: {
-      para: { x: -0.2, y: 0, rot: 0 }, largeA: { x: -0.167, y: -2.489, rot: 45 * D },
-      largeB: { x: -1.15, y: 2.49, rot: 225 * D }, medium: { x: 5.667, y: -2.501, rot: 15 * D },
-      smallA: { x: -3.4, y: 6.15, rot: 150 * D }, smallB: { x: 0.2, y: -6.05, rot: 45 * D },
-      square: { x: 4.85, y: 1.35, rot: 6 * D },
-    },
-    tree: {
-      para: { x: 0, y: -2.15, rot: 90 * D }, largeA: { x: 0, y: 2.3, rot: 225 * D },
-      largeB: { x: 5.55, y: -2.55, rot: 225 * D }, medium: { x: 0, y: 5.95, rot: 225 * D },
-      smallA: { x: -4.55, y: 6.35, rot: 150 * D }, smallB: { x: 4.15, y: 6.55, rot: 30 * D },
-      square: { x: 6.4, y: 4.6, rot: 45 * D },
-    },
-    mandala: {
-      largeA: { x: 0, y: 3.49, rot: 225 * D }, largeB: { x: 0, y: -3.49, rot: 45 * D },
-      medium: { x: 5.1, y: 0, rot: 135 * D }, smallA: { x: -3.1, y: 6.15, rot: 160 * D },
-      smallB: { x: 3.1, y: 6.15, rot: 20 * D }, square: { x: 0, y: 0, rot: 45 * D },
-      para: { x: -5.16, y: 0, rot: 90 * D },
-    },
-    square: {
-      largeA: { x: -2.6667, y: 0, rot: 135 * D }, largeB: { x: 0, y: 2.6667, rot: 45 * D },
-      medium: { x: 2.6667, y: -2.6667, rot: 90 * D }, smallA: { x: 0, y: -1.3333, rot: 225 * D },
-      smallB: { x: 3.3333, y: 2, rot: 315 * D }, square: { x: 2, y: 0, rot: 45 * D },
-      para: { x: -1, y: -3, rot: 0 },
-    },
-  };
-  const RADIUS = { scatter: 12.2, person: 11.1, bird: 11.4, boat: 10.8, tree: 12.2, mandala: 10.6, square: 7.15 };
-  const FLASH = {
-    CIRCUM: '#e8c56b', AMBULA: '#e24b3a', SEVEN: '#f6f1e6', SHADOW: '#e24b3a',
-    ANIMA: '#e48aa4', ANIMUS: '#3d7ec9', NIGHT: '#8eb7ff', AXIS: '#2f9e86',
-    SELF: '#f6f1e6', SQUARE: '#e8c56b', CIRCUMAMBULATIO: '#f6f1e6',
+    largeA: '#e4c16a', largeB: '#e15a45', medium: '#f3ecdf',
+    smallA: '#3f86c8', smallB: '#e59aab', square: '#fff8ec', para: '#3aaa90',
   };
 
-  const FIGS = [
-    { pose: 'person', word: 'SHADOW', shadow: true },
-    { pose: 'bird', word: 'ANIMA' },
-    { pose: 'bird', word: 'ANIMUS', mirror: true },
-    { pose: 'boat', word: 'NIGHT' },
-    { pose: 'tree', word: 'AXIS' },
-    { pose: 'mandala', word: 'SELF', spin: true },
-    { pose: 'square', word: 'SQUARE' },
-  ];
-  const CUTS = [];
-  CUTS.push({ beat: 0, pose: 'scatter', word: 'CIRCUM' });
-  CUTS.push({ beat: 2, pose: 'scatter', word: 'AMBULA' });
-  CUTS.push({ beat: 4, pose: 'square', word: 'SEVEN' });
-  CUTS.push({ beat: 6, pose: 'square', word: 'SEVEN' });
-  let beatCursor = 8, fig = 0;
-  while (beatCursor < 96) { CUTS.push({ beat: beatCursor, ...FIGS[fig++ % 7] }); beatCursor += 4; }
-  while (beatCursor < 128) { CUTS.push({ beat: beatCursor, ...FIGS[fig++ % 7] }); beatCursor += 2; }
-  CUTS.push({ beat: 128, pose: 'mandala', word: 'SELF', spin: true });
-  CUTS.push({ beat: 144, pose: 'square', word: 'CIRCUMAMBULATIO' });
-  CUTS.forEach((c, i) => { c.index = i; c.durBeats = (CUTS[i + 1] ? CUTS[i + 1].beat : BEATS) - c.beat; });
+  // The finished tangram, minus the little square. The hole is a diamond.
+  const HOME = {
+    largeA: { x: -2.6667, y: 0, rot: 135 * D },
+    largeB: { x: 0, y: 2.6667, rot: 45 * D },
+    medium: { x: 2.6667, y: -2.6667, rot: 90 * D },
+    smallA: { x: 0, y: -1.3333, rot: 225 * D },
+    smallB: { x: 3.3333, y: 2, rot: 315 * D },
+    para: { x: -1, y: -3, rot: 0 },
+    square: { x: 2, y: 0, rot: 45 * D },
+  };
+  // The other six, waiting outside the circle, badly disguised as scenery.
+  // Offstage right, spaced so the big triangles never sit on each other.
+  const LOUNGE = {
+    largeA: { x: 18.2, y: 6.2, rot: -0.4 },
+    largeB: { x: 19.0, y: -6.8, rot: 2.3 },
+    medium: { x: 16.2, y: 0.3, rot: 0.2 },
+    smallA: { x: 15.0, y: 4.6, rot: 0.8 },
+    smallB: { x: 15.4, y: -4.8, rot: -0.5 },
+    para: { x: 21.2, y: -0.1, rot: 0.1 },
+  };
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const easeOutExpo = (u) => (u >= 1 ? 1 : 1 - 2 ** (-10 * u));
-  const easeOutBack = (u) => {
-    const c1 = 1.35, c3 = c1 + 1;
-    return 1 + c3 * (u - 1) ** 3 + c1 * (u - 1) ** 2;
+  const lerp = (a, b, u) => a + (b - a) * u;
+  const easeInOut = (u) => (u < 0.5 ? 4 * u * u * u : 1 - ((-2 * u + 2) ** 3) / 2);
+  const easeOut = (u) => 1 - (1 - u) ** 3;
+  const smooth = (t, a, b) => easeInOut(clamp((t - a) / (b - a), 0, 1));
+  const ang = (a, b) => {
+    let d = (b - a) % (Math.PI * 2);
+    if (d > Math.PI) d -= Math.PI * 2;
+    if (d < -Math.PI) d += Math.PI * 2;
+    return d;
   };
-  const worldPoly = (local, x, y, rot, s) => {
-    const c = Math.cos(rot), sn = Math.sin(rot);
-    return local.map(([px, py]) => {
-      const fx = px * s, fy = py * s;
-      return [x + fx * c - fy * sn, y + fx * sn + fy * c];
-    });
+
+  const k = (t, x, y, rot, extra) => ({ t, x, y, rot, ...(extra || {}) });
+
+  // The little square. Upright until the moment it has to turn.
+  const HERO = [
+    k(0, 0, 0.2, 0),
+    k(1.15, 0, 0.2, -0.42),
+    k(2.35, 0, 0.2, 0.48),
+    k(3.5, 0, 0.2, 0),
+    k(5.3, -4.1, 1.85, -0.1, { hop: 1.5 }),
+    k(8.4, -4.1, 1.85, 0.62),
+    k(11.2, -4.1, 1.85, 0),
+    k(12.4, -0.6, -3.55, 0.08, { hop: 1.65 }),
+    k(15.8, -0.6, -3.55, -0.4),
+    k(17.4, -0.6, -3.55, 0),
+    k(18.6, -4.7, -1.7, 0.05, { hop: 1.35 }),
+    k(21.8, -4.7, -1.7, 0.4),
+    k(23.4, -4.7, -1.7, 0),
+    k(24.6, -6.5, 0.15, 0.06, { hop: 1.2 }),
+    k(39.6, -6.5, 0.15, 0),
+    k(40.5, 2, 0, 0, { hop: 2.35 }),          // upright, and the hole is a diamond
+    k(41.55, -5.4, -0.5, -0.25, { hop: 1.7 }),
+    k(45.8, -5.4, -0.5, 0),
+    k(46.7, 2.35, 1.05, 0.35, { hop: 2.5 }),   // still the wrong way up
+    k(47.8, -5.6, -0.15, 0.1, { hop: 1.5 }),
+    k(52.6, -5.6, -0.15, 0),
+    k(54.6, 2, 0, 45 * D, { hop: 2.05 }),      // turns in the air
+    k(55.3, 2, 0, 45 * D + 0.12),
+    k(56.1, 2, 0, 45 * D),
+    k(88, 2, 0, 45 * D),
+  ];
+
+  const shadowTrip = (id, leave, spot, backRot) => {
+    const home = LOUNGE[id];
+    return [
+      k(0, home.x, home.y, home.rot),
+      k(leave, home.x, home.y, home.rot),
+      k(leave + 2.05, spot.x, spot.y, spot.rot),
+      k(leave + 3.7, spot.x, spot.y, spot.rot + 0.2),
+      k(leave + 4.5, spot.x, spot.y, spot.rot),
+      k(leave + 6.1, home.x, home.y, backRot),
+    ];
   };
-  const trace = (ctx, poly) => {
-    ctx.beginPath();
-    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
-    ctx.closePath();
+
+  const TRACKS = {
+    largeA: shadowTrip('largeA', 6.4, { x: 1.7, y: -1.35, rot: 0.7 }, -0.4).concat([
+      k(26.2, LOUNGE.largeA.x, LOUNGE.largeA.y, 0.2),
+      k(29.2, HOME.largeA.x, HOME.largeA.y, HOME.largeA.rot),
+      k(88, HOME.largeA.x, HOME.largeA.y, HOME.largeA.rot),
+    ]),
+    medium: shadowTrip('medium', 13.4, { x: 2.6, y: 1.7, rot: -0.9 }, 0.2).concat([
+      k(28.4, LOUNGE.medium.x, LOUNGE.medium.y, -0.3),
+      k(31.2, HOME.medium.x, HOME.medium.y, HOME.medium.rot),
+      k(41.45, HOME.medium.x, HOME.medium.y, HOME.medium.rot),
+      k(41.7, HOME.medium.x + 0.28, HOME.medium.y - 0.22, HOME.medium.rot),
+      k(42.5, HOME.medium.x, HOME.medium.y, HOME.medium.rot),
+      k(47.6, HOME.medium.x, HOME.medium.y, HOME.medium.rot),
+      k(47.85, HOME.medium.x + 0.22, HOME.medium.y - 0.28, HOME.medium.rot),
+      k(48.7, HOME.medium.x, HOME.medium.y, HOME.medium.rot),
+      k(88, HOME.medium.x, HOME.medium.y, HOME.medium.rot),
+    ]),
+    para: shadowTrip('para', 19.4, { x: 2.15, y: 2.55, rot: 0.35 }, 0.1).concat([
+      k(27.6, LOUNGE.para.x, LOUNGE.para.y, 0.15),
+      k(30.4, HOME.para.x, HOME.para.y, HOME.para.rot),
+      k(88, HOME.para.x, HOME.para.y, HOME.para.rot),
+    ]),
+    largeB: [
+      k(0, LOUNGE.largeB.x, LOUNGE.largeB.y, LOUNGE.largeB.rot),
+      k(27.0, LOUNGE.largeB.x, LOUNGE.largeB.y, LOUNGE.largeB.rot),
+      k(30.0, HOME.largeB.x, HOME.largeB.y, HOME.largeB.rot),
+      k(88, HOME.largeB.x, HOME.largeB.y, HOME.largeB.rot),
+    ],
+    smallA: [
+      k(0, LOUNGE.smallA.x, LOUNGE.smallA.y, LOUNGE.smallA.rot),
+      k(29.0, LOUNGE.smallA.x, LOUNGE.smallA.y, LOUNGE.smallA.rot),
+      k(31.6, HOME.smallA.x, HOME.smallA.y, HOME.smallA.rot),
+      k(36.4, HOME.smallA.x, HOME.smallA.y, HOME.smallA.rot),
+      k(37.1, HOME.smallA.x, HOME.smallA.y, HOME.smallA.rot + 0.35),
+      k(38.0, HOME.smallA.x, HOME.smallA.y, HOME.smallA.rot),
+      k(88, HOME.smallA.x, HOME.smallA.y, HOME.smallA.rot),
+    ],
+    smallB: [
+      k(0, LOUNGE.smallB.x, LOUNGE.smallB.y, LOUNGE.smallB.rot),
+      k(29.8, LOUNGE.smallB.x, LOUNGE.smallB.y, LOUNGE.smallB.rot),
+      k(32.4, HOME.smallB.x, HOME.smallB.y, HOME.smallB.rot),
+      k(88, HOME.smallB.x, HOME.smallB.y, HOME.smallB.rot),
+    ],
+  };
+
+  const sample = (keys, t) => {
+    if (t <= keys[0].t) return { ...keys[0], u: 1, hop: 0 };
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i].t) {
+        const a = keys[i - 1], b = keys[i];
+        const dur = Math.max(0.0001, b.t - a.t);
+        const raw = clamp((t - a.t) / dur, 0, 1);
+        const hop = b.hop || 0;
+        const u = hop ? easeOut(raw) : easeInOut(raw);
+        const arc = hop ? Math.sin(Math.PI * raw) * hop * (reduced ? 0.3 : 1) : 0;
+        return {
+          x: lerp(a.x, b.x, u),
+          y: lerp(a.y, b.y, u) + arc,
+          rot: a.rot + ang(a.rot, b.rot) * u,
+          hop, raw,
+        };
+      }
+    }
+    const last = keys[keys.length - 1];
+    return { ...last, u: 1, hop: 0, raw: 1 };
+  };
+
+  const squashOf = (keys, t) => {
+    if (reduced) return 1;
+    for (let i = 1; i < keys.length; i++) {
+      if (!keys[i].hop) continue;
+      const dt = keys[i].t - t;
+      if (dt > 0 && dt < 0.2) return 1 - 0.18 * Math.sin((1 - dt / 0.2) * Math.PI);
+      const since = t - keys[i].t;
+      if (since >= 0 && since < 0.16) return 1 - 0.14 * (1 - since / 0.16);
+    }
+    return 1;
+  };
+
+  const heroAt = (t) => sample(HERO, t);
+  const pieceAt = (id, t) => (id === 'square' ? heroAt(t) : sample(TRACKS[id], t));
+
+  const reveal = (t) => smooth(t, 54.6, 66);
+  const mix = (hex, t) => {
+    const n = (i) => parseInt(hex.slice(i, i + 2), 16);
+    const d = [44, 40, 36];
+    const c = [0, 1, 2].map((i) => Math.round(d[i] + (n(1 + i * 2) - d[i]) * t));
+    return `rgb(${c[0]},${c[1]},${c[2]})`;
   };
 
   const canvas = document.getElementById('stage');
@@ -208,8 +264,7 @@ button:hover { background: #e24b3a; color: #fff }
   let view = { w: 1, h: 1, dpr: 1 };
   const resize = () => {
     const w = innerWidth, h = innerHeight;
-    const area = w * h;
-    const dpr = Math.min(devicePixelRatio || 1, area > 1400 * 900 ? 1.25 : 1.75);
+    const dpr = Math.min(devicePixelRatio || 1, w * h > 1400 * 900 ? 1.35 : 1.75);
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
     view = { w, h, dpr };
@@ -217,168 +272,141 @@ button:hover { background: #e24b3a; color: #fff }
   resize();
   addEventListener('resize', resize);
 
-  const sceneAt = (t) => {
-    const beat = t / BEAT;
-    let s = CUTS[0];
-    for (const c of CUTS) { if (c.beat <= beat) s = c; else break; }
-    return s;
+  const cam = (t) => {
+    const keys = [
+      [0, 0, 0.2, 6.7],
+      [5.0, 0, 0.2, 6.7],
+      [8, -0.8, 0.4, 10.8],
+      [24, -1.4, 0, 11.2],
+      [34, -0.4, 0, 9.6],
+      [54, 0.3, 0, 8.4],
+      [66, 0, 0, 7.35],
+      [88, 0, 0, 7.35],
+    ];
+    let a = keys[0], b = keys[0];
+    for (let i = 1; i < keys.length; i++) {
+      if (t <= keys[i][0]) { a = keys[i - 1]; b = keys[i]; break; }
+      a = b = keys[i];
+    }
+    const u = a === b ? 1 : easeInOut(clamp((t - a[0]) / (b[0] - a[0]), 0, 1));
+    let x = lerp(a[1], b[1], u), y = lerp(a[2], b[2], u);
+    if (t < 24) {
+      const h = heroAt(Math.max(0, t - 0.28));
+      x = h.x * 0.42;
+      y = h.y * 0.42;
+    }
+    if (!reduced) {
+      for (const bt of [41.45, 47.7]) {
+        const age = t - bt;
+        if (age > 0 && age < 0.3) x += Math.sin(age * 46) * Math.exp(-age * 9) * 0.1;
+      }
+    }
+    return { x, y, r: lerp(a[3], b[3], u) };
   };
 
-  const placed = (id, pose, u) => {
-    const p = POSES[pose][id];
-    const [dx, dy, spin] = DIR[id];
-    const k = 1 - u;
+  const worldPoly = (local, x, y, rot, sx, sy) => {
+    const c = Math.cos(rot), s = Math.sin(rot);
+    return local.map(([px, py]) => {
+      const fx = px * sx, fy = py * sy;
+      return [x + fx * c - fy * s, y + fx * s + fy * c];
+    });
+  };
+  const trace = (poly) => {
+    ctx.beginPath();
+    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
+    ctx.closePath();
+  };
+
+  const shadowOf = (t) => {
+    if (t < 63) return null;
+    const u = smooth(t, 63, 71);
     return {
-      x: p.x + dx * k * 7.5,
-      y: p.y + dy * k * 7.5,
-      rot: p.rot + k * spin,
-      s: 0.72 + 0.28 * u,
+      x: lerp(2.4, 0.55, u),
+      y: lerp(1.35, -0.42, u),
+      a: lerp(0.12, 0.42, u),
     };
   };
 
-  const drawPoly = (poly, id, alpha) => {
-    if (alpha < 0.02) return;
-    ctx.globalAlpha = alpha;
-    trace(ctx, poly);
-    ctx.fillStyle = INK[id];
+  const drawPiece = (id, t, px) => {
+    const p = pieceAt(id, t);
+    const sy = id === 'square' ? squashOf(HERO, t) : 1;
+    const sx = 1 / sy;
+    const poly = worldPoly(LOCAL[id], p.x, p.y, p.rot, sx, sy);
+    const col = id === 'square' ? INK.square : mix(INK[id], 0.22 + 0.78 * reveal(t));
+    trace(poly);
+    ctx.fillStyle = col;
     ctx.fill();
-    ctx.globalAlpha = 1;
-  };
-
-  const fitFont = (text, maxW, maxSize) => {
-    let size = maxSize;
-    ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
-    while (size > 18 && ctx.measureText(text).width > maxW) {
-      size *= 0.94;
-      ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
-    }
-    return size;
+    ctx.lineWidth = 1.35 * px;
+    ctx.strokeStyle = id === 'square' ? 'rgba(255,248,236,.9)' : `rgba(244,236,220,${0.28 + 0.45 * reveal(t)})`;
+    ctx.stroke();
   };
 
   const draw = (t, live) => {
+    const time = live ? Math.min(t, END) : 3.2;
     const { w, h, dpr } = view;
-    const ended = live && t >= END;
-    const time = ended ? END - 0.001 : (live ? t : END - 0.001);
-    const scene = sceneAt(time);
-    const local = time - scene.beat * BEAT;
-    const u = reduced ? 1 : easeOutBack(clamp(local / 0.09, 0, 1));
-    const punch = reduced ? 0 : Math.exp(-(time % BEAT) * 16);
-    const pose = scene.pose;
-    const rad = RADIUS[pose];
-    const zoom = (reduced ? 1 : 1 + punch * 0.07 + Math.max(0, 1 - local / 0.16) * 0.16);
-    const sc = (Math.min(w, h) * dpr * 0.46 * zoom) / rad;
-    const tilt = reduced || pose === 'square' ? 0 : ((scene.index % 5) - 2) * 0.1;
-    const tiltNow = tilt * (reduced ? 1 : easeOutExpo(clamp(local / 0.16, 0, 1)));
-    const spin = !reduced && scene.spin ? (local / (scene.durBeats * BEAT)) * Math.PI : 0;
-    const camRot = tiltNow + spin;
+    const c = cam(time);
+    const sc = (Math.min(w, h) * dpr * 0.46) / c.r;
+    const px = dpr / sc;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.fillStyle = '#07060a';
     ctx.fillRect(0, 0, w, h);
 
-    const wash = reduced ? 0 : Math.exp(-local * 11);
-    if (wash > 0.02) {
-      ctx.globalAlpha = wash * 0.55;
-      ctx.fillStyle = FLASH[scene.word] || '#fff';
-      ctx.fillRect(0, 0, w, h);
-      ctx.globalAlpha = 1;
-    }
+    ctx.setTransform(sc, 0, 0, -sc, (w * dpr) / 2 - c.x * sc, (h * dpr) / 2 + c.y * sc);
 
-    if (live && !reduced) {
-      const word = scene.word;
-      const wu = easeOutExpo(clamp(local / 0.14, 0, 1));
-      const size = fitFont(word, w * 0.94, Math.min(w * (word.length > 10 ? 0.11 : 0.2), h * 0.34));
+    ctx.beginPath();
+    ctx.arc(0, 0, 4 * SQRT2, 0, Math.PI * 2);
+    ctx.fillStyle = '#1c1814';
+    ctx.fill();
+    ctx.lineWidth = 1.4 * px;
+    ctx.strokeStyle = 'rgba(232, 206, 154, .55)';
+    ctx.stroke();
+
+    const sh = shadowOf(time);
+    if (sh) {
       ctx.save();
-      ctx.translate(w * 0.5 + (1 - wu) * w * 0.18, h * (scene.index % 2 ? 0.62 : 0.38));
-      ctx.rotate(((scene.index % 2) ? -1 : 1) * 0.04 * (1 - wu));
-      ctx.scale(1.45 - 0.45 * wu, 1.45 - 0.45 * wu);
-      ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = 'rgba(244,239,228,.14)';
-      ctx.fillText(word, 6, 6);
-      ctx.fillStyle = FLASH[word] || '#f6f1e6';
-      ctx.globalAlpha = 0.92;
-      ctx.fillText(word, 0, 0);
+      ctx.translate(sh.x, sh.y);
+      ctx.globalAlpha = sh.a;
+      for (const id of ORDER) {
+        const p = pieceAt(id, time);
+        const sy = id === 'square' ? squashOf(HERO, time) : 1;
+        trace(worldPoly(LOCAL[id], p.x, p.y, p.rot, 1 / sy, sy));
+        ctx.fillStyle = '#000';
+        ctx.fill();
+      }
       ctx.restore();
       ctx.globalAlpha = 1;
-    } else if (!live) {
-      const size = fitFont('CIRCUMAMBULATIO', w * 0.92, Math.min(w * 0.09, h * 0.12));
-      ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillStyle = '#f6f1e6';
-      ctx.fillText('CIRCUMAMBULATIO', w / 2, h * 0.2);
     }
 
-    ctx.setTransform(sc, 0, 0, -sc, (w * dpr) / 2, (h * dpr) / 2);
-    ctx.rotate(camRot);
-    const px = dpr / sc;
+    for (const id of ORDER) if (id !== 'square') drawPiece(id, time, px);
+    drawPiece('square', time, px);
 
-    ctx.lineWidth = 1.6 * px;
-    ctx.strokeStyle = 'rgba(244,239,228,.85)';
-    ctx.beginPath();
-    ctx.arc(0, 0, CIRCLE, 0, Math.PI * 2);
-    ctx.stroke();
-    if (pose === 'square' || pose === 'mandala') {
-      ctx.lineWidth = 1.25 * px;
-      ctx.strokeStyle = 'rgba(232,197,107,.9)';
-      ctx.strokeRect(-4, -4, 8, 8);
-    }
-    const head = -Math.PI / 2 + ((time / BEAT) % 4) / 4 * Math.PI * 2;
-    ctx.fillStyle = '#f6f1e6';
-    ctx.beginPath();
-    ctx.arc(Math.cos(head) * CIRCLE, Math.sin(head) * CIRCLE, 0.16, 0, Math.PI * 2);
-    ctx.fill();
-
-    const since = time % BEAT;
-    const clap = !reduced && since < 0.05 && Math.floor(time / BEAT) % 2 === 1;
-    if (clap) {
-      ctx.strokeStyle = 'rgba(255,255,255,.85)';
-      ctx.lineWidth = 0.8 * px;
+    if (live && time > 54.55 && time < 55.35) {
+      const age = time - 54.55;
       ctx.beginPath();
-      ctx.moveTo(-14, 0); ctx.lineTo(14, 0);
+      ctx.arc(2, 0, 0.3 + age * 5.5, 0, Math.PI * 2);
+      ctx.strokeStyle = `rgba(255, 246, 228, ${0.7 * (1 - age / 0.8)})`;
+      ctx.lineWidth = 1.5 * px;
       ctx.stroke();
     }
 
-    const drawSet = (ox, oy, alpha, uu) => {
-      for (const id of ORDER) {
-        const p = placed(id, pose, uu);
-        const poly = worldPoly(LOCAL[id], p.x + ox, p.y + oy, p.rot, p.s * (1 + punch * 0.035));
-        const sh = worldPoly(LOCAL[id], p.x + ox + 0.12, p.y + oy - 0.1, p.rot, p.s);
-        ctx.globalAlpha = alpha * 0.55;
-        trace(ctx, sh);
-        ctx.fillStyle = '#000';
-        ctx.fill();
-        drawPoly(poly, id, alpha);
-      }
-      ctx.globalAlpha = 1;
-    };
-
-    if (!reduced && local < 0.16) drawSet(0, 0, 0.28, Math.max(0, u - 0.45));
-    if (scene.shadow) drawSet(2.15, -0.35, 0.9, reduced ? 1 : easeOutBack(clamp((local - 0.04) / 0.09, 0, 1)));
-    if (scene.mirror) {
-      ctx.save();
-      ctx.scale(-1, 1);
-      drawSet(0, 0, 0.78, u);
-      ctx.restore();
-    }
-    drawSet(0, 0, 1, u);
-
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.42, w / 2, h / 2, Math.max(w, h) * 0.72);
+    const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.4, w / 2, h / 2, Math.max(w, h) * 0.75);
     vg.addColorStop(0, 'rgba(0,0,0,0)');
-    vg.addColorStop(1, 'rgba(0,0,0,.55)');
+    vg.addColorStop(1, 'rgba(0,0,0,.5)');
     ctx.fillStyle = vg;
     ctx.fillRect(0, 0, w, h);
 
-    if (live) {
-      ctx.font = '500 12px ui-monospace, Menlo, Consolas, monospace';
-      ctx.textAlign = 'right';
-      ctx.textBaseline = 'top';
-      ctx.fillStyle = 'rgba(244,239,228,.78)';
-      const bar = Math.min(BARS, Math.floor(time / BEAT / 4) + 1);
-      ctx.fillText(`${scene.word}   ${String(bar).padStart(2, '0')} / ${BARS}`, w - 14, 12);
+    const titleA = live ? smooth(time, 74, 82) : 0;
+    if (titleA > 0.01) {
+      ctx.globalAlpha = titleA;
+      ctx.fillStyle = '#f4ecdc';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'bottom';
+      const size = Math.min(22, w * 0.045);
+      ctx.font = `500 ${size}px Palatino, "Palatino Linotype", Georgia, serif`;
+      ctx.fillText('Circumambulatio', w / 2, h - Math.max(18, 22));
+      ctx.globalAlpha = 1;
     }
   };
 
@@ -387,7 +415,6 @@ button:hover { background: #e24b3a; color: #fff }
     const m = /(?:^|[#&])t=([\d.]+)/.exec(location.hash);
     return m ? clamp(parseFloat(m[1]) || 0, 0, END) : 0;
   };
-
   const frame = () => {
     const t = started ? ((audioCtx ? audioCtx.currentTime : performance.now() / 1000) - t0 + seek) : 0;
     draw(t, started);
@@ -395,150 +422,107 @@ button:hover { background: #e24b3a; color: #fff }
   };
   requestAnimationFrame(frame);
 
-  const N = { D1: 36.71, D2: 73.42, F2: 87.31, Fs2: 92.5, A1: 55, A2: 110, C2: 65.41, D3: 146.83, F3: 174.61, Fs3: 185, A3: 220, D4: 293.66, F4: 349.23, Fs4: 369.99, A4: 440 };
-
-  function buildEvents() {
-    const ev = [];
-    for (let b = 0; b < BEATS; b++) {
-      const t = b * BEAT;
-      if (b < 158) ev.push({ t, k: 'kick' });
-      if (b % 2 === 1 && b < 156) ev.push({ t, k: 'clap' });
-      if (b < 152) ev.push({ t: t + BEAT * 0.5, k: 'hat', open: b % 4 === 3 });
-      if (b >= 96 && b < 128) {
-        ev.push({ t: t + BEAT * 0.25, k: 'hat' });
-        ev.push({ t: t + BEAT * 0.75, k: 'hat' });
-      }
-      if (b % 8 === 7 && b < 144) ev.push({ t, k: 'riser' });
-      if (b % 8 === 0) ev.push({ t, k: 'stab', major: b >= 128 });
-    }
-    for (let bar = 0; bar < BARS; bar++) {
-      const base = bar * 4 * BEAT;
-      const major = bar >= 32;
-      const notes = major
-        ? [[0, N.D1], [0.75, N.D2], [1.5, N.A1], [2.5, N.Fs2], [3.25, N.A2]]
-        : [[0, N.D1], [0.75, N.D2], [1.5, N.A1], [2, N.F2], [2.75, N.C2], [3.5, N.D2]];
-      if (bar < 38) notes.forEach(([b, f]) => ev.push({ t: base + b * BEAT, k: 'bass', f }));
-    }
-    ev.sort((a, b) => a.t - b.t);
-    return ev;
-  }
-
-  function arm(ctx, all) {
+  const score = (ctx) => {
     const bus = ctx.createGain();
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4;
-    comp.attack.value = 0.003; comp.release.value = 0.12;
-    const lim = ctx.createDynamicsCompressor();
-    lim.threshold.value = -1.2; lim.knee.value = 0; lim.ratio.value = 16;
-    lim.attack.value = 0.002; lim.release.value = 0.08;
+    comp.threshold.value = -14; comp.knee.value = 10; comp.ratio.value = 3;
+    comp.attack.value = 0.01; comp.release.value = 0.2;
     const master = ctx.createGain();
-    master.gain.value = 0.8;
-    bus.connect(comp).connect(lim).connect(master).connect(ctx.destination);
-
+    master.gain.value = 0.85;
+    const wetIn = ctx.createGain();
+    const conv = ctx.createConvolver();
+    conv.normalize = false;
     const rate = ctx.sampleRate;
-    const noise = ctx.createBuffer(1, rate, rate);
-    const nd = noise.getChannelData(0);
-    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+    const irLen = Math.floor(rate * 1.3);
+    const ir = ctx.createBuffer(2, irLen, rate);
+    for (let c = 0; c < 2; c++) {
+      const d = ir.getChannelData(c);
+      for (let i = 0; i < irLen; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-(i / rate) * 2.4);
+    }
+    conv.buffer = ir;
+    const wet = ctx.createGain();
+    wet.gain.value = 0.28;
+    bus.connect(comp);
+    comp.connect(master);
+    comp.connect(wetIn);
+    wetIn.connect(conv).connect(wet).connect(master);
+    master.connect(ctx.destination);
 
-    const burst = (time, type, freq, dest, dur, amp) => {
-      const src = ctx.createBufferSource();
-      src.buffer = noise;
-      const f = ctx.createBiquadFilter();
-      f.type = type; f.frequency.value = freq; f.Q.value = type === 'bandpass' ? 0.7 : 0.4;
+    const tone = (time, freq, dur, amp, type = 'sine', dest = bus) => {
+      const o = ctx.createOscillator();
+      o.type = type;
+      o.frequency.value = freq;
       const g = ctx.createGain();
-      g.gain.setValueAtTime(amp, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + dur);
-      src.connect(f).connect(g).connect(dest);
-      src.start(time); src.stop(time + dur + 0.02);
+      const atk = Math.min(0.04, dur * 0.25);
+      g.gain.setValueAtTime(0.0001, time);
+      g.gain.linearRampToValueAtTime(amp, time + atk);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + dur);
+      o.connect(g).connect(dest);
+      o.start(time); o.stop(time + dur + 0.05);
     };
-
-    const kick = (time) => {
+    const step = (time) => {
+      const o = ctx.createOscillator();
+      o.type = 'triangle';
+      o.frequency.value = 180;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.08, time);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.07);
+      o.connect(g).connect(bus);
+      o.start(time); o.stop(time + 0.08);
+    };
+    const bonk = (time) => {
       const o = ctx.createOscillator();
       o.type = 'sine';
-      o.frequency.setValueAtTime(172, time);
-      o.frequency.exponentialRampToValueAtTime(46, time + 0.09);
+      o.frequency.setValueAtTime(280, time);
+      o.frequency.exponentialRampToValueAtTime(70, time + 0.2);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0.72, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+      g.gain.setValueAtTime(0.14, time);
+      g.gain.exponentialRampToValueAtTime(0.0001, time + 0.28);
       o.connect(g).connect(bus);
-      o.start(time); o.stop(time + 0.22);
-      burst(time, 'highpass', 1800, bus, 0.02, 0.18);
+      o.start(time); o.stop(time + 0.3);
     };
-    const clap = (time) => {
-      burst(time, 'bandpass', 1900, bus, 0.11, 0.28);
-      const o = ctx.createOscillator();
-      o.type = 'triangle'; o.frequency.value = 210;
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.12, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
-      o.connect(g).connect(bus);
-      o.start(time); o.stop(time + 0.1);
-    };
-    const hat = (time, open) => burst(time, 'highpass', 7500, bus, open ? 0.14 : 0.035, open ? 0.07 : 0.045);
-    const bass = (time, freq) => {
-      const o = ctx.createOscillator();
-      o.type = 'square'; o.frequency.value = freq;
-      const f = ctx.createBiquadFilter();
-      f.type = 'lowpass';
-      f.frequency.setValueAtTime(480, time);
-      f.frequency.exponentialRampToValueAtTime(110, time + 0.1);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.2, time);
-      g.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-      o.connect(f).connect(g).connect(bus);
-      o.start(time); o.stop(time + 0.17);
-    };
-    const stab = (time, major) => {
-      const chord = major ? [N.D4, N.Fs4, N.A4] : [N.D4, N.F4, N.A4];
-      chord.forEach((freq) => {
-        const o = ctx.createOscillator();
-        o.type = 'triangle'; o.frequency.value = freq;
-        const f = ctx.createBiquadFilter();
-        f.type = 'lowpass'; f.frequency.value = 2200;
-        const g = ctx.createGain();
-        g.gain.setValueAtTime(0.1, time);
-        g.gain.exponentialRampToValueAtTime(0.001, time + 0.28);
-        o.connect(f).connect(g).connect(bus);
-        o.start(time); o.stop(time + 0.32);
+    const motif = (time, bright) => {
+      const notes = bright ? [587.33, 739.99, 880, 1174.66] : [587.33, 698.46, 880];
+      const gap = bright ? 1.15 : 1.05;
+      notes.forEach((f, i) => {
+        tone(time + i * gap, f, bright ? 1.6 : 0.9, bright ? 0.07 : 0.075, 'sine');
+        tone(time + i * gap, f / 2, bright ? 1.8 : 1.05, 0.03, 'triangle');
       });
     };
-    const riser = (time) => {
-      const src = ctx.createBufferSource();
-      src.buffer = noise;
-      const f = ctx.createBiquadFilter();
-      f.type = 'bandpass'; f.Q.value = 4;
-      f.frequency.setValueAtTime(300, time);
-      f.frequency.exponentialRampToValueAtTime(4000, time + BEAT * 0.9);
-      const g = ctx.createGain();
-      g.gain.setValueAtTime(0.001, time);
-      g.gain.exponentialRampToValueAtTime(0.16, time + BEAT * 0.85);
-      g.gain.exponentialRampToValueAtTime(0.001, time + BEAT);
-      src.connect(f).connect(g).connect(bus);
-      src.start(time); src.stop(time + BEAT + 0.02);
-    };
 
-    const events = buildEvents();
-    const origin = ctx.currentTime + 0.03;
-    const play = (e) => {
-      const when = origin + e.t;
-      if (!all && when < ctx.currentTime - 0.02) return;
-      if (e.k === 'kick') kick(when);
-      else if (e.k === 'clap') clap(when);
-      else if (e.k === 'hat') hat(when, e.open);
-      else if (e.k === 'bass') bass(when, e.f);
-      else if (e.k === 'stab') stab(when, e.major);
-      else if (e.k === 'riser') riser(when);
-    };
-    if (all) { events.forEach(play); return origin; }
-    let cursor = 0;
-    const pump = () => {
-      const horizon = ctx.currentTime + 0.18;
-      while (cursor < events.length && origin + events[cursor].t < horizon) play(events[cursor++]);
-      if (cursor < events.length) setTimeout(pump, 40);
-    };
-    pump();
-    return origin;
-  }
+    const t0 = ctx.currentTime + 0.05;
+    const at = (sec) => t0 + sec;
+    motif(at(0.35), false);
+    step(at(5.3));
+    tone(at(7.6), 155.56, 0.45, 0.05); // the shadow is the wrong note
+    step(at(12.4));
+    tone(at(14.8), 155.56, 0.4, 0.045);
+    step(at(18.6));
+    tone(at(21.2), 146.83, 0.35, 0.04);
+    step(at(24.6));
+    [27, 28.2, 29.4, 30.6, 31.6, 32.6].forEach((s) => step(at(s)));
+    motif(at(35.2), false);
+
+    const pedal = ctx.createOscillator();
+    pedal.type = 'sine';
+    pedal.frequency.value = 73.42;
+    const pg = ctx.createGain();
+    pg.gain.setValueAtTime(0.0001, at(27));
+    pg.gain.linearRampToValueAtTime(0.04, at(32));
+    pg.gain.setValueAtTime(0.04, at(74));
+    pg.gain.linearRampToValueAtTime(0.0001, at(84));
+    pedal.connect(pg).connect(bus);
+    pedal.start(at(27)); pedal.stop(at(86));
+
+    step(at(40.5)); bonk(at(41.45));
+    step(at(46.7)); bonk(at(47.7));
+    step(at(53.2));
+    tone(at(54.7), 1174.7, 0.7, 0.06);
+    tone(at(54.7), 880, 1.1, 0.05);
+    motif(at(63.5), true);
+
+    return t0;
+  };
 
   const gate = document.getElementById('gate');
   const begin = () => {
@@ -549,8 +533,7 @@ button:hover { background: #e24b3a; color: #fff }
     const AC = window.AudioContext || window.webkitAudioContext;
     try {
       audioCtx = new AC();
-      const origin = arm(audioCtx);
-      t0 = origin;
+      t0 = score(audioCtx);
       audioCtx.resume();
     } catch (err) {
       audioCtx = null;
@@ -559,7 +542,6 @@ button:hover { background: #e24b3a; color: #fff }
   };
   document.getElementById('begin').addEventListener('click', begin);
   if (new URLSearchParams(location.search).has('autostart')) begin();
-
 })();
 </script>
 </html>
