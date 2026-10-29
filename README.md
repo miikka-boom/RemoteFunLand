@@ -9,6 +9,7 @@ published as a single static page.
 
 | No. | Demo | What it is |
 | --- | ---- | ---------- |
+| 004 | [Circumambulatio](https://miikka-boom.github.io/RemoteFunLand/circumambulatio/) | Seven tangram pieces circle the Self — shadow, anima and animus, the night sea — and come to rest as a square inside a circle. A three-minute Web Audio ritual on canvas. |
 | 003 | [Antenna Aerobics](https://miikka-boom.github.io/RemoteFunLand/antenna-aerobics/) | The robots, rig and dance from `robot_CameraWork.blend`, exported to glTF and staged in three.js: a 90-second aerobics class to an original Web Audio score at 150 BPM, ending in a 16-robot party with the file’s hidden PARTY sign and disco ball. |
 | 002 | [The Alchemist’s Spread](https://miikka-boom.github.io/RemoteFunLand/alchemists-spread/) | Three random Tarot de Marseille cards become a 2:24 audio-visual ritual after Jodorowsky’s *The Holy Mountain*: three painted tableaux, an ascent to gold and a pull-back to the film set. Canvas 2D at 30 fps, adapting its resolution for low-end devices. |
 | 001 | [Lissajous Nocturne](https://miikka-boom.github.io/RemoteFunLand/lissajous-nocturne/) | A 77-second Web Audio piece whose left and right channels steer a simulated X–Y oscilloscope, so each musical interval draws its own Lissajous figure. |
