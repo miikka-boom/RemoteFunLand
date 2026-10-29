@@ -3,154 +3,84 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Circumambulatio</title>
-<meta name="description" content="A three-minute tangram of individuation. Seven pieces walk around a centre — shadow, anima and animus, the night sea — and come to rest as a square inside a circle.">
-<meta name="theme-color" content="#100c0e">
+<meta name="description" content="A 75-second tangram title sequence at 128 BPM. Seven pieces slam through shadow, anima, the night sea and the Self, and lock as a square inside a circle.">
+<meta name="theme-color" content="#07060a">
 <style>
-/* A dark chapel. The canvas is the rite; the gate is only the threshold. */
-:root {
-  color-scheme: dark;
-  --ink: #f4ecdc;
-  --gold: #f0ddb0;
-  --dim: rgba(244, 236, 220, .62);
-  padding-top: env(safe-area-inset-top, 0px);
-}
+:root { color-scheme: dark; }
 * { box-sizing: border-box }
-html, body { margin: 0; height: 100%; background: #100c0e; overflow: hidden }
+html, body { margin: 0; height: 100%; background: #07060a; overflow: hidden }
 body {
-  color: var(--ink);
-  font: 400 18px/1.45 "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+  color: #f4efe4;
+  font: 16px/1.3 Impact, "Arial Black", "Haettenschweiler", sans-serif;
   -webkit-font-smoothing: antialiased;
   touch-action: none;
 }
 canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block }
 .back {
-  position: fixed;
-  z-index: 5;
-  top: max(12px, env(safe-area-inset-top));
-  left: max(14px, env(safe-area-inset-left));
-  color: rgba(244, 236, 220, .5);
-  text-decoration: none;
+  position: fixed; z-index: 5;
+  top: max(10px, env(safe-area-inset-top));
+  left: max(12px, env(safe-area-inset-left));
+  color: rgba(244, 239, 228, .72);
+  font: 500 12px/1.2 ui-monospace, Menlo, Consolas, monospace;
   letter-spacing: .08em;
-  font-size: 13px;
+  text-decoration: none;
   touch-action: manipulation;
 }
-.back:hover { color: var(--gold) }
-.back:focus-visible, button:focus-visible {
-  outline: 2px solid var(--gold);
-  outline-offset: 4px;
-}
+.back:focus-visible, button:focus-visible { outline: 2px solid #f4efe4; outline-offset: 3px }
 #gate {
-  position: fixed;
-  inset: 0;
-  z-index: 4;
-  display: grid;
-  place-items: center;
-  padding: 28px 22px;
-  text-align: center;
-  background: radial-gradient(ellipse at center, rgba(16, 12, 14, .15), rgba(16, 12, 14, .62) 72%);
-  transition: opacity 1.1s ease;
+  position: fixed; inset: 0; z-index: 4;
+  display: grid; align-content: end; justify-items: center;
+  padding: 0 20px max(28px, env(safe-area-inset-bottom));
+  background: linear-gradient(to top, rgba(7,6,10,.72), rgba(7,6,10,0) 42%);
+  transition: opacity .12s linear;
 }
 #gate.gone { opacity: 0; pointer-events: none }
-.card { max-width: 38rem }
-.kicker {
-  margin: 0 0 14px;
-  font-size: 12px;
-  letter-spacing: .32em;
-  text-indent: .32em;
-  text-transform: uppercase;
-  color: #e07a64;
-}
-h1 {
-  margin: 0;
-  font-weight: 500;
-  font-size: clamp(34px, 8.6vw, 86px);
-  line-height: .92;
-  letter-spacing: .12em;
-  text-indent: .12em;
-  text-transform: uppercase;
-  text-wrap: balance;
-}
-.lede {
-  margin: 16px auto 0;
-  max-width: 28ch;
-  color: var(--dim);
-  font-size: clamp(16px, 4vw, 20px);
-}
 button {
-  margin-top: 28px;
-  min-height: 48px;
-  padding: 12px 34px;
-  border: 1px solid rgba(240, 221, 176, .75);
-  background: transparent;
-  color: var(--gold);
-  font: inherit;
-  font-size: 14px;
-  letter-spacing: .24em;
-  text-indent: .24em;
-  text-transform: uppercase;
-  cursor: pointer;
+  min-height: 52px; min-width: 168px;
+  padding: 12px 28px;
+  border: 0; cursor: pointer;
+  background: #f4efe4; color: #07060a;
+  font: inherit; font-size: 22px; letter-spacing: .16em;
+  text-indent: .16em;
   touch-action: manipulation;
 }
-button:hover { background: var(--gold); color: #1a120c }
+button:hover { background: #e24b3a; color: #fff }
 .hint {
-  margin: 16px 0 0;
-  font-size: 13px;
-  letter-spacing: .06em;
-  color: rgba(244, 236, 220, .42);
-}
-#cap {
-  position: fixed;
-  z-index: 3;
-  left: 16px;
-  right: 16px;
-  bottom: max(16px, env(safe-area-inset-bottom));
-  margin: 0;
-  text-align: center;
-  font-size: 12px;
-  letter-spacing: .28em;
-  text-indent: .28em;
-  text-transform: uppercase;
-  color: rgba(244, 236, 220, .7);
-  pointer-events: none;
-  opacity: 0;
-  transition: opacity 1.5s linear;
+  margin: 10px 0 0;
+  font: 11px/1.3 ui-monospace, Menlo, Consolas, monospace;
+  letter-spacing: .14em;
+  color: rgba(244, 239, 228, .7);
 }
 @media (prefers-reduced-motion: reduce) {
   #gate { transition: none }
-  #cap { transition: none }
 }
 </style>
 
 <a class="back" href="../">← RemoteFunLand</a>
 <canvas id="stage" aria-hidden="true"></canvas>
 <div id="gate">
-  <div class="card">
-    <p class="kicker">Tangram · Jung</p>
-    <h1>Circum<wbr>ambulatio</h1>
-    <p class="lede">Seven pieces of the Self.</p>
-    <button id="begin" type="button">Begin</button>
-    <p class="hint">A three-minute piece. Sound on.</p>
-  </div>
+  <button id="begin" type="button">BEGIN</button>
+  <p class="hint">75 SECONDS · 128 BPM · SOUND ON</p>
 </div>
-<p id="cap" aria-live="polite"></p>
 
 <script>
 (() => {
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
   const D = Math.PI / 180;
-  const END = 204;
-  const CIRCLE = 4 * Math.SQRT2; // circumradius of the finished square
-
+  const BPM = 128;
+  const BEAT = 60 / BPM;
+  const BARS = 40;
+  const BEATS = BARS * 4;
+  const END = BEATS * BEAT;
+  const CIRCLE = 4 * Math.SQRT2;
   const SQRT2 = Math.SQRT2;
+
   const centroid = (poly) => {
     let a = 0, cx = 0, cy = 0;
     for (let i = 0; i < poly.length; i++) {
-      const [x1, y1] = poly[i];
-      const [x2, y2] = poly[(i + 1) % poly.length];
+      const [x1, y1] = poly[i], [x2, y2] = poly[(i + 1) % poly.length];
       const cr = x1 * y2 - x2 * y1;
-      a += cr;
-      cx += (x1 + x2) * cr;
-      cy += (y1 + y2) * cr;
+      a += cr; cx += (x1 + x2) * cr; cy += (y1 + y2) * cr;
     }
     a *= 0.5;
     return [cx / (6 * a), cy / (6 * a)];
@@ -168,202 +98,97 @@ button:hover { background: var(--gold); color: #1a120c }
     square: centerPoly([[0, 0], [2 * SQRT2, 0], [2 * SQRT2, 2 * SQRT2], [0, 2 * SQRT2]]),
     para: centerPoly([[0, 0], [4, 0], [6, 2], [2, 2]]),
   };
-  const DRAW = ['largeA', 'largeB', 'medium', 'para', 'square', 'smallA', 'smallB'];
-  const EMERGE = ['smallA', 'smallB', 'medium', 'para', 'largeA', 'largeB', 'square'];
+  const ORDER = ['largeA', 'largeB', 'medium', 'para', 'square', 'smallA', 'smallB'];
   const INK = {
-    largeA: ['#f2e0b4', '#a68442'],
-    largeB: ['#e38468', '#8a332c'],
-    medium: ['#f7f2e6', '#cfc4a8'],
-    smallA: ['#93b4d6', '#3c5e8c'],
-    smallB: ['#e8b4c0', '#a35d74'],
-    square: ['#fff8ec', '#e7d7b0'],
-    para: ['#86b4a2', '#3c6b5c'],
+    largeA: '#e8c56b', largeB: '#e24b3a', medium: '#f6f1e6',
+    smallA: '#3d7ec9', smallB: '#e48aa4', square: '#fff8ee', para: '#2f9e86',
   };
-  const ASH = ['#3a3228', '#16130f'];
-
+  const INK_DARK = {
+    largeA: '#8a6a2e', largeB: '#8e261c', medium: '#b7ad96',
+    smallA: '#1c4478', smallB: '#8d4458', square: '#d9cbb0', para: '#14685a',
+  };
+  const DIR = {
+    largeA: [-1, 0.25, 2.4], largeB: [1, -0.15, -2.2], medium: [0.15, 1, 1.7],
+    smallA: [-0.85, -1, -1.9], smallB: [0.9, 0.75, 2.1], square: [0.05, -1, 1.4],
+    para: [-0.35, -0.9, -1.5],
+  };
   const POSES = {
     scatter: {
-      largeA: { x: -5.6, y: 3.6, rot: 20 * D },
-      largeB: { x: 5.8, y: -3.2, rot: 200 * D },
-      medium: { x: 0.2, y: 6.4, rot: -30 * D },
-      smallA: { x: -6.4, y: -3.4, rot: 80 * D },
-      smallB: { x: 6.2, y: 4.0, rot: -20 * D },
-      square: { x: 0.15, y: 0.05, rot: 45 * D },
+      largeA: { x: -5.6, y: 3.6, rot: 20 * D }, largeB: { x: 5.8, y: -3.2, rot: 200 * D },
+      medium: { x: 0.2, y: 6.4, rot: -30 * D }, smallA: { x: -6.4, y: -3.4, rot: 80 * D },
+      smallB: { x: 6.2, y: 4, rot: -20 * D }, square: { x: 0.15, y: 0.05, rot: 45 * D },
       para: { x: 3.4, y: -6.5, rot: 12 * D },
     },
     person: {
-      largeA: { x: 0, y: -2.4, rot: 45 * D },
-      largeB: { x: -6.4, y: -3.6, rot: 18 * D },
-      medium: { x: 0, y: 6.35, rot: 225 * D },
-      smallA: { x: -5.16, y: 0.24, rot: 45 * D },
-      smallB: { x: 5.16, y: 0.24, rot: 45 * D },
-      square: { x: 0, y: 3.25, rot: 45 * D },
+      largeA: { x: 0, y: -2.4, rot: 45 * D }, largeB: { x: -6.4, y: -3.6, rot: 18 * D },
+      medium: { x: 0, y: 6.35, rot: 225 * D }, smallA: { x: -5.16, y: 0.24, rot: 45 * D },
+      smallB: { x: 5.16, y: 0.24, rot: 45 * D }, square: { x: 0, y: 3.25, rot: 45 * D },
       para: { x: 0, y: 0.09, rot: 0 },
     },
     bird: {
-      largeA: { x: -0.348, y: 2.625, rot: 225 * D },
-      largeB: { x: 0.2, y: -2.49, rot: 45 * D },
-      medium: { x: -5.279, y: 1.503, rot: 315 * D },
-      smallA: { x: 7.864, y: 0.719, rot: 8 * D },
-      smallB: { x: -6.3, y: -2.15, rot: 210 * D },
-      square: { x: 5.413, y: 0.343, rot: 15 * D },
+      largeA: { x: -0.348, y: 2.625, rot: 225 * D }, largeB: { x: 0.2, y: -2.49, rot: 45 * D },
+      medium: { x: -5.279, y: 1.503, rot: 315 * D }, smallA: { x: 7.864, y: 0.719, rot: 8 * D },
+      smallB: { x: -6.3, y: -2.15, rot: 210 * D }, square: { x: 5.413, y: 0.343, rot: 15 * D },
       para: { x: 0, y: 0, rot: -6 * D },
     },
     boat: {
-      para: { x: -0.2, y: 0, rot: 0 },
-      largeA: { x: -0.167, y: -2.489, rot: 45 * D },
-      largeB: { x: -1.15, y: 2.49, rot: 225 * D },
-      medium: { x: 5.667, y: -2.501, rot: 15 * D },
-      smallA: { x: -3.4, y: 6.15, rot: 150 * D },
-      smallB: { x: 0.2, y: -6.05, rot: 45 * D },
+      para: { x: -0.2, y: 0, rot: 0 }, largeA: { x: -0.167, y: -2.489, rot: 45 * D },
+      largeB: { x: -1.15, y: 2.49, rot: 225 * D }, medium: { x: 5.667, y: -2.501, rot: 15 * D },
+      smallA: { x: -3.4, y: 6.15, rot: 150 * D }, smallB: { x: 0.2, y: -6.05, rot: 45 * D },
       square: { x: 4.85, y: 1.35, rot: 6 * D },
     },
     tree: {
-      para: { x: 0, y: -2.15, rot: 90 * D },
-      largeA: { x: 0, y: 2.3, rot: 225 * D },
-      largeB: { x: 5.55, y: -2.55, rot: 225 * D },
-      medium: { x: 0, y: 5.95, rot: 225 * D },
-      smallA: { x: -4.55, y: 6.35, rot: 150 * D },
-      smallB: { x: 4.15, y: 6.55, rot: 30 * D },
+      para: { x: 0, y: -2.15, rot: 90 * D }, largeA: { x: 0, y: 2.3, rot: 225 * D },
+      largeB: { x: 5.55, y: -2.55, rot: 225 * D }, medium: { x: 0, y: 5.95, rot: 225 * D },
+      smallA: { x: -4.55, y: 6.35, rot: 150 * D }, smallB: { x: 4.15, y: 6.55, rot: 30 * D },
       square: { x: 6.4, y: 4.6, rot: 45 * D },
     },
     mandala: {
-      largeA: { x: 0, y: 3.49, rot: 225 * D },
-      largeB: { x: 0, y: -3.49, rot: 45 * D },
-      medium: { x: 5.1, y: 0, rot: 135 * D },
-      smallA: { x: -3.1, y: 6.15, rot: 160 * D },
-      smallB: { x: 3.1, y: 6.15, rot: 20 * D },
-      square: { x: 0, y: 0, rot: 45 * D },
+      largeA: { x: 0, y: 3.49, rot: 225 * D }, largeB: { x: 0, y: -3.49, rot: 45 * D },
+      medium: { x: 5.1, y: 0, rot: 135 * D }, smallA: { x: -3.1, y: 6.15, rot: 160 * D },
+      smallB: { x: 3.1, y: 6.15, rot: 20 * D }, square: { x: 0, y: 0, rot: 45 * D },
       para: { x: -5.16, y: 0, rot: 90 * D },
     },
     square: {
-      largeA: { x: -2.6667, y: 0, rot: 135 * D },
-      largeB: { x: 0, y: 2.6667, rot: 45 * D },
-      medium: { x: 2.6667, y: -2.6667, rot: 90 * D },
-      smallA: { x: 0, y: -1.3333, rot: 225 * D },
-      smallB: { x: 3.3333, y: 2, rot: 315 * D },
-      square: { x: 2, y: 0, rot: 45 * D },
+      largeA: { x: -2.6667, y: 0, rot: 135 * D }, largeB: { x: 0, y: 2.6667, rot: 45 * D },
+      medium: { x: 2.6667, y: -2.6667, rot: 90 * D }, smallA: { x: 0, y: -1.3333, rot: 225 * D },
+      smallB: { x: 3.3333, y: 2, rot: 315 * D }, square: { x: 2, y: 0, rot: 45 * D },
       para: { x: -1, y: -3, rot: 0 },
     },
   };
+  const RADIUS = { scatter: 12.2, person: 11.1, bird: 11.4, boat: 10.8, tree: 12.2, mandala: 10.6, square: 7.15 };
+  const FLASH = {
+    CIRCUM: '#e8c56b', AMBULA: '#e24b3a', SEVEN: '#f6f1e6', SHADOW: '#e24b3a',
+    ANIMA: '#e48aa4', ANIMUS: '#3d7ec9', NIGHT: '#8eb7ff', AXIS: '#2f9e86',
+    SELF: '#f6f1e6', SQUARE: '#e8c56b', CIRCUMAMBULATIO: '#f6f1e6',
+  };
 
-  const MOVES = [
-    [32, 46, 'person'],
-    [68, 80, 'bird'],
-    [102, 114, 'boat'],
-    [126, 138, 'tree'],
-    [152, 164, 'mandala'],
-    [180, 192, 'square'],
+  const FIGS = [
+    { pose: 'person', word: 'SHADOW', shadow: true },
+    { pose: 'bird', word: 'ANIMA' },
+    { pose: 'bird', word: 'ANIMUS', mirror: true },
+    { pose: 'boat', word: 'NIGHT' },
+    { pose: 'tree', word: 'AXIS' },
+    { pose: 'mandala', word: 'SELF', spin: true },
+    { pose: 'square', word: 'SQUARE' },
   ];
-  const EMERGE_T0 = 4;
-  const EMERGE_STEP = 2.85;
-  const EMERGE_DUR = 2.5;
+  const CUTS = [];
+  CUTS.push({ beat: 0, pose: 'scatter', word: 'CIRCUM' });
+  CUTS.push({ beat: 2, pose: 'scatter', word: 'AMBULA' });
+  CUTS.push({ beat: 4, pose: 'square', word: 'SEVEN' });
+  CUTS.push({ beat: 6, pose: 'square', word: 'SEVEN' });
+  let beatCursor = 8, fig = 0;
+  while (beatCursor < 96) { CUTS.push({ beat: beatCursor, ...FIGS[fig++ % 7] }); beatCursor += 4; }
+  while (beatCursor < 128) { CUTS.push({ beat: beatCursor, ...FIGS[fig++ % 7] }); beatCursor += 2; }
+  CUTS.push({ beat: 128, pose: 'mandala', word: 'SELF', spin: true });
+  CUTS.push({ beat: 144, pose: 'square', word: 'CIRCUMAMBULATIO' });
+  CUTS.forEach((c, i) => { c.index = i; c.durBeats = (CUTS[i + 1] ? CUTS[i + 1].beat : BEATS) - c.beat; });
 
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
-  const smoother = (u) => { u = clamp(u, 0, 1); return u * u * u * (u * (u * 6 - 15) + 10); };
-  const angDelta = (a, b) => {
-    let d = (b - a) % (Math.PI * 2);
-    if (d > Math.PI) d -= Math.PI * 2;
-    if (d < -Math.PI) d += Math.PI * 2;
-    return d;
-  };
-  const sample1D = (keys, t) => {
-    if (t <= keys[0][0]) return keys[0][1];
-    for (let i = 1; i < keys.length; i++) {
-      if (t <= keys[i][0]) {
-        const u = smoother((t - keys[i - 1][0]) / (keys[i][0] - keys[i - 1][0]));
-        return keys[i - 1][1] + (keys[i][1] - keys[i - 1][1]) * u;
-      }
-    }
-    return keys[keys.length - 1][1];
-  };
-  const span = (t, a, b, c, d) => {
-    if (t <= a || t >= d) return 0;
-    if (t < b) return smoother((t - a) / (b - a));
-    if (t > c) return 1 - smoother((t - c) / (d - c));
-    return 1;
-  };
-
-  const KEYS = {};
-  for (const id of DRAW) {
-    const emergeAt = EMERGE.indexOf(id);
-    const sc = POSES.scatter[id];
-    const tIn = EMERGE_T0 + emergeAt * EMERGE_STEP;
-    const keys = [
-      { t: tIn, x: 0, y: 0, rot: sc.rot + 0.9, s: 0 },
-      { t: tIn + EMERGE_DUR, x: sc.x, y: sc.y, rot: sc.rot, s: 1 },
-    ];
-    let prev = keys[1];
-    for (const [t0, t1, name] of MOVES) {
-      const leave = Math.max(t0 + emergeAt * 0.12, prev.t + 0.35);
-      keys.push({ t: leave, x: prev.x, y: prev.y, rot: prev.rot, s: 1 });
-      const p = POSES[name][id];
-      keys.push({ t: t1, x: p.x, y: p.y, rot: p.rot, s: 1 });
-      prev = keys[keys.length - 1];
-    }
-    keys.push({ t: END + 20, x: prev.x, y: prev.y, rot: prev.rot, s: 1 });
-    for (let i = 1; i < keys.length; i++) {
-      if (keys[i].t < keys[i - 1].t) console.error('key order', id, i);
-    }
-    KEYS[id] = keys;
-  }
-
-  const pieceAt = (id, t) => {
-    const keys = KEYS[id];
-    let a = keys[0], b = keys[0], u = 0;
-    if (t > keys[0].t) {
-      let i = 1;
-      for (; i < keys.length; i++) if (t <= keys[i].t) break;
-      if (i >= keys.length) { a = b = keys[keys.length - 1]; u = 1; }
-      else {
-        a = keys[i - 1]; b = keys[i];
-        u = b.t === a.t ? 1 : smoother((t - a.t) / (b.t - a.t));
-      }
-    }
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const len = Math.hypot(dx, dy);
-    let x = a.x + dx * u, y = a.y + dy * u;
-    const idx = EMERGE.indexOf(id);
-    if (!reduced && len > 0.6) {
-      const arc = Math.min(1.4, len * 0.15) * (idx % 2 ? 1 : -1);
-      const bulge = Math.sin(Math.PI * ((t - a.t) / (b.t - a.t))) * arc;
-      x += (-dy / len) * bulge;
-      y += (dx / len) * bulge;
-    }
-    const rot = a.rot + angDelta(a.rot, b.rot) * u;
-    const s = a.s + (b.s - a.s) * u;
-    return { x, y, rot, s };
-  };
-
-  const orbitOf = (t) => {
-    if (reduced) return 0;
-    const amp = 0.4;
-    if (t < 166 || t > 180) return 0;
-    if (t < 172) return smoother((t - 166) / 6) * amp;
-    if (t < 176) return amp;
-    return amp * (1 - smoother((t - 176) / 4));
-  };
-  const shadowOf = (t) => {
-    if (t < 50 || t > 67) return null;
-    const peak = { x: 2.7, y: -0.45 };
-    if (t < 57) {
-      const u = smoother((t - 50) / 7);
-      return { x: peak.x * u, y: peak.y * u, a: 0.78 * u };
-    }
-    const u = smoother((t - 57) / 10);
-    return { x: peak.x * (1 - u), y: peak.y * (1 - u), a: 0.78 * (1 - u) };
-  };
-  const mirrorOf = (t) => {
-    if (t < 83 || t > 102) return null;
-    if (t < 87) return { axis: 6.6, a: smoother((t - 83) / 4) * 0.48 };
-    if (t < 95) return { axis: 6.6 + (0.4 - 6.6) * smoother((t - 87) / 8), a: 0.48 };
-    return { axis: 0.4, a: 0.48 * (1 - smoother((t - 95) / 7)) };
-  };
-
-  const hex = (h) => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
-  const mix = (a, b, t) => {
-    const A = hex(a), B = hex(b);
-    return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`;
+  const easeOutExpo = (u) => (u >= 1 ? 1 : 1 - 2 ** (-10 * u));
+  const easeOutBack = (u) => {
+    const c1 = 1.35, c3 = c1 + 1;
+    return 1 + c3 * (u - 1) ** 3 + c1 * (u - 1) ** 2;
   };
   const worldPoly = (local, x, y, rot, s) => {
     const c = Math.cos(rot), sn = Math.sin(rot);
@@ -372,588 +197,347 @@ button:hover { background: var(--gold); color: #1a120c }
       return [x + fx * c - fy * sn, y + fx * sn + fy * c];
     });
   };
-  const insetPoly = (poly, amt) => {
-    let cx = 0, cy = 0;
-    for (const [x, y] of poly) { cx += x; cy += y; }
-    cx /= poly.length; cy /= poly.length;
-    return poly.map(([x, y]) => {
-      const dx = cx - x, dy = cy - y, len = Math.hypot(dx, dy) || 1;
-      const m = Math.min(amt, len * 0.42);
-      return [x + (dx / len) * m, y + (dy / len) * m];
-    });
-  };
   const trace = (ctx, poly) => {
     ctx.beginPath();
-    poly.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+    poly.forEach(([x, y], i) => (i ? ctx.lineTo(x, y) : ctx.moveTo(x, y)));
     ctx.closePath();
   };
 
   const canvas = document.getElementById('stage');
-  const ctx = canvas.getContext('2d');
-  const cap = document.getElementById('cap');
-  const grain = document.createElement('canvas');
-  grain.width = grain.height = 140;
-  {
-    const g = grain.getContext('2d');
-    const img = g.createImageData(140, 140);
-    for (let i = 0; i < img.data.length; i += 4) {
-      const v = 180 + Math.random() * 70;
-      img.data[i] = img.data[i + 1] = img.data[i + 2] = v;
-      img.data[i + 3] = 28 + Math.random() * 40;
-    }
-    g.putImageData(img, 0, 0);
-  }
-
-  const CAPS = [
-    [6, 30, 'The unconscious'],
-    [40, 66, 'The shadow'],
-    [72, 100, 'Anima and animus'],
-    [106, 124, 'The night sea'],
-    [130, 150, 'The world tree'],
-    [156, 186, 'The Self'],
-    [192, 220, 'Circumambulatio'],
-  ];
-  let capText = '';
-
-  const CAM = [[0, 8.6], [4, 11.5], [24, 11.8], [46, 10.6], [80, 10.8], [114, 10.1], [138, 11.5], [164, 9.9], [192, 6.6], [204, 6.45]];
-
-  let view = { w: 1, h: 1, dpr: 1, sc: 1 };
+  const ctx = canvas.getContext('2d', { alpha: false });
+  let view = { w: 1, h: 1, dpr: 1 };
   const resize = () => {
-    const dpr = Math.min(devicePixelRatio || 1, 2);
     const w = innerWidth, h = innerHeight;
+    const area = w * h;
+    const dpr = Math.min(devicePixelRatio || 1, area > 1400 * 900 ? 1.25 : 1.75);
     canvas.width = Math.round(w * dpr);
     canvas.height = Math.round(h * dpr);
-    view = { w, h, dpr, sc: 1 };
+    view = { w, h, dpr };
   };
   resize();
   addEventListener('resize', resize);
 
-  const drawPiece = (poly, id, ch, alpha, flash, px) => {
-    if (alpha <= 0.01) return;
-    const light = mix(ASH[0], INK[id][0], ch);
-    const dark = mix(ASH[1], INK[id][1], ch);
-    let cx = 0, cy = 0;
-    for (const [x, y] of poly) { cx += x; cy += y; }
-    cx /= poly.length; cy /= poly.length;
-    const g = ctx.createLinearGradient(cx - 2.4, cy + 2.4, cx + 2.2, cy - 2.2);
-    g.addColorStop(0, light);
-    g.addColorStop(1, dark);
+  const sceneAt = (t) => {
+    const beat = t / BEAT;
+    let s = CUTS[0];
+    for (const c of CUTS) { if (c.beat <= beat) s = c; else break; }
+    return s;
+  };
+
+  const placed = (id, pose, u) => {
+    const p = POSES[pose][id];
+    const [dx, dy, spin] = DIR[id];
+    const k = 1 - u;
+    return {
+      x: p.x + dx * k * 7.5,
+      y: p.y + dy * k * 7.5,
+      rot: p.rot + k * spin,
+      s: 0.72 + 0.28 * u,
+    };
+  };
+
+  const drawPoly = (poly, id, alpha) => {
+    if (alpha < 0.02) return;
     ctx.globalAlpha = alpha;
     trace(ctx, poly);
-    ctx.fillStyle = g;
+    ctx.fillStyle = INK[id];
     ctx.fill();
-    trace(ctx, insetPoly(poly, 0.1));
-    ctx.fillStyle = `rgba(255,248,236,${0.09 * ch})`;
-    ctx.fill();
-    trace(ctx, poly);
-    ctx.lineWidth = (1.15 + flash * 1.1) * px;
-    ctx.strokeStyle = `rgba(255, 244, 220, ${0.18 + 0.45 * ch + flash * 0.55})`;
-    ctx.stroke();
     ctx.globalAlpha = 1;
   };
 
-  const draw = (t, alive) => {
+  const fitFont = (text, maxW, maxSize) => {
+    let size = maxSize;
+    ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
+    while (size > 18 && ctx.measureText(text).width > maxW) {
+      size *= 0.94;
+      ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
+    }
+    return size;
+  };
+
+  const draw = (t, live) => {
     const { w, h, dpr } = view;
-    const camR = alive ? sample1D(CAM, t) : 8.8;
-    const sc = (Math.min(w, h) * dpr * 0.5) / camR;
-    const px = dpr / sc;
-    view.sc = sc;
-
-    ctx.setTransform(1, 0, 0, 1, 0, 0);
-    ctx.fillStyle = '#100c0e';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-    const breath = reduced ? 0 : Math.sin((alive ? t : performance.now() / 1000) * 0.35);
-    const ch = alive ? sample1D([[0, 0.1], [8, 0.16], [30, 0.4], [46, 0.55], [68, 0.74], [114, 0.9], [152, 0.96], [170, 1], [204, 1]], t) : 0.12;
-    const glow = (0.16 + ch * 0.5) * (1 + breath * 0.04);
+    const ended = live && t >= END;
+    const time = ended ? END - 0.001 : (live ? t : END - 0.001);
+    const scene = sceneAt(time);
+    const local = time - scene.beat * BEAT;
+    const u = reduced ? 1 : easeOutBack(clamp(local / 0.09, 0, 1));
+    const punch = reduced ? 0 : Math.exp(-(time % BEAT) * 16);
+    const pose = scene.pose;
+    const rad = RADIUS[pose];
+    const zoom = (reduced ? 1 : 1 + punch * 0.07 + Math.max(0, 1 - local / 0.16) * 0.16);
+    const sc = (Math.min(w, h) * dpr * 0.46 * zoom) / rad;
+    const tilt = reduced || pose === 'square' ? 0 : ((scene.index % 5) - 2) * 0.1;
+    const tiltNow = tilt * (reduced ? 1 : easeOutExpo(clamp(local / 0.16, 0, 1)));
+    const spin = !reduced && scene.spin ? (local / (scene.durBeats * BEAT)) * Math.PI : 0;
+    const camRot = tiltNow + spin;
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    const rg = ctx.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, Math.min(w, h) * 0.55);
-    rg.addColorStop(0, `rgba(92, 48, 36, ${glow})`);
-    rg.addColorStop(0.45, 'rgba(28, 16, 20, 0.2)');
-    rg.addColorStop(1, 'rgba(16, 12, 14, 0)');
-    ctx.fillStyle = rg;
+    ctx.fillStyle = '#07060a';
     ctx.fillRect(0, 0, w, h);
 
-    ctx.save();
-    ctx.globalAlpha = 0.22;
-    const gx = reduced ? 0 : Math.floor((alive ? t : 0) * 7) % 140;
-    const gy = reduced ? 0 : Math.floor((alive ? t : 0) * 4) % 140;
-    ctx.translate(-gx, -gy);
-    const pat = ctx.createPattern(grain, 'repeat');
-    ctx.fillStyle = pat;
-    ctx.fillRect(gx - 20, gy - 20, w + 180, h + 180);
-    ctx.restore();
+    const wash = reduced ? 0 : Math.exp(-local * 11);
+    if (wash > 0.02) {
+      ctx.globalAlpha = wash * 0.55;
+      ctx.fillStyle = FLASH[scene.word] || '#fff';
+      ctx.fillRect(0, 0, w, h);
+      ctx.globalAlpha = 1;
+    }
+
+    if (live && !reduced) {
+      const word = scene.word;
+      const wu = easeOutExpo(clamp(local / 0.14, 0, 1));
+      const size = fitFont(word, w * 0.94, Math.min(w * (word.length > 10 ? 0.11 : 0.2), h * 0.34));
+      ctx.save();
+      ctx.translate(w * 0.5 + (1 - wu) * w * 0.18, h * (scene.index % 2 ? 0.62 : 0.38));
+      ctx.rotate(((scene.index % 2) ? -1 : 1) * 0.04 * (1 - wu));
+      ctx.scale(1.45 - 0.45 * wu, 1.45 - 0.45 * wu);
+      ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = 'rgba(244,239,228,.14)';
+      ctx.fillText(word, 6, 6);
+      ctx.fillStyle = FLASH[word] || '#f6f1e6';
+      ctx.globalAlpha = 0.92;
+      ctx.fillText(word, 0, 0);
+      ctx.restore();
+      ctx.globalAlpha = 1;
+    } else if (!live) {
+      const size = fitFont('CIRCUMAMBULATIO', w * 0.92, Math.min(w * 0.09, h * 0.12));
+      ctx.font = `400 ${size}px Impact, "Arial Black", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillStyle = '#f6f1e6';
+      ctx.fillText('CIRCUMAMBULATIO', w / 2, h * 0.2);
+    }
 
     ctx.setTransform(sc, 0, 0, -sc, (w * dpr) / 2, (h * dpr) / 2);
+    ctx.rotate(camRot);
+    const px = dpr / sc;
 
-    const progress = alive ? clamp(t / 198, 0, 1) : 0.08;
-    ctx.lineWidth = 1.15 * px;
-    ctx.strokeStyle = 'rgba(232, 206, 154, 0.14)';
+    ctx.lineWidth = 1.6 * px;
+    ctx.strokeStyle = 'rgba(244,239,228,.85)';
     ctx.beginPath();
     ctx.arc(0, 0, CIRCLE, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = `rgba(240, 221, 176, ${0.35 + 0.4 * progress})`;
-    ctx.lineWidth = 1.45 * px;
+    if (pose === 'square' || pose === 'mandala') {
+      ctx.lineWidth = 1.25 * px;
+      ctx.strokeStyle = 'rgba(232,197,107,.9)';
+      ctx.strokeRect(-4, -4, 8, 8);
+    }
+    const head = -Math.PI / 2 + ((time / BEAT) % 4) / 4 * Math.PI * 2;
+    ctx.fillStyle = '#f6f1e6';
     ctx.beginPath();
-    ctx.arc(0, 0, CIRCLE, Math.PI / 2, Math.PI / 2 - progress * Math.PI * 2, true);
-    ctx.stroke();
-    const head = Math.PI / 2 - progress * Math.PI * 2;
-    ctx.fillStyle = `rgba(255, 236, 196, ${0.35 + 0.5 * progress})`;
-    ctx.beginPath();
-    ctx.arc(Math.cos(head) * CIRCLE, Math.sin(head) * CIRCLE, 0.07, 0, Math.PI * 2);
+    ctx.arc(Math.cos(head) * CIRCLE, Math.sin(head) * CIRCLE, 0.16, 0, Math.PI * 2);
     ctx.fill();
 
-    const outer = alive ? span(t, 6, 14, 28, 40) : 0;
-    if (outer > 0) {
-      ctx.strokeStyle = `rgba(232, 206, 154, ${0.12 * outer})`;
-      ctx.lineWidth = 1 * px;
+    const since = time % BEAT;
+    const clap = !reduced && since < 0.05 && Math.floor(time / BEAT) % 2 === 1;
+    if (clap) {
+      ctx.strokeStyle = 'rgba(255,255,255,.85)';
+      ctx.lineWidth = 0.8 * px;
       ctx.beginPath();
-      ctx.arc(0, 0, 9.4, 0, Math.PI * 2);
+      ctx.moveTo(-14, 0); ctx.lineTo(14, 0);
       ctx.stroke();
     }
 
-    const mand = alive ? span(t, 156, 166, 178, 188) : 0;
-    if (mand > 0) {
-      ctx.save();
-      ctx.rotate(reduced ? 0 : -orbitOf(t) * 0.6);
-      ctx.strokeStyle = `rgba(232, 206, 154, ${0.07 * mand})`;
-      ctx.lineWidth = 1 * px;
-      for (let i = 0; i < 8; i++) {
-        ctx.rotate(Math.PI / 4);
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(9.2, 0);
-        ctx.stroke();
+    const drawSet = (ox, oy, alpha, uu) => {
+      for (const id of ORDER) {
+        const p = placed(id, pose, uu);
+        const poly = worldPoly(LOCAL[id], p.x + ox, p.y + oy, p.rot, p.s * (1 + punch * 0.035));
+        const sh = worldPoly(LOCAL[id], p.x + ox + 0.12, p.y + oy - 0.1, p.rot, p.s);
+        ctx.globalAlpha = alpha * 0.55;
+        trace(ctx, sh);
+        ctx.fillStyle = '#000';
+        ctx.fill();
+        drawPoly(poly, id, alpha);
       }
+      ctx.globalAlpha = 1;
+    };
+
+    if (!reduced && local < 0.16) drawSet(0, 0, 0.28, Math.max(0, u - 0.45));
+    if (scene.shadow) drawSet(2.15, -0.35, 0.9, reduced ? 1 : easeOutBack(clamp((local - 0.04) / 0.09, 0, 1)));
+    if (scene.mirror) {
+      ctx.save();
+      ctx.scale(-1, 1);
+      drawSet(0, 0, 0.78, u);
       ctx.restore();
     }
+    drawSet(0, 0, 1, u);
 
-    const sqA = alive ? span(t, 176, 190, 220, 230) : 0;
-    if (sqA > 0) {
-      ctx.strokeStyle = `rgba(240, 221, 176, ${0.75 * sqA})`;
-      ctx.lineWidth = 1.4 * px;
-      ctx.strokeRect(-4, -4, 8, 8);
-    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.42, w / 2, h / 2, Math.max(w, h) * 0.72);
+    vg.addColorStop(0, 'rgba(0,0,0,0)');
+    vg.addColorStop(1, 'rgba(0,0,0,.55)');
+    ctx.fillStyle = vg;
+    ctx.fillRect(0, 0, w, h);
 
-    const mandorla = alive ? span(t, 88, 93, 96, 101) : 0;
-    if (mandorla > 0) {
-      ctx.strokeStyle = `rgba(224, 176, 168, ${0.55 * mandorla})`;
-      ctx.lineWidth = 1.3 * px;
-      ctx.beginPath(); ctx.arc(-1.55, 0, 3.15, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = `rgba(150, 186, 206, ${0.5 * mandorla})`;
-      ctx.beginPath(); ctx.arc(1.55, 0, 3.15, 0, Math.PI * 2); ctx.stroke();
-    }
-
-    if (!alive) {
-      ctx.fillStyle = `rgba(240, 221, 176, ${0.45 + breath * 0.12})`;
-      ctx.beginPath();
-      ctx.arc(0, 0, 0.07, 0, Math.PI * 2);
-      ctx.fill();
-      vignette();
-      return;
-    }
-
-    const orb = orbitOf(t);
-    const oc = Math.cos(orb), os = Math.sin(orb);
-    const spin = (x, y, rot) => ({
-      x: x * oc - y * os,
-      y: x * os + y * oc,
-      rot: rot + orb,
-    });
-    const states = {};
-    for (const id of DRAW) {
-      const p = pieceAt(id, t);
-      states[id] = spin(p.x, p.y, p.rot);
-      states[id].s = p.s;
-    }
-
-    const sh = shadowOf(t);
-    if (sh && sh.a > 0.02) {
-      ctx.fillStyle = `rgba(12, 8, 16, ${sh.a})`;
-      for (const id of DRAW) {
-        const s = states[id];
-        if (s.s < 0.02) continue;
-        trace(ctx, worldPoly(LOCAL[id], s.x + sh.x, s.y + sh.y, s.rot, s.s));
-        ctx.fill();
-      }
-    }
-
-    const mir = mirrorOf(t);
-    if (mir && mir.a > 0.02) {
-      for (const id of DRAW) {
-        const s = states[id];
-        if (s.s < 0.02) continue;
-        const poly = worldPoly(LOCAL[id], s.x, s.y, s.rot, s.s).map(([x, y]) => [2 * mir.axis - x, y]);
-        drawPiece(poly, id, ch * 0.8, mir.a, 0, px);
-      }
-    }
-
-    let flash = 0;
-    for (const a of [46, 80, 114, 138, 164, 192]) {
-      const d = t - a;
-      if (d >= 0 && d < 0.65) flash = Math.max(flash, 1 - d / 0.65);
-    }
-
-    for (const id of DRAW) {
-      const s = states[id];
-      if (s.s < 0.02) continue;
-      const poly = worldPoly(LOCAL[id], s.x, s.y, s.rot, s.s);
-      const polyS = worldPoly(LOCAL[id], s.x + 0.16, s.y - 0.14, s.rot, s.s);
-      ctx.globalAlpha = 0.28 * s.s;
-      trace(ctx, polyS);
-      ctx.fillStyle = '#000';
-      ctx.fill();
-      ctx.globalAlpha = 1;
-      drawPiece(poly, id, ch, 0.25 + 0.75 * s.s, flash, px);
-    }
-
-    if (!reduced) {
-      for (let i = 0; i < 18; i++) {
-        const base = ((i * 53) % 100) / 100;
-        const y = (((base + t * 0.018) % 1) * 2 - 1) * 8.2;
-        const x = Math.sin(i * 2.17) * 8.4 + Math.sin(t * 0.15 + i) * 0.2;
-        const tw = 0.25 + 0.75 * (0.5 + 0.5 * Math.sin(t * 0.8 + i * 1.7));
-        ctx.globalAlpha = 0.18 * tw * (0.4 + ch);
-        ctx.fillStyle = i % 3 === 0 ? '#f0ddb0' : '#e7c9b4';
-        ctx.beginPath();
-        ctx.arc(x, y, 0.035, 0, Math.PI * 2);
-        ctx.fill();
-      }
-      ctx.globalAlpha = 1;
-    }
-
-    const dot = 0.055 * (1 + flash * 0.8);
-    ctx.fillStyle = `rgba(255, 236, 200, ${0.55 + 0.35 * ch})`;
-    ctx.beginPath();
-    ctx.arc(0, 0, dot, 0, Math.PI * 2);
-    ctx.fill();
-
-    if (t > 190 && t < 198) {
-      const u = Math.sin(((t - 190) / 8) * Math.PI);
-      const halo = ctx.createRadialGradient(0, 0, 0.2, 0, 0, 3.2);
-      halo.addColorStop(0, `rgba(255, 228, 180, ${0.18 * u})`);
-      halo.addColorStop(1, 'rgba(255, 228, 180, 0)');
-      ctx.fillStyle = halo;
-      ctx.beginPath();
-      ctx.arc(0, 0, 3.2, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    vignette();
-
-    let next = '';
-    let op = 0;
-    for (const [a, b, text] of CAPS) {
-      if (t < a || t >= b) continue;
-      next = text;
-      const fin = Math.min(2.2, (b - a) / 3);
-      op = span(t, a, a + fin, b - fin, b);
-    }
-    if (next !== capText) { capText = next; cap.textContent = next; }
-    cap.style.opacity = String(op);
-
-    function vignette() {
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const vg = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.35, w / 2, h / 2, Math.max(w, h) * 0.72);
-      vg.addColorStop(0, 'rgba(0,0,0,0)');
-      vg.addColorStop(1, 'rgba(0,0,0,0.62)');
-      ctx.fillStyle = vg;
-      ctx.fillRect(0, 0, w, h);
+    if (live) {
+      ctx.font = '500 12px ui-monospace, Menlo, Consolas, monospace';
+      ctx.textAlign = 'right';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = 'rgba(244,239,228,.78)';
+      const bar = Math.min(BARS, Math.floor(time / BEAT / 4) + 1);
+      ctx.fillText(`${scene.word}   ${String(bar).padStart(2, '0')} / ${BARS}`, w - 14, 12);
     }
   };
 
-  let started = false;
-  let tOrigin = 0;
-  let audioCtx = null;
-  let seek = 0;
+  let started = false, audioCtx = null, t0 = 0, seek = 0;
   const hashSeek = () => {
     const m = /(?:^|[#&])t=([\d.]+)/.exec(location.hash);
     return m ? clamp(parseFloat(m[1]) || 0, 0, END) : 0;
   };
 
   const frame = () => {
-    const t = started
-      ? ((audioCtx ? audioCtx.currentTime : performance.now() / 1000) - tOrigin + seek)
-      : 0;
+    const t = started ? ((audioCtx ? audioCtx.currentTime : performance.now() / 1000) - t0 + seek) : 0;
     draw(t, started);
-    if (!started || t < END + 1.5 || !reduced) requestAnimationFrame(frame);
+    requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
 
-  // —— sound, scheduled against the same clock as the picture ——
-  const N = {
-    D1: 36.708, D2: 73.416, Eb2: 77.782, E2: 82.407, F2: 87.307, Fs2: 92.499, A2: 110,
-    C3: 130.813, D3: 146.832, Eb3: 155.563, F3: 174.614, A3: 220,
-    D4: 293.665, Eb4: 311.127, E4: 329.628, F4: 349.228, Fs4: 369.994, G4: 391.995, A4: 440,
-    C5: 523.251, D5: 587.33, E5: 659.255, A5: 880,
-  };
+  const N = { D1: 36.71, D2: 73.42, F2: 87.31, Fs2: 92.5, A1: 55, A2: 110, C2: 65.41, D3: 146.83, F3: 174.61, Fs3: 185, A3: 220, D4: 293.66, F4: 349.23, Fs4: 369.99, A4: 440 };
 
-  function schedule(ctx, t0) {
-    const dry = ctx.createGain();
-    const wetIn = ctx.createGain();
-    const delay = ctx.createDelay();
-    delay.delayTime.value = 0.028;
-    const conv = ctx.createConvolver();
-    conv.normalize = false;
-    const rate = ctx.sampleRate;
-    const irLen = Math.floor(rate * 2.5);
-    const ir = ctx.createBuffer(2, irLen, rate);
-    for (let c = 0; c < 2; c++) {
-      const d = ir.getChannelData(c);
-      for (let i = 0; i < irLen; i++) {
-        const tt = i / rate;
-        d[i] = (Math.random() * 2 - 1) * Math.exp(-tt * 1.45) * (c ? 0.92 : 1);
+  function buildEvents() {
+    const ev = [];
+    for (let b = 0; b < BEATS; b++) {
+      const t = b * BEAT;
+      if (b < 158) ev.push({ t, k: 'kick' });
+      if (b % 2 === 1 && b < 156) ev.push({ t, k: 'clap' });
+      if (b < 152) ev.push({ t: t + BEAT * 0.5, k: 'hat', open: b % 4 === 3 });
+      if (b >= 96 && b < 128) {
+        ev.push({ t: t + BEAT * 0.25, k: 'hat' });
+        ev.push({ t: t + BEAT * 0.75, k: 'hat' });
       }
+      if (b % 8 === 7 && b < 144) ev.push({ t, k: 'riser' });
+      if (b % 8 === 0) ev.push({ t, k: 'stab', major: b >= 128 });
     }
-    conv.buffer = ir;
-    const wet = ctx.createGain();
-    wet.gain.value = 0.42;
+    for (let bar = 0; bar < BARS; bar++) {
+      const base = bar * 4 * BEAT;
+      const major = bar >= 32;
+      const notes = major
+        ? [[0, N.D1], [0.75, N.D2], [1.5, N.A1], [2.5, N.Fs2], [3.25, N.A2]]
+        : [[0, N.D1], [0.75, N.D2], [1.5, N.A1], [2, N.F2], [2.75, N.C2], [3.5, N.D2]];
+      if (bar < 38) notes.forEach(([b, f]) => ev.push({ t: base + b * BEAT, k: 'bass', f }));
+    }
+    ev.sort((a, b) => a.t - b.t);
+    return ev;
+  }
+
+  function arm(ctx, all) {
+    const bus = ctx.createGain();
     const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -12;
-    comp.knee.value = 16;
-    comp.ratio.value = 3;
-    comp.attack.value = 0.008;
-    comp.release.value = 0.28;
-    const master = ctx.createGain();
+    comp.threshold.value = -12; comp.knee.value = 8; comp.ratio.value = 4;
+    comp.attack.value = 0.003; comp.release.value = 0.12;
     const lim = ctx.createDynamicsCompressor();
-    lim.threshold.value = -1.5;
-    lim.knee.value = 0;
-    lim.ratio.value = 20;
-    lim.attack.value = 0.002;
-    lim.release.value = 0.12;
-    master.gain.setValueAtTime(0.0001, t0);
-    master.gain.linearRampToValueAtTime(0.72, t0 + 5);
-    master.gain.setValueAtTime(0.72, t0 + 194);
-    master.gain.linearRampToValueAtTime(0.0001, t0 + 202);
+    lim.threshold.value = -1.2; lim.knee.value = 0; lim.ratio.value = 16;
+    lim.attack.value = 0.002; lim.release.value = 0.08;
+    const master = ctx.createGain();
+    master.gain.value = 0.8;
+    bus.connect(comp).connect(lim).connect(master).connect(ctx.destination);
 
-    dry.connect(comp);
-    wetIn.connect(delay).connect(conv).connect(wet).connect(comp);
-    comp.connect(lim).connect(master).connect(ctx.destination);
+    const rate = ctx.sampleRate;
+    const noise = ctx.createBuffer(1, rate, rate);
+    const nd = noise.getChannelData(0);
+    for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
 
-    const panner = (value) => {
-      if (ctx.createStereoPanner) {
-        const p = ctx.createStereoPanner();
-        p.pan.value = value;
-        return p;
-      }
-      const g = ctx.createGain();
-      return g;
-    };
-
-    const droneFilter = ctx.createBiquadFilter();
-    droneFilter.type = 'lowpass';
-    droneFilter.frequency.value = 280;
-    droneFilter.Q.value = 0.5;
-    const lfo = ctx.createOscillator();
-    lfo.frequency.value = 0.045;
-    const lfoG = ctx.createGain();
-    lfoG.gain.value = 70;
-    lfo.connect(lfoG).connect(droneFilter.frequency);
-    lfo.start(t0); lfo.stop(t0 + END);
-    const droneOut = ctx.createGain();
-    droneOut.gain.setValueAtTime(0.0001, t0);
-    droneOut.gain.linearRampToValueAtTime(1, t0 + 8);
-    droneOut.gain.setValueAtTime(1, t0 + 176);
-    droneOut.gain.linearRampToValueAtTime(0.0001, t0 + 192);
-    droneFilter.connect(droneOut).connect(dry);
-
-    const drone = (freq, type, amp, detune) => {
-      const o = ctx.createOscillator();
-      o.type = type;
-      o.frequency.value = freq;
-      if (detune) o.detune.value = detune;
-      const g = ctx.createGain();
-      g.gain.value = amp;
-      o.connect(g).connect(droneFilter);
-      o.start(t0); o.stop(t0 + END);
-    };
-    drone(N.D2, 'sine', 0.09, 0);
-    drone(N.D2, 'sine', 0.045, 6);
-    drone(N.A2, 'sine', 0.05, -4);
-    drone(N.D1, 'sine', 0.05, 0);
-
-    // The shadow leans a minor second against the drone, then lets go.
-    const eb = ctx.createOscillator();
-    eb.type = 'sine';
-    eb.frequency.value = N.Eb2;
-    const ebG = ctx.createGain();
-    ebG.gain.setValueAtTime(0.0001, t0);
-    ebG.gain.setValueAtTime(0.0001, t0 + 49);
-    ebG.gain.linearRampToValueAtTime(0.045, t0 + 56);
-    ebG.gain.linearRampToValueAtTime(0.0001, t0 + 67);
-    eb.connect(ebG).connect(dry);
-    eb.start(t0 + 49); eb.stop(t0 + 68);
-
-    // Ground, a slow ostinato. The third brightens when the square is near.
-    const bass = ctx.createOscillator();
-    bass.type = 'triangle';
-    const bassF = ctx.createBiquadFilter();
-    bassF.type = 'lowpass';
-    bassF.frequency.value = 220;
-    const bassG = ctx.createGain();
-    bass.connect(bassF).connect(bassG).connect(dry);
-    bassG.gain.setValueAtTime(0.0001, t0);
-    const minor = [N.D2, N.A2, N.D2, N.A2, N.F2, N.A2, N.C3, N.A2];
-    const major = [N.D2, N.A2, N.D2, N.A2, N.Fs2, N.A2, N.D3, N.A2];
-    let bt = 38, bi = 0;
-    while (bt < 190) {
-      const beat = bt < 100 ? 1.12 : bt < 152 ? 0.84 : 1.2;
-      const freq = (bt < 164 ? minor : major)[bi % 8];
-      const t = t0 + bt;
-      bass.frequency.setValueAtTime(freq, t);
-      bassG.gain.setValueAtTime(0.0001, t);
-      bassG.gain.linearRampToValueAtTime(0.1, t + 0.03);
-      bassG.gain.exponentialRampToValueAtTime(0.0001, t + beat * 0.9);
-      bt += beat; bi++;
-    }
-    bass.start(t0 + 38); bass.stop(t0 + 192);
-
-    const noiseLen = Math.floor(rate * 1.2);
-    const noiseBuf = ctx.createBuffer(1, noiseLen, rate);
-    {
-      const d = noiseBuf.getChannelData(0);
-      for (let i = 0; i < noiseLen; i++) d[i] = Math.random() * 2 - 1;
-    }
-    const air = ctx.createBufferSource();
-    air.buffer = noiseBuf;
-    air.loop = true;
-    const hp = ctx.createBiquadFilter();
-    hp.type = 'highpass';
-    hp.frequency.value = 5000;
-    const airG = ctx.createGain();
-    airG.gain.value = 0.02;
-    air.connect(hp).connect(airG).connect(wetIn);
-    air.start(t0); air.stop(t0 + END);
-
-    const bell = (time, freq, amp, dur = 3.2) => {
-      const car = ctx.createOscillator();
-      const mod = ctx.createOscillator();
-      const mg = ctx.createGain();
-      const ag = ctx.createGain();
-      car.frequency.value = freq;
-      mod.frequency.value = freq * Math.SQRT2;
-      const t = t0 + time;
-      mg.gain.setValueAtTime(Math.min(180, freq * 0.55), t);
-      mg.gain.exponentialRampToValueAtTime(1, t + Math.min(0.8, dur * 0.35));
-      mod.connect(mg).connect(car.frequency);
-      car.connect(ag);
-      const send = ctx.createGain();
-      send.gain.value = 0.85;
-      ag.connect(dry);
-      ag.connect(send).connect(wetIn);
-      ag.gain.setValueAtTime(0.0001, t);
-      ag.gain.linearRampToValueAtTime(amp, t + 0.015);
-      ag.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-      car.start(t); mod.start(t);
-      car.stop(t + dur + 0.05); mod.stop(t + dur + 0.05);
-    };
-    const tick = (time, amp = 0.07) => {
+    const burst = (time, type, freq, dest, dur, amp) => {
       const src = ctx.createBufferSource();
-      src.buffer = noiseBuf;
-      const bp = ctx.createBiquadFilter();
-      bp.type = 'bandpass';
-      bp.frequency.value = 1600;
-      bp.Q.value = 3.5;
+      src.buffer = noise;
+      const f = ctx.createBiquadFilter();
+      f.type = type; f.frequency.value = freq; f.Q.value = type === 'bandpass' ? 0.7 : 0.4;
       const g = ctx.createGain();
-      const t = t0 + time;
-      g.gain.setValueAtTime(amp, t);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
-      src.connect(bp).connect(g).connect(dry);
-      src.start(t); src.stop(t + 0.08);
+      g.gain.setValueAtTime(amp, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + dur);
+      src.connect(f).connect(g).connect(dest);
+      src.start(time); src.stop(time + dur + 0.02);
     };
 
-    const emergeNotes = [N.D5, N.A4, N.F4, N.C5, N.G4, N.E4, N.D4];
-    EMERGE.forEach((_, i) => {
-      const t = EMERGE_T0 + i * EMERGE_STEP + 0.15;
-      bell(t, emergeNotes[i], i === EMERGE.length - 1 ? 0.07 : 0.055, 2.6);
-      if (i === EMERGE.length - 1) bell(t, N.A3, 0.04, 3);
-    });
-
-    bell(46, N.D3, 0.06, 3.4); bell(46, N.A3, 0.04, 3.2); tick(46, 0.05);
-    bell(56, N.Eb4, 0.045, 2.4);
-    bell(66, N.D4, 0.05, 2.8); bell(66, N.A4, 0.035, 2.6);
-    bell(80, N.A4, 0.05, 2.6); bell(80, N.E5, 0.03, 2.4); tick(80, 0.05);
-    bell(94, N.D5, 0.05, 3.2); bell(94, N.A4, 0.03, 3);
-    bell(114, N.D4, 0.05, 2.4); bell(114, N.A4, 0.035, 2.4); tick(114);
-    bell(138, N.F4, 0.045, 2.6); bell(138, N.A4, 0.04, 2.6); bell(138, N.D5, 0.03, 2.8); tick(138);
-    bell(164, N.D5, 0.055, 3.6); tick(164, 0.06);
-    bell(174, N.A5, 0.03, 3.4);
-    bell(192, N.D4, 0.06, 4.2);
-    bell(192, N.Fs4, 0.045, 4.4);
-    bell(192, N.A4, 0.04, 4.6);
-    bell(192, N.D5, 0.035, 5);
-    tick(192, 0.05);
-
-    // Anima and animus: a line, and the same line a fourth below, a little late.
-    const mel = [N.D4, N.F4, N.A4, N.C5, N.A4, N.F4, N.E4, N.D4, N.A4, N.C5, N.D5, N.C5, N.A4, N.G4, N.F4, N.E4, N.D4, N.E4, N.F4, N.A4, N.G4, N.E4, N.D4, N.A3];
-    const voice = (time, freq, amp, pan) => {
-      const o = ctx.createOscillator();
-      const o2 = ctx.createOscillator();
-      o.type = 'triangle'; o2.type = 'sine';
-      o.frequency.value = freq; o2.frequency.value = freq;
-      const g = ctx.createGain();
-      const g2 = ctx.createGain(); g2.gain.value = 0.4;
-      const lp = ctx.createBiquadFilter();
-      lp.type = 'lowpass'; lp.frequency.value = 1600;
-      const p = panner(pan);
-      o.connect(g);
-      o2.connect(g2).connect(g);
-      g.connect(lp).connect(p);
-      p.connect(dry);
-      const send = ctx.createGain(); send.gain.value = 0.7;
-      p.connect(send).connect(wetIn);
-      const t = t0 + time;
-      g.gain.setValueAtTime(0.0001, t);
-      g.gain.linearRampToValueAtTime(amp, t + 0.08);
-      g.gain.exponentialRampToValueAtTime(0.0001, t + 1.2);
-      o.start(t); o2.start(t);
-      o.stop(t + 1.35); o2.stop(t + 1.35);
-    };
-    mel.forEach((freq, i) => {
-      const t = 70 + i * 1.22;
-      if (t > 100) return;
-      voice(t, freq, 0.045, -0.28);
-      voice(t + 2.44, freq * 0.75, 0.028, 0.32);
-    });
-
-    // Chapel fifth under the dialogue.
-    const bed = (freq, tA, tB, amp) => {
+    const kick = (time) => {
       const o = ctx.createOscillator();
       o.type = 'sine';
-      o.frequency.value = freq;
+      o.frequency.setValueAtTime(172, time);
+      o.frequency.exponentialRampToValueAtTime(46, time + 0.09);
       const g = ctx.createGain();
-      g.gain.setValueAtTime(0.0001, t0 + tA);
-      g.gain.linearRampToValueAtTime(amp, t0 + tA + 3);
-      g.gain.setValueAtTime(amp, t0 + tB - 3);
-      g.gain.linearRampToValueAtTime(0.0001, t0 + tB);
-      o.connect(g).connect(dry);
-      o.start(t0 + tA); o.stop(t0 + tB + 0.1);
+      g.gain.setValueAtTime(0.72, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.2);
+      o.connect(g).connect(bus);
+      o.start(time); o.stop(time + 0.22);
+      burst(time, 'highpass', 1800, bus, 0.02, 0.18);
     };
-    bed(N.F3, 68, 102, 0.02);
-    bed(N.A3, 68, 102, 0.018);
-
-    // The Self, as a held major chord.
-    const pad = ctx.createGain();
-    pad.gain.setValueAtTime(0.0001, t0);
-    pad.gain.setValueAtTime(0.0001, t0 + 156);
-    pad.gain.linearRampToValueAtTime(1, t0 + 168);
-    pad.gain.setValueAtTime(1, t0 + 190);
-    pad.gain.linearRampToValueAtTime(0.0001, t0 + 201);
-    pad.connect(dry);
-    const padWet = ctx.createGain();
-    padWet.gain.value = 0.55;
-    pad.connect(padWet).connect(wetIn);
-    [[N.D3, 0.04], [N.A3, 0.032], [N.Fs4, 0.026], [N.A4, 0.02], [N.D5, 0.012]].forEach(([freq, amp], i) => {
+    const clap = (time) => {
+      burst(time, 'bandpass', 1900, bus, 0.11, 0.28);
       const o = ctx.createOscillator();
-      o.type = 'sine';
-      o.frequency.value = freq;
-      o.detune.value = (i - 2) * 4;
+      o.type = 'triangle'; o.frequency.value = 210;
       const g = ctx.createGain();
-      g.gain.value = amp;
-      o.connect(g).connect(pad);
-      o.start(t0 + 156); o.stop(t0 + 202);
-    });
+      g.gain.setValueAtTime(0.12, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.08);
+      o.connect(g).connect(bus);
+      o.start(time); o.stop(time + 0.1);
+    };
+    const hat = (time, open) => burst(time, 'highpass', 7500, bus, open ? 0.14 : 0.035, open ? 0.07 : 0.045);
+    const bass = (time, freq) => {
+      const o = ctx.createOscillator();
+      o.type = 'square'; o.frequency.value = freq;
+      const f = ctx.createBiquadFilter();
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(480, time);
+      f.frequency.exponentialRampToValueAtTime(110, time + 0.1);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.2, time);
+      g.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+      o.connect(f).connect(g).connect(bus);
+      o.start(time); o.stop(time + 0.17);
+    };
+    const stab = (time, major) => {
+      const chord = major ? [N.D4, N.Fs4, N.A4] : [N.D4, N.F4, N.A4];
+      chord.forEach((freq) => {
+        const o = ctx.createOscillator();
+        o.type = 'triangle'; o.frequency.value = freq;
+        const f = ctx.createBiquadFilter();
+        f.type = 'lowpass'; f.frequency.value = 2200;
+        const g = ctx.createGain();
+        g.gain.setValueAtTime(0.1, time);
+        g.gain.exponentialRampToValueAtTime(0.001, time + 0.28);
+        o.connect(f).connect(g).connect(bus);
+        o.start(time); o.stop(time + 0.32);
+      });
+    };
+    const riser = (time) => {
+      const src = ctx.createBufferSource();
+      src.buffer = noise;
+      const f = ctx.createBiquadFilter();
+      f.type = 'bandpass'; f.Q.value = 4;
+      f.frequency.setValueAtTime(300, time);
+      f.frequency.exponentialRampToValueAtTime(4000, time + BEAT * 0.9);
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.001, time);
+      g.gain.exponentialRampToValueAtTime(0.16, time + BEAT * 0.85);
+      g.gain.exponentialRampToValueAtTime(0.001, time + BEAT);
+      src.connect(f).connect(g).connect(bus);
+      src.start(time); src.stop(time + BEAT + 0.02);
+    };
+
+    const events = buildEvents();
+    const origin = ctx.currentTime + 0.03;
+    const play = (e) => {
+      const when = origin + e.t;
+      if (!all && when < ctx.currentTime - 0.02) return;
+      if (e.k === 'kick') kick(when);
+      else if (e.k === 'clap') clap(when);
+      else if (e.k === 'hat') hat(when, e.open);
+      else if (e.k === 'bass') bass(when, e.f);
+      else if (e.k === 'stab') stab(when, e.major);
+      else if (e.k === 'riser') riser(when);
+    };
+    if (all) { events.forEach(play); return origin; }
+    let cursor = 0;
+    const pump = () => {
+      const horizon = ctx.currentTime + 0.18;
+      while (cursor < events.length && origin + events[cursor].t < horizon) play(events[cursor++]);
+      if (cursor < events.length) setTimeout(pump, 40);
+    };
+    pump();
+    return origin;
   }
 
   const gate = document.getElementById('gate');
@@ -961,22 +545,21 @@ button:hover { background: var(--gold); color: #1a120c }
     if (started) return;
     started = true;
     seek = hashSeek();
-    if (seek > 1) gate.style.transition = 'none';
     gate.classList.add('gone');
     const AC = window.AudioContext || window.webkitAudioContext;
     try {
       audioCtx = new AC();
-      schedule(audioCtx, audioCtx.currentTime + 0.06);
-      tOrigin = audioCtx.currentTime + 0.06;
+      const origin = arm(audioCtx);
+      t0 = origin;
       audioCtx.resume();
     } catch (err) {
       audioCtx = null;
-      tOrigin = performance.now() / 1000;
+      t0 = performance.now() / 1000;
     }
   };
   document.getElementById('begin').addEventListener('click', begin);
-
   if (new URLSearchParams(location.search).has('autostart')) begin();
+
 })();
 </script>
 </html>
