@@ -1103,8 +1103,8 @@ body.tense .vig { opacity: 1; animation: vigPulse .7s ease-in-out infinite }
   }
   /* ===================== LOGIC END ===================== */
 
-  /* ---------- Setup, timing, debug hooks ---------- */
-  const HASH = new URLSearchParams(location.hash.slice(1));
+  /* ---------- Setup, timing, debug hooks (they only work under automation, so visitors can't rig the shoe) ---------- */
+  const HASH = new URLSearchParams(navigator.webdriver ? location.hash.slice(1) : '');
   const DEBUG = ['debug', 'rig', 'fast', 'thumb', 'nointro'].some((k) => HASH.has(k));
   let SPEED = HASH.has('fast') ? 0.15 : 1;
   const RM = () => fx.reducedMotion;

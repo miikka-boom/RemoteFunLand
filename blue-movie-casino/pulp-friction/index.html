@@ -1996,8 +1996,9 @@ ${text ? `<text x="50" y="84" text-anchor="middle" font-family="Anton, Impact, s
     }
     stopAuto();
   }
+  // Forced outcomes (#force=...) only work under automation (navigator.webdriver), for tests and the thumbnail.
   function debugForce() {
-    const m = location.hash.match(/force=(\w+)/);
+    const m = navigator.webdriver ? location.hash.match(/force=(\w+)/) : null;
     return m ? m[1] : null;
   }
   function anticFlags(grid) {
@@ -2583,7 +2584,7 @@ ${text ? `<text x="50" y="84" text-anchor="middle" font-family="Anton, Impact, s
     setPhase('idle');
     // slow font: the WILD labels were drawn with a fallback, so redraw them once Anton arrives
     if (!antonOk) document.fonts.load('40px Anton').then(() => { if (sprites && document.fonts.check('40px Anton')) { sprites = buildSprites(sprites.S); redraw(); } }).catch(() => {});
-    if (/auto=1/.test(location.hash)) setTimeout(play, 300);
+    if (navigator.webdriver && /auto=1/.test(location.hash)) setTimeout(play, 300);
   }).catch((err) => {
     console.error(err);
     setMsg('The jukebox art failed to load. Try a reload.', 'bad');
