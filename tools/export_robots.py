@@ -6,6 +6,7 @@
 #     argv[2]  output .glb
 #     argv[3]  "all" also bakes the mocap clip; anything else skips it
 #     argv[4]  how much of the mocap hip travel to keep (0.5 = half)
+#     argv[5]  optional: a choreography script run before export, e.g. tools/new_moves.py
 #   then embed it for the page (so it also works from file://):
 #   { printf 'window.ROBOTS_GLB="'; base64 -w0 robots.glb; printf '";\n'; } > antenna-aerobics/robots.js
 #
@@ -121,6 +122,8 @@ if MODE=='all':
             r['__Hips']=(mathutils.Vector((d.x, (h.y-mean.y)*k, d.z)), r['__Hips'][1])
         return samples
     made.append(bake(D.actions['miikka_dance_long'],'mocap',1,3325,step=2,ik=False,hips_fix=fixhips))
+if len(sys.argv) > 5:  # optional choreography script that adds more clips to `made` (see tools/new_moves.py)
+    exec(open(sys.argv[5]).read())
 set_ik(False)
 for a in list(D.actions):
     if a not in made: D.actions.remove(a)
