@@ -1,0 +1,2331 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Flirt Locker · Blue Movie Casino</title>
+<meta name="description" content="A cheeky mines game: open gym lockers for crushes, dodge the mood killers and cut the pink wire before the mood dies.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;600&family=Black+Ops+One&family=Bungee&family=Monoton&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="../shared/casino.css">
+<style>
+:root {
+  --accent: #ff3d9a;
+  --accent-2: #e9d6a0;
+  --khaki-hi: #d3c495;
+  --khaki: #b8a677;
+  --khaki-lo: #998959;
+  --khaki-dk: #5d5437;
+  --olive: #1c1b12;
+  --olive-2: #29271b;
+  --sand: #efe0b5;
+  --led: #ff4fa8;
+  --screen: #0e100a;
+  --danger: #ff4545;
+  --f-stencil: "Black Ops One", "Stencil Std", Stencil, Impact, sans-serif;
+  --lkw: 64px;
+  --gap: 5px;
+  --ar: .86;
+}
+body {
+  background:
+    radial-gradient(130% 55% at 50% -8%, rgba(255, 61, 154, .2), transparent 62%),
+    radial-gradient(90% 50% at 50% 108%, rgba(239, 224, 181, .11), transparent 70%),
+    var(--olive);
+}
+/* faint desert camo behind everything */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: .9;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260' viewBox='0 0 260 260'%3E%3Cg fill-opacity='.05'%3E%3Cpath fill='%23efe0b5' d='M18 40c28-26 78-20 92 6s-16 52-52 50S-12 68 18 40z'/%3E%3Cpath fill='%23b8a677' d='M150 10c40-10 90 10 96 40s-34 40-62 30-74-60-34-70z'/%3E%3Cpath fill='%23ff3d9a' d='M120 130c22-18 62-12 70 14s-22 40-48 34-44-32-22-48z'/%3E%3Cpath fill='%23efe0b5' d='M10 170c20-16 60-6 64 20s-30 50-50 40-34-44-14-60z'/%3E%3Cpath fill='%23998959' d='M190 190c30-14 70 6 66 34s-46 34-66 22-30-42 0-56z'/%3E%3C/g%3E%3C/svg%3E");
+}
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap }
+
+/* ---------- Layout ---------- */
+.fl {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "title" "hud" "quip" "board" "ctrl" "foot";
+  gap: 8px;
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 8px 16px calc(18px + env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 900px) {
+  .fl {
+    max-width: 1180px;
+    grid-template-columns: minmax(0, 1fr) 390px;
+    grid-template-rows: auto auto auto auto 1fr;
+    grid-template-areas: "board title" "board hud" "board quip" "board ctrl" "board foot";
+    column-gap: 34px;
+    row-gap: 12px;
+    padding: 20px 24px 24px;
+    align-items: start;
+  }
+}
+
+/* ---------- Title ---------- */
+.fl-title { grid-area: title; display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0 10px }
+.t-name { margin: 0; font: 400 22px/1 var(--f-stencil); color: var(--sand); letter-spacing: .02em; text-shadow: 0 2px 0 rgba(0, 0, 0, .45) }
+.t-name em { font-style: normal; color: var(--accent); text-shadow: 0 0 16px rgba(255, 61, 154, .65), 0 2px 0 rgba(0, 0, 0, .45) }
+.t-sub { margin: 3px 0 0; font: 700 10.5px/1.2 var(--f-cond); letter-spacing: .2em; text-transform: uppercase; color: var(--khaki) }
+.t-tag { display: none }
+.fl-help { grid-column: 2; grid-row: 1 / span 2; --b1: rgba(239, 224, 181, .14); --b2: rgba(239, 224, 181, .06); font: 400 20px/1 var(--f-stencil) }
+@media (min-width: 900px) {
+  .fl-title { padding-top: 6px }
+  .t-name { font-size: 54px; line-height: .92 }
+  .t-name span { display: block }
+  .t-name .t-the { font-size: 26px; letter-spacing: .3em; color: var(--khaki) }
+  .t-sub { font-size: 13px; margin-top: 8px }
+  .t-tag { display: block; grid-column: 1 / -1; margin: 10px 0 0; font: 600 17px/1.35 var(--f-text); color: #e6d7ad }
+  .fl-help { grid-row: 1 }
+  .t-sub { grid-column: 1 / -1 }
+}
+
+/* ---------- HUD ---------- */
+.fl-hud {
+  grid-area: hud;
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr 1.12fr 1fr;
+  gap: 5px;
+  padding: 6px;
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at 7px 7px, #3a3422 0 2px, #c9bb8b 2.2px 3px, transparent 3.4px),
+    radial-gradient(circle at calc(100% - 7px) 7px, #3a3422 0 2px, #c9bb8b 2.2px 3px, transparent 3.4px),
+    radial-gradient(circle at 7px calc(100% - 7px), #3a3422 0 2px, #c9bb8b 2.2px 3px, transparent 3.4px),
+    radial-gradient(circle at calc(100% - 7px) calc(100% - 7px), #3a3422 0 2px, #c9bb8b 2.2px 3px, transparent 3.4px),
+    linear-gradient(180deg, #8f8259, #6c6142);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .3), inset 0 -2px 0 rgba(0, 0, 0, .3), 0 10px 26px rgba(0, 0, 0, .45);
+}
+.hud-cell, .hud-row {
+  position: relative;
+  border-radius: 8px;
+  background: var(--screen);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .85), inset 0 2px 10px rgba(0, 0, 0, .9);
+  overflow: hidden;
+}
+.hud-cell::after, .hud-row::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: repeating-linear-gradient(180deg, rgba(255, 255, 255, .035) 0 1px, transparent 1px 3px);
+}
+.hud-cell { display: grid; align-content: center; gap: 4px; min-height: 60px; padding: 6px 8px }
+.hud-lbl { font: 400 9.5px/1 var(--f-stencil); letter-spacing: .1em; color: #a2936a; white-space: nowrap }
+.hud-val {
+  display: block;
+  font: 800 29px/1 var(--f-cond);
+  font-variant-numeric: tabular-nums;
+  color: var(--led);
+  text-shadow: 0 0 10px rgba(255, 79, 168, .75);
+  white-space: nowrap;
+  transform-origin: 30% 60%;
+}
+.hud-yield .hud-val { color: #ffb3d6 }
+.hud-yield.is-live .hud-val { color: var(--led) }
+.hud-pay .hud-val { color: #6a5f45; text-shadow: none }
+.hud-pay.is-live .hud-val { color: var(--gold); text-shadow: 0 0 12px rgba(255, 207, 74, .7) }
+.hud-yield.is-dead .hud-val { color: var(--danger); text-shadow: 0 0 12px rgba(255, 69, 69, .8); text-decoration: line-through 3px }
+.hud-pay.is-paid .hud-val { color: #fff6c8 }
+.hud-ecg { padding: 0 }
+.hud-ecg canvas { position: absolute; inset: 0; width: 100%; height: 100% }
+.hud-bpm {
+  position: absolute;
+  left: 6px;
+  bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font: 800 15px/1 var(--f-cond);
+  font-variant-numeric: tabular-nums;
+  color: var(--led);
+  text-shadow: 0 0 8px rgba(255, 79, 168, .8);
+}
+.hud-bpm small { font: 400 8px/1 var(--f-stencil); color: #a2936a; letter-spacing: .1em; text-shadow: none }
+.hud-heart { width: 14px; height: 14px; fill: var(--led); filter: drop-shadow(0 0 4px rgba(255, 79, 168, .9)) }
+.hud-heart.is-beat { animation: beat .32s var(--ease-back) }
+.hud-ecg .hud-lbl { position: absolute; left: 6px; top: 6px }
+.hud-row {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 9px;
+  font: 700 13px/1 var(--f-cond);
+  letter-spacing: .05em;
+  color: #b6a77a;
+  white-space: nowrap;
+}
+.hud-row b { color: #ffd1e8; font-weight: 800; font-variant-numeric: tabular-nums }
+.hud-row .hud-np { color: var(--gold) }
+.riskbar { display: inline-block; width: 44px; height: 7px; margin: 0 2px; vertical-align: 1px; border-radius: 4px; background: rgba(255, 255, 255, .1); overflow: hidden }
+.riskbar i { display: block; width: 0; height: 100%; border-radius: 4px; background: linear-gradient(90deg, #4dffb0, #ffcf4a 45%, #ff4545 80%) 0 0 / 44px 100%; transition: width .35s var(--ease-back) }
+.hud-risk.is-hot b { color: var(--danger); animation: blink .5s steps(2) infinite }
+.is-slam { animation: hud-slam .62s var(--ease-back) }
+@media (min-width: 900px) {
+  .hud-cell { min-height: 92px; padding: 10px 12px }
+  .hud-val { font-size: 44px }
+  .hud-lbl { font-size: 11px }
+  .hud-row { padding: 9px 12px; font-size: 15px }
+  .riskbar { width: 60px }
+  .riskbar i { background-size: 60px 100% }
+}
+
+/* ---------- Radio quip ---------- */
+.fl-quip {
+  grid-area: quip;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  margin: 0;
+  font: 600 15px/1.13 var(--f-cond);
+  letter-spacing: .02em;
+  color: #e6d7ad;
+}
+.q-tag {
+  flex: none;
+  padding: 3px 6px 2px;
+  border-radius: 4px;
+  background: #3a3524;
+  color: var(--khaki-hi);
+  font: 400 10px/1 var(--f-stencil);
+  letter-spacing: .12em;
+}
+.q-tag::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 5px; border-radius: 50%; background: #4dffb0; box-shadow: 0 0 6px #4dffb0; vertical-align: 1px; animation: blink 1.4s steps(2) infinite }
+.q-text { min-width: 0; overflow: hidden; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2 }
+.fl-quip.good .q-text { color: #ffb3d6 }
+.fl-quip.bad .q-text { color: #ff9a8a }
+.fl-quip.gold .q-text { color: var(--gold) }
+@media (min-width: 900px) { .fl-quip { font-size: 17px; height: auto; min-height: 40px } }
+
+/* ---------- Locker bank ---------- */
+.fl-board {
+  grid-area: board;
+  position: relative;
+  padding: 0 8px 8px;
+  border-radius: 12px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .08), transparent 30%),
+    linear-gradient(180deg, #5d5437, #443d28);
+  box-shadow: inset 0 0 0 2px #2a2617, inset 0 2px 0 rgba(255, 255, 255, .15), 0 18px 40px rgba(0, 0, 0, .55);
+  transition: box-shadow .4s;
+}
+.fl-board::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px rgba(255, 61, 154, 0), 0 0 0 rgba(255, 61, 154, 0);
+}
+.fl-board.is-pulse::after { animation: board-pulse .5s ease-out }
+.fl-board.is-danger.is-pulse::after { animation-name: board-pulse-red }
+.b-plate {
+  position: relative;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  margin: 0 -8px 8px;
+  padding: 0 12px;
+  border-radius: 12px 12px 0 0;
+  background: repeating-linear-gradient(-45deg, #ff3d9a 0 9px, #17140b 9px 18px);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .4);
+  font: 400 10px/1 var(--f-stencil);
+  letter-spacing: .1em;
+  color: var(--sand);
+  white-space: nowrap;
+}
+.b-plate span {
+  padding: 3px 6px 2px;
+  border-radius: 3px;
+  background: #17140b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.b-plate b { color: var(--accent); font-weight: 400 }
+.b-plate .b-long { font-style: normal }
+@media (max-width: 599px) { .b-plate .b-long { display: none } }
+@media (max-width: 380px), (max-width: 899px) and (max-height: 790px) { .b-plate > span:first-child { display: none } .b-plate { justify-content: center } }
+.b-plate .b-days { overflow: visible } /* its number pops (scales) and must not be clipped */
+.b-plate .b-days b { display: inline-block; min-width: 2ch; text-align: right }
+.b-light {
+  position: absolute;
+  left: 50%;
+  top: 100%;
+  width: 40%;
+  height: 3px;
+  translate: -50% 0;
+  border-radius: 3px;
+  background: #fff8e0;
+  box-shadow: 0 0 12px 3px rgba(255, 248, 224, .55), 0 6px 40px 10px rgba(255, 248, 224, .12);
+  animation: flicker 7s steps(1) infinite;
+  pointer-events: none;
+}
+.b-grid { position: relative; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--gap) }
+@media (min-width: 900px) {
+  .fl-board {
+    width: min(100%, calc((100dvh - var(--bar-h) - 146px) * .86 + 68px));
+    justify-self: center;
+    padding: 0 14px 14px;
+    --gap: 10px;
+  }
+  .b-plate { height: 34px; margin: 0 -14px 14px; font-size: 12px; padding: 0 16px }
+}
+
+/* Locker */
+.lk {
+  position: relative;
+  display: block;
+  width: 100%;
+  aspect-ratio: var(--ar);
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: #0b0a06;
+  cursor: pointer;
+  perspective: 760px;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.lk[aria-disabled="true"] { cursor: default }
+.fl-board:not(.can-pick) .lk:not(.is-open) { cursor: default }
+@media (max-width: 899px) and (max-height: 900px) { :root { --ar: .92 } }
+@media (max-width: 899px) and (max-height: 790px) { :root { --ar: .98 } }
+@media (max-width: 899px) and (max-height: 700px) { :root { --ar: 1.08 } }
+/* single column: the bank gives up width on short screens so START / CASH OUT stay above the fold */
+@media (max-width: 899px) { .fl-board { width: min(100%, max(280px, calc((100dvh - var(--chrome, 490px)) * var(--ar) + 36px))); justify-self: center } }
+.lk:focus-visible { outline: 3px solid var(--gold); outline-offset: 2px; z-index: 3 }
+.lk-in {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 5px;
+  overflow: hidden;
+  background: radial-gradient(120% 90% at 50% 30%, #3a3423, #191609 62%, #0b0a05);
+  box-shadow: inset 0 8px 12px rgba(0, 0, 0, .75), inset 0 0 0 2px #090804;
+  transition: background .3s, box-shadow .3s;
+}
+.lk-in::before {
+  content: "";
+  position: absolute;
+  top: 8%;
+  left: 50%;
+  width: 18%;
+  height: 8%;
+  translate: -50% 0;
+  border: 2px solid #6d664c;
+  border-top: 0;
+  border-radius: 0 0 50% 50%;
+  opacity: .55;
+}
+.lk-item { position: relative; width: 76%; height: 76%; opacity: 0; scale: .3; filter: drop-shadow(0 3px 2px rgba(0, 0, 0, .65)) }
+.lk-tag {
+  position: absolute;
+  left: 4%;
+  right: 4%;
+  bottom: 5%;
+  font: 700 calc(var(--lkw) * .105)/1 var(--f-cond);
+  letter-spacing: .06em;
+  text-align: center;
+  text-transform: uppercase;
+  color: #ffd9ea;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  opacity: 0;
+}
+@media (max-width: 899px) { .lk-tag { display: none } }
+
+.lk-door { position: absolute; inset: 0; transform-origin: 0 50%; transform-style: preserve-3d; pointer-events: none }
+.lk-front, .lk-back { position: absolute; inset: 0; border-radius: 5px; backface-visibility: hidden; -webkit-backface-visibility: hidden }
+.lk-front {
+  --s: calc(var(--lkw) * .034);
+  background:
+    linear-gradient(90deg, rgba(0, 0, 0, .24), rgba(0, 0, 0, 0) 9%, rgba(255, 255, 255, .07) 50%, rgba(0, 0, 0, 0) 91%, rgba(0, 0, 0, .26)),
+    linear-gradient(180deg, var(--khaki-hi), var(--khaki) 45%, var(--khaki-lo));
+  box-shadow: inset 0 0 0 1px rgba(45, 36, 12, .75), inset 2px 2px 0 rgba(255, 248, 215, .3), inset -2px -2px 0 rgba(0, 0, 0, .22);
+  transform-origin: 50% 0;
+  overflow: hidden;
+}
+.lk-front i { position: absolute; display: block; font-style: normal }
+.lk-vent {
+  left: 20%;
+  right: 20%;
+  top: 7%;
+  height: calc(var(--s) * 6.6);
+  border-radius: 2px;
+  background: repeating-linear-gradient(180deg, #2a2412 0 var(--s), rgba(255, 246, 210, .6) var(--s) calc(var(--s) + 1px), transparent calc(var(--s) + 1px) calc(var(--s) * 2.2));
+}
+.lk-vent--b { top: auto; bottom: 7%; }
+.lk-num {
+  left: 11%;
+  top: 31%;
+  padding: .14em .28em .08em;
+  border-radius: 2px;
+  background: #2a2614;
+  color: var(--sand);
+  font: 400 calc(var(--lkw) * .15)/1 var(--f-stencil);
+  letter-spacing: .03em;
+  box-shadow: inset 0 0 0 1px rgba(255, 240, 200, .18);
+}
+.lk-latch {
+  right: 9%;
+  top: 36%;
+  width: 13%;
+  height: 31%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #5b5338, #8d825c 50%, #5b5338);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .45);
+}
+.lk-lock { right: 1.5%; top: 50%; width: 35%; aspect-ratio: .92; transform-origin: 50% -20%; transition: rotate .35s var(--ease-back) }
+.lk-shackle {
+  left: 21%;
+  right: 21%;
+  top: -34%;
+  height: 52%;
+  border: calc(var(--lkw) * .036) solid #d9dde2;
+  border-bottom: 0;
+  border-radius: 999px 999px 0 0;
+  transition: translate .12s var(--ease-back);
+}
+.lk-body {
+  inset: 0;
+  display: grid;
+  place-items: center;
+  border-radius: 28%;
+  background: linear-gradient(180deg, #ff8ac2, #ff3d9a 50%, #c2186d);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .55), 0 2px 3px rgba(0, 0, 0, .5);
+  transition: box-shadow .2s;
+}
+.lk-body::before {
+  content: "";
+  position: absolute;
+  top: 3%;
+  left: 50%;
+  translate: -50% 0;
+  border: calc(var(--lkw) * .03) solid transparent;
+  border-top-color: #ffe58a;
+  z-index: 1;
+}
+.lk-body::after {
+  content: "";
+  position: absolute;
+  right: 8%;
+  bottom: 8%;
+  width: 16%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: #5a1a36;
+  transition: background .2s, box-shadow .2s;
+}
+.lk.is-armed .lk-body::after { background: #4dffb0; box-shadow: 0 0 4px #4dffb0 }
+.fl-board.is-danger .lk.is-armed .lk-body::after { background: #ff4545; box-shadow: 0 0 5px #ff4545; animation: blink .5s steps(2) infinite }
+.lk-dial {
+  position: relative !important;
+  width: 68%;
+  aspect-ratio: 1;
+  border-radius: 50%;
+  background: radial-gradient(circle, #1c1c1c 0 44%, transparent 46%), repeating-conic-gradient(#f4f4f4 0 6deg, #222 6deg 30deg);
+  box-shadow: 0 0 0 1.5px #ffcf4a, inset 0 0 2px #000;
+}
+.lk-decal { inset: auto; pointer-events: none }
+.lk-decal[data-d="kiss"] {
+  left: 10%; bottom: 20%; width: 34%; aspect-ratio: 40 / 24; rotate: -16deg; opacity: .85;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 24'%3E%3Cpath d='M2 12C8 4 14 2 20 7C26 2 32 4 38 12C32 20 26 22 20 22C14 22 8 20 2 12Z' fill='%23e8175d'/%3E%3Cpath d='M4 12C12 14 28 14 36 12' stroke='%23800025' stroke-width='1.8' fill='none'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+.lk-decal[data-d="heart"] {
+  left: 12%; bottom: 21%; width: 26%; aspect-ratio: 1; rotate: 12deg;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 56C14 44 4 34 6 22C8 12 20 8 32 18C44 8 56 12 58 22C60 34 50 44 32 56Z' fill='%23ff3d9a' stroke='%23fff' stroke-width='6'/%3E%3C/svg%3E") center / contain no-repeat;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, .4));
+}
+.lk-decal[data-d="xoxo"] { left: 8%; bottom: 19%; rotate: -12deg; font: 400 calc(var(--lkw) * .15)/1 var(--f-retro); color: #e8175d; opacity: .9 }
+.lk-decal[data-d="xoxo"]::after { content: "xoxo" }
+.lk-decal[data-d="tape"] { left: -6%; right: -6%; top: 60%; height: 9%; rotate: -24deg; background: repeating-linear-gradient(45deg, #ff3d9a 0 5px, #17140b 5px 10px); opacity: .85; box-shadow: 0 1px 2px rgba(0, 0, 0, .35) }
+.lk-decal[data-d="dent"] { left: 14%; bottom: 22%; width: 30%; aspect-ratio: 1.3; border-radius: 50%; background: radial-gradient(closest-side, rgba(0, 0, 0, .2), rgba(255, 255, 255, .12) 70%, transparent) }
+.lk-back {
+  transform: rotateY(180deg);
+  background: linear-gradient(90deg, #6c6141, #8a7e55 60%, #74693f);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, .5);
+}
+.lk-back::before { content: ""; position: absolute; left: 22%; right: 22%; top: 13%; height: 30%; border-radius: 3px; background: linear-gradient(135deg, #d6edf4, #8fb3c2 50%, #eef8fb); box-shadow: inset 0 0 0 2px #4a4430 }
+.lk-back::after {
+  content: ""; position: absolute; left: 30%; top: 55%; width: 40%; aspect-ratio: 1; rotate: -8deg;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M32 56C14 44 4 34 6 22C8 12 20 8 32 18C44 8 56 12 58 22C60 34 50 44 32 56Z' fill='%23ff3d9a' stroke='%23fff' stroke-width='5'/%3E%3C/svg%3E") center / contain no-repeat;
+}
+
+/* Interaction and reveal states */
+.fl-board.can-pick .lk:not(.is-open):hover .lk-front,
+.fl-board.can-pick .lk:not(.is-open):focus-visible .lk-front,
+.lk.is-jiggle .lk-front { animation: rattle .36s ease-in-out }
+.fl-board.can-pick .lk:not(.is-open):hover .lk-lock,
+.fl-board.can-pick .lk:not(.is-open):focus-visible .lk-lock,
+.lk.is-jiggle .lk-lock { animation: swing .7s ease-in-out }
+.fl-board.can-pick .lk:not(.is-open):hover .lk-body { box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25), inset 0 1px 0 rgba(255, 255, 255, .55), 0 0 12px rgba(255, 61, 154, .95) }
+.fl-board.can-pick .lk:not(.is-open):active .lk-front { scale: .96 }
+.lk.is-spinning .lk-dial { animation: dial-spin .2s cubic-bezier(.3, .1, .3, 1) both }
+.lk.is-tense .lk-dial { animation: dial-spin .55s cubic-bezier(.2, .6, .2, 1) both }
+.lk.is-tense .lk-front { animation: tremble .07s linear infinite }
+.lk.is-unlocked .lk-shackle { translate: 0 -30% }
+.lk.is-unlocked .lk-lock { rotate: 22deg }
+.lk.is-jam .lk-front { animation: jam .16s linear }
+.lk.is-jam .lk-dial { rotate: -50deg }
+
+.lk.is-open { z-index: 2 }
+.lk.is-open .lk-door { transform: rotateY(-99deg); animation: door-open .62s cubic-bezier(.2, .8, .3, 1) both }
+.lk.is-ghost.is-open .lk-door { animation: door-fling .48s cubic-bezier(.3, 1.3, .5, 1) both }
+.lk.is-closing .lk-door { animation: door-close .3s cubic-bezier(.6, 0, .9, .5) both }
+.lk.is-reattach .lk-door { animation: reattach .34s var(--ease-back) both }
+.lk.is-blown .lk-door { visibility: hidden }
+.lk.no-anim .lk-door, .lk.no-anim .lk-item { animation: none !important }
+
+.lk.is-open .lk-item { opacity: 1; scale: 1; animation: item-pop .55s var(--ease-back) .1s both }
+.lk.is-open .lk-tag { opacity: .95; transition: opacity .3s .3s }
+.lk.is-safe .lk-item { animation: item-pop .55s var(--ease-back) .1s both, bob 2.6s ease-in-out .8s infinite }
+.lk.is-safe .lk-in { background: radial-gradient(110% 85% at 50% 45%, rgba(255, 61, 154, .62), #3a0f24 58%, #12060c); box-shadow: inset 0 0 0 2px #ff3d9a, inset 0 0 22px rgba(255, 61, 154, .75) }
+.lk.is-kill .lk-in { background: repeating-linear-gradient(45deg, rgba(255, 69, 69, .16) 0 6px, transparent 6px 12px), radial-gradient(#4a1414, #140606) }
+.lk.is-boom { z-index: 4 }
+.lk.is-boom .lk-in { background: radial-gradient(circle at 50% 50%, #ff3a3a, #6a0a0a 60%, #1a0303); box-shadow: inset 0 0 0 2px #ff5050, 0 0 26px rgba(255, 40, 40, .85); animation: boom-pulse .45s ease-in-out 6 alternate }
+.lk.is-boom .lk-item { animation: item-pop .4s var(--ease-back) both, jitter .08s linear .4s 22 }
+.lk.is-ghost .lk-item { opacity: .78; scale: .84; animation: item-ghost .4s var(--ease-out) .12s both }
+.lk.is-ghost:not(.is-kill) .lk-in { background: radial-gradient(110% 85% at 50% 45%, rgba(255, 61, 154, .24), #22121a 60%, #0f080b) }
+.lk.is-ghost .lk-item { filter: none }
+.lk.is-dodged .lk-in { box-shadow: inset 0 0 0 2px rgba(255, 69, 69, .7), inset 0 0 18px rgba(255, 69, 69, .4) }
+.lk.is-ghost.is-dodged .lk-item { animation: item-ghost .4s var(--ease-out) .12s both, sulk .5s ease-in-out .5s }
+.lk.is-near { z-index: 5 }
+.lk.is-near .lk-in { box-shadow: inset 0 0 0 3px #ff4545, 0 0 22px rgba(255, 69, 69, .8); animation: boom-pulse .3s ease-in-out 4 alternate }
+.lk.is-ghost.is-near .lk-item { opacity: 1; scale: 1; animation: item-pop .45s var(--ease-back) both, sulk .55s ease-in-out .45s }
+.lk.is-glimmer .lk-front::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: linear-gradient(110deg, transparent 30%, rgba(255, 255, 255, .8) 47%, rgba(255, 207, 74, .65) 53%, transparent 70%) 0 0 / 260% 100% no-repeat;
+  animation: glimmer .45s ease-out both;
+}
+
+/* Stamp (in a layer clipped to the bank, so its 3x slam-in never widens the page) */
+.b-stamps { position: absolute; inset: 0; z-index: 30; overflow: hidden; border-radius: inherit; pointer-events: none }
+.fl-stamp {
+  position: absolute;
+  left: 50%;
+  top: 52%;
+  z-index: 30;
+  translate: -50% -50%;
+  rotate: -9deg;
+  padding: .22em .42em .16em;
+  border: .11em solid currentColor;
+  border-radius: .16em;
+  box-shadow: inset 0 0 0 .05em rgba(0, 0, 0, .25), 0 10px 30px rgba(0, 0, 0, .5);
+  background: rgba(22, 6, 14, .86);
+  color: #ff4fa8;
+  font: 400 clamp(32px, 10.5vw, 70px)/.95 var(--f-stencil);
+  letter-spacing: .04em;
+  text-align: center;
+  text-shadow: 0 0 18px rgba(255, 61, 154, .55), 0 2px 0 rgba(0, 0, 0, .55);
+  white-space: nowrap;
+  pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.2 2.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") 0 0 / 220px 120px;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120'%3E%3Cfilter id='f'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.2 2.2'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23f)'/%3E%3C/svg%3E") 0 0 / 220px 120px;
+  animation: stamp .5s cubic-bezier(.2, 1.5, .4, 1) both;
+}
+.fl-stamp small { display: block; margin-top: .3em; font: 800 .34em/1 var(--f-cond); letter-spacing: .16em; color: #ffe8a3; font-variant-numeric: tabular-nums; text-shadow: 0 0 12px rgba(255, 207, 74, .55), 0 2px 0 rgba(0, 0, 0, .6) }
+.fl-stamp.is-boom { color: #ff5a4a; rotate: 7deg; text-shadow: 0 0 18px rgba(255, 60, 60, .6) }
+.fl-stamp.is-boom small { color: #ffc2b8 }
+.fl-stamp.is-out { animation: stamp-out .25s ease-in both }
+
+/* Fixed-layer effects: the flying door and rings live in a viewport-sized clip layer (no sideways scroll) */
+.fl-fxlayer { position: fixed; inset: 0; z-index: 9360; overflow: hidden; pointer-events: none }
+.fl-flydoor { position: absolute !important; right: auto !important; bottom: auto !important; z-index: 9360; pointer-events: none; margin: 0; will-change: transform, opacity; box-shadow: 0 10px 30px rgba(0, 0, 0, .5) }
+.fl-ring {
+  position: absolute;
+  z-index: 9350;
+  width: 240px;
+  height: 240px;
+  margin: -120px 0 0 -120px;
+  border-radius: 50%;
+  background: radial-gradient(closest-side, transparent 76%, rgba(255, 206, 130, .75) 85%, rgba(255, 90, 74, .95) 91%, rgba(255, 90, 74, .4) 96%, transparent 100%);
+  pointer-events: none;
+  will-change: transform, opacity;
+  animation: ring .65s cubic-bezier(.1, .8, .3, 1) forwards;
+}
+.fl-ring.is-2 { background: radial-gradient(closest-side, transparent 82%, rgba(255, 207, 74, .8) 92%, transparent 100%); animation-duration: .9s; animation-delay: .06s; opacity: 0 }
+.fl-ring.is-pink { background: radial-gradient(closest-side, transparent 76%, rgba(255, 194, 223, .7) 85%, rgba(255, 61, 154, .95) 91%, transparent 100%) }
+.fl-hot {
+  position: fixed;
+  z-index: 9450;
+  pointer-events: none;
+  translate: -50% -50%;
+  font: 400 clamp(30px, 9vw, 64px)/1 var(--f-stencil);
+  color: #fff;
+  letter-spacing: .04em;
+  white-space: nowrap;
+  -webkit-text-stroke: 1.5px #ff3d9a;
+  text-shadow: 0 0 22px #ff3d9a, 0 4px 0 #6a0a3a;
+  animation: hot 1.1s var(--ease-out) forwards;
+}
+
+/* ---------- Controls ---------- */
+.fl-ctrl { grid-area: ctrl; display: grid; gap: 8px }
+.c-mk-head { display: flex; align-items: baseline; gap: 8px; min-width: 0; white-space: nowrap }
+.c-mk-head .clabel { color: var(--khaki) }
+.c-mk-head b { font: 400 19px/1 var(--f-stencil); color: var(--accent); text-shadow: 0 0 10px rgba(255, 61, 154, .5); display: inline-block }
+.c-mk-head span:last-child { overflow: hidden; text-overflow: ellipsis; font: 600 13px/1 var(--f-cond); color: #b6a77a; letter-spacing: .04em }
+.c-mk-row { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; margin-top: 7px }
+.c-mk-row .cbtn { min-height: 44px; padding: 0; border-radius: 11px; font: 800 19px/1 var(--f-cond); letter-spacing: 0 }
+.c-mk-row .mk-step { --b1: rgba(239, 224, 181, .16); --b2: rgba(239, 224, 181, .07); font-size: 24px }
+.mk-pre[aria-pressed="true"] { --b1: #ff86c0; --b2: #ff3d9a; --b3: #8a0f4a; --bt: #fff; box-shadow: 0 4px 0 var(--b3), 0 0 16px rgba(255, 61, 154, .55), inset 0 1px 0 rgba(255, 255, 255, .45) }
+.c-mk-row .cbtn:disabled { filter: grayscale(.6) brightness(.62) }
+@media (max-width: 370px) { .c-mk-row { gap: 3px } }
+.c-act { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 10px; align-items: stretch }
+.c-stake { display: grid; grid-template-columns: 44px 1fr 44px; grid-template-rows: auto 1fr; align-items: center; justify-items: center; gap: 2px 4px }
+.c-stake .clabel { grid-column: 1 / -1; font-size: 10px; color: var(--khaki) }
+.c-stake .cbtn { --b1: rgba(239, 224, 181, .16); --b2: rgba(239, 224, 181, .07); font: 800 24px/1 var(--f-cond); min-height: 44px; height: 44px }
+.c-stake .cchip { cursor: default; width: 50px; height: 50px; font-size: 15px }
+.c-stake .cchip.is-short { box-shadow: 0 3px 0 rgba(0, 0, 0, .45), 0 0 0 3px var(--danger), 0 0 14px rgba(255, 69, 69, .6) }
+.fl-start, .fl-cash, .fl-rand { min-height: 62px }
+.fl-start { font: 400 30px/1 var(--f-stencil); letter-spacing: .1em }
+.fl-start.is-again { animation: again .5s var(--ease-back) }
+@media (max-width: 400px) { .fl-start small { letter-spacing: .05em } }
+.fl-start small { display: block; font: 700 11px/1 var(--f-cond); letter-spacing: .16em; opacity: .85 }
+.fl-start > span { display: grid; gap: 4px; justify-items: center }
+.fl-rand { --b1: rgba(239, 224, 181, .2); --b2: rgba(239, 224, 181, .08); padding: 8px 10px; font-size: 15px; line-height: 1.05; gap: 6px }
+.fl-rand svg { width: 26px; height: 26px; flex: none }
+.fl-cash { position: relative; display: grid; justify-items: center; align-content: center; gap: 3px; padding: 8px 12px 14px; overflow: hidden }
+.fl-cash .c-top { font: 400 10.5px/1 var(--f-stencil); letter-spacing: .14em; color: #7a1048; text-shadow: none }
+.fl-cash b { font: 400 22px/1 var(--f-stencil); letter-spacing: .04em; white-space: nowrap }
+.fl-cash.is-locked { filter: grayscale(.55) brightness(.72) }
+.fl-cash.is-locked .c-top { color: #5b4a20 }
+.fl-cash.is-ready { animation: ready calc(1.3s - var(--heat, 0) * .62s) ease-in-out infinite }
+.c-wire { position: absolute; left: 0; right: 0; bottom: 3px; width: 100%; height: 14px; overflow: visible; pointer-events: none }
+.c-wire path { fill: none; stroke-linecap: round; vector-effect: non-scaling-stroke; transform-box: fill-box; transition: transform .45s var(--ease-back), opacity .4s }
+.c-wire .w-core { stroke: #ff3d9a; stroke-width: 4.5 }
+.c-wire .w-hi { stroke: #ffc2df; stroke-width: 1.2; opacity: .8 }
+.c-wire .w-flow { stroke: #fff; stroke-width: 1.6; stroke-dasharray: 3 14; opacity: 0 }
+.fl-cash.is-ready .w-flow { opacity: .85; animation: flow .7s linear infinite }
+.c-wire .w-l { transform-origin: 0% 50% }
+.c-wire .w-r { transform-origin: 100% 50% }
+.fl-cash.is-cut .w-l { transform: rotate(9deg) translateY(2px) }
+.fl-cash.is-cut .w-r { transform: rotate(-9deg) translateY(2px) }
+.fl-cash.is-cut .w-flow { opacity: 0 }
+.fl-cash .c-snip { position: absolute; left: 50%; bottom: 0; width: 18px; height: 18px; translate: -50% 0; opacity: .9 }
+.fl-cash.is-cut .c-snip { opacity: 0 }
+@media (min-width: 900px) {
+  .fl-ctrl { gap: 14px; margin-top: 4px }
+  .c-act { grid-template-columns: 160px minmax(0, 1fr) }
+  .fl-start, .fl-cash, .fl-rand { min-height: 70px }
+  .fl-cash b { font-size: 26px }
+}
+
+/* ---------- Short phones (iPhone SE class) ----------
+   The top bar already names the game, so the stencil title folds away and "?" joins the radio line; the HUD,
+   spacing and buttons tighten so START and CASH OUT both sit above the fold (checked at 375x667 and 360x640). */
+@media (max-width: 899px) and (max-height: 760px) {
+  :root { --chrome: 420px }
+  .fl { grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "hud hud" "quip title" "board board" "ctrl ctrl" "foot foot"; gap: 6px; padding-top: 6px }
+  .fl-title { display: block; align-self: center }
+  .t-name, .t-sub { display: none }
+  .fl-quip { height: 44px }
+  .hud-cell { min-height: 50px; padding: 4px 8px }
+  .hud-val { font-size: 26px }
+  .c-stake { grid-template-rows: 1fr }
+  .c-stake .clabel { display: none }
+  .fl-start, .fl-cash, .fl-rand { min-height: 56px }
+  .fl-start { padding-top: 6px; padding-bottom: 6px }
+  .fl-ctrl { gap: 6px }
+}
+
+/* ---------- Footer ---------- */
+.fl-foot { grid-area: foot; margin: 4px 0 0; font: 500 12.5px/1.45 var(--f-cond); letter-spacing: .04em; color: #8e8262; text-align: center }
+.fl-foot kbd { padding: 1px 5px; border-radius: 4px; background: rgba(239, 224, 181, .1); font: inherit; color: #c9b98a }
+@media (min-width: 900px) { .fl-foot { text-align: left } }
+
+/* ---------- Help dialog ---------- */
+.fl-help-body .h-items { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; margin: 2px 0 }
+.fl-help-body .h-items div { display: flex; align-items: center; gap: 8px; font: 600 14px/1.1 var(--f-cond); color: var(--ink) }
+.fl-help-body .h-items svg { width: 30px; height: 30px; flex: none }
+.fl-help-body h3 { margin: 4px 0 0; font: 400 13px/1 var(--f-stencil); letter-spacing: .1em; color: var(--khaki-hi) }
+.fl-help-body .h-small { font-size: 13px; color: #9e8fb3 }
+.fl-help-body td:nth-child(n+2), .fl-help-body th:nth-child(n+2) { text-align: right; font-variant-numeric: tabular-nums }
+.fl-help-body td:not(:last-child) { color: var(--ink) }
+.fl-help-body table { font-size: 14px }
+
+/* ---------- Keyframes ---------- */
+@keyframes rattle { 0%, 100% { rotate: 0deg; translate: 0 0 } 18% { rotate: -1.6deg; translate: -1px 0 } 38% { rotate: 1.3deg; translate: 1px 0 } 58% { rotate: -.8deg } 78% { rotate: .5deg } }
+@keyframes swing { 0%, 100% { rotate: 0deg } 22% { rotate: 16deg } 48% { rotate: -10deg } 72% { rotate: 5deg } }
+@keyframes tremble { 0% { translate: -1px 0 } 50% { translate: 1px .5px } 100% { translate: -.5px -.5px } }
+@keyframes jam { 0% { translate: 0 0; rotate: 0deg } 25% { translate: 3px 0; rotate: 1.5deg } 50% { translate: -3px 0; rotate: -1.5deg } 75% { translate: 2px 0 } 100% { translate: 0 0 } }
+@keyframes dial-spin { from { rotate: 0deg } to { rotate: 620deg } }
+@keyframes door-open { 0% { transform: rotateY(0deg) } 50% { transform: rotateY(-116deg) } 72% { transform: rotateY(-92deg) } 88% { transform: rotateY(-102deg) } 100% { transform: rotateY(-99deg) } }
+@keyframes door-fling { from { transform: rotateY(0deg) } to { transform: rotateY(-99deg) } }
+@keyframes door-close { 0% { transform: rotateY(-99deg) } 85% { transform: rotateY(4deg) } 100% { transform: rotateY(0deg) } }
+@keyframes reattach { from { transform: scale(1.3) translateZ(40px) } to { transform: none } }
+@keyframes item-pop { 0% { opacity: 0; scale: .2; translate: 0 22% } 55% { opacity: 1; scale: 1.2; translate: 0 -5% } 76% { scale: .93; translate: 0 1% } 100% { opacity: 1; scale: 1; translate: 0 0 } }
+@keyframes item-ghost { from { opacity: 0; scale: .5 } to { opacity: .78; scale: .84 } }
+@keyframes bob { 0%, 100% { translate: 0 0; rotate: 0deg } 50% { translate: 0 -5%; rotate: 3deg } }
+@keyframes jitter { 0% { translate: -4% 0; rotate: -5deg } 50% { translate: 4% 0; rotate: 5deg } 100% { translate: -4% 0; rotate: -5deg } }
+@keyframes boom-pulse { from { filter: brightness(1) } to { filter: brightness(1.45) } }
+@keyframes glimmer { from { background-position: 130% 0 } to { background-position: -40% 0 } }
+@keyframes stamp { 0% { opacity: 0; scale: 3; filter: blur(5px) } 55% { opacity: 1; scale: .88; filter: blur(0) } 76% { scale: 1.06 } 100% { opacity: 1; scale: 1 } }
+@keyframes stamp-out { to { opacity: 0; scale: .9 } }
+@keyframes ring { 0% { scale: .08; opacity: 1 } 100% { scale: 2.8; opacity: 0 } }
+@keyframes hot { 0% { opacity: 0; scale: .3 } 20% { opacity: 1; scale: 1.2 } 32% { scale: 1 } 75% { opacity: 1; translate: -50% -70% } 100% { opacity: 0; translate: -50% -110% } }
+@keyframes hud-slam { 0% { scale: 1.9; filter: brightness(2) } 40% { scale: .9; rotate: -5deg } 62% { scale: 1.07; rotate: 3deg } 80% { rotate: -1.5deg } 100% { scale: 1; rotate: 0deg; filter: none } }
+@keyframes beat { 0% { scale: 1 } 30% { scale: 1.45 } 100% { scale: 1 } }
+@keyframes blink { 50% { opacity: .25 } }
+@keyframes flicker { 0%, 61%, 64%, 100% { opacity: 1 } 62% { opacity: .2 } 63% { opacity: .85 } 86% { opacity: .35 } 87% { opacity: 1 } }
+@keyframes board-pulse { 0% { box-shadow: 0 0 0 2px rgba(255, 61, 154, .55), 0 0 30px rgba(255, 61, 154, .35) } 100% { box-shadow: 0 0 0 2px rgba(255, 61, 154, 0), 0 0 30px rgba(255, 61, 154, 0) } }
+@keyframes board-pulse-red { 0% { box-shadow: 0 0 0 3px rgba(255, 69, 69, .75), 0 0 36px rgba(255, 69, 69, .45) } 100% { box-shadow: 0 0 0 3px rgba(255, 69, 69, 0), 0 0 36px rgba(255, 69, 69, 0) } }
+/* the glow swells and the pulse quickens with --heat (0..1, set from the yield) */
+@keyframes ready { 0%, 100% { box-shadow: 0 5px 0 var(--b3), 0 8px 22px rgba(0, 0, 0, .45), inset 0 1px 0 rgba(255, 255, 255, .45) } 50% { box-shadow: 0 5px 0 var(--b3), 0 0 calc(24px + var(--heat, 0) * 30px) calc(var(--heat, 0) * 7px) rgba(255, 207, 74, .8), inset 0 1px 0 rgba(255, 255, 255, .45) } }
+@keyframes sulk { 0%, 100% { rotate: 0deg } 25% { rotate: -10deg } 50% { rotate: 8deg } 75% { rotate: -4deg } }
+@keyframes flow { to { stroke-dashoffset: -17 } }
+@keyframes again { 0% { scale: .84; translate: 0 10px; filter: brightness(1.6) } 60% { scale: 1.035; translate: 0 -2px } 100% { scale: 1; translate: 0 0; filter: none } }
+
+@media (prefers-reduced-motion: reduce) {
+  .b-light, .q-tag::before, .fl-cash.is-ready, .hud-risk.is-hot b { animation: none }
+  .lk.is-safe .lk-item { animation: item-pop .3s ease-out both }
+  .lk.is-boom .lk-item, .lk.is-boom .lk-in, .lk.is-near .lk-in { animation: none }
+  .lk.is-ghost.is-dodged .lk-item, .lk.is-ghost.is-near .lk-item { animation: item-ghost .2s ease-out both }
+  .lk.is-ghost.is-near .lk-item { animation-name: item-pop }
+  .lk.is-tense .lk-front, .lk.is-jiggle .lk-front, .lk.is-jiggle .lk-lock { animation: none }
+  .fl-board.can-pick .lk:not(.is-open):hover .lk-front, .fl-board.can-pick .lk:not(.is-open):hover .lk-lock { animation: none }
+  .lk.is-open .lk-door { animation-duration: .25s }
+}
+</style>
+
+<body class="fl-body">
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-heart" viewBox="0 0 64 64"><path d="M32 56C14 44 4 34 6 22C8 12 20 8 32 18C44 8 56 12 58 22C60 34 50 44 32 56Z"/></symbol>
+    <symbol id="i-lips" viewBox="0 0 40 24"><path d="M2 12C8 4 14 2 20 7C26 2 32 4 38 12C32 20 26 22 20 22C14 22 8 20 2 12Z" fill="#ff2e63"/><path d="M4 12C12 14 28 14 36 12" stroke="#8a0026" stroke-width="1.8" fill="none"/></symbol>
+    <!-- Crushes -->
+    <symbol id="i-letter" viewBox="0 0 64 64">
+      <g transform="rotate(-10 32 34)">
+        <rect x="7" y="17" width="50" height="34" rx="3" fill="#fff3e2" stroke="#b98d5e" stroke-width="2"/>
+        <path d="M9 49L27 33M55 49L37 33" stroke="#e2c9a5" stroke-width="2" fill="none"/>
+        <path d="M8 19L32 38L56 19Z" fill="#f6e0c0" stroke="#b98d5e" stroke-width="2" stroke-linejoin="round"/>
+        <path d="M32 47C25 42 22 39 24 35.5C26 32.5 30 33 32 36C34 33 38 32.5 40 35.5C42 39 39 42 32 47Z" fill="#ff2e63" stroke="#a3003a" stroke-width="1.3"/>
+        <use href="#i-lips" x="40" y="40" width="13" height="8" opacity=".85"/>
+      </g>
+    </symbol>
+    <symbol id="i-rose" viewBox="0 0 64 64">
+      <path d="M32 33C30 42 35 50 30 61" stroke="#2f7a32" stroke-width="3.4" fill="none" stroke-linecap="round"/>
+      <path d="M31.5 47C24 43 17 46 14 51C21 54 28 52 31.5 47Z" fill="#46a346" stroke="#2f7a32" stroke-width="1.3"/>
+      <path d="M33 41C39 36 46 37 50 41C45 46 38 45 33 41Z" fill="#46a346" stroke="#2f7a32" stroke-width="1.3"/>
+      <path d="M15 19C14 9 24 4 32 7C40 4 50 9 49 19C49 29 41 35 32 35C23 35 15 29 15 19Z" fill="#e3123f" stroke="#8c0024" stroke-width="1.8"/>
+      <path d="M15 19C19 26 26 29 32 28C38 29 45 26 49 19C49 29 41 35 32 35C23 35 15 29 15 19Z" fill="#b40a33"/>
+      <path d="M24.5 18C23.5 11.5 30 9 34 11C39 13 39.5 19 35.5 21.2C32 23 27.5 21 28.6 17.4C29.6 14.6 33 14.8 34 17" fill="none" stroke="#8c0024" stroke-width="2.1" stroke-linecap="round"/>
+      <path d="M19 14C20 11 22.5 9.4 25.5 9" stroke="#ff8aa6" stroke-width="2.2" fill="none" stroke-linecap="round" opacity=".85"/>
+    </symbol>
+    <symbol id="i-choco" viewBox="0 0 64 64">
+      <path d="M32 59C13 47 4 37 5 25C6 14 19 9 32 19C45 9 58 14 59 25C60 37 51 47 32 59Z" fill="#d4163c" stroke="#7a0019" stroke-width="2"/>
+      <path d="M32 52C18 43 11 36 12 27.5C13 19.5 23 16.5 32 24.5C41 16.5 51 19.5 52 27.5C53 36 46 43 32 52Z" fill="#3a1410"/>
+      <g fill="#6e3b22" stroke="#2a0f08" stroke-width="1"><circle cx="22" cy="29" r="5"/><circle cx="42" cy="29" r="5"/><circle cx="32" cy="34.5" r="5"/><circle cx="26" cy="42" r="4.4"/><circle cx="38" cy="42" r="4.4"/></g>
+      <g fill="#fff" opacity=".4"><circle cx="20.4" cy="27.4" r="1.5"/><circle cx="40.4" cy="27.4" r="1.5"/><circle cx="30.4" cy="32.9" r="1.5"/><circle cx="24.6" cy="40.6" r="1.3"/><circle cx="36.6" cy="40.6" r="1.3"/></g>
+      <path d="M19.5 30.5q2.5-2.4 5 0M39.5 30.5q2.5-2.4 5 0" stroke="#f3d7a1" stroke-width="1.3" fill="none"/>
+      <path d="M13 16C5 9 3 20 13 17.5ZM13 16C21 9 23 20 13 17.5Z" fill="#ffcf4a" stroke="#9a6500" stroke-width="1.4" stroke-linejoin="round"/>
+      <path d="M13 17.5L9 25M13 17.5L17 25" stroke="#ffcf4a" stroke-width="2.4" stroke-linecap="round"/>
+      <circle cx="13" cy="16.8" r="2.6" fill="#ffe58a" stroke="#9a6500" stroke-width="1.2"/>
+    </symbol>
+    <symbol id="i-perfume" viewBox="0 0 64 64">
+      <g fill="#ffd1e8" opacity=".85"><circle cx="24" cy="13" r="1.7"/><circle cx="19.5" cy="10" r="1.3"/><circle cx="20" cy="16" r="1.2"/><circle cx="15" cy="13" r="1"/><circle cx="14" cy="8" r=".9"/></g>
+      <path d="M17 35C17 29 21 26.5 26 26.5L42 26.5C47 26.5 51 29 51 35L51 52C51 57 47 59.5 42 59.5L26 59.5C21 59.5 17 57 17 52Z" fill="#ff5fa8" stroke="#a3105a" stroke-width="2"/>
+      <path d="M17.5 44C26 41 42 47 50.5 44L50.5 52C50.5 57 47 59 42 59L26 59C21 59 17.5 57 17.5 52Z" fill="#e0287f" opacity=".7"/>
+      <path d="M22 33L22 50" stroke="#ffe1ef" stroke-width="3" stroke-linecap="round" opacity=".85"/>
+      <path d="M34 50C29 46.6 27.6 44.6 29 42.4C30.2 40.6 32.6 41 34 43C35.4 41 37.8 40.6 39 42.4C40.4 44.6 39 46.6 34 50Z" fill="#fff" opacity=".9"/>
+      <rect x="27" y="18.5" width="14" height="9" rx="2" fill="#ffcf4a" stroke="#9a6500" stroke-width="1.5"/>
+      <rect x="30" y="11.5" width="8" height="8" rx="2" fill="#e5b53a" stroke="#9a6500" stroke-width="1.5"/>
+      <path d="M38 14.5C44 13.5 47 11.5 50 9.5" stroke="#9a6500" stroke-width="2" fill="none"/>
+      <ellipse cx="54" cy="8.5" rx="5" ry="5.6" fill="#ff3d9a" stroke="#a3105a" stroke-width="1.5"/>
+      <path d="M54 14L52.5 21M55 14L57.5 20" stroke="#ffcf4a" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-champ" viewBox="0 0 64 64">
+      <g fill="#fff3b0"><circle cx="46" cy="18" r="2"/><circle cx="51" cy="14" r="1.5"/><circle cx="43" cy="12" r="1.3"/><circle cx="54" cy="20" r="1.2"/><circle cx="49" cy="22" r="1"/></g>
+      <path d="M47 9l3-4M53 12l4-2M41 7l0-4" stroke="#fff3b0" stroke-width="1.8" stroke-linecap="round"/>
+      <rect x="50" y="1.5" width="7" height="9" rx="2" fill="#d9a566" stroke="#7a4f1f" stroke-width="1.2" transform="rotate(35 53.5 6)"/>
+      <g transform="rotate(28 32 40)">
+        <path d="M26 63L26 36C26 30 29 28 29.5 23L29.5 14L34.5 14L34.5 23C35 28 38 30 38 36L38 63Z" fill="#1d5c34" stroke="#0b2c17" stroke-width="1.7"/>
+        <path d="M29 13.5L35 13.5L35.8 26L28.2 26Z" fill="#ffcf4a" stroke="#9a6500" stroke-width="1.1"/>
+        <rect x="26.6" y="42" width="10.8" height="10" fill="#f3e6c4"/>
+        <path d="M30 46.5C28.5 45.4 28 44.6 28.6 43.8C29.1 43.2 29.8 43.4 30 44C30.2 43.4 30.9 43.2 31.4 43.8C32 44.6 31.5 45.4 30 46.5Z" fill="#ff2e63"/>
+        <path d="M29 34L29 41M29 54L29 60" stroke="#6fbf8a" stroke-width="1.7" opacity=".75" stroke-linecap="round"/>
+      </g>
+    </symbol>
+    <symbol id="i-wink" viewBox="0 0 64 64">
+      <circle cx="32" cy="35" r="23" fill="#ffd25a" stroke="#c98a00" stroke-width="2"/>
+      <path d="M17 31Q23 25 29 31" stroke="#3a2200" stroke-width="3.3" fill="none" stroke-linecap="round"/>
+      <path d="M18.3 28L15.5 24.5M22.5 26.4L21.6 22.2M26.8 27.2L28.2 23.4" stroke="#3a2200" stroke-width="2" stroke-linecap="round"/>
+      <ellipse cx="41" cy="29.5" rx="3.3" ry="4.5" fill="#3a2200"/>
+      <circle cx="42.2" cy="28" r="1.2" fill="#fff"/>
+      <path d="M21 42Q33 53 45 40" stroke="#3a2200" stroke-width="3.3" fill="none" stroke-linecap="round"/>
+      <ellipse cx="17.5" cy="40" rx="4" ry="2.6" fill="#ff8fc7" opacity=".9"/>
+      <ellipse cx="47.5" cy="39" rx="4" ry="2.6" fill="#ff8fc7" opacity=".9"/>
+      <use href="#i-lips" x="42" y="45" width="13" height="8" transform="rotate(-22 48.5 49)"/>
+      <path d="M9 6L11 11L16 13L11 15L9 20L7 15L2 13L7 11Z" fill="#fff6c8"/>
+    </symbol>
+    <!-- Mood killers -->
+    <symbol id="i-alarm" viewBox="0 0 64 64">
+      <path d="M6 26A11 11 0 0 1 28 26Z" fill="#ffcf4a" stroke="#9a6500" stroke-width="1.6" transform="rotate(-38 17 26)"/>
+      <path d="M36 26A11 11 0 0 1 58 26Z" fill="#ffcf4a" stroke="#9a6500" stroke-width="1.6" transform="rotate(38 47 26)"/>
+      <path d="M21 54L16 61M43 54L48 61" stroke="#3a3a3a" stroke-width="3.6" stroke-linecap="round"/>
+      <circle cx="32" cy="37" r="20" fill="#e8334a" stroke="#7a0f1f" stroke-width="2"/>
+      <circle cx="32" cy="37" r="15" fill="#fff8ee" stroke="#7a0f1f" stroke-width="1.2"/>
+      <path d="M32 24v3M32 47v3M19 37h3M42 37h3" stroke="#7a0f1f" stroke-width="2" stroke-linecap="round"/>
+      <path d="M32 37L32 27.5M32 37L39.5 41" stroke="#222" stroke-width="2.7" stroke-linecap="round"/>
+      <circle cx="32" cy="37" r="2" fill="#e8334a"/>
+      <path d="M5 31q-3.5 6 0 12M59 31q3.5 6 0 12M9 34q-2 3 0 6M55 34q2 3 0 6" stroke="#fff" stroke-width="2.4" fill="none" stroke-linecap="round" opacity=".9"/>
+    </symbol>
+    <symbol id="i-mom" viewBox="0 0 64 64">
+      <path d="M11 20l-5 4 5 4-5 4M53 20l5 4-5 4 5 4" stroke="#ff3d9a" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="17" y="4" width="30" height="56" rx="6" fill="#1b1b22" stroke="#000" stroke-width="1.5"/>
+      <rect x="20" y="10" width="24" height="42" rx="2" fill="#4dffb0"/>
+      <rect x="28" y="6.5" width="8" height="1.8" rx=".9" fill="#555"/>
+      <circle cx="32" cy="20" r="5.5" fill="#0d4a32"/>
+      <path d="M32 23.2C29.5 21.6 28.8 20.6 29.4 19.6C30 18.8 31.2 19 32 20C32.8 19 34 18.8 34.6 19.6C35.2 20.6 34.5 21.6 32 23.2Z" fill="#4dffb0"/>
+      <text x="32" y="35" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, sans-serif" font-weight="800" font-size="9.5" fill="#062a1a">MOM</text>
+      <text x="32" y="41.5" text-anchor="middle" font-family="Barlow Condensed, Arial Narrow, sans-serif" font-weight="700" font-size="5.2" letter-spacing=".4" fill="#0d4a32">CALLING</text>
+      <circle cx="26" cy="47" r="3" fill="#1fae5b" stroke="#0b4a26"/>
+      <circle cx="38" cy="47" r="3" fill="#e8334a" stroke="#7a0f1f"/>
+    </symbol>
+    <symbol id="i-garlic" viewBox="0 0 64 64">
+      <path d="M12 27c-4.5-4 4-6.5 0-12M52 27c4.5-4-4-6.5 0-12M21 13c-3-3 3-5 0-9" stroke="#9bd84f" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <path d="M32 9.5L32 14" stroke="#b5a47c" stroke-width="3.2" stroke-linecap="round"/>
+      <path d="M32 13C31 18 30 21 27 23C17 27 12 35 14 44C16 52 25 57 32 57C39 57 48 52 50 44C52 35 47 27 37 23C34 21 33 18 32 13Z" fill="#f6f0df" stroke="#b5a47c" stroke-width="2"/>
+      <path d="M31 24C24 32 23 47 28 56M33 24C40 32 41 47 36 56M27 25C18 33 18 46 22 53M37 25C46 33 46 46 42 53" stroke="#d9cba6" stroke-width="1.7" fill="none"/>
+      <path d="M27 57l-2 4.5M31 57.5l-.5 4.5M35 57.5l1 4.5M39 56.5l2 4" stroke="#a39065" stroke-width="1.6" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-sock" viewBox="0 0 64 64">
+      <path d="M10 28c-4.5-4 4-7 0-12.5M50 32c4.5-4-4-7 0-12.5" stroke="#9bd84f" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+      <path d="M20 5L38 5L38 36C38 41 41 43 47 45C57 48 57 61 47 61L27 61C20 61 18 55 20 49Z" fill="#efefe4" stroke="#8f8f7a" stroke-width="2" stroke-linejoin="round"/>
+      <rect x="20" y="9" width="18" height="3.6" fill="#e8334a"/>
+      <rect x="20" y="15" width="18" height="3.6" fill="#2f7bff"/>
+      <path d="M47 45C57 48 57 61 47 61L44 61C49 56 49 50 44 45.5Z" fill="#c9c9b2"/>
+      <ellipse cx="30" cy="53" rx="2.8" ry="1.9" fill="#5a5a48"/>
+      <path d="M42 22q5-9 10-6" stroke="#333" stroke-width="1.2" stroke-dasharray="1.6 2.2" fill="none"/>
+      <g transform="translate(53 15)"><ellipse rx="2.6" ry="2" fill="#222"/><ellipse cx="-2.2" cy="-2.6" rx="2.2" ry="1.4" fill="#cfe9ff" opacity=".9"/><ellipse cx="2.2" cy="-2.6" rx="2.2" ry="1.4" fill="#cfe9ff" opacity=".9"/></g>
+    </symbol>
+    <symbol id="i-shower" viewBox="0 0 64 64">
+      <path d="M32 12L32 5L11 5L11 14" stroke="#aab4bd" stroke-width="4" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M13 25C13 16 21 11.5 32 11.5C43 11.5 51 16 51 25Z" fill="#d7dee5" stroke="#6f7c88" stroke-width="2"/>
+      <g stroke="#7fd4ff" stroke-width="2.4" stroke-linecap="round" stroke-dasharray="5 4"><path d="M18 29L13 50M25 29L22 54M32 29L32 56M39 29L42 54M46 29L51 50"/></g>
+      <rect x="13" y="50" width="11" height="10" rx="2.5" fill="#c9f2ff" stroke="#5fb6dc" stroke-width="1.5" transform="rotate(-14 18.5 55)"/>
+      <rect x="41" y="51" width="10" height="9" rx="2.5" fill="#c9f2ff" stroke="#5fb6dc" stroke-width="1.5" transform="rotate(16 46 55.5)"/>
+      <path d="M56 34v10M51.7 36.5l8.6 5M51.7 41.5l8.6-5" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-dice" viewBox="0 0 32 32">
+      <rect x="4" y="4" width="24" height="24" rx="6" fill="currentColor" opacity=".18" stroke="currentColor" stroke-width="2.2"/>
+      <g fill="currentColor"><circle cx="11" cy="11" r="2.4"/><circle cx="21" cy="11" r="2.4"/><circle cx="16" cy="16" r="2.4"/><circle cx="11" cy="21" r="2.4"/><circle cx="21" cy="21" r="2.4"/></g>
+    </symbol>
+  </defs>
+</svg>
+
+<main class="fl" data-shake>
+  <header class="fl-title">
+    <h1 class="t-name"><span class="t-the">THE</span> <span><em>FLIRT</em> LOCKER</span></h1>
+    <button class="cbtn cbtn--ghost cbtn--round fl-help" id="help" type="button" aria-label="Rules and payouts">?</button>
+    <p class="t-sub">Emotional Ordnance Disposal Unit</p>
+    <p class="t-tag">Every locker hides a crush. Some hide a mood killer.</p>
+  </header>
+
+  <section class="fl-hud" aria-label="Tension readout">
+    <div class="hud-cell hud-ecg">
+      <canvas id="ecg" aria-hidden="true"></canvas>
+      <span class="hud-lbl">PULSE</span>
+      <span class="hud-bpm"><svg class="hud-heart" id="hHeart" viewBox="0 0 64 64" aria-hidden="true"><use href="#i-heart"/></svg><b id="hBpm">62</b><small>BPM</small></span>
+    </div>
+    <div class="hud-cell hud-yield" id="hYieldCell">
+      <span class="hud-lbl">CRUSH YIELD</span>
+      <b class="hud-val" id="hYield">×1.00</b>
+    </div>
+    <div class="hud-cell hud-pay" id="hPayCell">
+      <span class="hud-lbl">PAYOUT</span>
+      <b class="hud-val" id="hPay">0</b>
+    </div>
+    <div class="hud-row">
+      <span>NEXT <b id="hNext">×1.13</b> <b class="hud-np" id="hNextPay">28</b></span>
+      <span class="hud-risk" id="hRiskWrap">RISK<i class="riskbar"><i id="hRiskFill"></i></i><b id="hRisk">12%</b></span>
+      <span>SAFE <b id="hLeft">22</b></span>
+    </div>
+  </section>
+
+  <p class="fl-quip" id="quip"><span class="q-tag">RADIO</span><span class="q-text" id="quipText" aria-hidden="true"></span><span class="sr" id="quipSr" aria-live="polite"></span></p>
+
+  <section class="fl-board" id="board" aria-label="Locker bank">
+    <div class="b-plate"><span><i class="b-long">BANK B · AUTHORIZED </i>FLIRTS ONLY</span><span class="b-days">DAYS SINCE LAST DATE <b id="days">38</b></span><i class="b-light"></i></div>
+    <div class="b-grid" id="grid" role="group" aria-label="25 lockers"></div>
+    <div class="b-stamps" id="stamps" aria-hidden="true"></div>
+  </section>
+
+  <section class="fl-ctrl" id="ctrl">
+    <div class="c-mk">
+      <div class="c-mk-head"><span class="clabel">Mood killers</span><b id="mkVal">03</b><span id="mkInfo">22 crushes · 12% first-pick risk</span></div>
+      <div class="c-mk-row" id="mkRow">
+        <button class="cbtn cbtn--ghost mk-step" type="button" data-d="-1" aria-label="One fewer mood killer">−</button>
+        <button class="cbtn cbtn--ghost mk-pre" type="button" data-m="1">1</button>
+        <button class="cbtn cbtn--ghost mk-pre" type="button" data-m="3">3</button>
+        <button class="cbtn cbtn--ghost mk-pre" type="button" data-m="5">5</button>
+        <button class="cbtn cbtn--ghost mk-pre" type="button" data-m="10">10</button>
+        <button class="cbtn cbtn--ghost mk-pre" type="button" data-m="24">24</button>
+        <button class="cbtn cbtn--ghost mk-step" type="button" data-d="1" aria-label="One more mood killer">+</button>
+      </div>
+    </div>
+    <div class="c-act">
+      <div class="c-stake" id="stake">
+        <span class="clabel">Stake</span>
+        <button class="cbtn cbtn--ghost" type="button" id="stDown" aria-label="Lower stake">−</button>
+        <div class="cchip" id="stChip" data-v="25" role="status" aria-label="Stake 25">25</div>
+        <button class="cbtn cbtn--ghost" type="button" id="stUp" aria-label="Raise stake">+</button>
+      </div>
+      <button class="cbtn cbtn--ghost fl-rand" type="button" id="rand" hidden><svg viewBox="0 0 32 32" aria-hidden="true"><use href="#i-dice"/></svg><span>Random<br>locker</span></button>
+      <button class="cbtn cbtn--hot fl-start c-shine" type="button" id="start"><span>START<small id="startSub">25 chips · 3 mood killers</small></span></button>
+      <button class="cbtn cbtn--gold fl-cash is-locked" type="button" id="cash" hidden>
+        <span class="c-top" id="cashTop">PICK A LOCKER FIRST</span>
+        <b id="cashLbl">CASH OUT</b>
+        <svg class="c-wire" viewBox="0 0 200 14" preserveAspectRatio="none" aria-hidden="true">
+          <path class="w-core w-l" d="M-4 8C30 2 62 13 100 7"/><path class="w-core w-r" d="M100 7C138 1 170 13 204 8"/>
+          <path class="w-hi w-l" d="M-4 7C30 1 62 12 100 6"/><path class="w-hi w-r" d="M100 6C138 0 170 12 204 7"/>
+          <path class="w-flow" d="M-4 8C30 2 62 13 100 7C138 1 170 13 204 8"/>
+        </svg>
+      </button>
+    </div>
+  </section>
+
+  <footer class="fl-foot">Parody. Fake chips, no real money. Not affiliated with any film, locker room or mother.<br><kbd>Space</kbd> start / cash out · <kbd>R</kbd> random locker · <kbd>←↑→↓</kbd> move</footer>
+</main>
+
+<script src="../shared/casino.js"></script>
+<script>
+(() => {
+  'use strict';
+  const C = window.Casino;
+  const { wallet, sfx, fx, rng } = C;
+  C.init({ id: 'the-flirt-locker', title: 'The Flirt Locker', minBet: 10 });
+
+  const $ = (s) => document.querySelector(s);
+  const sleep = C.sleep;
+  const clamp = C.clamp;
+  const RM = () => fx.reducedMotion;
+  const rand = Math.random; // cosmetic only; every outcome comes from Casino.rng
+  // Haptics only after a real gesture (Chrome logs an error otherwise).
+  const vib = (p) => { if (!navigator.userActivation || navigator.userActivation.hasBeenActive) fx.vibrate(p); };
+
+  /* ---------- Math ----------
+     25 lockers, m mood killers. The chance of surviving k picks is S(k) = prod_{i<k} (25-m-i)/(25-i)
+     and the multiplier is M(k) = 0.97 * prod_{i<k} (25-i)/(25-m-i) = 0.97 / S(k). So S(k) * M(k) = 0.97 for
+     every cash-out point, and therefore for every stopping strategy: RTP 97% by construction.
+     Payouts are whole chips: round(stake * M(k)), capped so that no single (m, k) choice returns more than
+     99% (the cap only bites at the 10-chip stake, where rounding alone let m=1/k=2 pay 101.2%).
+     Exact expectation averaged over every (m, k) cash-out choice: 96.77% at stake 10, 97.01% at 25 and 50,
+     97.00% at 100+. Best single choice anywhere: 98.8%; worst: 92.0% (stake 10, m=1, k=2).
+     Monte Carlo in node (this page's own mult/payout code, real Fisher-Yates layouts, uniform picks, crypto
+     RNG): 4,000,000 rounds with random m (1-24), a random cash-out target up to 50x and a random ladder stake
+     measured RTP 96.88% ± 0.58% (2 sigma). Presets at stake 25 (1M rounds each, targets up to 25x, ± ~0.6%):
+     m=1 97.1%, m=3 97.0%, m=5 96.6%, m=10 96.6%, m=24 96.8%. Unbounded targets converge too slowly to
+     measure (multipliers reach x5M at odds of 1 in 5M), which is why the exact figure is the headline. */
+  const N = 25;
+  const EDGE = 0.97;
+  const STAKES = [10, 25, 50, 100, 250, 500, 1000];
+  const BIG_LABELS = ['', 'BIG CRUSH!', 'STEAMY WIN!', 'HEARTBREAKER!', 'BOMBSHELL!!!']; // by Casino.winTier 1-4
+  const RTP_NOTE = '96.9% (± 0.6%) over 4,000,000 simulated rounds; the exact expectation is 97.0% (96.8% at the 10-chip stake), and no choice returns more than 98.8%';
+  const mult = (m, k) => {
+    let x = EDGE;
+    for (let i = 0; i < k; i++) x *= (N - i) / (N - m - i);
+    return x;
+  };
+  // Nearest whole chip, but never more than a 99% return for that (m, k) choice: stake * M * 0.99 / 0.97.
+  // Without the cap, rounding let a few stake-10 choices pay over 100% (m=1, k=2: 11 chips, 101.2%).
+  const payout = (stake, m, k) => {
+    if (k <= 0) return 0;
+    const x = stake * mult(m, k);
+    return Math.min(Math.round(x), Math.floor(x * (0.99 / EDGE) + 1e-9));
+  };
+
+  const fmtX = (x) => {
+    if (x < 100) return x.toFixed(2);
+    if (x < 1000) return x.toFixed(1);
+    if (x < 1e6) return `${(x / 1e3).toFixed(x < 1e4 ? 2 : 1)}K`;
+    return `${(x / 1e6).toFixed(x < 1e7 ? 2 : 1)}M`;
+  };
+  const fmtC = (n) => {
+    n = Math.round(n);
+    if (n < 1e6) return C.fmt(n);
+    if (n < 1e9) return `${(n / 1e6).toFixed(n < 1e7 ? 2 : 1)}M`;
+    return `${(n / 1e9).toFixed(2)}B`;
+  };
+
+  /* ---------- Cast ---------- */
+  const SAFE = [
+    { id: 'letter', name: 'Love letter' },
+    { id: 'rose', name: 'Red rose' },
+    { id: 'choco', name: 'Chocolates' },
+    { id: 'perfume', name: 'Perfume' },
+    { id: 'champ', name: 'Champagne' },
+    { id: 'wink', name: 'A wink' },
+  ];
+  const KILL = [
+    { id: 'alarm', name: 'Alarm clock' },
+    { id: 'mom', name: 'Mom calling' },
+    { id: 'garlic', name: 'Garlic breath' },
+    { id: 'sock', name: 'Smelly sock' },
+    { id: 'shower', name: 'Cold shower' },
+  ];
+  const Q = {
+    idle: [
+      'Twenty-five lockers. Some of them are into you.',
+      'Pick your mood killers, set the stake, hit START.',
+      'Steady hands. Warm heart. Cold feet optional.',
+    ],
+    start: [
+      'Shift started. Somebody in here has a crush on you.',
+      'Bank armed. Breathe slow. Flirt responsibly.',
+      'Easy does it, soldier. Nice and slow.',
+      'One of these wrote you a poem. The rest left a strongly worded note.',
+      'Gloves on. Hearts out. Pick a locker.',
+    ],
+    letter: ['A love letter, sealed with a kiss.', 'Dear you: nice hands. Keep going.', 'Love letter. The handwriting is very... loopy.'],
+    rose: ['A single red rose. Smooth.', 'Roses are red. Your payout is redder.', 'One rose, thorns removed for your safety.'],
+    choco: ['Chocolates. Somebody is sweet on you.', 'Heart-shaped box. Heart-shaped hopes.', 'Chocolates. The caramel ones are already gone.'],
+    perfume: ['Perfume: notes of musk, mischief and maybe.', 'A spritz of trouble. Smells like a yes.', 'Eau de Call Me Later.'],
+    champ: ['Champagne! Pop it like you mean it.', 'Bubbly. Things are getting fizzy in here.', 'Champagne. Celebrate quietly, the lockers are listening.'],
+    wink: ['A wink. You know exactly what that means.', 'Somebody winked. The tension is unbearable.', 'Wink received. Wink returned. Very professional.'],
+    hot: ['The heart monitor is blushing.', 'Sweaty palms are normal. Probably.', 'Getting steamy. Cash out or push your luck.', 'Your pulse is doing the tango.'],
+    alarm: ['Alarm clock. The dream is over, soldier.', 'BRRRING. Nothing kills a vibe like 6 a.m.'],
+    mom: ['MOM CALLING. Mood: neutralized.', 'It’s your mother. She wants to know if you’re eating.'],
+    garlic: ['Garlic breath at close range. Abort, abort.', 'Garlic. Romance left the building holding its nose.'],
+    sock: ['A smelly sock. The mood has been gassed.', 'One damp sock. Nobody knows whose.'],
+    shower: ['Cold shower. Everybody just calm down.', 'Ice-cold shower. Well, that settles that.'],
+    cash: ['Smooth operator. Walk away slow.', 'Pink wire cut. Hearts intact.', 'Leave them wanting more. Classic.', 'Get out while it’s hot.', 'Textbook. The lockers will talk about you.'],
+    clear: ['Full clearance. Every crush accounted for. Legend.'],
+    phew: ['Phew.', 'Close call.', 'That was close, hot stuff.', 'Out just in time.', 'Smooth exit.'],
+    broke: ['Not enough chips for that stake. Drop it, or cash your residuals.'],
+  };
+  const lastQ = new Map();
+  const line = (key) => {
+    const list = Q[key];
+    let s = list[0];
+    for (let t = 0; t < 6; t++) {
+      s = list[Math.floor(rand() * list.length)];
+      if (s !== lastQ.get(key)) break;
+    }
+    lastQ.set(key, s);
+    return s;
+  };
+
+  /* ---------- Elements ---------- */
+  const board = $('#board');
+  const grid = $('#grid');
+  const stampLayer = $('#stamps');
+  const fxLayer = document.createElement('div');
+  fxLayer.className = 'fl-fxlayer';
+  fxLayer.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(fxLayer);
+  const hud = {
+    yieldCell: $('#hYieldCell'), payCell: $('#hPayCell'), yield: $('#hYield'), pay: $('#hPay'),
+    next: $('#hNext'), nextPay: $('#hNextPay'), risk: $('#hRisk'), riskWrap: $('#hRiskWrap'), riskFill: $('#hRiskFill'),
+    left: $('#hLeft'), bpm: $('#hBpm'), heart: $('#hHeart'),
+  };
+  const ui = {
+    start: $('#start'), startSub: $('#startSub'), cash: $('#cash'), cashTop: $('#cashTop'), cashLbl: $('#cashLbl'),
+    rand: $('#rand'), stake: $('#stake'), stChip: $('#stChip'), stUp: $('#stUp'), stDown: $('#stDown'),
+    mkVal: $('#mkVal'), mkInfo: $('#mkInfo'), mkRow: $('#mkRow'), days: $('#days'),
+    quip: $('#quip'), quipText: $('#quipText'), quipSr: $('#quipSr'),
+  };
+  const retrigger = (el, cls) => {
+    if (!el) return;
+    el.classList.remove(cls);
+    void el.offsetWidth;
+    el.classList.add(cls);
+  };
+
+  /* ---------- Prefs ---------- */
+  const PREF_KEY = 'bmc.flirtLocker.prefs';
+  const DAYS_KEY = 'bmc.flirtLocker.days';
+  const saved = C.store.get(PREF_KEY, null) || {};
+  let mk = Number.isInteger(saved.m) && saved.m >= 1 && saved.m <= 24 ? saved.m : 3;
+  let stakeIdx = Math.max(0, STAKES.indexOf(saved.stake));
+  if (!STAKES.includes(saved.stake)) stakeIdx = 1;
+  let days = C.store.get(DAYS_KEY, 38);
+  if (!Number.isInteger(days) || days < 0 || days > 9999) days = 38;
+  const savePrefs = () => C.store.set(PREF_KEY, { m: mk, stake: STAKES[stakeIdx] });
+
+  /* ---------- Lockers ---------- */
+  const L = [];
+  for (let i = 0; i < N; i++) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'lk';
+    b.dataset.i = i;
+    b.setAttribute('aria-label', `Locker ${i + 1}`);
+    b.innerHTML = `<span class="lk-in"><svg class="lk-item" viewBox="0 0 64 64" aria-hidden="true"><use/></svg><span class="lk-tag"></span></span><span class="lk-door"><span class="lk-front"><i class="lk-vent"></i><i class="lk-num">${String(i + 1).padStart(2, '0')}</i><i class="lk-decal"></i><i class="lk-latch"></i><i class="lk-lock"><i class="lk-shackle"></i><i class="lk-body"><i class="lk-dial"></i></i></i><i class="lk-vent lk-vent--b"></i></span><span class="lk-back"></span></span>`;
+    grid.appendChild(b);
+    L.push({ i, el: b, use: b.querySelector('use'), tag: b.querySelector('.lk-tag'), front: b.querySelector('.lk-front'), decal: b.querySelector('.lk-decal'), open: false });
+  }
+  const STATE_CLASSES = ['is-open', 'is-safe', 'is-kill', 'is-boom', 'is-ghost', 'is-blown', 'is-unlocked', 'is-spinning', 'is-tense', 'is-jam', 'is-glimmer', 'no-anim', 'is-jiggle', 'is-armed', 'is-dodged', 'is-near'];
+  function showItem(lk, item) {
+    lk.use.setAttribute('href', `#i-${item.id}`);
+    lk.tag.textContent = item.name;
+  }
+  function decorate() {
+    const kinds = ['kiss', 'heart', 'xoxo', 'tape', 'dent', 'kiss', 'heart', 'tape'];
+    for (const lk of L) lk.decal.dataset.d = '';
+    const order = L.map((l) => l.i).sort(() => rand() - 0.5);
+    const n = 5 + Math.floor(rand() * 3);
+    for (let j = 0; j < n; j++) L[order[j]].decal.dataset.d = kinds[Math.floor(rand() * kinds.length)];
+  }
+  decorate();
+  // Locker width drives the door details' type sizes (also for flying clones, so it lives on :root).
+  const sizeLockers = () => {
+    const w = L[0].el.getBoundingClientRect().width;
+    if (w > 0) document.documentElement.style.setProperty('--lkw', `${w.toFixed(1)}px`);
+  };
+  new ResizeObserver(sizeLockers).observe(L[0].el);
+  sizeLockers();
+
+  /* ---------- Sound design (Casino.sfx primitives) ---------- */
+  const S = {
+    rattle() {
+      const p = 0.85 + rand() * 0.35;
+      sfx.noise({ type: 'bandpass', freq: 2600 * p, q: 6, dur: 0.06, vol: 0.05 });
+      sfx.tone({ freq: 720 * p, type: 'triangle', dur: 0.045, vol: 0.025, delay: 0.018 });
+    },
+    dial(n = 5, slow = 1) {
+      for (let i = 0; i < n; i++) sfx.tone({ freq: (1500 + i * 130) * (0.95 + rand() * 0.1), type: 'square', dur: 0.016, vol: 0.035, delay: i * 0.038 * slow, filter: { type: 'highpass', freq: 900 } });
+    },
+    clack() {
+      sfx.noise({ type: 'highpass', freq: 3000, dur: 0.03, vol: 0.2 });
+      sfx.tone({ freq: 400, to: 230, type: 'triangle', dur: 0.07, vol: 0.12 });
+    },
+    creak() {
+      sfx.tone({ freq: 150 + rand() * 30, to: 270, type: 'sawtooth', dur: 0.26, vol: 0.03, filter: { type: 'bandpass', freq: 900, q: 4 } });
+      sfx.whoosh(0.22, 0.07);
+    },
+    clank(p = 1, vol = 0.08) {
+      sfx.tone({ freq: 250 * p, to: 170 * p, type: 'triangle', dur: 0.09, vol });
+      sfx.noise({ type: 'bandpass', freq: 2100 * p, q: 3, dur: 0.04, vol: vol * 0.85 });
+    },
+    alarm() {
+      for (let i = 0; i < 6; i++) {
+        const f = i % 2 ? 620 : 880;
+        sfx.tone({ freq: f, type: 'square', dur: 0.13, vol: 0.05, delay: 0.04 + i * 0.14, filter: { type: 'lowpass', freq: 2600 } });
+        sfx.tone({ freq: f * 1.5, type: 'sawtooth', dur: 0.13, vol: 0.018, delay: 0.04 + i * 0.14, filter: { type: 'lowpass', freq: 3200 } });
+      }
+    },
+    clang() {
+      sfx.tone({ freq: 523, type: 'triangle', dur: 0.6, vol: 0.09 });
+      sfx.tone({ freq: 1318, dur: 0.4, vol: 0.045 });
+      sfx.tone({ freq: 2093, dur: 0.25, vol: 0.025 });
+    },
+    jam() {
+      sfx.tone({ freq: 150, to: 90, type: 'square', dur: 0.08, vol: 0.07, filter: { type: 'lowpass', freq: 1200 } });
+      sfx.noise({ type: 'bandpass', freq: 900, q: 2, dur: 0.06, vol: 0.12 });
+    },
+    snip() {
+      sfx.noise({ type: 'highpass', freq: 2800, dur: 0.03, vol: 0.28 });
+      sfx.noise({ type: 'highpass', freq: 3600, dur: 0.03, vol: 0.24, delay: 0.07 });
+      sfx.tone({ freq: 3600, to: 2600, dur: 0.05, vol: 0.05, delay: 0.07 });
+      sfx.spark();
+    },
+    beat(vol, p = 1) {
+      sfx.tone({ freq: 64, to: 38, dur: 0.13, vol });
+      sfx.tone({ freq: 57, to: 36, dur: 0.15, vol: vol * 0.7, delay: 0.15 });
+      // Phone speakers can't reproduce 60 Hz, so a soft mid-range knock carries the lub-dub there.
+      sfx.tone({ freq: 165 * p, to: 92 * p, type: 'triangle', dur: 0.075, vol: vol * 0.42 });
+      sfx.noise({ type: 'lowpass', freq: 520 * p, dur: 0.045, vol: vol * 0.5 });
+      sfx.tone({ freq: 142 * p, to: 84 * p, type: 'triangle', dur: 0.08, vol: vol * 0.3, delay: 0.15 });
+    },
+    flatline() {
+      sfx.tone({ freq: 988, type: 'sine', dur: 0.95, vol: 0.055, attack: 0.01 });
+      sfx.tone({ freq: 1976, type: 'sine', dur: 0.7, vol: 0.012, attack: 0.01 });
+    },
+    dodge(p = 1) {
+      sfx.tone({ freq: 210 * p, to: 120 * p, type: 'square', dur: 0.09, vol: 0.035, filter: { type: 'lowpass', freq: 900 } });
+      sfx.noise({ type: 'lowpass', freq: 600, dur: 0.05, vol: 0.06 });
+    },
+    kaching(p = 1) {
+      sfx.noise({ type: 'bandpass', freq: 3400, q: 3, dur: 0.06, vol: 0.12 });
+      sfx.tone({ freq: 1568 * p, dur: 0.18, vol: 0.09, delay: 0.03 });
+      sfx.tone({ freq: 2349 * p, dur: 0.42, vol: 0.08, delay: 0.09 });
+    },
+    item(id) {
+      switch (id) {
+        case 'letter': sfx.flip(); sfx.kiss(); break;
+        case 'rose': sfx.kiss(); break;
+        case 'choco': sfx.pop(1.15); sfx.boing(1.5); break;
+        case 'perfume':
+          sfx.noise({ type: 'highpass', freq: 5200, dur: 0.12, vol: 0.09, attack: 0.01 });
+          sfx.noise({ type: 'highpass', freq: 5600, dur: 0.22, vol: 0.08, attack: 0.02, delay: 0.14 });
+          break;
+        case 'champ':
+          sfx.tone({ freq: 480, to: 1500, dur: 0.06, vol: 0.2 });
+          sfx.noise({ type: 'bandpass', freq: 1600, dur: 0.04, vol: 0.2 });
+          sfx.noise({ type: 'highpass', freq: 6200, dur: 0.6, vol: 0.04, delay: 0.05, attack: 0.05 });
+          break;
+        case 'wink':
+          sfx.tone({ freq: 1320, to: 1980, dur: 0.12, vol: 0.08 });
+          sfx.tone({ freq: 2640, dur: 0.18, vol: 0.05, delay: 0.07 });
+          break;
+        default: break;
+      }
+    },
+  };
+
+  /* ---------- Particles ---------- */
+  fx.registerParticle('shard', (g, p) => {
+    const s = p.size;
+    g.save();
+    g.translate(p.x, p.y);
+    g.rotate(p.rot);
+    g.fillStyle = p.color;
+    g.beginPath();
+    g.moveTo(-s, -s * 0.3);
+    g.lineTo(s * 0.7, -s * 0.6);
+    g.lineTo(s * 0.9, s * 0.4);
+    g.lineTo(-s * 0.4, s * 0.55);
+    g.closePath();
+    g.fill();
+    g.fillStyle = 'rgba(0,0,0,.3)';
+    g.fillRect(-s * 0.5, -s * 0.1, s, s * 0.14);
+    g.restore();
+  }, { size: [4, 9], speed: [380, 1000], gravity: 1300, drag: 0.8, life: [0.8, 1.4], colors: ['#b8a677', '#d3c495', '#8d825c', '#ff3d9a', '#5d5437'] });
+  fx.registerParticle('petal', (g, p) => {
+    const s = p.size;
+    g.save();
+    g.translate(p.x, p.y);
+    g.rotate(p.rot + Math.sin(p.phase) * 0.8);
+    g.scale(1, 0.55 + 0.45 * Math.abs(Math.cos(p.phase)));
+    g.fillStyle = p.color;
+    g.beginPath();
+    g.moveTo(0, -s);
+    g.bezierCurveTo(s, -s * 0.6, s * 0.8, s * 0.7, 0, s);
+    g.bezierCurveTo(-s * 0.8, s * 0.7, -s, -s * 0.6, 0, -s);
+    g.fill();
+    g.restore();
+  }, { size: [5, 9], speed: [160, 460], gravity: 200, drag: 1.8, life: [1.2, 2.2], sway: 70, colors: ['#e3123f', '#ff2e63', '#b40a33', '#ff5c8a'] });
+
+  /* ---------- Quips (typewriter radio) ---------- */
+  let quipTimer = 0;
+  function quip(text, tone = '') {
+    ui.quip.className = `fl-quip ${tone}`;
+    ui.quipSr.textContent = text;
+    clearInterval(quipTimer);
+    if (RM()) {
+      ui.quipText.textContent = text;
+      return;
+    }
+    let n = 0;
+    ui.quipText.textContent = '';
+    quipTimer = setInterval(() => {
+      n += 2;
+      ui.quipText.textContent = text.slice(0, n);
+      if (n >= text.length) clearInterval(quipTimer);
+    }, 16);
+  }
+
+  /* ---------- ECG monitor + heartbeat bed ---------- */
+  const ecg = (() => {
+    const cv = $('#ecg');
+    const g = cv.getContext('2d');
+    let w = 0;
+    let h = 0;
+    let dpr = 1;
+    let buf = new Float32Array(1);
+    let head = 0;
+    let lastT = 0;
+    let acc = 0;
+    const beats = [];
+    const api = { mode: 'live', beat() { beats.push(performance.now()); if (beats.length > 6) beats.shift(); } };
+    const kernel = (s) => {
+      const k = (mu, sig, a) => a * Math.exp(-((s - mu) ** 2) / (2 * sig * sig));
+      return k(0.04, 0.018, 0.12) + k(0.1, 0.007, -0.16) + k(0.12, 0.009, 1) + k(0.145, 0.01, -0.32) + k(0.3, 0.04, 0.2);
+    };
+    function size() {
+      const r = cv.getBoundingClientRect();
+      dpr = Math.min(2, devicePixelRatio || 1);
+      w = Math.max(1, Math.round(r.width));
+      h = Math.max(1, Math.round(r.height));
+      cv.width = w * dpr;
+      cv.height = h * dpr;
+      buf = new Float32Array(w);
+      head = 0;
+    }
+    function value(t) {
+      if (api.mode === 'flat') return (rand() - 0.5) * 0.015;
+      let v = 0;
+      for (const b of beats) {
+        const s = (t - b) / 1000;
+        if (s >= 0 && s < 0.6) v += kernel(s);
+      }
+      return v + (rand() - 0.5) * 0.025;
+    }
+    let onScreen = true;
+    let running = false;
+    function run() {
+      if (running) return;
+      running = true;
+      lastT = 0;
+      requestAnimationFrame(frame);
+    }
+    function frame(t) {
+      if (!onScreen) { running = false; return; } // scrolled out of view: no frames at all until it is back
+      requestAnimationFrame(frame);
+      if (!lastT) {
+        lastT = t;
+        return;
+      }
+      if (t - lastT < 31) return; // ~30 fps is plenty for a small monitor and halves the idle cost
+      const t0 = lastT;
+      lastT = t;
+      if (t - t0 > 250) return; // tab was hidden: skip the gap
+      acc += ((t - t0) / 1000) * (w / 2.4);
+      const n = Math.floor(acc);
+      acc -= n;
+      for (let j = 1; j <= n; j++) {
+        buf[head] = value(t0 + (t - t0) * (j / n));
+        head = (head + 1) % w;
+      }
+      while (beats.length && t - beats[0] > 1200) beats.shift();
+      draw();
+    }
+    function draw() {
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, w, h);
+      const col = api.mode === 'flat' ? '#ff4545' : api.mode === 'gold' ? '#ffcf4a' : '#ff4fa8';
+      g.strokeStyle = 'rgba(255, 79, 168, .09)';
+      g.lineWidth = 1;
+      g.beginPath();
+      for (let x = 0.5; x < w; x += 10) { g.moveTo(x, 0); g.lineTo(x, h); }
+      for (let y = 0.5; y < h; y += 10) { g.moveTo(0, y); g.lineTo(w, y); }
+      g.stroke();
+      const base = h * 0.6;
+      const amp = h * 0.46;
+      g.strokeStyle = col;
+      g.lineWidth = 1.7;
+      g.lineJoin = 'round';
+      g.shadowColor = col;
+      g.shadowBlur = 6;
+      g.beginPath();
+      let pen = false;
+      for (let x = 0; x < w; x++) {
+        if ((x - head + w) % w < 10) { pen = false; continue; }
+        const y = base - buf[x] * amp;
+        if (pen) g.lineTo(x, y);
+        else { g.moveTo(x, y); pen = true; }
+      }
+      g.stroke();
+      const hx = (head - 1 + w) % w;
+      g.fillStyle = '#fff';
+      g.beginPath();
+      g.arc(hx, base - buf[hx] * amp, 2, 0, Math.PI * 2);
+      g.fill();
+      g.shadowBlur = 0;
+    }
+    new ResizeObserver(size).observe(cv);
+    // scrolled out of view: the loop stops; it restarts (skipping the gap) when the monitor is back
+    new IntersectionObserver((es) => { onScreen = es[es.length - 1].isIntersecting; if (onScreen) run(); }).observe(cv);
+    size();
+    run();
+    return api;
+  })();
+
+  // hold: the bed holds its breath while any dial spins (both outcomes alike, so it is never a tell)
+  const heart = { bpm: 62, target: 62, audio: false, flat: false, hold: false };
+  function beatLoop() {
+    heart.bpm += (heart.target - heart.bpm) * 0.4;
+    if (!document.hidden && !heart.flat) {
+      ecg.beat();
+      hud.bpm.textContent = Math.round(heart.bpm);
+      retrigger(hud.heart, 'is-beat');
+      const heat = clamp((heart.bpm - 70) / 110, 0, 1);
+      if (heart.audio && !heart.hold) S.beat(0.1 + heat * 0.16, 1 + heat * 0.3);
+      if (state === 'play' || state === 'busy') retrigger(board, 'is-pulse');
+    }
+    setTimeout(beatLoop, 60000 / Math.max(40, heart.bpm));
+  }
+  const bpmFor = (M, k) => clamp(Math.round(72 + 30 * Math.log2(Math.max(1, M)) + 1.5 * k), 72, 178);
+
+  /* ---------- Game state ---------- */
+  let state = 'idle'; // idle | arming | play | busy | scan | end
+  let token = 0; // bumps when a round is replaced: stale timers check it and bail
+  let round = null; // { stake, m, kill: Set, items: [], k, picks: [], over, demo }
+  let pendingCredit = 0;
+  let pendingCash = false;
+  let payShown = 0;
+  let payTween = null;
+
+  const stakeVal = () => STAKES[stakeIdx];
+  const liveRound = () => round && !round.over;
+  // #rig=safe|boom forces the next pick; it only works under automation (navigator.webdriver), for tests.
+  const rigged = () => (navigator.webdriver && (location.hash.match(/rig=(safe|boom)/) || [])[1]) || null;
+
+  /* ---------- Crash safety ----------
+     Each live round keeps a small record in localStorage (its own key, refreshed every 2 s). pagehide settles
+     a round normally; if a tab is killed without pagehide, the next visit finds the stale record and settles
+     it: a won-but-unpaid cash-out is paid, crushes found are cashed out, an unrisked stake is refunded.
+     The record is removed before anything is paid, and a tab only pays a round whose record it still owns,
+     so no round can be paid twice, even with several tabs open. */
+  const LIVE_PRE = 'bmc.flirtLocker.live.';
+  const STALE_MS = 6500;
+  const tryLS = (fn, fb) => { try { return fn(); } catch { return fb; } };
+  const persistOK = tryLS(() => { localStorage.setItem(`${LIVE_PRE}probe`, '1'); localStorage.removeItem(`${LIVE_PRE}probe`); return true; }, false);
+  const live = { rec: null, stored: false, beat: 0 };
+  const liveKey = (id) => LIVE_PRE + id;
+  const liveWrite = () => { if (live.rec) { live.rec.t = Date.now(); C.store.set(liveKey(live.rec.id), live.rec); } };
+  function liveBegin(r) {
+    liveEnd();
+    if (!persistOK || r.demo) return;
+    const id = `${Date.now().toString(36)}${rng.int(1e9).toString(36)}`;
+    live.rec = { id, stake: r.stake, m: r.m, k: 0, t: 0 };
+    liveWrite();
+    // only a record that really landed in storage can later prove another tab settled it
+    live.stored = tryLS(() => localStorage.getItem(liveKey(id)) !== null, false);
+    tryLS(() => sessionStorage.setItem('bmc.flirtLocker.mine', id));
+    live.beat = setInterval(() => { if (liveOwned()) liveWrite(); }, 2000);
+  }
+  function liveOwned() {
+    if (!live.rec || !live.stored) return true;
+    return tryLS(() => localStorage.getItem(liveKey(live.rec.id)) !== null, true);
+  }
+  function liveUpdate(fields) {
+    if (!live.rec || !liveOwned()) return;
+    Object.assign(live.rec, fields);
+    liveWrite();
+  }
+  function liveEnd() {
+    clearInterval(live.beat);
+    if (live.rec) tryLS(() => localStorage.removeItem(liveKey(live.rec.id)));
+    live.rec = null;
+    live.stored = false;
+  }
+  // A round this tab is playing was settled by another tab (this one was frozen for a long time): void it here.
+  function liveLost() {
+    return !!live.rec && !liveOwned();
+  }
+  function recoverLive() {
+    if (!persistOK) return;
+    const mine = tryLS(() => sessionStorage.getItem('bmc.flirtLocker.mine'), null);
+    const keys = tryLS(() => Object.keys(localStorage), []).filter((k) => k.startsWith(LIVE_PRE));
+    let fresh = false;
+    for (const key of keys) {
+      const rec = C.store.get(key, null);
+      if (live.rec && key === liveKey(live.rec.id)) continue;
+      const okRec = rec && Number.isFinite(rec.stake) && rec.stake > 0 && rec.stake <= 1000 && Number.isInteger(rec.m) && rec.m >= 1 && rec.m <= 24 && Number.isInteger(rec.k) && rec.k >= 0 && rec.k <= N - rec.m;
+      if (!okRec) { tryLS(() => localStorage.removeItem(key)); continue; }
+      if (rec.id !== mine && Date.now() - (rec.t || 0) < STALE_MS) { fresh = true; continue; } // another tab may still be playing it
+      tryLS(() => localStorage.removeItem(key));
+      const settled = Number.isFinite(rec.settled) ? rec.settled : null;
+      const amount = settled ?? (rec.k > 0 ? payout(rec.stake, rec.m, rec.k) : rec.stake);
+      if (settled == null && rec.k > 0) C.record({ bet: rec.stake, win: amount });
+      if (amount > 0) {
+        wallet.win(amount, rec.k > 0 || settled != null ? 'win' : 'refund');
+        C.toast(rec.k > 0 || settled != null ? `Last shift recovered: +${fmtC(amount)} chips` : `Unfinished shift refunded: +${fmtC(amount)}`, 'good');
+      }
+    }
+    if (fresh) setTimeout(recoverLive, STALE_MS);
+  }
+
+  function flushCredit() {
+    if (pendingCredit > 0) {
+      const n = pendingCredit;
+      pendingCredit = 0;
+      if (liveOwned()) wallet.win(n);
+    }
+    if (round && round.over) liveEnd();
+  }
+
+  /* ---------- HUD ---------- */
+  function setPay(v, animate) {
+    if (payTween) payTween.skip();
+    payTween = null;
+    if (animate && v > payShown && !RM()) payTween = fx.countUp(hud.pay, payShown, v, { ms: 460, format: fmtC, sound: true });
+    else hud.pay.textContent = fmtC(v);
+    payShown = v;
+  }
+  function hudRefresh(slam = false) {
+    const live = liveRound() && state !== 'idle';
+    const m = live ? round.m : mk;
+    const k = live ? round.k : 0;
+    const stake = live ? round.stake : stakeVal();
+    const M = k ? mult(m, k) : 1;
+    hud.yield.textContent = `×${fmtX(M)}`;
+    hud.yieldCell.classList.toggle('is-live', k > 0);
+    hud.yieldCell.classList.remove('is-dead');
+    hud.payCell.classList.toggle('is-live', k > 0);
+    hud.payCell.classList.remove('is-paid');
+    setPay(k ? payout(stake, m, k) : 0, slam);
+    const more = k < N - m;
+    hud.next.textContent = more ? `×${fmtX(mult(m, k + 1))}` : 'MAX';
+    hud.nextPay.textContent = more ? fmtC(payout(stake, m, k + 1)) : '';
+    const risk = more ? m / (N - k) : 0;
+    hud.risk.textContent = `${Math.round(risk * 100)}%`;
+    hud.riskFill.style.width = `${Math.round(risk * 100)}%`;
+    hud.riskWrap.classList.toggle('is-hot', live && risk >= 0.4);
+    hud.left.textContent = N - m - k;
+    board.classList.toggle('is-danger', live && risk >= 0.4);
+    if (slam) retrigger(hud.yield, 'is-slam');
+    // cash-out button
+    if (live) {
+      const ready = k > 0;
+      ui.cash.classList.toggle('is-locked', !ready);
+      ui.cash.classList.toggle('is-ready', ready);
+      ui.cash.setAttribute('aria-disabled', String(!ready));
+      ui.cashTop.textContent = ready ? 'CUT THE PINK WIRE' : 'PICK A LOCKER FIRST';
+      ui.cashLbl.textContent = ready ? `CASH OUT ${fmtC(payout(stake, m, k))}` : 'CASH OUT';
+    }
+  }
+
+  function setMode(mode) {
+    const play = mode === 'play';
+    ui.start.hidden = play;
+    if (play) ui.start.classList.remove('c-jelly', 'c-wobble', 'is-again'); // or they replay when it reappears
+    ui.stake.hidden = play;
+    ui.cash.hidden = !play;
+    ui.rand.hidden = !play;
+    for (const b of ui.mkRow.querySelectorAll('button')) b.disabled = play;
+    ui.stUp.disabled = play;
+    ui.stDown.disabled = play;
+  }
+  function syncPick() {
+    const can = state === 'play';
+    board.classList.toggle('can-pick', can);
+    for (const lk of L) lk.el.setAttribute('aria-disabled', String(!can || lk.open));
+  }
+  function setState(s) {
+    state = s;
+    syncPick();
+  }
+
+  /* ---------- Settings ---------- */
+  function paintSettings(refreshHud = true) {
+    ui.mkVal.textContent = String(mk).padStart(2, '0');
+    const pct = Math.round((mk / N) * 100);
+    ui.mkInfo.textContent = `${N - mk} crush${N - mk === 1 ? '' : 'es'} · ${pct}% first-pick risk`;
+    for (const b of ui.mkRow.querySelectorAll('.mk-pre')) b.setAttribute('aria-pressed', String(Number(b.dataset.m) === mk));
+    const s = stakeVal();
+    ui.stChip.dataset.v = s;
+    ui.stChip.textContent = s >= 1000 ? `${s / 1000}K` : s;
+    ui.stChip.setAttribute('aria-label', `Stake ${s}`);
+    ui.stChip.classList.toggle('is-short', s > wallet.balance);
+    ui.startSub.textContent = `${C.fmt(s)} chips · ${mk} mood killer${mk === 1 ? '' : 's'}`;
+    if (state === 'idle' && refreshHud) hudRefresh(false);
+  }
+  function setMk(next, el) {
+    if (state !== 'idle') return;
+    next = clamp(next, 1, 24);
+    if (next === mk) {
+      sfx.buzz();
+      fx.anim(ui.mkVal, 'c-wobble');
+      return;
+    }
+    const up = next > mk;
+    mk = next;
+    savePrefs();
+    paintSettings();
+    sfx.tick(0.8 + (mk / 24) * 1.4);
+    sfx.tone({ freq: up ? 220 + mk * 14 : 260 + mk * 12, to: up ? 330 + mk * 16 : 180 + mk * 10, type: 'triangle', dur: 0.08, vol: 0.06 });
+    fx.anim(ui.mkVal, 'c-pop');
+    if (el) fx.anim(el, 'c-jelly');
+    vib(6);
+    if (mk >= 20) quip('Brave. Or lonely. Either way, respect.', 'bad');
+    else if (mk === 1) quip('One mood killer. Practically a first date.', '');
+  }
+  function setStake(d) {
+    if (state !== 'idle') return;
+    const next = clamp(stakeIdx + d, 0, STAKES.length - 1);
+    if (next === stakeIdx) {
+      sfx.buzz();
+      fx.anim(ui.stChip, 'c-wobble');
+      return;
+    }
+    stakeIdx = next;
+    savePrefs();
+    paintSettings();
+    sfx.chip(0.85 + stakeIdx * 0.07);
+    fx.anim(ui.stChip, 'c-jelly');
+    vib(6);
+  }
+  ui.mkRow.addEventListener('click', (e) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.dataset.m) setMk(Number(b.dataset.m), b);
+    else setMk(mk + Number(b.dataset.d), b);
+  });
+  ui.stUp.addEventListener('click', () => setStake(1));
+  ui.stDown.addEventListener('click', () => setStake(-1));
+  wallet.onChange(() => ui.stChip.classList.toggle('is-short', stakeVal() > wallet.balance));
+
+  function setDays(n) {
+    days = clamp(n, 0, 9999);
+    C.store.set(DAYS_KEY, days);
+    ui.days.textContent = String(days).padStart(2, '0');
+    fx.anim(ui.days, 'c-pop');
+  }
+
+  /* ---------- Board resets ---------- */
+  function closeAll() {
+    let any = false;
+    const tok = token;
+    L.forEach((lk, idx) => {
+      const el = lk.el;
+      const wasOpen = el.classList.contains('is-open');
+      const blown = el.classList.contains('is-blown');
+      lk.open = false;
+      if (!wasOpen && !blown) {
+        el.classList.remove(...STATE_CLASSES);
+        return;
+      }
+      any = true;
+      const delay = RM() ? 0 : (N - 1 - idx) * 11;
+      setTimeout(() => {
+        if (tok !== token) return;
+        el.classList.remove(...STATE_CLASSES);
+        el.classList.add(blown ? 'is-reattach' : 'is-closing');
+        if (idx % 5 === 0) S.clank(0.8 + (idx / 25) * 0.5, 0.06);
+        setTimeout(() => {
+          el.classList.remove('is-closing', 'is-reattach');
+          if (!el.classList.contains('is-open')) lk.use.removeAttribute('href');
+        }, 360);
+      }, delay);
+    });
+    return any;
+  }
+  function clearStamp() {
+    const old = board.querySelector('.fl-stamp');
+    if (!old) return;
+    old.classList.add('is-out');
+    setTimeout(() => old.remove(), 260);
+  }
+  function stamp(text, sub, kind, near) {
+    board.querySelectorAll('.fl-stamp').forEach((s) => s.remove());
+    const d = document.createElement('div');
+    d.className = `fl-stamp ${kind === 'boom' ? 'is-boom' : ''}`;
+    // keep the stamp off the locker that caused it: upper half for a low locker, lower half otherwise
+    if (near != null) d.style.top = Math.floor(near / 5) >= 3 ? '30%' : '73%';
+    d.setAttribute('aria-hidden', 'true');
+    d.innerHTML = text.split(' ').join('<br>');
+    if (sub) {
+      const s = document.createElement('small');
+      s.textContent = sub;
+      d.appendChild(s);
+    }
+    stampLayer.appendChild(d);
+    return d;
+  }
+
+  /* ---------- Round flow ---------- */
+  function newRound(stake, m, demo = false) {
+    const order = rng.shuffle([...Array(N).keys()]);
+    const kill = new Set(order.slice(0, m));
+    const items = [];
+    for (let i = 0; i < N; i++) items[i] = kill.has(i) ? rng.pick(KILL) : rng.pick(SAFE);
+    return { stake, m, kill, items, k: 0, picks: [], over: false, demo, milestone: 0 };
+  }
+
+  async function start() {
+    if (state !== 'idle') return;
+    flushCredit();
+    const stake = stakeVal();
+    if (!wallet.bet(stake)) {
+      fx.anim(ui.stChip, 'c-wobble');
+      fx.shake(5, 260, ui.stake);
+      fx.anim(ui.start, 'c-wobble');
+      sfx.buzz();
+      vib([30, 40, 30]);
+      // Drop to the biggest stake that fits, so the next tap plays (never spend without showing the stake).
+      let fit = -1;
+      STAKES.forEach((s, i) => { if (s <= wallet.balance) fit = i; });
+      if (fit >= 0) {
+        stakeIdx = fit;
+        savePrefs();
+        paintSettings();
+        setTimeout(() => fx.anim(ui.stChip, 'c-jelly'), 300);
+        C.toast(`Short on chips: stake dropped to ${C.fmt(STAKES[fit])}. Tap START again.`, 'bad');
+      } else {
+        C.toast('Out of chips. Hit Residuals up top.', 'bad');
+      }
+      quip(line('broke'), 'bad');
+      return;
+    }
+    const tok = ++token;
+    pendingCash = false;
+    setState('arming');
+    sfx.chips(4);
+    fx.anim(ui.start, 'c-jelly');
+    vib(12);
+    fx.burst(ui.start, { type: 'chip', count: 8, speed: [200, 500] });
+    clearStamp();
+    ui.cash.classList.remove('is-cut');
+    const hadOpen = closeAll();
+    round = newRound(stake, mk);
+    liveBegin(round);
+    decorate();
+    heart.flat = false;
+    heart.hold = false;
+    ecg.mode = 'live';
+    ui.cash.style.setProperty('--heat', 0);
+    setMode('play');
+    hudRefresh(false);
+    await sleep(hadOpen ? (RM() ? 120 : 380) : 90);
+    if (tok !== token) return;
+    // arm sweep: padlock LEDs light up in a diagonal wave
+    L.forEach((lk) => {
+      const r = Math.floor(lk.i / 5);
+      const c = lk.i % 5;
+      setTimeout(() => { if (tok === token) lk.el.classList.add('is-armed'); }, RM() ? 0 : (r + c) * 28);
+    });
+    sfx.riser(0.35);
+    heart.audio = true;
+    heart.target = bpmFor(1, 0);
+    await sleep(RM() ? 0 : 200);
+    if (tok !== token) return;
+    setState('play');
+    quip(line('start'));
+  }
+
+  function swapLayout(i, wantKill) {
+    const r = round;
+    const pool = [];
+    for (let j = 0; j < N; j++) if (j !== i && !L[j].open && r.kill.has(j) === wantKill) pool.push(j);
+    if (!pool.length) return;
+    const j = pool[Math.floor(rand() * pool.length)];
+    const ki = r.kill.has(i);
+    if (ki) { r.kill.delete(i); r.kill.add(j); } else { r.kill.delete(j); r.kill.add(i); }
+    [r.items[i], r.items[j]] = [r.items[j], r.items[i]];
+  }
+
+  function pick(i) {
+    if (state !== 'play' || !liveRound()) return;
+    if (liveLost()) { voidRound(); return; }
+    const lk = L[i];
+    if (!lk || lk.open) return;
+    const r = round;
+    const rig = rigged();
+    if (rig === 'safe' && r.kill.has(i)) swapLayout(i, false);
+    if (rig === 'boom' && !r.kill.has(i)) swapLayout(i, true);
+    const risk = r.m / (N - r.k);
+    lk.open = true;
+    setState('busy');
+    heart.hold = true; // every dial spin holds its breath; nothing about the outcome shows until the dial stops
+    // The outcome is settled right here, before any animation, so nothing can double-count it.
+    if (r.kill.has(i)) {
+      r.over = true;
+      pendingCash = false;
+      if (!r.demo) C.record({ bet: r.stake, win: 0 });
+      liveEnd();
+      animBoom(i, token, risk);
+    } else {
+      r.k += 1;
+      r.picks.push(i);
+      liveUpdate({ k: r.k });
+      animSafe(i, token, risk);
+    }
+  }
+
+  // Another tab settled this round while this one was frozen in the background: stand down without paying.
+  function voidRound() {
+    if (!round) return;
+    round.over = true;
+    pendingCredit = 0;
+    pendingCash = false;
+    live.rec = null;
+    live.stored = false;
+    clearInterval(live.beat);
+    token++;
+    C.toast('This shift was settled in another tab.', 'bad');
+    toIdle();
+  }
+
+  async function dialSpin(lk, risk, tok) {
+    const el = lk.el;
+    const tense = risk >= 0.28 && !RM();
+    el.classList.remove('is-jiggle');
+    el.classList.add('is-spinning');
+    if (tense) el.classList.add('is-tense');
+    S.dial(tense ? 9 : 5, tense ? 1.3 : 1);
+    if (tense) sfx.riser(0.5);
+    vib(8);
+    await sleep(tense ? 200 + Math.min(320, risk * 420) : 200);
+    if (tok !== token) return false;
+    el.classList.remove('is-spinning', 'is-tense');
+    return true;
+  }
+
+  async function animSafe(i, tok, risk) {
+    const r = round;
+    const lk = L[i];
+    const el = lk.el;
+    if (!(await dialSpin(lk, risk, tok))) return;
+    el.classList.add('is-unlocked');
+    S.clack();
+    await sleep(45);
+    if (tok !== token) return;
+    const item = r.items[i];
+    showItem(lk, item);
+    el.classList.add('is-open', 'is-safe');
+    el.setAttribute('aria-label', `Locker ${i + 1}: ${item.name}, a crush`);
+    S.creak();
+    await sleep(150);
+    if (tok !== token) return;
+    // Reveal: hearts, rising chime, multiplier slam
+    const k = r.k;
+    const M = mult(r.m, k);
+    const prevM = k > 1 ? mult(r.m, k - 1) : 1;
+    S.item(item.id);
+    sfx.chime(k - 1);
+    vib(14);
+    fx.burst(el, { type: 'heart', count: 10 + Math.min(22, k * 2), speed: [160, 380 + k * 22] });
+    if (item.id === 'rose') fx.burst(el, { type: 'petal', count: 10 });
+    if (item.id === 'champ') fx.burst(el, { type: 'star', count: 12, speed: [200, 500] });
+    if (item.id === 'wink' || item.id === 'letter') fx.burst(el, { type: 'kiss', count: 5, speed: [140, 300] });
+    fx.floatText(el, `×${fmtX(M)}`, { color: '#ffd1e8', size: 20 + Math.min(14, k), rise: 60 });
+    hudRefresh(true);
+    heart.hold = false;
+    heart.target = bpmFor(M, k);
+    // the payout gain pops off the PAYOUT readout, and the cash-out button swells and glows hotter
+    const gain = payout(r.stake, r.m, k) - (k > 1 ? payout(r.stake, r.m, k - 1) : 0);
+    const pr = hud.payCell.getBoundingClientRect();
+    if (gain > 0) fx.floatText({ x: pr.right - 22, y: pr.top + 12 }, `+${fmtC(gain)}`, { color: '#ffe58a', size: 17 + Math.min(11, k), rise: 34, ms: 950 });
+    fx.anim(ui.cashLbl, 'c-pop');
+    ui.cash.style.setProperty('--heat', clamp(Math.log2(M) / 6, 0, 1).toFixed(2));
+    // Milestones: hit-stop and a heat level shout
+    const MILES = [[2, 'WARM'], [5, 'HOT'], [10, 'STEAMY'], [25, 'SIZZLING'], [100, 'SCORCHING'], [1000, 'MELTDOWN']];
+    let hit = 0;
+    MILES.forEach(([t], idx) => { if (M >= t && prevM < t) hit = idx + 1; });
+    if (hit && hit > r.milestone) {
+      r.milestone = hit;
+      if (hit >= 3) {
+        await sleep(RM() ? 0 : 90);
+        if (tok !== token) return;
+      }
+      heatShout(MILES[hit - 1][1], hit);
+    } else if (k >= 4 && rand() < 0.35) {
+      quip(line('hot'), 'good');
+    } else {
+      quip(line(item.id), 'good');
+    }
+    await sleep(110);
+    if (tok !== token) return;
+    if (r.k >= N - r.m) {
+      await sleep(260);
+      if (tok !== token) return;
+      setState('play');
+      cashOut('clear');
+      return;
+    }
+    setState('play');
+    if (pendingCash) {
+      pendingCash = false;
+      cashOut();
+    }
+  }
+
+  function heatShout(word, level) {
+    const at = fx.point(board);
+    const d = document.createElement('div');
+    d.className = 'fl-hot';
+    d.textContent = word;
+    d.style.left = `${at.x}px`;
+    d.style.top = `${at.y}px`;
+    document.body.appendChild(d);
+    setTimeout(() => d.remove(), 1200);
+    fx.flash('#ff3d9a', 260, 0.12 + level * 0.04);
+    fx.shake(3 + level * 2, 300 + level * 40);
+    fx.burst(hud.yield, { type: 'kiss', count: 8 + level * 3 });
+    sfx.kiss();
+    sfx.win(level >= 3 ? 2 : 1);
+    vib([20, 30, 20]);
+    quip(`${word}! ${line('hot')}`, 'good');
+  }
+
+  // camera punch: a quick zoom-and-settle on the board, scaled to the moment
+  function punch(el, s = 1.03, ms = 260) {
+    if (RM() || !el.animate) return;
+    try {
+      el.animate([{ transform: 'scale(1)' }, { transform: `scale(${s})`, offset: 0.22 }, { transform: 'scale(1)' }], { duration: ms, easing: 'cubic-bezier(.2,.9,.3,1)' });
+    } catch { /* no WAAPI: skip the punch */ }
+  }
+  // the closest unopened mood killer touching locker i (diagonals count), or null
+  function nearKiller(i) {
+    if (i == null || !round) return null;
+    const r0 = Math.floor(i / 5);
+    const c0 = i % 5;
+    let best = null;
+    let bestD = 9;
+    for (const j of round.kill) {
+      const dr = Math.abs(Math.floor(j / 5) - r0);
+      const dc = Math.abs((j % 5) - c0);
+      if (dr > 1 || dc > 1 || L[j].open) continue;
+      const d = dr + dc;
+      if (d < bestD) { bestD = d; best = j; }
+    }
+    return best;
+  }
+
+  function shockwave(el, pink) {
+    const at = fx.point(el);
+    for (const extra of pink ? ['is-pink'] : ['', 'is-2']) {
+      const d = document.createElement('div');
+      d.className = `fl-ring ${extra}`;
+      d.style.left = `${at.x}px`;
+      d.style.top = `${at.y}px`;
+      fxLayer.appendChild(d);
+      setTimeout(() => d.remove(), 1000);
+    }
+  }
+
+  function blowDoor(lk) {
+    const r = lk.front.getBoundingClientRect();
+    lk.el.classList.add('is-blown');
+    if (RM()) return;
+    const c = lk.front.cloneNode(true);
+    c.classList.add('fl-flydoor');
+    c.classList.remove('is-glimmer');
+    Object.assign(c.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    fxLayer.appendChild(c);
+    const dir = r.left + r.width / 2 < innerWidth / 2 ? -1 : 1;
+    const dx = dir * innerWidth * (0.45 + rand() * 0.3);
+    const up = -innerHeight * (0.22 + rand() * 0.18);
+    const spin = dir * (560 + rand() * 400);
+    const remove = () => c.remove();
+    try {
+      const a = c.animate([
+        { transform: 'translate(0, 0) rotate(0deg) scale(1)', opacity: 1 },
+        { transform: `translate(${dx * 0.22}px, ${up}px) rotate(${spin * 0.3}deg) scale(1.55)`, opacity: 1, offset: 0.28 },
+        { transform: `translate(${dx}px, ${up + innerHeight}px) rotate(${spin}deg) scale(1.15)`, opacity: 0.2 },
+      ], { duration: 1150, easing: 'cubic-bezier(.25,.6,.45,1)', fill: 'forwards' });
+      a.onfinish = remove;
+    } catch { /* no WAAPI: the door just vanishes */ }
+    setTimeout(remove, 1600);
+  }
+
+  function revealRest(fromIdx, tok, kind) {
+    const r = round;
+    const fr = Math.floor(fromIdx / 5);
+    const fc = fromIdx % 5;
+    let sounded = 0;
+    L.forEach((lk) => {
+      if (lk.open) return;
+      lk.open = true;
+      const rr = Math.floor(lk.i / 5);
+      const cc = lk.i % 5;
+      const dist = kind === 'boom' ? Math.hypot(rr - fr, cc - fc) : rr + cc;
+      const delay = RM() ? 0 : kind === 'boom' ? 60 + dist * 80 : 40 + dist * 55;
+      const isKill = r.kill.has(lk.i);
+      const item = r.items[lk.i];
+      setTimeout(() => {
+        if (tok !== token) return;
+        if (kind === 'cash' && !RM()) lk.el.classList.add('is-glimmer');
+        const open = () => {
+          if (tok !== token) return;
+          showItem(lk, item);
+          lk.el.classList.add('is-open', 'is-ghost');
+          if (isKill) lk.el.classList.add('is-kill');
+          lk.el.setAttribute('aria-label', `Locker ${lk.i + 1}: ${item.name}`);
+          if (isKill && kind === 'cash') {
+            // a mood killer you walked away from: it twitches, sulks and goes "bonk"
+            lk.el.classList.add('is-dodged');
+            S.dodge(0.85 + rand() * 0.3);
+          } else if (sounded++ % 2 === 0) {
+            if (kind === 'boom') S.clank(0.7 + rand() * 0.6, 0.05);
+            else sfx.tone({ freq: 1800 + dist * 160, type: 'triangle', dur: 0.08, vol: 0.035 });
+          }
+        };
+        if (kind === 'cash' && !RM()) setTimeout(open, 150);
+        else open();
+      }, delay);
+    });
+  }
+
+  async function animBoom(i, tok, risk) {
+    const r = round;
+    const lk = L[i];
+    const el = lk.el;
+    if (!(await dialSpin(lk, risk, tok))) return;
+    // jam + hit-stop: the dial snags, the pulse flatlines (with the monitor's beeeep), everything holds its breath
+    el.classList.add('is-jam');
+    S.jam();
+    S.flatline();
+    heart.audio = false;
+    heart.flat = true;
+    ecg.mode = 'flat';
+    await sleep(RM() ? 40 : 170);
+    if (tok !== token) return;
+    if (!r.demo) setDays(days + 1);
+    const item = r.items[i];
+    showItem(lk, item);
+    el.classList.remove('is-jam');
+    el.classList.add('is-open', 'is-kill', 'is-boom');
+    el.setAttribute('aria-label', `Locker ${i + 1}: ${item.name}, a mood killer`);
+    blowDoor(lk);
+    shockwave(el);
+    punch(board, 1.045, 300);
+    fx.flash('#ff2e2e', 420, 0.55);
+    fx.shake(18, 680);
+    vib([90, 40, 160]);
+    fx.burst(el, { type: 'smoke', count: 16, speed: [60, 220] });
+    fx.burst(el, { type: 'spark', count: 46 });
+    fx.burst(el, { type: 'shard', count: 18 });
+    sfx.explode();
+    S.alarm();
+    S.clang();
+    hud.yieldCell.classList.add('is-dead');
+    hud.yieldCell.classList.remove('is-live');
+    hud.payCell.classList.remove('is-live');
+    retrigger(hud.yield, 'is-slam');
+    setPay(0, false);
+    hud.riskWrap.classList.remove('is-hot');
+    board.classList.remove('is-danger');
+    const missed = r.k < N - r.m ? mult(r.m, r.k + 1) : 0;
+    quip(`${line(item.id)}${missed && r.k ? ` That crush would’ve paid ×${fmtX(missed)}.` : ''}`, 'bad');
+    setMode('play');
+    ui.cash.classList.remove('is-ready');
+    ui.cash.classList.add('is-locked');
+    ui.cashTop.textContent = 'MOOD KILLED';
+    ui.cashLbl.textContent = `LOST ${fmtC(r.stake)}`;
+    await sleep(RM() ? 100 : 360);
+    if (tok !== token) return;
+    stamp('MOOD KILLED', item.name.toUpperCase(), 'boom', i);
+    sfx.thud(0.8);
+    revealRest(i, tok, 'boom');
+    await sleep(RM() ? 200 : 520);
+    if (tok !== token) return;
+    sfx.lose();
+    toIdle();
+    setTimeout(() => {
+      if (tok !== token || state !== 'idle') return;
+      heart.flat = false;
+      ecg.mode = 'live';
+      heart.target = 62;
+    }, 1500);
+  }
+
+  async function cashOut(kind) {
+    if (state === 'scan') {
+      if (!liveRound() || round.k < 1) return;
+      token++; // cancel the random-locker scan: cutting the wire wins
+      setState('play');
+    }
+    if (state === 'busy' && liveRound() && round.k > 0) {
+      pendingCash = true; // tapped mid-reveal: cash out as soon as the door settles
+      return;
+    }
+    if (state !== 'play' || !liveRound()) return;
+    const r = round;
+    if (r.k < 1) {
+      fx.anim(ui.cash, 'c-wobble');
+      sfx.buzz();
+      quip('Open at least one locker before you cut the wire.', '');
+      return;
+    }
+    if (liveLost()) { voidRound(); return; }
+    const tok = token;
+    const win = payout(r.stake, r.m, r.k);
+    r.over = true;
+    r.win = win;
+    setState('end');
+    heart.audio = false;
+    heart.hold = false;
+    if (!r.demo) {
+      pendingCredit = win;
+      liveUpdate({ settled: win }); // if the tab dies mid-celebration, the next visit pays exactly this
+      C.record({ bet: r.stake, win });
+      setDays(0);
+    }
+    const clear = kind === 'clear';
+    // Snip the pink wire
+    ui.cash.classList.add('is-cut');
+    ui.cash.classList.remove('is-ready');
+    S.snip();
+    fx.burst({ x: fx.point(ui.cash).x, y: ui.cash.getBoundingClientRect().bottom - 8 }, { type: 'spark', count: 26 });
+    vib([15, 25, 30]);
+    await sleep(150);
+    if (tok !== token) return;
+    const mult0 = win / r.stake;
+    const big = !r.demo && win >= r.stake * 10;
+    const last = r.picks[r.picks.length - 1];
+    const st = stamp(clear ? 'FULL CLEARANCE' : 'SMOOTH OPERATOR', `PAID ${fmtC(big || RM() ? win : 0)}`, 'cash', last);
+    sfx.thud(0.9);
+    sfx.win(mult0 >= 3 ? 2 : 1);
+    fx.shake(6 + Math.min(8, Math.log2(mult0 + 1) * 2), 340);
+    fx.flash('#ff3d9a', 280, 0.22 + Math.min(0.18, mult0 / 40));
+    punch(board, 1.02 + Math.min(0.025, mult0 / 300), 280);
+    shockwave(st, true);
+    fx.burst(st, { type: 'heart', count: 22 + Math.min(24, Math.round(mult0 * 3)), speed: [250, 700] });
+    // The paid amount rolls up on the stamp with ticks and lands with a ka-ching (big wins count on the overlay).
+    const small = st.querySelector('small');
+    if (!big && !RM() && small) {
+      fx.countUp(small, 0, win, { ms: clamp(420 + Math.log10(win + 1) * 170, 460, 980), format: (v) => `PAID ${fmtC(v)}`, sound: true }).then(() => {
+        if (tok !== token) return;
+        S.kaching(1 + Math.min(0.25, mult0 / 24));
+        fx.anim(small, 'c-pop');
+      });
+    }
+    // Middling wins still get a party: hearts rain from 3x, a feather-boa flurry from 5x.
+    if (!big && mult0 >= 3) fx.shower('heart', Math.round(20 + Math.min(30, mult0 * 3)));
+    if (!big && mult0 >= 5) fx.shower('feather', 16);
+    hud.payCell.classList.add('is-paid');
+    hud.riskWrap.classList.remove('is-hot');
+    board.classList.remove('is-danger');
+    retrigger(hud.pay, 'is-slam');
+    ecg.mode = 'gold';
+    heart.target = 66;
+    // Near-miss: a mood killer right next to the last crush gets named and shamed once the sweep reaches it.
+    const near = clear ? null : nearKiller(last);
+    if (near != null) {
+      quip(`${line('phew')} Locker ${near + 1}, right next door: ${r.items[near].name.toLowerCase()}.`, 'gold');
+      setTimeout(() => {
+        if (tok !== token) return;
+        L[near].el.classList.add('is-near');
+        fx.floatText(L[near].el, 'PHEW', { color: '#ffb0a0', size: 19, rise: 34, ms: 1000, font: 'var(--f-stencil)' });
+      }, RM() ? 0 : 420);
+    } else {
+      quip(line(clear ? 'clear' : 'cash'), 'gold');
+    }
+    revealRest(last ?? 12, tok, 'cash');
+    ui.cashTop.textContent = clear ? 'FULL CLEARANCE' : 'WIRE CUT';
+    ui.cashLbl.textContent = `PAID ${fmtC(win)}`;
+    await sleep(RM() ? 120 : 420);
+    if (tok !== token) return;
+    // On-theme tier names (and they keep the overlay on the cheeky side of the content line)
+    if (big) await C.bigWin(win, r.stake, { label: clear ? 'FULL CLEARANCE!' : BIG_LABELS[C.winTier(win, r.stake)] || 'BIG CRUSH!' });
+    if (tok !== token) return;
+    const count = clamp(Math.round(5 + Math.log2(mult0 + 1) * 4), 6, 26);
+    const coins = fx.collect(hud.pay, null, { count });
+    fx.floatText(hud.pay, `+${fmtC(win)}`, { color: '#ffe58a', size: 26 });
+    await Promise.race([coins, sleep(600)]);
+    flushCredit();
+    if (tok !== token) return;
+    toIdle();
+  }
+
+  function toIdle() {
+    setState('idle');
+    setMode('idle');
+    heart.audio = false;
+    heart.hold = false;
+    if (!heart.flat) heart.target = 62;
+    ui.start.querySelector('span').firstChild.textContent = 'AGAIN';
+    if (!RM()) fx.anim(ui.start, 'is-again'); // the next round is one tap away, and the button says so
+    paintSettings(false); // the finished round stays on the HUD until START or a settings change
+  }
+
+  /* ---------- Random locker (cosmetic scan, uniform pick) ---------- */
+  async function randomPick() {
+    if (state !== 'play' || !liveRound()) {
+      if (state === 'idle') fx.anim(ui.start, 'c-wobble');
+      return;
+    }
+    const closed = L.filter((lk) => !lk.open).map((lk) => lk.i);
+    if (!closed.length) return;
+    const target = closed[rng.int(closed.length)];
+    const tok = token;
+    fx.anim(ui.rand, 'c-jelly');
+    if (!RM() && closed.length > 1) {
+      setState('scan');
+      for (let s = 0; s < 5; s++) {
+        const j = s === 4 ? target : closed[Math.floor(rand() * closed.length)];
+        retrigger(L[j].el, 'is-jiggle');
+        sfx.tick(1 + s * 0.25);
+        await sleep(55);
+        if (tok !== token) return;
+      }
+      setState('play');
+    }
+    pick(target);
+  }
+
+  /* ---------- Input ---------- */
+  grid.addEventListener('click', (e) => {
+    const b = e.target.closest('.lk');
+    if (!b) return;
+    const i = Number(b.dataset.i);
+    if (state === 'idle') {
+      retrigger(b, 'is-jiggle');
+      setTimeout(() => b.classList.remove('is-jiggle'), 700);
+      S.rattle();
+      fx.anim(ui.start, 'c-wobble');
+      return;
+    }
+    pick(i);
+  });
+  let lastRattle = 0;
+  grid.addEventListener('pointerover', (e) => {
+    if (e.pointerType !== 'mouse' || state !== 'play') return;
+    const b = e.target.closest('.lk');
+    if (!b || L[b.dataset.i].open || b.contains(e.relatedTarget)) return;
+    const t = performance.now();
+    if (t - lastRattle < 70) return;
+    lastRattle = t;
+    S.rattle();
+  });
+  ui.start.addEventListener('click', start);
+  ui.cash.addEventListener('click', () => cashOut());
+  ui.rand.addEventListener('click', randomPick);
+
+  function mainAction() {
+    if (state === 'idle') start();
+    else if (state === 'play' || state === 'busy') {
+      if (round && round.k > 0) cashOut();
+      else randomPick();
+    }
+  }
+  let tabNav = false; // true once the player moves focus with Tab, false again on any pointer press
+  addEventListener('pointerdown', () => { tabNav = false; }, true);
+  addEventListener('keydown', (e) => {
+    if (e.key === 'Tab') tabNav = true;
+    if (e.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+    if (document.querySelector('dialog[open], .cbig')) return;
+    const t = e.target instanceof Element ? e.target : document.body;
+    if (t.closest('input, textarea, select, [contenteditable="true"]')) return;
+    const lkEl = t.closest('.lk');
+    const k = e.key;
+    if (k === ' ' || k === 'Enter') {
+      if (e.repeat) { e.preventDefault(); return; }
+      if (lkEl && state === 'play' && !L[lkEl.dataset.i].open) return; // native click picks it
+      // A control reached with Tab keeps Space/Enter; one that merely kept focus after a mouse click or tap
+      // (the stake +, a preset, mute) hands them to the main action, so "tap +, hit Space" starts a round.
+      if (!lkEl && t.closest('button, a') && tabNav) return;
+      e.preventDefault();
+      mainAction();
+    } else if ((k === 'r' || k === 'R') && !e.repeat) {
+      randomPick();
+    } else if (lkEl && k.startsWith('Arrow')) {
+      const i = Number(lkEl.dataset.i);
+      const d = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -5, ArrowDown: 5 }[k];
+      const j = i + d;
+      if (j >= 0 && j < N && !(d === -1 && i % 5 === 0) && !(d === 1 && i % 5 === 4)) {
+        e.preventDefault();
+        L[j].el.focus();
+      }
+    }
+  });
+
+  // Leaving mid-shift: cash out what's earned (or refund an untouched stake) so no chips vanish.
+  addEventListener('pagehide', () => {
+    flushCredit();
+    if (!liveRound() || round.demo) return;
+    const r = round;
+    r.over = true;
+    token++;
+    if (liveOwned()) {
+      if (r.k > 0) {
+        const win = payout(r.stake, r.m, r.k);
+        wallet.win(win);
+        C.record({ bet: r.stake, win });
+      } else {
+        wallet.win(r.stake, 'refund');
+      }
+    }
+    liveEnd();
+    toIdle();
+  });
+  // Back from the background: if another tab settled this round meanwhile, stand down.
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && round && liveLost()) voidRound();
+  });
+
+  /* ---------- Help ---------- */
+  $('#help').addEventListener('click', () => {
+    sfx.tap();
+    const rows = [1, 3, 5, 10, 24].map((m) => {
+      const cell = (k) => (k <= N - m ? `×${fmtX(mult(m, k))}` : '–');
+      return `<tr><td>${m}</td><td>${cell(1)}</td><td>${cell(3)}</td><td>${cell(5)}</td><td>×${fmtX(mult(m, N - m))}</td></tr>`;
+    }).join('');
+    const icon = (it) => `<div><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#i-${it.id}"/></svg>${it.name}</div>`;
+    C.dialog({
+      title: 'The Flirt Locker',
+      button: 'Gloves on',
+      html: `<div class="fl-help-body" style="display:grid;gap:10px">
+        <p><b>25 gym lockers.</b> Choose how many hide a mood killer (1 to 24), set your stake, hit <b>START</b>. Then open lockers one at a time, or let <b>Random locker</b> pick for you.</p>
+        <h3>CRUSHES · KEEP GOING</h3><div class="h-items">${SAFE.map(icon).join('')}</div>
+        <h3>MOOD KILLERS · LOSE THE STAKE</h3><div class="h-items">${KILL.map(icon).join('')}</div>
+        <p>Every crush raises the <b>crush yield</b>. <b>Cut the pink wire</b> (cash out) any time after your first crush to bank stake × yield. Find every crush and you cash out automatically.</p>
+        <table><tr><th>Killers</th><th>1st</th><th>3rd</th><th>5th</th><th>All</th></tr>${rows}</table>
+        <p>Yield after k crushes with m mood killers: 0.97 × 25/(25−m) × 24/(24−m) × … (k terms). Payouts round to the nearest whole chip, capped so no choice ever returns more than 99%; minimum stake 10.</p>
+        <p><b>RTP 97%</b> by construction for any strategy. Measured ${RTP_NOTE}.</p>
+        <p class="h-small">Keys: Space or Enter starts and cashes out, R opens a random locker, arrows move between lockers. Leave mid-shift and you are cashed out automatically (an untouched stake is refunded); if the browser kills the tab, your next visit settles it.</p>
+        <p class="h-small">Parody. Fake chips, no real money.</p>
+      </div>`,
+    });
+  });
+
+  /* ---------- Idle life ---------- */
+  setInterval(() => {
+    if (document.hidden || RM() || (state !== 'idle' && state !== 'play')) return;
+    const closed = L.filter((lk) => !lk.open && !lk.el.matches(':hover'));
+    if (!closed.length) return;
+    const lk = closed[Math.floor(rand() * closed.length)];
+    retrigger(lk.el, 'is-jiggle');
+    setTimeout(() => lk.el.classList.remove('is-jiggle'), 700);
+    // now and then somebody in there sighs a few little hearts out through the vent
+    if (rand() < 0.4) {
+      const vr = lk.el.querySelector('.lk-vent').getBoundingClientRect();
+      if (vr.width) fx.burst({ x: vr.left + vr.width / 2, y: vr.top + 2 }, { type: 'heart', count: 3, speed: [50, 120], angle: -Math.PI / 2, spread: 0.9, gravity: -40, size: [4, 7], life: [0.9, 1.4] });
+    }
+  }, 2300);
+
+  /* ---------- Debug / staging hooks ----------
+     #rig=safe or #rig=boom forces the next picks (layout is swapped, the wallet still pays honestly).
+     #stage=play shows a staged mid-round still for the gallery thumbnail (no chips move). */
+  function stage() {
+    const m = 5;
+    mk = m;
+    paintSettings();
+    round = newRound(100, m, true);
+    round.kill = new Set([0, 4, 10, 19, 23]);
+    const shown = [[2, 1], [6, 2], [8, 5], [13, 4], [17, 3], [21, 0]];
+    for (let i = 0; i < N; i++) round.items[i] = round.kill.has(i) ? KILL[i % KILL.length] : SAFE[i % SAFE.length];
+    for (const [i, s] of shown) {
+      const lk = L[i];
+      round.items[i] = SAFE[s];
+      lk.open = true;
+      showItem(lk, round.items[i]);
+      lk.el.classList.add('is-open', 'is-safe', 'no-anim', 'is-unlocked');
+      round.k += 1;
+      round.picks.push(i);
+    }
+    round.items[18] = SAFE[1];
+    L.forEach((lk) => lk.el.classList.add('is-armed'));
+    setMode('play');
+    setState('play');
+    hudRefresh(false);
+    heart.target = heart.bpm = bpmFor(mult(m, round.k), round.k);
+    quip('Getting steamy. Cash out or push your luck.', 'good');
+    // keyed to the load event (what the thumbnail tool waits on), so the captured still is reproducible
+    const go = () => setTimeout(() => pick(18), 650);
+    if (document.readyState === 'complete') go();
+    else addEventListener('load', go, { once: true });
+  }
+
+  window.__flirt = {
+    get state() { return state; },
+    get round() { return round && { stake: round.stake, m: round.m, k: round.k, over: round.over, win: round.win || 0 }; },
+    get pending() { return pendingCredit; },
+    get live() { return live.rec && { ...live.rec, stored: live.stored }; },
+  };
+
+  /* ---------- Boot ---------- */
+  ui.days.textContent = String(days).padStart(2, '0');
+  paintSettings();
+  setMode('idle');
+  setState('idle');
+  quip(line('idle'));
+  beatLoop();
+  recoverLive();
+  if (/stage=play/.test(location.hash)) stage();
+})();
+</script>
+</body>
+</html>

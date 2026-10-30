@@ -1,0 +1,2522 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Scratch Me If You Can · Blue Movie Casino</title>
+<meta name="description" content="Jet-set scratch cards from Pan Amour Airways: scratch the foil with your lucky coin, match three amounts and pray for a Lucky Kiss.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;600&family=Bungee&family=Monoton&family=Shrikhand&family=Special+Elite&display=swap">
+<link rel="stylesheet" href="../shared/casino.css">
+<style>
+/* Scratch Me If You Can: a 60s cut-paper title sequence for the fictional Pan Amour Airways.
+   Layout: printer (the marquee) feeds a boarding-pass ticket; the control column sits beside it on
+   desktop and under it on phones. */
+:root {
+  --accent: #ff9a84;
+  --accent-2: #f3c24f;
+  --cream: #f4e9d2;
+  --paper: #fbf6ea;
+  --navy: #1d2a44;
+  --navy-2: #2c3d5e;
+  --p-mint: #9ed8c3;
+  --p-blue: #a8c8e6;
+  --p-coral: #f28b74;
+  --p-mustard: #f3c24f;
+  --p-pink: #f4a7b9;
+  --p-lilac: #c3b1e1;
+  --lip: #d7263d;
+  --f-type: "Special Elite", "Courier New", Courier, monospace;
+}
+body { background: var(--cream); color: var(--navy) }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap }
+
+/* ---------- Backdrop: sliding pastel blocks, a dotted flight path, a cruising jet ---------- */
+.bg { position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none; background: var(--cream) }
+.bg::after {
+  content: ""; position: absolute; inset: 0; opacity: .22; mix-blend-mode: multiply;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .38 0 0 0 0 .3 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+.blk { position: absolute; display: block; box-shadow: 7px 7px 0 rgba(29, 42, 68, .07) }
+.b1 { left: -8vw; top: 13vh; width: 40vw; height: 42vh; background: var(--p-mint); animation: drift1 27s ease-in-out infinite alternate }
+.b2 { right: -9vw; top: 5vh; width: 32vw; height: 27vh; background: var(--p-coral); animation: drift2 33s ease-in-out infinite alternate }
+.b3 { left: 22vw; bottom: -14vh; width: 50vw; height: 36vh; background: var(--p-blue); animation: drift3 24s ease-in-out infinite alternate }
+.b4 { right: 9vw; bottom: 16vh; width: 13vw; height: 34vh; background: var(--p-mustard); animation: drift4 29s ease-in-out infinite alternate }
+.b5 { left: 6vw; top: 64vh; width: 20vw; height: 2.2vh; background: var(--navy); animation: drift2 21s ease-in-out infinite alternate }
+.b6 { right: 30vw; top: 9vh; width: 9vw; height: 9vw; border-radius: 50%; background: var(--p-pink); animation: drift3 35s ease-in-out infinite alternate }
+@keyframes drift1 { to { translate: 7vw 3vh } }
+@keyframes drift2 { to { translate: -6vw 4vh } }
+@keyframes drift3 { to { translate: -8vw -3vh } }
+@keyframes drift4 { to { translate: 4vw -6vh } }
+.route { position: absolute; inset: 0; width: 100%; height: 100%; color: var(--navy) }
+.route path { fill: none; stroke: var(--navy); stroke-width: 3; stroke-dasharray: 1 13; stroke-linecap: round; opacity: .32 }
+.route-plane { position: absolute; left: -17px; top: -17px; width: 34px; height: 34px; color: var(--navy); opacity: 0; will-change: transform }
+.bg-jet { position: absolute; display: block; left: 0; top: 7vh; width: 210px; height: 66px; color: var(--navy); animation: cruise 26s linear infinite; animation-delay: -9s }
+@keyframes cruise { from { translate: -260px 3vh } to { translate: calc(100vw + 60px) -2vh } }
+.cloud { position: absolute; display: block; color: #fffaf0; filter: drop-shadow(4px 4px 0 rgba(29, 42, 68, .08)) }
+/* the drifting/cruising art is wrapped in HTML boxes: animating the <svg> itself ran on the main thread */
+.cloud svg, .bg-jet svg { display: block; width: 100%; height: 100% }
+.cl1 { left: 4vw; top: 7vh; width: 150px; height: 62px; animation: drift1 40s ease-in-out infinite alternate }
+.cl2 { right: 5vw; top: 46vh; width: 200px; height: 84px; animation: drift2 46s ease-in-out infinite alternate }
+.bg-lips { position: absolute; left: 3vw; bottom: 7vh; width: 130px; height: 80px; color: var(--lip); opacity: .22; rotate: -16deg }
+
+/* ---------- Page layout ---------- */
+main {
+  position: relative; z-index: 1;
+  width: min(1240px, 100%); margin: 0 auto;
+  padding: 8px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  display: grid; gap: 8px; align-items: start;
+  overflow: clip;
+}
+/* two columns on desktop and on any landscape screen from 700px: the controls stay in view (sticky) */
+@media (min-width: 1100px), (min-width: 700px) and (orientation: landscape) {
+  main { grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; padding-top: 14px }
+  .side { position: sticky; top: calc(var(--bar-h) + 14px) }
+}
+.stage { display: grid; justify-items: center; min-width: 0 }
+
+/* ---------- The ticket printer (doubles as the title card) ---------- */
+.printer { position: relative; z-index: 3; width: min(100%, 900px) }
+.pr-face {
+  position: relative;
+  display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px;
+  padding: 11px 16px 10px;
+  border-radius: 18px 18px 8px 8px;
+  background: var(--navy); color: var(--cream);
+  box-shadow: 0 5px 0 #0e1628, 7px 9px 0 rgba(29, 42, 68, .16);
+}
+.pr-face::before {
+  content: ""; position: absolute; left: 18px; right: 18px; top: 0; height: 5px; border-radius: 0 0 4px 4px;
+  background: linear-gradient(90deg, var(--p-coral) 0 25%, var(--p-mustard) 25% 50%, var(--p-mint) 50% 75%, var(--p-blue) 75%);
+}
+.printer.jiggle .pr-face { animation: jiggle .12s linear infinite }
+@keyframes jiggle { 50% { translate: 0 1px } }
+.pr-brand { grid-column: 1 / -1; display: flex; align-items: center; gap: 7px; font: 700 11px/1 var(--f-cond); letter-spacing: .2em; text-transform: uppercase; color: var(--p-mustard) }
+.pr-brand svg { width: 26px; height: 16px; color: var(--cream) }
+.pr-brand em { font-style: normal; color: rgba(244, 233, 210, .55); letter-spacing: .12em }
+.pr-title { position: relative; margin: 2px 0 0; display: flex; align-items: flex-end; flex-wrap: wrap; gap: 0 14px; font-weight: 400 }
+.tiles { display: flex; gap: 3px; font: 400 clamp(19px, 6.2vw, 40px)/1 var(--f-marquee) }
+.tiles span {
+  display: grid; place-items: center; width: 1.08em; height: 1.18em;
+  background: var(--c, var(--p-coral)); color: var(--navy);
+  border-radius: 3px; rotate: var(--r, 0deg);
+  box-shadow: 2px 3px 0 rgba(0, 0, 0, .35);
+  animation: bob 3.4s ease-in-out infinite; animation-delay: calc(var(--i) * -.21s);
+}
+.tiles span.sp { width: .3em; background: none; box-shadow: none; animation: none }
+@keyframes bob { 0%, 100% { translate: 0 0 } 50% { translate: 0 -3px } }
+.pr-script { font: 400 clamp(20px, 5.6vw, 34px)/1 var(--f-retro); color: var(--p-coral); rotate: -6deg; translate: 0 2px; text-shadow: 2px 2px 0 #0e1628; white-space: nowrap }
+.pr-tag { grid-column: 1 / -1; margin: 3px 0 0; font: 400 13px/1.2 var(--f-type); color: rgba(244, 233, 210, .78) }
+.pr-led { grid-row: 2; grid-column: 2; align-self: start; width: 12px; height: 12px; margin-top: 4px; border-radius: 50%; background: var(--p-mint); box-shadow: 0 0 10px var(--p-mint); animation: led 2.2s steps(1) infinite }
+.printer.busy .pr-led { background: #ff7a5c; box-shadow: 0 0 12px #ff7a5c; animation-duration: .25s }
+@keyframes led { 50% { opacity: .35 } }
+.pr-slot { position: relative; z-index: 4; height: 12px; margin: 0 8px; border-radius: 0 0 10px 10px; background: #0a0f1c; box-shadow: inset 0 5px 5px rgba(0, 0, 0, .7), 0 3px 0 rgba(29, 42, 68, .25) }
+@media (max-width: 699px) {
+  .pr-face { padding: 9px 12px 8px; border-radius: 14px 14px 6px 6px }
+  .pr-title { gap: 0 8px }
+  .tiles { font-size: min(5.5vw, 24px); gap: 2.5px }
+  .pr-face { padding-bottom: 15px }
+  .pr-script { position: absolute; right: -4px; bottom: -15px; font-size: 19px }
+  .pr-tag { display: none }
+  .pr-brand em { display: none }
+}
+
+/* ---------- Ticket feed ---------- */
+.feed {
+  position: relative; display: grid; width: calc(min(100%, 900px) - 26px); margin-top: -3px;
+  clip-path: inset(0 -60px -200vh -60px);
+}
+.tk {
+  grid-area: 1 / 1; min-width: 0;
+  filter: drop-shadow(0 6px 0 rgba(29, 42, 68, .16)) drop-shadow(0 14px 16px rgba(29, 42, 68, .22));
+  --band: var(--p-blue); --stub: #e7f0f9; --tc: var(--navy);
+}
+.tk[data-cls="first"] { --band: var(--p-mustard); --stub: #fbf0cf }
+.tk[data-cls="jet"] { --band: var(--p-lilac); --stub: #f1e9fb }
+.tk.leaving { z-index: 5; pointer-events: none }
+
+.ticket {
+  --stub-w: 270px;
+  position: relative;
+  display: grid; grid-template-columns: minmax(0, 1fr) var(--stub-w);
+  border-radius: 14px; background: var(--paper); color: var(--navy);
+  -webkit-user-select: none; user-select: none; -webkit-touch-callout: none;
+  -webkit-mask: radial-gradient(circle 10px at calc(100% - var(--stub-w)) 0, #0000 9.5px, #000 10.5px) top / 100% 51% no-repeat, radial-gradient(circle 10px at calc(100% - var(--stub-w)) 100%, #0000 9.5px, #000 10.5px) bottom / 100% 51% no-repeat;
+  mask: radial-gradient(circle 10px at calc(100% - var(--stub-w)) 0, #0000 9.5px, #000 10.5px) top / 100% 51% no-repeat, radial-gradient(circle 10px at calc(100% - var(--stub-w)) 100%, #0000 9.5px, #000 10.5px) bottom / 100% 51% no-repeat;
+}
+.t-main { display: grid; gap: 8px; padding: 0 14px 12px; min-width: 0 }
+.t-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  margin: 0 -14px; padding: 8px 14px 7px; background: var(--band);
+  border-radius: 14px 0 0 0;
+}
+.t-brand { display: flex; align-items: center; gap: 8px; min-width: 0 }
+.t-brand svg { flex: none; width: 34px; height: 21px; color: var(--navy) }
+.t-brand b { display: block; font: 400 17px/1 var(--f-retro); letter-spacing: .01em }
+.t-brand small { display: block; font: 700 10px/1.2 var(--f-cond); letter-spacing: .16em; text-transform: uppercase; opacity: .75; white-space: nowrap }
+.t-pass { text-align: right; line-height: 1 }
+.t-pass small { display: block; font: 700 10px/1 var(--f-cond); letter-spacing: .2em; text-transform: uppercase; opacity: .7 }
+.t-pass b { font: 400 16px/1.1 var(--f-marquee); letter-spacing: .02em }
+.t-info { display: flex; flex-wrap: wrap; gap: 2px 16px; font: 700 13px/1 var(--f-cond); letter-spacing: .04em; text-transform: uppercase }
+.t-info i { display: block; font-style: normal; font-size: 9.5px; letter-spacing: .18em; opacity: .55; margin-bottom: 2px }
+
+.t-grid { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; touch-action: pan-y }
+.cell {
+  --tint: #efe6d2; --tc: var(--navy);
+  position: relative; aspect-ratio: 1.62; border-radius: 10px; overflow: hidden;
+  background: var(--tint);
+  box-shadow: inset 0 0 0 2px rgba(29, 42, 68, .12);
+}
+.prize { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 2px; opacity: 0 }
+.cell.armed .prize, .cell.rev .prize { opacity: 1 }
+.prize svg { width: clamp(30px, 8.4vw, 50px); height: clamp(30px, 8.4vw, 50px); filter: drop-shadow(2px 2px 0 rgba(29, 42, 68, .18)) }
+.prize b { font: 800 clamp(17px, 4.7vw, 25px)/1 var(--f-cond); letter-spacing: .02em; font-variant-numeric: tabular-nums }
+.foil { position: absolute; inset: 0; z-index: 2; display: block; width: 100%; height: 100%; touch-action: pan-y }
+/* while a ticket is in play the grid and the kiss box own every touch (no page pan or zoom) */
+.ticket.live .t-grid, .ticket.live .kiss-box, .ticket.live .foil { touch-action: none }
+.foil.gone { pointer-events: none; animation: foil-off .5s var(--ease-out) forwards }
+.foil.gone-now { display: none }
+@keyframes foil-off {
+  0% { opacity: 1; scale: 1; filter: brightness(1) }
+  28% { opacity: 1; scale: 1.07; filter: brightness(1.7) }
+  100% { opacity: 0; scale: .25; rotate: 9deg; filter: brightness(2.2) }
+}
+/* idle glint that ripples across untouched foil */
+.cell::after, .kiss-box::after {
+  content: ""; position: absolute; inset: -10% auto -10% -70%; z-index: 3; width: 45%; pointer-events: none;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, .65), transparent); rotate: 14deg;
+  animation: glint 4.2s ease-in-out infinite; animation-delay: calc(var(--i, 0) * .14s);
+}
+.cell.rev::after, .kiss-box.rev::after { animation: glint-once .65s .08s ease-out both }
+@keyframes glint { 0%, 62% { translate: 0 0 } 100% { translate: 470% 0 } }
+@keyframes glint-once { 0% { translate: 0 0; opacity: 1 } 99% { opacity: 1 } 100% { translate: 470% 0; opacity: 0 } }
+.cell.rev .prize svg { animation: c-pop .45s var(--ease-back) }
+/* Looping glows only animate scale and opacity (compositor work), so a finished ticket can sit on
+   screen without repainting every frame. */
+.cell.pair { z-index: 1; box-shadow: inset 0 0 0 3px var(--tc), 0 0 16px 3px color-mix(in srgb, var(--tc) 45%, transparent) }
+.cell.pair .prize { animation: pair-pulse .9s ease-in-out infinite }
+.cell.pair::before { content: ""; position: absolute; inset: 0; z-index: 1; border-radius: inherit; pointer-events: none; box-shadow: inset 0 0 22px 6px color-mix(in srgb, var(--tc) 55%, transparent); animation: pair-inner .9s ease-in-out infinite }
+.cell.pair.big .prize, .cell.pair.big::before { animation-duration: .62s }
+@keyframes pair-pulse { 50% { scale: 1.07 } }
+@keyframes pair-inner { 0%, 100% { opacity: .15 } 50% { opacity: 1 } }
+.cell.won { z-index: 1; animation: won-bounce .55s var(--ease-back); box-shadow: inset 0 0 0 3px var(--lip), 0 0 22px 4px rgba(215, 38, 61, .35) }
+.prize .pi { display: block; line-height: 0 }
+.cell.won .prize .pi { animation: won-wiggle 1.3s ease-in-out infinite }
+@keyframes won-bounce { 0% { scale: 1 } 35% { scale: 1.16 } 70% { scale: .96 } 100% { scale: 1 } }
+@keyframes won-wiggle { 0%, 100% { rotate: 0deg } 25% { rotate: -9deg } 75% { rotate: 9deg } }
+.cell.zap::before { content: ""; position: absolute; inset: 0; z-index: 4; border-radius: inherit; background: #fff; pointer-events: none; animation: zap .45s ease-out forwards }
+@keyframes zap { 0% { opacity: 1 } 100% { opacity: 0 } }
+.ticket.hitstop, .ticket.hitstop * { animation-play-state: paused !important }
+.ticket.punch { animation: punch .42s var(--ease-back) }
+@keyframes punch { 0% { scale: 1 } 30% { scale: 1.035 } 62% { scale: .992 } 100% { scale: 1 } }
+.shock { position: absolute; z-index: 6; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; border: 5px solid var(--ring, var(--lip)); pointer-events: none; animation: shock .6s cubic-bezier(.2, .7, .3, 1) forwards }
+@keyframes shock { 0% { scale: .3; opacity: 1 } 100% { scale: var(--sz, 7); opacity: 0; border-width: 1px } }
+.cell.tense, .ch-amt.tense { animation: tense .16s linear infinite }
+@keyframes tense { 0%, 100% { translate: 0 0 } 25% { translate: -1.2px .6px } 75% { translate: 1.2px -.6px } }
+.cell.nudge { animation: c-wobble .55s ease-in-out }
+.cell.pair.thump { animation: thump .34s ease-out }
+@keyframes thump {
+  0%, 100% { scale: 1; box-shadow: inset 0 0 0 3px var(--tc), 0 0 0 0 transparent }
+  30% { scale: 1.07; box-shadow: inset 0 0 0 3px var(--tc), 0 0 26px 8px color-mix(in srgb, var(--tc) 70%, transparent) }
+}
+.ticket.live .t-grid, .ticket.live .kiss-box { cursor: none }
+
+.t-route { position: absolute; inset: 0; z-index: 5; width: 100%; height: 100%; overflow: visible; pointer-events: none }
+.t-route .rt-case { fill: none; stroke: rgba(255, 255, 255, .85); stroke-width: 9; stroke-linecap: round; stroke-linejoin: round }
+.t-route .rt-line { fill: none; stroke: var(--lip); stroke-width: 4.5; stroke-dasharray: 10 7; stroke-linecap: round; stroke-linejoin: round }
+.t-route .rt-mask { fill: none; stroke: #fff; stroke-width: 18; stroke-linecap: round; stroke-linejoin: round }
+.t-route .rt-ring { fill: none; stroke: var(--lip); stroke-width: 3.5; stroke-linecap: round }
+.t-route .rt-plane { color: var(--navy) }
+.t-matched {
+  position: absolute; left: 50%; top: 50%; z-index: 6; translate: -50% -50%; rotate: -6deg;
+  padding: 6px 18px 8px; border-radius: 6px;
+  background: var(--lip); color: #fff;
+  font: 400 clamp(30px, 8.6vw, 56px)/1 var(--f-retro); white-space: nowrap;
+  box-shadow: 5px 5px 0 var(--navy); opacity: 0; pointer-events: none;
+}
+.t-matched.show { animation: c-slam .5s var(--ease-back) both }
+.t-matched.out { animation: matched-out .4s ease-in forwards }
+@keyframes matched-out { from { opacity: 1; scale: 1 } to { opacity: 0; scale: .6; translate: -50% -90% } }
+
+.t-cheque {
+  position: relative; display: grid; gap: 5px; padding: 8px 10px 7px; border-radius: 8px;
+  background:
+    repeating-linear-gradient(-45deg, rgba(42, 93, 159, .06) 0 2px, transparent 2px 7px),
+    linear-gradient(180deg, #fffdf6, #f6efdd);
+  box-shadow: inset 0 0 0 1.5px rgba(29, 42, 68, .22);
+}
+.ch-row { display: flex; align-items: center; gap: 8px; min-width: 0 }
+.ch-label { flex: none; font: 700 10.5px/1.05 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; opacity: .7 }
+.ch-payee { flex: 1; min-width: 0; padding: 0 4px 1px; border-bottom: 1.5px solid var(--navy); font: 400 19px/1.1 var(--f-type); white-space: nowrap; overflow: hidden; text-overflow: ellipsis }
+.ch-payee small { font-size: 11px; opacity: .6 }
+.ch-amt { flex: none; display: flex; align-items: baseline; gap: 4px; min-width: 6.6em; justify-content: flex-end; padding: 4px 8px; border-radius: 6px; background: #fff; box-shadow: inset 0 0 0 2px var(--navy) }
+.ch-amt b { font: 800 21px/1 var(--f-cond); font-variant-numeric: tabular-nums }
+.ch-amt i { font: 700 10px/1 var(--f-cond); font-style: normal; letter-spacing: .14em; text-transform: uppercase; opacity: .6 }
+.ch-amt.hot { box-shadow: inset 0 0 0 2px var(--lip), 0 0 16px rgba(215, 38, 61, .4) }
+.ch-amt.hot b { color: var(--lip) }
+.ch-x2 { display: none; align-self: center; width: 26px; height: 16px; color: var(--lip); rotate: -12deg }
+.ch-amt.doubled .ch-x2 { display: block; animation: c-slam .45s var(--ease-back) both }
+.ch-small { justify-content: space-between; font: 400 12px/1 var(--f-type); opacity: .8 }
+.ch-sig { width: 96px; height: 20px; color: var(--navy) }
+
+.stamp {
+  position: absolute; left: 50%; top: 40%; z-index: 8; translate: -50% -50%; rotate: -11deg;
+  display: grid; justify-items: center; padding: 4px 16px 6px; border: 5px double currentColor; border-radius: 10px;
+  color: rgba(215, 38, 61, .92); text-transform: uppercase; white-space: nowrap;
+  mix-blend-mode: multiply; opacity: 0; pointer-events: none;
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.4 2.05'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='220' height='120'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' seed='4'/%3E%3CfeColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 -2.4 2.05'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+.stamp b { font: 400 clamp(34px, 10vw, 54px)/1 var(--f-marquee); letter-spacing: .05em }
+.stamp small { font: 700 11px/1 var(--f-cond); letter-spacing: .24em }
+.stamp.bounced { color: rgba(42, 75, 140, .92); rotate: 7deg }
+.stamp.show { animation: stamp-in .42s cubic-bezier(.2, 1.5, .45, 1) forwards }
+.stamp.bounced.show { animation: stamp-bounce .9s ease-out forwards }
+@keyframes stamp-in { 0% { opacity: 0; scale: 2.9 } 55% { opacity: 1; scale: .9 } 78% { scale: 1.05 } 100% { opacity: 1; scale: 1 } }
+@keyframes stamp-bounce {
+  0% { opacity: 0; scale: 2.4; translate: -50% -120% }
+  30% { opacity: 1; scale: 1; translate: -50% -50% }
+  48% { translate: -50% -95% }
+  64% { translate: -50% -50% }
+  76% { translate: -50% -68% }
+  88% { translate: -50% -50% }
+  100% { opacity: 1; scale: 1; translate: -50% -50% }
+}
+.ticket.drooped { rotate: -1.2deg; transition: rotate .5s var(--ease-back) }
+
+.t-stub { display: grid; gap: 9px; align-content: start; padding: 12px 13px; background: var(--stub); border-left: 2px dashed rgba(29, 42, 68, .3); border-radius: 0 14px 14px 0; min-width: 0 }
+.kiss-wrap { display: grid; gap: 4px }
+.kiss-cap { display: flex; justify-content: space-between; font: 700 11px/1 var(--f-cond); letter-spacing: .16em; text-transform: uppercase }
+.kiss-cap b { color: var(--lip) }
+.kiss-box { position: relative; height: 112px; border-radius: 10px; overflow: hidden; background: #fff0f2; box-shadow: inset 0 0 0 2px rgba(215, 38, 61, .25); touch-action: pan-y }
+.kiss-under { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 0; text-align: center; opacity: 0 }
+.kiss-box.armed .kiss-under, .kiss-box.rev .kiss-under { opacity: 1 }
+.kiss-under svg { width: 92px; height: 56px; color: var(--lip) }
+.kiss-under b { font: 400 22px/1 var(--f-retro); color: var(--lip) }
+.kiss-under .dud { font: 400 15px/1.15 var(--f-type) }
+.kiss-under .dud small { display: block; font-size: 12px; opacity: .65 }
+.kiss-under .ghost { width: 70px; height: 42px; opacity: .14 }
+.kiss-box.kissed { animation: kissed 1s ease-in-out infinite; box-shadow: inset 0 0 0 3px var(--lip), 0 0 22px rgba(215, 38, 61, .45) }
+.kiss-box.kissed svg { animation: c-pop .5s var(--ease-back) }
+@keyframes kissed { 50% { scale: 1.03 } }
+.legend { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px }
+.legend li { display: grid; grid-template-columns: 20px 1fr auto; align-items: center; gap: 7px; padding: 2px 6px; border-radius: 6px; font: 700 13.5px/1.1 var(--f-cond); letter-spacing: .02em; transition: background .2s }
+.legend svg { width: 20px; height: 20px }
+.legend li b { font-weight: 800; font-variant-numeric: tabular-nums }
+.legend li.hot { background: color-mix(in srgb, var(--tc) 22%, transparent); animation: c-pop .4s var(--ease-back) }
+.legend li.hit { background: var(--lip); color: #fff; animation: c-jelly .6s ease-out }
+.t-rules { margin: 0; font: 600 11.5px/1.3 var(--f-cond); letter-spacing: .06em; text-transform: uppercase; opacity: .7 }
+.t-bar { align-self: end; display: grid; gap: 4px; margin-top: 2px }
+.t-bar i { display: block; height: 34px; background: repeating-linear-gradient(90deg, var(--navy) 0 2px, transparent 2px 4px, var(--navy) 4px 7px, transparent 7px 8px, var(--navy) 8px 9px, transparent 9px 12px, var(--navy) 12px 15px, transparent 15px 16px); opacity: .85 }
+.t-bar span { display: flex; justify-content: space-between; font: 700 10px/1 var(--f-cond); letter-spacing: .14em; text-transform: uppercase; opacity: .65 }
+@media (min-width: 700px) { .t-stub { align-content: stretch; grid-template-rows: auto auto auto 1fr } .kiss-box { height: 124px } }
+
+.t-specimen { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none }
+.t-specimen span {
+  rotate: -14deg; padding: 4px 16px; border: 3px solid rgba(29, 42, 68, .55); border-radius: 8px;
+  font: 400 clamp(26px, 8vw, 50px)/1 var(--f-marquee); letter-spacing: .1em; color: rgba(29, 42, 68, .55);
+  background: rgba(251, 246, 234, .55); text-align: center;
+}
+.t-specimen small { display: block; font: 700 11px/1.4 var(--f-cond); letter-spacing: .3em }
+
+@media (max-width: 699px) {
+  .feed { width: calc(100% - 14px) }
+  .ticket {
+    --stub-h: 104px;
+    grid-template-columns: minmax(0, 1fr);
+    -webkit-mask: radial-gradient(circle 9px at 0 calc(100% - var(--stub-h)), #0000 8.5px, #000 9.5px) left / 51% 100% no-repeat, radial-gradient(circle 9px at 100% calc(100% - var(--stub-h)), #0000 8.5px, #000 9.5px) right / 51% 100% no-repeat;
+    mask: radial-gradient(circle 9px at 0 calc(100% - var(--stub-h)), #0000 8.5px, #000 9.5px) left / 51% 100% no-repeat, radial-gradient(circle 9px at 100% calc(100% - var(--stub-h)), #0000 8.5px, #000 9.5px) right / 51% 100% no-repeat;
+  }
+  .t-main { padding: 0 10px 10px; gap: 7px }
+  .t-head { margin: 0 -10px; padding: 7px 10px 6px; border-radius: 14px 14px 0 0 }
+  .t-brand svg { width: 28px; height: 18px }
+  .t-brand b { font-size: 15px }
+  .t-pass b { font-size: 14px }
+  .t-info { gap: 2px 12px; font-size: 11px }
+  .t-info i { display: inline; margin-right: 4px; font-size: 9px }
+  .t-info .opt { display: none }
+  .t-grid { gap: 6px }
+  .cell { aspect-ratio: 1.38 }
+  .t-stub {
+    height: var(--stub-h); grid-template-columns: 112px minmax(0, 1fr); align-content: stretch; gap: 8px;
+    padding: 8px 10px; border-left: 0; border-top: 2px dashed rgba(29, 42, 68, .3); border-radius: 0 0 14px 14px;
+  }
+  .kiss-wrap { grid-template-rows: auto 1fr }
+  .kiss-box { height: auto }
+  .kiss-under svg { width: 70px; height: 42px }
+  .kiss-under b { font-size: 17px }
+  .kiss-under .ghost { display: none }
+  .kiss-under .dud { padding: 0 4px; font-size: 12.5px }
+  .kiss-under .dud small { font-size: 10.5px }
+  .kiss-cap { font-size: 10px; letter-spacing: .1em }
+  .kiss-cap span { display: none }
+  .legend { grid-template-columns: 1fr 1fr; gap: 1px 6px; align-content: center }
+  .legend li { grid-template-columns: 17px 1fr; gap: 4px; padding: 1px 4px; font-size: 12.5px }
+  .legend li span { display: none }
+  .legend li b { text-align: right }
+  .legend svg { width: 17px; height: 17px }
+  .t-rules, .t-bar { display: none }
+  .ch-label { font-size: 9.5px }
+  .ch-payee { font-size: 16px }
+  .ch-amt { min-width: 5.6em; padding: 3px 7px }
+  .ch-amt b { font-size: 19px }
+  .ch-small { font-size: 10.5px }
+  .ch-sig { width: 76px; height: 16px }
+}
+
+/* ---------- Controls ---------- */
+.side { display: grid; gap: 8px; min-width: 0; width: min(100%, 900px); justify-self: center }
+.pa {
+  display: grid; grid-template-columns: auto 1fr; align-items: center; gap: 9px;
+  min-height: 38px; padding: 7px 12px; border-radius: 12px;
+  background: var(--navy); color: var(--cream);
+  box-shadow: 4px 4px 0 rgba(29, 42, 68, .18);
+  font: 600 14px/1.25 var(--f-text);
+}
+.pa svg { width: 22px; height: 22px; color: var(--p-mustard) }
+.pa b { font: 800 12px/1 var(--f-cond); letter-spacing: .16em; text-transform: uppercase; color: var(--p-mustard); margin-right: 4px }
+.pa[data-tone="good"] { background: #1f5a4a }
+.pa[data-tone="bad"] { background: #4a2338 }
+.classes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px }
+.tag {
+  position: relative; cursor: pointer; display: grid; align-content: center; justify-items: start; gap: 3px;
+  min-height: 54px; padding: 7px 8px 7px 24px; border: 0; border-radius: 6px 12px 12px 6px;
+  background: var(--paper); color: var(--navy); text-align: left;
+  clip-path: polygon(13px 0, 100% 0, 100% 100%, 13px 100%, 0 calc(100% - 13px), 0 13px);
+  transition: translate .18s var(--ease-back), background .2s;
+  touch-action: manipulation;
+  --band: var(--p-blue);
+}
+.tag[data-cls="first"] { --band: var(--p-mustard) }
+.tag[data-cls="jet"] { --band: var(--p-lilac) }
+.tag::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 7px; background: var(--band) }
+.tag::after { content: ""; position: absolute; left: 12px; top: 50%; width: 7px; height: 7px; margin-top: -3.5px; border-radius: 50%; background: var(--cream); box-shadow: 0 0 0 2px var(--navy) }
+.tag b { font: 400 14px/1 var(--f-marquee); white-space: nowrap }
+.tag .tp { display: inline-flex; align-items: center; gap: 5px; font: 800 16px/1 var(--f-cond) }
+.tag .tp .cchip-icon { width: 15px; height: 15px }
+.tag small { font: 600 11px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase; opacity: .7 }
+.tag[aria-pressed="true"] { background: var(--band); translate: 0 -3px; box-shadow: inset 0 0 0 3px var(--navy) }
+.tag:disabled { cursor: not-allowed; opacity: .55 }
+.tag:disabled[aria-pressed="true"] { opacity: 1 }
+.tag.poor .tp { color: var(--lip) }
+.actions { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px }
+.main-btn { --b1: #ff7584; --b2: var(--lip); --b3: #760c1f; width: 100%; min-height: 60px; font-size: 22px; padding: 10px 14px }
+.main-btn .mp { display: inline-flex; align-items: center; gap: 5px; padding: 4px 9px 4px 5px; border-radius: 999px; background: rgba(0, 0, 0, .22); font-size: 18px }
+.main-btn .mp .cchip-icon { width: 18px; height: 18px; --chip: var(--p-mustard) }
+.main-btn.ready:not(:disabled):not(.c-jelly):not(.c-wobble) { animation: ready 1.5s ease-in-out infinite }
+@keyframes ready { 0%, 100% { scale: 1 } 50% { scale: 1.035 } }
+/* scale-only pulse and no filter/scale transitions on this button: keeps the idle pulse on the compositor */
+.main-btn { transition: translate .07s, box-shadow .07s }
+.main-btn:disabled { cursor: progress; filter: saturate(.8) brightness(.95); background-image: repeating-linear-gradient(-45deg, rgba(255, 255, 255, .16) 0 12px, transparent 12px 24px), linear-gradient(180deg, var(--b1), var(--b2)); background-size: 34px 34px, auto; animation: busy .6s linear infinite }
+@keyframes busy { to { background-position: 34px 0, 0 0 } }
+.help-btn { --b1: #fffaf0; --b2: #efe3c8; --b3: #a8987a; --bt: var(--navy); width: 60px; min-height: 60px; font: 400 26px/1 var(--f-marquee); text-shadow: none }
+.fine { margin: 2px 0 0; font: 600 12px/1.35 var(--f-cond); letter-spacing: .05em; color: rgba(29, 42, 68, .72); text-align: center }
+@media (min-width: 1100px), (min-width: 700px) and (orientation: landscape) {
+  .classes { grid-template-columns: 1fr }
+  .tag { min-height: 62px; grid-template-columns: 1fr auto; padding-left: 28px }
+  .tag b { font-size: 17px }
+  .tag .tp { grid-row: 1 / 3; grid-column: 2; font-size: 20px }
+  .pa { min-height: 74px; align-items: start; font-size: 15px }
+  .fine { text-align: left }
+}
+@media (max-width: 699px) {
+  .tag small { display: none }
+  .tag b .lg { display: none }
+  .tag { min-height: 50px }
+  .pa { font-size: 13px; min-height: 45px; padding: 6px 10px } /* two lines reserved: quips never shove the button */
+  .main-btn { min-height: 58px; font-size: 21px }
+  .help-btn { width: 58px; min-height: 58px }
+  main { padding-top: 6px; gap: 7px }
+  .side { gap: 7px }
+  .fine .more { display: none }
+}
+
+/* landscape tablets and small laptops: slimmer side column and stub */
+@media (min-width: 700px) and (max-width: 1099px) and (orientation: landscape) {
+  main { grid-template-columns: minmax(0, 1fr) 244px; gap: 14px; padding-top: 10px }
+  .ticket { --stub-w: 214px }
+  .tag b { font-size: 15px }
+  .tag .tp { font-size: 18px }
+  .pa { min-height: 66px; font-size: 13.5px }
+  .main-btn { font-size: 18px; letter-spacing: .05em; padding: 10px; gap: 6px; white-space: nowrap }
+  .main-btn .mp { font-size: 16px }
+  .help-btn { width: 48px }
+  .fine .more { display: none }
+}
+/* phone landscape: compact side column so the main button never needs a scroll */
+@media (min-width: 700px) and (orientation: landscape) and (max-height: 560px) {
+  .side { gap: 6px; top: calc(var(--bar-h) + 8px) }
+  .tag { min-height: 46px; padding-top: 5px; padding-bottom: 5px }
+  .tag small, .pr-tag, .pr-brand { display: none }
+  .pa { min-height: 59px; padding: 6px 10px; font-size: 12.5px }
+  .main-btn { min-height: 54px }
+  .help-btn { min-height: 54px }
+  .pr-face { padding: 8px 14px }
+  .pr-title { flex-wrap: nowrap }
+  .tiles { font-size: 25px }
+  .pr-script { font-size: 23px }
+}
+/* shorter phones (360x740 and the like): trim the marquee and flatten the panels to fit one screen */
+@media (max-width: 699px) and (max-height: 820px) {
+  .pr-brand { display: none }
+  .pr-face { padding-top: 9px }
+  .cell { aspect-ratio: 1.6 }
+  .ticket { --stub-h: 98px }
+  main, .side { gap: 6px }
+  .pa { min-height: 40px; padding: 5px 10px; font-size: 12.5px; line-height: 1.2 }
+  .tag { min-height: 46px }
+}
+/* very short phones: the main button docks to the bottom edge */
+@media (max-width: 699px) and (max-height: 700px) {
+  .actions {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    padding: 18px max(12px, env(safe-area-inset-right, 0px)) calc(8px + env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+    background: linear-gradient(180deg, rgba(244, 233, 210, 0), rgba(244, 233, 210, .94) 34%);
+  }
+  main { padding-bottom: calc(92px + env(safe-area-inset-bottom, 0px)) }
+}
+
+/* Coin cursor */
+.cursor-layer { position: fixed; inset: 0; z-index: 9390; overflow: hidden; pointer-events: none }
+.coin { position: absolute; left: -25px; top: -25px; width: 50px; height: 50px; opacity: 0; transition: opacity .12s; will-change: transform }
+.coin.on { opacity: 1 }
+.coin svg { width: 100%; height: 100%; filter: drop-shadow(2px 4px 2px rgba(29, 42, 68, .35)) }
+
+/* Help dialog */
+.cdialog-body .pt-ico { width: 24px; height: 24px; padding: 2px; vertical-align: -6px; margin-right: 7px; border-radius: 6px; background: var(--paper) }
+.cdialog-body .fine-print { font-size: 13px; opacity: .8 }
+.cdialog-body td.odds { color: var(--ink-soft); font-weight: 500 }
+
+@media (prefers-reduced-motion: reduce) {
+  .blk, .cloud, .bg-jet, .tiles span, .cell::after, .kiss-box::after, .main-btn.ready, .cell.pair .prize, .cell.pair::before, .kiss-box.kissed, .cell.won .prize .pi { animation: none !important }
+  .bg-jet { display: none }
+  .cell.nudge, .cell.tense, .ch-amt.tense, .ticket.punch, .cell.pair.thump, .shock { animation: none !important }
+}
+</style>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true" focusable="false">
+  <defs>
+    <!-- Pan Amour winged heart -->
+    <symbol id="i-logo" viewBox="0 0 64 40">
+      <path d="M17 16C11 10 5 10 0 7c1 6 5 10 11 12-4 1-7 1-9 1 3 4 8 5 13 4-2 2-4 3-6 3 4 3 9 2 13-1z" fill="currentColor"/>
+      <path d="M47 16c6-6 12-6 17-9-1 6-5 10-11 12 4 1 7 1 9 1-3 4-8 5-13 4 2 2 4 3 6 3-4 3-9 2-13-1z" fill="currentColor"/>
+      <path d="M32 36S16 27 16 17c0-6 4-9 8.5-9 3.6 0 6 2.2 7.5 5.2C33.5 10.2 35.9 8 39.5 8 44 8 48 11 48 17c0 10-16 19-16 19z" fill="#f28b74"/>
+      <path d="M21 15c0-3 2-4.5 4.2-4.5" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" opacity=".7"/>
+    </symbol>
+    <!-- top-down jet, nose pointing +x -->
+    <symbol id="i-plane" viewBox="0 0 64 64">
+      <path d="M61 32c0-2-4-3.2-10-3.2H39L25 11h-6l7.5 17.8H13L8 22H4l3 10-3 10h4l5-6.8h13.5L19 53h6l14-17.8h12C57 35.2 61 34 61 32z" fill="currentColor"/>
+    </symbol>
+    <!-- 60s airliner side view -->
+    <symbol id="i-airliner" viewBox="0 0 200 64">
+      <g fill="currentColor">
+        <path d="M30 23L13 2h16l24 21z"/>
+        <path d="M24 31L6 25h13l21 5z"/>
+        <path d="M14 30c0-5 8-8 22-8h132c16 0 28 5 30 9-2 4-13 7-29 7H36c-14 0-22-3-22-8z"/>
+        <path d="M86 34h40l-21 25H91z"/>
+        <rect x="97" y="45" width="27" height="8" rx="4"/>
+      </g>
+      <path d="M40 32h126" stroke="#f28b74" stroke-width="2.6"/>
+      <g fill="#f4e9d2"><circle cx="60" cy="27.5" r="1.8"/><circle cx="69" cy="27.5" r="1.8"/><circle cx="78" cy="27.5" r="1.8"/><circle cx="87" cy="27.5" r="1.8"/><circle cx="96" cy="27.5" r="1.8"/><circle cx="105" cy="27.5" r="1.8"/><circle cx="114" cy="27.5" r="1.8"/><circle cx="123" cy="27.5" r="1.8"/><circle cx="132" cy="27.5" r="1.8"/><circle cx="141" cy="27.5" r="1.8"/><circle cx="150" cy="27.5" r="1.8"/><path d="M179 26c6 0 11 1.5 13.5 4H181z"/></g>
+    </symbol>
+    <symbol id="i-cloud" viewBox="0 0 120 50">
+      <path d="M10 47C1 47 0 33 12 32c0-11 15-16 24-9 4-15 30-18 36-2 8-7 26-3 26 9 13-1 19 17 7 17z" fill="currentColor"/>
+    </symbol>
+    <!-- lipstick kiss print -->
+    <symbol id="i-lips" viewBox="0 0 100 60">
+      <path d="M3 30C13 18 25 6 37 7.5c6 .8 10 4.5 13 8.5 3-4 7-7.7 13-8.5C75 6 87 18 97 30c-15-2.5-30-1-47 1C33 29 18 27.5 3 30z" fill="currentColor"/>
+      <path d="M3 32c16 .5 31 2.6 47 3.4 16-.8 31-2.9 47-3.4-8 15-25 25-47 25S11 47 3 32z" fill="currentColor"/>
+      <g stroke="rgba(255,255,255,.4)" stroke-width="1.6" fill="none" stroke-linecap="round">
+        <path d="M27 41c2 5 4 9 6.5 11.5M42 39.5l1.2 13M58 39.5l-1.2 13M73 41c-2 5-4 9-6.5 11.5M26 17l5 9M74 17l-5 9M40 13l2 11M60 13l-2 11"/>
+      </g>
+    </symbol>
+    <!-- PA speaker -->
+    <symbol id="i-pa" viewBox="0 0 24 24">
+      <path d="M3 9.5h3.5L14 4v16l-7.5-5.5H3z" fill="currentColor"/>
+      <path d="M17 8.5a5 5 0 0 1 0 7M19.5 6a8.5 8.5 0 0 1 0 12" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>
+    </symbol>
+    <!-- lucky coin cursor -->
+    <symbol id="i-coin" viewBox="0 0 64 64">
+      <circle cx="32" cy="35" r="27" fill="#8a5a00"/>
+      <circle cx="32" cy="31" r="27" fill="#f2c14e"/>
+      <circle cx="32" cy="31" r="22" fill="none" stroke="#c48d17" stroke-width="2.6" stroke-dasharray="2.2 3.2"/>
+      <circle cx="32" cy="31" r="17.5" fill="#f8d97a"/>
+      <path d="M23 27c-4-3-8-3-11-5 1 4 4 6 8 7-3 1-5 1-6 1 2 2 5 3 9 2z M41 27c4-3 8-3 11-5-1 4-4 6-8 7 3 1 5 1 6 1-2 2-5 3-9 2z" fill="#c48d17"/>
+      <path d="M32 41s-10-5.6-10-12c0-3.6 2.5-5.6 5.3-5.6 2.3 0 3.8 1.4 4.7 3.3.9-1.9 2.4-3.3 4.7-3.3 2.8 0 5.3 2 5.3 5.6 0 6.4-10 12-10 12z" fill="#d7263d"/>
+      <ellipse cx="21" cy="17" rx="8" ry="3.6" fill="#fff" opacity=".6" transform="rotate(-38 21 17)"/>
+    </symbol>
+    <!-- prize symbols, cheapest first -->
+    <symbol id="i-peanut" viewBox="0 0 64 64">
+      <g transform="rotate(-38 32 32)">
+        <path d="M32 5c-8.5 0-14 6-14 13.5 0 5.5 3.2 8.6 3.2 13.5S18 40 18 45.5C18 53 23.5 59 32 59s14-6 14-13.5c0-5.5-3.2-8.6-3.2-13.5S46 24 46 18.5C46 11 40.5 5 32 5z" fill="#d9a066"/>
+        <path d="M24.5 13c3-5 10-6.5 13-3.5-5 .3-9 3.3-10.4 8.3-1.4-1.4-2.6-3-2.6-4.8z" fill="#f4cf9c"/>
+        <g fill="#a96f38"><circle cx="28" cy="20" r="1.7"/><circle cx="36.5" cy="16" r="1.7"/><circle cx="35.5" cy="24.5" r="1.7"/><circle cx="27" cy="44" r="1.7"/><circle cx="36.5" cy="41" r="1.7"/><circle cx="32" cy="51" r="1.7"/><circle cx="29" cy="33" r="1.5"/></g>
+        <path d="M22.5 32c6 2.2 13 2.2 19 0" stroke="#a96f38" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      </g>
+    </symbol>
+    <symbol id="i-cherry" viewBox="0 0 64 64">
+      <path d="M21 40C25 27 32 16 42 9M44 42c-2-13-2-23-2-33" stroke="#3b6b2f" stroke-width="3.2" fill="none" stroke-linecap="round"/>
+      <path d="M42 9c6-5 14-4.5 19 1-6 4.5-13.5 4.5-19-1z" fill="#5aa04a"/>
+      <circle cx="20" cy="46" r="12" fill="#e8424f"/>
+      <circle cx="44" cy="46" r="12" fill="#c92a3a"/>
+      <ellipse cx="15.5" cy="41" rx="3.6" ry="2.2" fill="#fff" opacity=".7" transform="rotate(-30 15.5 41)"/>
+      <ellipse cx="39.5" cy="41" rx="3.6" ry="2.2" fill="#fff" opacity=".6" transform="rotate(-30 39.5 41)"/>
+    </symbol>
+    <symbol id="i-martini" viewBox="0 0 64 64">
+      <path d="M41 3L28.5 27" stroke="#1d2a44" stroke-width="2.2" stroke-linecap="round"/>
+      <path d="M7 10h50L32 37z" fill="#f2fbf7" stroke="#1d2a44" stroke-width="3.2" stroke-linejoin="round"/>
+      <path d="M13.5 15.5h37L32 33z" fill="#3aa58a"/>
+      <circle cx="33" cy="19" r="5" fill="#8fb339" stroke="#1d2a44" stroke-width="1.6"/>
+      <circle cx="34.3" cy="18.4" r="1.6" fill="#d7263d"/>
+      <path d="M32 37v17" stroke="#1d2a44" stroke-width="3.6" stroke-linecap="round"/>
+      <path d="M20 57h24" stroke="#1d2a44" stroke-width="4.2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-heels" viewBox="0 0 64 64">
+      <path d="M4 50c0-5.5 6-8 14-8 6 0 10-1.5 14-5.5L46 20c3-3.6 7.5-5.4 12-4.6l2 .4-1 8.4c-2.6 1.6-4.4 4.2-5 7.6L52.6 58h-3.4L50 34c-5 3.5-9.5 9-14 14-3 3.4-7 5.4-12 5.4H8c-2.4 0-4-1.4-4-3.4z" fill="#d7263d"/>
+      <path d="M30 38.5L45.5 21c2.6-3 6.2-4.4 10-4.1" stroke="#ff9aa8" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+      <path d="M9 47.6c4-1.4 9-1.6 13-2.4" stroke="#ff9aa8" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+      <path d="M4 50.5c0 2 1.6 3 4 3h16c5 0 9-2 12-5.4" stroke="#1d2a44" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-bubbly" viewBox="0 0 64 64">
+      <g transform="rotate(24 34 38)">
+        <path d="M27 26c0-6 3-8.5 3-14h6c0 5.5 3 8 3 14v30c0 2-1 3-3 3h-6c-2 0-3-1-3-3z" fill="#2e6b4f"/>
+        <path d="M29.6 11.5h6.8v10h-6.8z" fill="#f2c14e"/>
+        <rect x="27" y="35" width="12" height="12" rx="1.6" fill="#fbf5e8"/>
+        <path d="M30 41h6" stroke="#d39a12" stroke-width="2.2" stroke-linecap="round"/>
+        <rect x="30" y="1.5" width="6" height="6.5" rx="1.6" fill="#d9a066"/>
+        <path d="M29 30c0-3 1-5 2-7" stroke="#6fae8f" stroke-width="2" fill="none" stroke-linecap="round"/>
+      </g>
+      <g fill="none" stroke="#d39a12" stroke-width="2.2"><circle cx="13" cy="15" r="3.4"/><circle cx="21" cy="6" r="2.2"/><circle cx="8" cy="27" r="2.4"/></g>
+      <path d="M24 13l-5-4M20 20l-7 1" stroke="#d39a12" stroke-width="2.2" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="i-cap" viewBox="0 0 64 64">
+      <path d="M6 31c0-9 12-15 26-15s26 6 26 15c0 3-2.5 5-6 5H12c-3.5 0-6-2-6-5z" fill="#fbf5e8" stroke="#1d2a44" stroke-width="3"/>
+      <path d="M11 34h42v8c0 2.2-1.8 4-4 4H15c-2.2 0-4-1.8-4-4z" fill="#1d2a44"/>
+      <path d="M12 44c6 9 34 9 40 0z" fill="#0d1424"/>
+      <path d="M17 40h30" stroke="#f2c14e" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M32 25c-3-3-9-4-14-3 4 3 9 5 14 5s10-2 14-5c-5-1-11 0-14 3z" fill="#f2c14e"/>
+      <circle cx="32" cy="26" r="3.6" fill="#d7263d"/>
+    </symbol>
+    <symbol id="i-carry" viewBox="0 0 64 64">
+      <path d="M24 17v-5c0-2 1.2-3.4 3.4-3.4h9.2c2.2 0 3.4 1.4 3.4 3.4v5" stroke="#1d2a44" stroke-width="3.6" fill="none"/>
+      <rect x="6" y="16" width="52" height="38" rx="6.5" fill="#e46a4e"/>
+      <path d="M18 16v38M46 16v38" stroke="#a8432c" stroke-width="4.2"/>
+      <circle cx="31" cy="37" r="7.6" fill="#f3c24f"/>
+      <path d="M31 41.5s-4.5-2.6-4.5-5.6c0-1.6 1.1-2.6 2.4-2.6 1 0 1.7.6 2.1 1.5.4-.9 1.1-1.5 2.1-1.5 1.3 0 2.4 1 2.4 2.6 0 3-4.5 5.6-4.5 5.6z" fill="#d7263d"/>
+      <rect x="36" y="22" width="10" height="7" rx="1.6" fill="#a8c8e6" transform="rotate(14 41 25.5)"/>
+      <rect x="11" y="56" width="6" height="3.4" rx="1.2" fill="#1d2a44"/><rect x="47" y="56" width="6" height="3.4" rx="1.2" fill="#1d2a44"/>
+    </symbol>
+    <symbol id="i-mile" viewBox="0 0 64 64">
+      <g fill="#f28b74">
+        <path d="M9 57s-4.5-2.6-4.5-5.4c0-1.6 1.1-2.6 2.3-2.6 1 0 1.7.6 2.2 1.5.5-.9 1.2-1.5 2.2-1.5 1.2 0 2.3 1 2.3 2.6 0 2.8-4.5 5.4-4.5 5.4z"/>
+        <path d="M18.5 47s-3.4-2-3.4-4.1c0-1.2.8-2 1.8-2 .8 0 1.3.5 1.6 1.1.3-.6.8-1.1 1.6-1.1 1 0 1.8.8 1.8 2 0 2.1-3.4 4.1-3.4 4.1z"/>
+      </g>
+      <path transform="translate(12 -4) rotate(-40 32 32) scale(.82)" d="M61 32c0-2-4-3.2-10-3.2H39L25 11h-6l7.5 17.8H13L8 22H4l3 10-3 10h4l5-6.8h13.5L19 53h6l14-17.8h12C57 35.2 61 34 61 32z" fill="#7b5bd0"/>
+    </symbol>
+  </defs>
+</svg>
+
+<div class="bg" aria-hidden="true">
+  <i class="blk b1"></i><i class="blk b2"></i><i class="blk b3"></i><i class="blk b4"></i><i class="blk b5"></i><i class="blk b6"></i>
+  <i class="cloud cl1"><svg><use href="#i-cloud"/></svg></i>
+  <i class="cloud cl2"><svg><use href="#i-cloud"/></svg></i>
+  <svg class="route" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice">
+    <path id="fp" d="M-60 640C180 330 470 790 740 400S1120 110 1280 170"/>
+  </svg>
+  <svg class="route-plane"><use href="#i-plane"/></svg>
+  <i class="bg-jet"><svg><use href="#i-airliner"/></svg></i>
+  <svg class="bg-lips"><use href="#i-lips"/></svg>
+</div>
+
+<main data-shake>
+  <section class="stage">
+    <div class="printer" id="printer">
+      <div class="pr-face">
+        <div class="pr-brand"><svg><use href="#i-logo"/></svg>Pan Amour Airways <em>· Ticket-O-Matic</em></div>
+        <h1 class="pr-title" aria-label="Scratch Me If You Can">
+          <span class="tiles" aria-hidden="true"></span>
+          <span class="pr-script" aria-hidden="true">if you can</span>
+        </h1>
+        <i class="pr-led" aria-hidden="true"></i>
+        <p class="pr-tag">Too good to be true? Scratch and see.</p>
+      </div>
+      <div class="pr-slot"></div>
+    </div>
+    <div class="feed" id="feed"></div>
+  </section>
+
+  <section class="side" aria-label="Controls">
+    <div class="pa" id="pa" data-tone=""><svg aria-hidden="true"><use href="#i-pa"/></svg><div aria-hidden="true"><b>Captain</b><span id="paText"></span></div></div>
+    <p class="sr" id="live" aria-live="polite"></p>
+    <div class="classes" role="group" aria-label="Ticket class" id="classes"></div>
+    <div class="actions">
+      <button class="cbtn cbtn--big main-btn" id="mainBtn" type="button"><span class="ml" id="mainLabel">Print ticket</span><span class="mp" id="mainPrice"><i class="cchip-icon"></i><b>10</b></span></button>
+      <button class="cbtn cbtn--round help-btn" id="helpBtn" type="button" aria-label="Rules, paytable and odds">?</button>
+    </div>
+    <p class="fine">Parody. Fake chips, no real money.<span class="more"> Pan Amour is not a real airline, thank goodness.</span></p>
+  </section>
+</main>
+
+<div class="cursor-layer" aria-hidden="true"><div class="coin" id="coin"><svg><use href="#i-coin"/></svg></div></div>
+
+<script src="../shared/casino.js"></script>
+<script>
+/* Scratch Me If You Can — game logic.
+   Outcome first, art second: buying a ticket draws {tier, kiss} from the class's prize table with
+   Casino.rng, then a 3x3 grid is dealt to match it exactly (one trio on a winner, never a trio on a
+   loser, with deliberate near-miss pairs that lean towards the big prizes). Scratching only reveals.
+
+   Math (weights per 100,000 tickets; a prize pays price x multiplier, the Lucky Kiss doubles it and
+   shows on 12% of tickets independently of the grid):
+     RTP = (sum of p_i * m_i) * (1 + 0.12)
+     Coach 10:        exact 95.54%  hit 1 in 3.01
+     First Class 50:  exact 95.20%  hit 1 in 2.95
+     Private Jet 200: exact 95.76%  hit 1 in 3.00
+   Monte Carlo (node; the LOGIC block below extracted verbatim and fed crypto randomness built the same
+   way as Casino.rng; 100,000,000 tickets per class through drawOutcome + payout, plus 2,000,000 grids
+   per class through makeGrid checked for exactly one trio on winners and none on losers):
+     Coach 95.61% (+-0.06), First Class 95.20% (+-0.09), Private Jet 95.92% (+-0.13); kiss rate 12.00%;
+     hit rate 1 in 3.01 / 2.96 / 3.00; 0 bad grids. About 73% of losing tickets carry a pair from the
+     top three tiers (deliberate near misses). */
+(() => {
+  'use strict';
+  const { wallet, sfx, fx, rng } = Casino;
+
+  /* LOGIC-START */
+  const TIERS = [
+    { name: 'Peanuts', pl: 'Peanuts', icon: 'i-peanut', tint: '#f6e4c6', tc: '#c9874a' },
+    { name: 'Cherries', pl: 'Cherries', icon: 'i-cherry', tint: '#fbd6d6', tc: '#e8424f' },
+    { name: 'Dirty Martini', pl: 'Dirty Martinis', icon: 'i-martini', tint: '#d3efe5', tc: '#2f9a7f' },
+    { name: 'Red Heels', pl: 'Red Heels', icon: 'i-heels', tint: '#ffdfe4', tc: '#d7263d' },
+    { name: 'Bubbly', pl: 'Bubblies', icon: 'i-bubbly', tint: '#fbecbf', tc: '#d39a12' },
+    { name: "Captain's Hat", pl: "Captain's Hats", icon: 'i-cap', tint: '#d6e4f5', tc: '#2a5d9f' },
+    { name: 'Carry-On', pl: 'Carry-Ons', icon: 'i-carry', tint: '#fde0d4', tc: '#e46a4e' },
+    { name: 'Mile High', pl: 'Mile Highs', icon: 'i-mile', tint: '#e6def7', tc: '#7b5bd0' },
+  ];
+  const KISS_CHANCE = 0.12;
+  const WEIGHT_TOTAL = 100000;
+  const CLASSES = {
+    coach: { key: 'coach', name: 'Coach', price: 10, foil: 'silver', mults: [1, 2, 3, 5, 10, 20, 50, 100], weights: [15000, 9000, 5000, 2600, 1100, 400, 70, 18] },
+    first: { key: 'first', name: 'First Class', price: 50, foil: 'gold', mults: [1, 2, 3, 5, 10, 25, 100, 250], weights: [15500, 9500, 5500, 2200, 800, 280, 50, 12] },
+    jet: { key: 'jet', name: 'Private Jet', price: 200, foil: 'holo', mults: [1, 2, 3, 5, 15, 50, 200, 500], weights: [16000, 9500, 5000, 2000, 600, 160, 25, 7] },
+  };
+  function drawOutcome(cls, R) {
+    let r = R.int(WEIGHT_TOTAL);
+    let tier = -1;
+    for (let i = 0; i < cls.weights.length; i++) {
+      if ((r -= cls.weights[i]) < 0) { tier = i; break; }
+    }
+    return { tier, kiss: R.chance(KISS_CHANCE) };
+  }
+  // Nine cells: a winner holds its tier three times and every other tier at most twice; a loser holds
+  // every tier at most twice. Pairs are the near misses and lean towards the top of the table.
+  function makeGrid(tier, R) {
+    const pool = [];
+    for (let i = 0; i < TIERS.length; i++) if (i !== tier) pool.push(i);
+    const cells = [];
+    let pairs;
+    let slots;
+    if (tier >= 0) {
+      cells.push(tier, tier, tier);
+      pairs = R.weighted([[0, 25], [1, 50], [2, 25]]);
+      slots = 6;
+    } else {
+      pairs = R.weighted([[1, 35], [2, 45], [3, 20]]);
+      slots = 9;
+    }
+    for (let p = 0; p < pairs; p++) {
+      const t = R.weighted(pool.map((i) => [i, i + 3]));
+      pool.splice(pool.indexOf(t), 1);
+      cells.push(t, t);
+    }
+    R.shuffle(pool);
+    for (let s = 0; s < slots - pairs * 2; s++) cells.push(pool[s]);
+    return R.shuffle(cells);
+  }
+  function payout(cls, t) {
+    return t.tier < 0 ? 0 : cls.price * cls.mults[t.tier] * (t.kiss ? 2 : 1);
+  }
+  /* LOGIC-END */
+
+  const MEASURED_RTP = { coach: '95.61%', first: '95.20%', jet: '95.92%' };
+  const EXACT_RTP = {};
+  for (const C of Object.values(CLASSES)) {
+    let e = 0;
+    C.weights.forEach((w, i) => { e += (w / WEIGHT_TOTAL) * C.mults[i]; });
+    EXACT_RTP[C.key] = `${(e * (1 + KISS_CHANCE) * 100).toFixed(2)}%`;
+  }
+
+  Casino.init({ id: 'scratch-me-if-you-can', title: 'Scratch Me If You Can', minBet: 10 });
+
+  /* ---------- helpers ---------- */
+  const $ = (s, r = document) => r.querySelector(s);
+  const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  const fmt = Casino.fmt;
+  // Debug hashes (#force=<tier|lose>&kiss=0|1, #fast, #stage=thumb) only work on a local copy (file:// or
+  // localhost), so the public page can't be used to print winning tickets into the shared wallet.
+  const DEBUG = location.protocol === 'file:' || /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  const hashOpts = () => new URLSearchParams(DEBUG ? location.hash.slice(1) : '');
+  const SPEED = hashOpts().has('fast') ? 0.3 : 1;
+  const sleep = (ms) => Casino.sleep(ms * SPEED);
+  const rm = () => fx.reducedMotion;
+  const DPR = () => Math.min(2, window.devicePixelRatio || 1);
+  const lastPicked = new Map();
+  function pick(list) {
+    let i = rng.int(list.length);
+    if (list.length > 1 && i === lastPicked.get(list)) i = (i + 1) % list.length;
+    lastPicked.set(list, i);
+    return list[i];
+  }
+  const race = (p, ms) => Promise.race([p, Casino.sleep(ms)]);
+  // floating text, nudged inwards so long lines never hang off a phone's edge
+  function say(at, text, o = {}) {
+    const p = fx.point(at);
+    const half = Math.min(innerWidth / 2 - 8, text.length * (o.size || 28) * 0.27);
+    return fx.floatText({ x: clamp(p.x, half + 8, innerWidth - half - 8), y: p.y }, text, o);
+  }
+  // Haptics only after the visitor has interacted (browsers refuse and log otherwise).
+  const buzz = (pattern) => {
+    const ua = navigator.userActivation;
+    if (!ua || ua.hasBeenActive) fx.vibrate(pattern);
+  };
+
+  /* ---------- copy ---------- */
+  const WIN_QUIPS = [
+    'Cleared for takeoff, you smooth operator.',
+    'Upgrade! Your seat now reclines all the way.',
+    "The captain has switched on the 'you're hot' sign.",
+    'Pay to the order of YOU. Signed, sealed, delivered.',
+    'Smooth landing, hotshot. Applause optional.',
+    'First-class treatment. Hot towel, darling?',
+    "Fasten your seatbelt, it's getting steamy in here.",
+    'Too good to be true? Apparently not.',
+    "Forged? Darling, that's creative accounting.",
+    'Tray tables up. Balance up.',
+    'Cashed before anyone checked the signature.',
+    'Welcome to the club, frequent flyer.',
+  ];
+  const LOSE_QUIPS = [
+    'Bounced. Like your last pickup line.',
+    'Grounded. Try another flight, flyboy.',
+    'Nothing in your carry-on but peanuts.',
+    'Turbulence. Buckle up and go again.',
+    'No match, no kiss, no free champagne.',
+    'Too good to be true? This time, yes.',
+    'Delayed, darling. Not cancelled.',
+    'That cheque bounced higher than a 60s bouffant.',
+    'Lost luggage. Found nothing.',
+    'Close, but no cigar. And no champagne.',
+    'Even master forgers have off days.',
+    'The captain regrets to inform you: nope.',
+  ];
+  const PRINT_QUIPS = [
+    'Ding-dong! Scratch at your leisure.',
+    'Please keep your hands on the foil at all times.',
+    'This is your captain speaking: get scratching.',
+    'Ding-dong! Prepare for a smooth ride.',
+    "Your ticket, darling. Handle with care. Or don't.",
+    'Ding-dong! Foil up, inhibitions down.',
+  ];
+  const KISS_DUDS = [
+    ['Air kiss.', 'Worth nothing.'],
+    ['Just a handshake.', 'How formal.'],
+    ['Not on the first flight.', 'Try again.'],
+    ['Kiss? We just met.', 'Maybe next ticket.'],
+    ['Saving it for later.', 'What a tease.'],
+  ];
+
+  /* ---------- sounds ---------- */
+  const SEMI = (n) => 523.25 * 2 ** (n / 12);
+  const PENTA = [0, 2, 4, 7, 9];
+  function ding(step, vol = 0.13) {
+    const n = PENTA[((step % 5) + 5) % 5] + 12 * Math.floor(step / 5);
+    const f = SEMI(n) * (1 + (Math.random() - 0.5) * 0.014);
+    sfx.tone({ freq: f, type: 'triangle', dur: 0.4, vol });
+    sfx.tone({ freq: f * 2, dur: 0.26, vol: vol * 0.35, delay: 0.012 });
+    sfx.tone({ freq: f * 3, dur: 0.12, vol: vol * 0.1 });
+  }
+  function dingDong() {
+    sfx.tone({ freq: 659.25, dur: 0.95, vol: 0.15, attack: 0.01 });
+    sfx.tone({ freq: 1318.5, dur: 0.5, vol: 0.025 });
+    sfx.tone({ freq: 523.25, dur: 1.3, vol: 0.15, attack: 0.01, delay: 0.42 });
+    sfx.tone({ freq: 1046.5, dur: 0.6, vol: 0.025, delay: 0.42 });
+  }
+  function feedBrrt(p = 1) {
+    sfx.noise({ type: 'bandpass', freq: 650 * p + Math.random() * 160, q: 3, dur: 0.15, vol: 0.13 });
+    sfx.tone({ freq: 86 * p, type: 'square', dur: 0.13, vol: 0.035, filter: { type: 'lowpass', freq: 380 } });
+  }
+  function rip() {
+    sfx.noise({ type: 'bandpass', freq: 2000, to: 5600, q: 0.8, dur: 0.2, vol: 0.2 });
+    sfx.whoosh(0.32, 0.1);
+  }
+  function foilPop(p = 1) {
+    sfx.noise({ type: 'highpass', freq: 3800 * p, dur: 0.09, vol: 0.14 });
+    sfx.tone({ freq: 420 * p, to: 900 * p, type: 'triangle', dur: 0.06, vol: 0.06 });
+  }
+  function stab(rootSemi = 0) {
+    [0, 4, 7, 12].forEach((n, i) => {
+      sfx.tone({ freq: SEMI(n + rootSemi - 5), type: 'sawtooth', dur: 0.5, vol: 0.05, filter: { type: 'lowpass', freq: 2600, to: 900 } });
+      sfx.tone({ freq: SEMI(n + rootSemi + 7), type: 'triangle', dur: 0.4, vol: 0.05, delay: 0.01 * i });
+    });
+    sfx.noise({ type: 'highpass', freq: 5200, dur: 0.6, vol: 0.08, attack: 0.002 });
+    sfx.thud(1.05);
+  }
+  function stampThunk() {
+    sfx.thud(0.78);
+    sfx.noise({ type: 'lowpass', freq: 520, dur: 0.11, vol: 0.34 });
+    sfx.tone({ freq: 1900, type: 'square', dur: 0.02, vol: 0.035, delay: 0.012 });
+  }
+  function wahWah() {
+    sfx.tone({ freq: 233, type: 'sawtooth', dur: 0.24, vol: 0.075, delay: 0.18, filter: { type: 'lowpass', freq: 1000 } });
+    sfx.tone({ freq: 207, to: 188, type: 'sawtooth', dur: 0.62, vol: 0.075, delay: 0.44, filter: { type: 'lowpass', freq: 900, to: 420 } });
+  }
+  function dudKiss() {
+    sfx.tone({ freq: 320, to: 130, type: 'triangle', dur: 0.24, vol: 0.09 });
+    sfx.noise({ type: 'lowpass', freq: 900, dur: 0.12, vol: 0.08 });
+  }
+
+  // Continuous scratch: looping grainy noise through a band-pass; its gain follows scratch speed.
+  // The loop is torn down 1.5 s after the coin stops, so nothing keeps running while idle.
+  const scr = { g: null, bp: null, src: null, level: 0, lastHit: 0, idle: 0, grit: 0, beat: 0 };
+  const TIMBRE = { silver: [1700, 2800], gold: [1250, 2300], holo: [2100, 3300] };
+  function stopScratch() {
+    if (!scr.src || scr.level > 0) return;
+    try { scr.src.stop(); } catch { /* already stopped */ }
+    scr.src.disconnect();
+    scr.g.disconnect();
+    scr.src = scr.g = scr.bp = null;
+  }
+  function ensureScratch() {
+    if (scr.g) return true;
+    const c = sfx.ctx();
+    if (!c || !sfx.out) return false;
+    const buf = c.createBuffer(1, c.sampleRate, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * (Math.random() < 0.07 ? 1 : 0.32);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const hp = c.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.value = 850;
+    scr.bp = c.createBiquadFilter();
+    scr.bp.type = 'bandpass';
+    scr.bp.frequency.value = 2600;
+    scr.bp.Q.value = 0.75;
+    scr.g = c.createGain();
+    scr.g.gain.value = 0;
+    src.connect(hp).connect(scr.bp).connect(scr.g).connect(sfx.out);
+    src.start();
+    scr.src = src;
+    return true;
+  }
+  function setScratch(level) {
+    level = clamp(level, 0, 1);
+    if (Math.abs(level - scr.level) < 0.02 && level !== 0) return;
+    const rising = level > scr.level;
+    scr.level = level;
+    clearTimeout(scr.idle);
+    if (level === 0) {
+      if (!scr.g) return;
+      scr.idle = setTimeout(stopScratch, 1500);
+    }
+    if (!ensureScratch()) return;
+    const c = sfx.ctx();
+    if (!c) return;
+    const t = c.currentTime;
+    const [f0, f1] = TIMBRE[(S.view && S.view.foilKind) || 'silver'];
+    scr.g.gain.setTargetAtTime(level * 0.42, t, rising ? 0.012 : 0.05);
+    scr.bp.frequency.setTargetAtTime(f0 + level * f1 + Math.random() * 500, t, 0.03);
+  }
+  // tiny metallic crackles riding on the loop, so fast strokes feel gritty
+  function grit(now, speed) {
+    if (now - scr.grit < 45 || Math.random() > 0.3 + speed * 0.5) return;
+    scr.grit = now;
+    sfx.noise({ type: 'highpass', freq: 4600 + Math.random() * 3800, dur: 0.016 + Math.random() * 0.012, vol: 0.035 + speed * 0.05 });
+  }
+
+  /* ---------- particles ---------- */
+  const FOILS = {
+    silver: { stops: ['#8e969e', '#e8ecf0', '#a9b1b9', '#f8fafb', '#99a1a9', '#dadfe4'], flakes: ['#c9ced4', '#eef1f4', '#9aa2aa', '#ffffff', '#b7bec6'] },
+    gold: { stops: ['#a5741c', '#f6dc8a', '#c69632', '#fff1c0', '#b18122', '#e6bf5b'], flakes: ['#e8c15e', '#fff2c4', '#b48424', '#f7df8f', '#d6a640'] },
+    holo: { stops: ['#d493b2', '#f8deea', '#b5a3e8', '#d4f2e6', '#f4d899', '#e3b0cc'], flakes: ['#f9e1ec', '#b9a8ea', '#d8f4ea', '#f6dca2', '#e3b0cc'] },
+  };
+  fx.registerParticle('flake', (g, p) => {
+    const s = p.size;
+    const c = Math.cos(p.phase);
+    g.save();
+    g.translate(p.x, p.y);
+    g.rotate(p.rot);
+    g.scale(1, Math.max(0.15, Math.abs(c)));
+    g.fillStyle = p.color;
+    g.beginPath();
+    g.moveTo(-s, -s * 0.5);
+    g.lineTo(s * 0.7, -s * 0.85);
+    g.lineTo(s, s * 0.4);
+    g.lineTo(-s * 0.4, s * 0.8);
+    g.closePath();
+    g.fill();
+    if (c > 0.72) {
+      g.fillStyle = 'rgba(255,255,255,.85)';
+      g.fill();
+    }
+    g.restore();
+  }, { size: [1.8, 4.4], speed: [40, 240], gravity: 1300, drag: 2.4, life: [0.6, 1.25], spin: [8, 20], colors: FOILS.silver.flakes });
+  fx.registerParticle('ink', (g, p) => {
+    g.fillStyle = p.color;
+    g.beginPath();
+    g.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+    g.fill();
+  }, { size: [1.4, 4], speed: [160, 520], gravity: 900, drag: 3, life: [0.35, 0.75], colors: ['#d7263d', '#b01a30'] });
+
+  /* ---------- foil textures ---------- */
+  const texCache = new Map();
+  function tintOf(mask, color) {
+    const c = document.createElement('canvas');
+    c.width = mask.width;
+    c.height = mask.height;
+    const g = c.getContext('2d');
+    g.drawImage(mask, 0, 0);
+    g.globalCompositeOperation = 'source-in';
+    g.fillStyle = color;
+    g.fillRect(0, 0, c.width, c.height);
+    return c;
+  }
+  function emboss(g, base, mask, off, hi, lo, faceShade) {
+    g.drawImage(tintOf(mask, `rgba(0,0,0,${lo})`), off, off);
+    g.drawImage(tintOf(mask, `rgba(255,255,255,${hi})`), -off, -off);
+    const face = document.createElement('canvas');
+    face.width = mask.width;
+    face.height = mask.height;
+    const fg = face.getContext('2d');
+    fg.drawImage(base, 0, 0);
+    fg.globalCompositeOperation = 'destination-in';
+    fg.drawImage(mask, 0, 0);
+    g.drawImage(face, 0, 0);
+    if (faceShade) g.drawImage(tintOf(mask, faceShade), 0, 0);
+  }
+  function heart(g, x, y, s) {
+    g.moveTo(x, y + s);
+    g.bezierCurveTo(x - s * 1.6, y - s * 0.1, x - s * 0.6, y - s * 1.25, x, y - s * 0.45);
+    g.bezierCurveTo(x + s * 0.6, y - s * 1.25, x + s * 1.6, y - s * 0.1, x, y + s);
+  }
+  let fontsReady = false;
+  function foilTexture(kind, w, h, dpr, lines) {
+    const key = `${kind}|${w}|${h}|${dpr}|${lines.join('/')}|${fontsReady}`;
+    if (texCache.has(key)) return texCache.get(key);
+    if (texCache.size > 24) texCache.clear();
+    const F = FOILS[kind];
+    const W = Math.max(1, Math.round(w * dpr));
+    const H = Math.max(1, Math.round(h * dpr));
+    const mk = () => {
+      const c = document.createElement('canvas');
+      c.width = W;
+      c.height = H;
+      const g = c.getContext('2d');
+      g.scale(dpr, dpr);
+      return [c, g];
+    };
+    const [c, g] = mk();
+    const lg = g.createLinearGradient(0, 0, w, h);
+    F.stops.forEach((s, i) => lg.addColorStop(i / (F.stops.length - 1), s));
+    g.fillStyle = lg;
+    g.fillRect(0, 0, w, h);
+    // brushed-metal streaks
+    for (let y = 0; y < h; y += 1.4) {
+      g.fillStyle = Math.random() < 0.5 ? `rgba(255,255,255,${0.05 + Math.random() * 0.14})` : `rgba(0,0,0,${0.02 + Math.random() * 0.05})`;
+      g.fillRect(0, y, w, 0.7);
+    }
+    const base = document.createElement('canvas');
+    base.width = W;
+    base.height = H;
+    base.getContext('2d').drawImage(c, 0, 0);
+    // embossed lattice of tiny hearts
+    const [m, mg] = mk();
+    mg.fillStyle = '#000';
+    mg.beginPath();
+    let row = 0;
+    for (let y = 7; y < h + 8; y += 13, row++) {
+      for (let x = (row % 2 ? 4 : 11); x < w + 8; x += 15) heart(mg, x, y, 2.6);
+    }
+    mg.fill();
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    emboss(g, base, m, Math.max(1, dpr * 0.8), 0.55, 0.22);
+    g.restore();
+    // embossed lettering
+    const [t, tg] = mk();
+    const fam = fontsReady ? 'Bungee, "Arial Black", Impact, sans-serif' : '"Arial Black", Impact, sans-serif';
+    tg.translate(w / 2, h / 2);
+    tg.rotate(-0.07);
+    tg.textAlign = 'center';
+    tg.textBaseline = 'middle';
+    tg.fillStyle = '#000';
+    const sizes = lines.map((ln, i) => {
+      tg.font = `400 100px ${fam}`;
+      const wid = tg.measureText(ln).width || 1;
+      const max = i === lines.length - 1 && lines.length > 1 ? 0.62 : 0.84;
+      return Math.min((w * max * 100) / wid, h * (lines.length > 1 ? 0.3 : 0.42));
+    });
+    const lh = sizes.reduce((a, b) => a + b * 1.02, 0);
+    let yy = -lh / 2;
+    lines.forEach((ln, i) => {
+      tg.font = `400 ${sizes[i]}px ${fam}`;
+      tg.fillText(ln, 0, yy + sizes[i] * 0.53);
+      yy += sizes[i] * 1.02;
+    });
+    g.save();
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    emboss(g, base, t, Math.max(1.2, dpr * 1.1), 0.8, 0.34, 'rgba(0,0,0,.07)');
+    g.restore();
+    // sparkle and edge
+    for (let i = 0; i < (w * h) / 260; i++) {
+      g.fillStyle = `rgba(255,255,255,${0.4 + Math.random() * 0.5})`;
+      g.fillRect(Math.random() * w, Math.random() * h, 1, 1);
+    }
+    g.strokeStyle = 'rgba(255,255,255,.55)';
+    g.lineWidth = 1;
+    g.strokeRect(1.5, 1.5, w - 3, h - 3);
+    g.strokeStyle = 'rgba(0,0,0,.18)';
+    g.strokeRect(0.5, 0.5, w - 1, h - 1);
+    texCache.set(key, c);
+    return c;
+  }
+  // Soft brush sprites with a ragged rim, erased with destination-out.
+  const BRUSHES = [0, 1, 2].map(() => {
+    const s = 64;
+    const c = document.createElement('canvas');
+    c.width = c.height = s;
+    const g = c.getContext('2d');
+    const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+    gr.addColorStop(0, 'rgba(0,0,0,1)');
+    gr.addColorStop(0.55, 'rgba(0,0,0,.96)');
+    gr.addColorStop(0.82, 'rgba(0,0,0,.42)');
+    gr.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = gr;
+    g.fillRect(0, 0, s, s);
+    g.globalCompositeOperation = 'destination-out';
+    for (let i = 0; i < 70; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 20 + Math.random() * 12;
+      g.fillStyle = `rgba(0,0,0,${0.3 + Math.random() * 0.6})`;
+      g.beginPath();
+      g.arc(32 + Math.cos(a) * r, 32 + Math.sin(a) * r, 1 + Math.random() * 2.6, 0, Math.PI * 2);
+      g.fill();
+    }
+    return c;
+  });
+  function brushStamp(g, x, y, r, rot) {
+    g.save();
+    g.translate(x, y);
+    g.rotate(rot);
+    g.drawImage(BRUSHES[Math.floor(rot * 7) % 3], -r, -r, r * 2, r * 2);
+    g.restore();
+  }
+
+  /* ---------- state ---------- */
+  const S = {
+    cls: 'coach',
+    phase: 'boot', // boot | idle | printing | play | auto | settling | done
+    t: null, // paid ticket data
+    view: null, // DOM + scratch state of the ticket on screen
+    won: false,
+    doubled: false,
+    settling: false,
+    chain: Promise.resolve(),
+    streak: 0,
+    hitstop: false,
+    rush: false, // second press during Reveal all: same animation, triple speed
+    lastPress: -1e9,
+    pairTier: -1, // the visible pair while no trio is out (drives the scratch tension)
+    lastTouch: 0,
+  };
+  const feed = $('#feed');
+  const printer = $('#printer');
+  const mainBtn = $('#mainBtn');
+  const mainLabel = $('#mainLabel');
+  const mainPrice = $('#mainPrice');
+  const pa = $('#pa');
+  const paText = $('#paText');
+  const live = $('#live');
+  const coinEl = $('#coin');
+
+  /* ---------- persistence: a paid ticket survives reloads and pays exactly once ---------- */
+  const TKEY = 'bmc.smiyc.tickets.v1';
+  const storageOK = (() => {
+    try {
+      localStorage.setItem('bmc.smiyc.probe', '1');
+      localStorage.removeItem('bmc.smiyc.probe');
+      return true;
+    } catch { return false; }
+  })();
+  function readTickets() {
+    try {
+      const v = JSON.parse(localStorage.getItem(TKEY) || '{}');
+      return v && typeof v === 'object' && !Array.isArray(v) ? v : {};
+    } catch { return {}; }
+  }
+  function writeTickets(m) {
+    try { localStorage.setItem(TKEY, JSON.stringify(m)); return true; } catch { return false; }
+  }
+  const pack = (t) => ({ id: t.id, cls: t.cls, tier: t.tier, kiss: t.kiss, grid: t.grid, rev: t.rev, kissRev: t.kissRev, ts: t.ts, cov: t.cov });
+  // Half-scratched panels survive a reload as a 12x9 coverage bitmap per foil (27 hex digits).
+  function covPack(f) {
+    let out = '';
+    for (let i = 0; i < f.cov.length; i += 4) out += (f.cov[i] | (f.cov[i + 1] << 1) | (f.cov[i + 2] << 2) | (f.cov[i + 3] << 3)).toString(16);
+    return out;
+  }
+  function covUnpack(f, str) {
+    if (typeof str !== 'string' || str.length !== (CC * CR) / 4 || f.revealed) return;
+    for (let i = 0; i < str.length; i++) {
+      const nib = parseInt(str[i], 16) || 0;
+      for (let b = 0; b < 4; b++) {
+        const k = i * 4 + b;
+        if (!((nib >> b) & 1) || f.cov[k]) continue;
+        f.cov[k] = 1;
+        f.covered++;
+        f.stamps.push(((k % CC) + 0.5) / CC, (Math.floor(k / CC) + 0.5) / CR, 0.85 / CC, Math.random() * 6.28);
+      }
+    }
+  }
+  function keepScratches() {
+    const t = S.t;
+    const v = S.view;
+    if (!t || !v || v.specimen || t.claimed || !t.saved) return;
+    t.cov = v.foils.map((f) => (f.revealed || !f.covered ? '' : covPack(f)));
+    saveProgress(t);
+  }
+  function addTicket(t) {
+    if (!storageOK) return;
+    const m = readTickets();
+    m[t.id] = pack(t);
+    const ids = Object.keys(m).sort((a, b) => (m[b].ts || 0) - (m[a].ts || 0));
+    for (const id of ids.slice(6)) delete m[id];
+    t.saved = writeTickets(m) && !!readTickets()[t.id];
+  }
+  function saveProgress(t) {
+    if (!t.saved || t.claimed) return;
+    const m = readTickets();
+    if (!m[t.id]) return; // settled in another tab
+    m[t.id] = pack(t);
+    writeTickets(m);
+  }
+  function claimTicket(t) {
+    if (t.claimed) return false;
+    t.claimed = true;
+    if (!t.saved) return true;
+    const m = readTickets();
+    if (!m[t.id]) return false;
+    delete m[t.id];
+    writeTickets(m);
+    return true;
+  }
+  function validTicket(t) {
+    if (!t || typeof t.id !== 'string' || !CLASSES[t.cls] || !Array.isArray(t.grid) || t.grid.length !== 9 || !Array.isArray(t.rev) || t.rev.length !== 9) return false;
+    if (!t.grid.every((x) => Number.isInteger(x) && x >= 0 && x < TIERS.length)) return false;
+    const n = Array(TIERS.length).fill(0);
+    t.grid.forEach((x) => n[x]++);
+    if (t.tier === -1) return n.every((c) => c <= 2);
+    return Number.isInteger(t.tier) && t.tier >= 0 && t.tier < TIERS.length && n[t.tier] === 3 && n.every((c, i) => i === t.tier || c <= 2);
+  }
+  function restorable() {
+    if (!storageOK) return null;
+    const list = Object.values(readTickets()).filter(validTicket).sort((a, b) => (b.ts || 0) - (a.ts || 0));
+    if (!list.length) return null;
+    const t = list[0];
+    const cov = Array.isArray(t.cov) && t.cov.length === 10 ? t.cov.map((c) => (typeof c === 'string' ? c : '')) : null;
+    return { ...t, rev: t.rev.map(Boolean), kiss: !!t.kiss, kissRev: !!t.kissRev, cov, saved: true, claimed: false };
+  }
+
+  /* ---------- the little plane on the dotted route ----------
+     A composited Web Animation sampled from the path (re-sampled on resize), instead of SMIL
+     animateMotion, which forced a layout on every frame while the page sat idle. */
+  (() => {
+    const path = document.getElementById('fp');
+    const plane = document.querySelector('.route-plane');
+    if (!path || !plane || !plane.animate || !path.getScreenCTM) return;
+    let anim = null;
+    let queued = 0;
+    function fly() {
+      queued = 0;
+      const m = path.getScreenCTM();
+      if (!m || !innerWidth) return;
+      const L = path.getTotalLength();
+      const k = Math.max(innerWidth / 1200, innerHeight / 800);
+      const frames = [];
+      let prev = null;
+      for (let i = 0; i <= 60; i++) {
+        const d = (L * i) / 60;
+        const p = path.getPointAtLength(d).matrixTransform(m);
+        const q = path.getPointAtLength(Math.min(L, d + 3)).matrixTransform(m);
+        let ang = i === 60 && prev !== null ? prev : (Math.atan2(q.y - p.y, q.x - p.x) * 180) / Math.PI;
+        if (prev !== null) {
+          while (ang - prev > 180) ang -= 360;
+          while (ang - prev < -180) ang += 360;
+        }
+        prev = ang;
+        frames.push({ transform: `translate(${p.x.toFixed(1)}px, ${p.y.toFixed(1)}px) rotate(${ang.toFixed(1)}deg) scale(${k.toFixed(3)})` });
+      }
+      const at = anim ? anim.currentTime : 0;
+      if (anim) anim.cancel();
+      plane.style.opacity = '1';
+      anim = plane.animate(frames, { duration: 19000, iterations: Infinity });
+      anim.currentTime = at || 0;
+    }
+    if (rm()) return; // reduced motion: no plane
+    fly();
+    addEventListener('resize', () => {
+      clearTimeout(queued);
+      queued = setTimeout(fly, 200);
+    });
+  })();
+
+  /* ---------- the title tiles ---------- */
+  (() => {
+    const box = $('.tiles');
+    const colors = ['var(--p-coral)', 'var(--p-mustard)', 'var(--p-mint)', 'var(--p-blue)', 'var(--p-pink)', 'var(--p-lilac)'];
+    [...'SCRATCH ME'].forEach((ch, i) => {
+      const s = document.createElement('span');
+      if (ch === ' ') s.className = 'sp';
+      else s.textContent = ch;
+      s.style.setProperty('--c', colors[i % colors.length]);
+      s.style.setProperty('--r', `${[-4, 3, -2, 5, -3, 2, -5, 0, 4, -3][i]}deg`);
+      s.style.setProperty('--i', i);
+      box.appendChild(s);
+    });
+  })();
+
+  /* ---------- class tags ---------- */
+  const classBox = $('#classes');
+  const tags = {};
+  for (const C of Object.values(CLASSES)) {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'tag';
+    b.dataset.cls = C.key;
+    const words = C.name.split(' ');
+    const label = words.length > 1 ? (C.key === 'jet' ? `<span class="lg">${words[0]} </span>${words[1]}` : `${words[0]}<span class="lg"> ${words[1]}</span>`) : C.name;
+    b.innerHTML = `<b>${label}</b><span class="tp"><i class="cchip-icon"></i>${fmt(C.price)}</span><small>Top prize ${fmt(C.price * C.mults[7] * 2)}</small>`;
+    b.setAttribute('aria-label', `${C.name}, ${C.price} chips a ticket`);
+    b.addEventListener('click', () => selectClass(C.key, true));
+    classBox.appendChild(b);
+    tags[C.key] = b;
+  }
+  function selectClass(key, user) {
+    if (!CLASSES[key]) return;
+    if (S.phase !== 'idle' && S.phase !== 'done' && S.phase !== 'boot') return;
+    const changed = key !== S.cls;
+    S.cls = key;
+    if (user) {
+      sfx.chip(key === 'coach' ? 1 : key === 'first' ? 1.15 : 1.32);
+      fx.anim(tags[key], 'c-jelly');
+      buzz(8);
+    }
+    if (changed && S.phase === 'idle' && S.view && S.view.specimen) {
+      const old = S.view;
+      const v = buildTicket(key, null);
+      feed.appendChild(v.root);
+      armView(v);
+      S.view = v;
+      disposeView(old);
+      old.root.remove();
+      fx.anim(v.root, 'c-pop');
+      if (user) sfx.flip();
+    }
+    updateUI();
+  }
+
+  /* ---------- the ticket ---------- */
+  const CC = 12;
+  const CR = 9;
+  function ticketHTML(C, t) {
+    const cells = Array.from({ length: 9 }, (_, i) => {
+      const tier = t ? t.grid[i] : -1;
+      const T = TIERS[tier];
+      const style = T ? ` style="--tint:${T.tint};--tc:${T.tc};--i:${i}"` : ` style="--i:${i}"`;
+      const prize = T ? `<div class="prize"><i class="pi"><svg><use href="#${T.icon}"/></svg></i><b>${fmt(C.price * C.mults[tier])}</b></div>` : '<div class="prize"></div>';
+      return `<div class="cell" data-i="${i}" role="img" aria-label="Unscratched panel"${style}>${prize}<canvas class="foil"></canvas></div>`;
+    }).join('');
+    let kissUnder = '';
+    if (t && t.kiss) kissUnder = '<svg><use href="#i-lips"/></svg><b>&times;2 Kiss!</b>';
+    else if (t) {
+      const d = pick(KISS_DUDS);
+      kissUnder = `<svg class="ghost"><use href="#i-lips"/></svg><span class="dud">${d[0]}<small>${d[1]}</small></span>`;
+    }
+    const legend = TIERS.map((T, i) => i).reverse().map((i) => {
+      const T = TIERS[i];
+      return `<li data-t="${i}" style="--tc:${T.tc}"><svg><use href="#${T.icon}"/></svg><span>${T.name}</span><b>${fmt(C.price * C.mults[i])}</b></li>`;
+    }).join('');
+    return `<article class="ticket">
+      <div class="t-main">
+        <header class="t-head">
+          <div class="t-brand"><svg><use href="#i-logo"/></svg><div><b>Pan Amour</b><small>Airways · We go all the way</small></div></div>
+          <div class="t-pass"><small>Boarding pass</small><b>${C.name}</b></div>
+        </header>
+        <div class="t-info"><span><i>Flight</i>PA-XXX</span><span><i>From</i>Here</span><span><i>To</i>Cloud 9</span><span><i>Seat</i>2B</span><span class="opt"><i>Gate</i>7½</span><span class="opt"><i>Passenger</i>You, allegedly</span></div>
+        <div class="t-grid">${cells}<svg class="t-route" aria-hidden="true"></svg><div class="t-matched" aria-hidden="true">Matched!</div></div>
+        <div class="t-cheque">
+          <div class="ch-row"><span class="ch-label">Pay to the<br>order of</span><span class="ch-payee">YOU <small>(allegedly)</small></span><span class="ch-amt"><svg class="ch-x2" aria-hidden="true"><use href="#i-lips"/></svg><b>—</b><i>chips</i></span></div>
+          <div class="ch-row ch-small"><span>Memo: totally legit, darling</span><svg class="ch-sig" viewBox="0 0 96 20" aria-hidden="true"><path d="M2 15C7 2 12 1 11 11c-1 8 8-9 13-2 4 6 7-5 12-2 5 4 8-4 14 0 5 3 9-3 16-1s12 4 26-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></div>
+          <div class="stamp" aria-hidden="true"><b>Cashed</b><small>Bank of Love</small></div>
+        </div>
+      </div>
+      <aside class="t-stub">
+        <div class="kiss-wrap"><div class="kiss-cap">Lucky Kiss <b>&times;2<span> any win</span></b></div><div class="kiss-box"><div class="kiss-under">${kissUnder}</div><canvas class="foil"></canvas></div></div>
+        <ol class="legend" aria-label="Prizes for three of a kind">${legend}</ol>
+        <p class="t-rules">Match 3 amounts to win that amount. One winner per ticket. A lipstick kiss doubles it.</p>
+        <div class="t-bar" aria-hidden="true"><i></i><span><b>Boarding: whenever</b><b>Zone: danger</b></span></div>
+      </aside>
+      ${t ? '' : '<div class="t-specimen"><span>Specimen<small>Not valid for travel</small></span></div>'}
+    </article>`;
+  }
+  function buildTicket(clsKey, t) {
+    const C = CLASSES[clsKey];
+    const root = document.createElement('div');
+    root.className = 'tk';
+    root.dataset.cls = clsKey;
+    root.innerHTML = ticketHTML(C, t);
+    const v = {
+      root,
+      cls: clsKey,
+      foilKind: C.foil,
+      specimen: !t,
+      ticket: $('.ticket', root),
+      grid: $('.t-grid', root),
+      route: $('.t-route', root),
+      matched: $('.t-matched', root),
+      amtBox: $('.ch-amt', root),
+      amt: $('.ch-amt b', root),
+      stamp: $('.stamp', root),
+      legend: {},
+      cells: [],
+      foils: [],
+      brushR: 18,
+      rectsDirty: true,
+      winCells: null,
+      ro: null,
+    };
+    root.querySelectorAll('.legend li').forEach((li) => { v.legend[li.dataset.t] = li; });
+    const mkFoil = (el, kind, i, lines) => ({
+      kind, i, el, lines,
+      canvas: $('canvas', el),
+      ctx: $('canvas', el).getContext('2d'),
+      stamps: [],
+      cov: new Uint8Array(CC * CR),
+      covered: 0,
+      revealed: false,
+      w: 0,
+      h: 0,
+      rect: null,
+    });
+    root.querySelectorAll('.cell').forEach((el, i) => {
+      const f = mkFoil(el, 'cell', i, ['SCRATCH', 'ME']);
+      v.cells.push(f);
+      v.foils.push(f);
+    });
+    v.kiss = mkFoil($('.kiss-box', root), 'kiss', 9, ['LUCKY', 'KISS?']);
+    v.foils.push(v.kiss);
+    return v;
+  }
+  function paintFoil(v, f) {
+    if (f.revealed) return;
+    const w = f.el.clientWidth;
+    const h = f.el.clientHeight;
+    if (!w || !h) return;
+    const dpr = DPR();
+    f.w = w;
+    f.h = h;
+    f.canvas.width = Math.round(w * dpr);
+    f.canvas.height = Math.round(h * dpr);
+    const g = f.ctx;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.globalCompositeOperation = 'source-over';
+    g.drawImage(foilTexture(v.foilKind, w, h, dpr, f.lines), 0, 0);
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.globalCompositeOperation = 'destination-out';
+    const s = f.stamps;
+    for (let i = 0; i < s.length; i += 4) brushStamp(g, s[i] * w, s[i + 1] * h, s[i + 2] * w, s[i + 3]);
+    f.el.classList.add('armed');
+  }
+  function layoutView(v) {
+    v.brushR = clamp((v.cells[0].el.clientWidth || 100) * 0.17, 13, 28);
+    for (const f of v.foils) {
+      if (f.revealed) continue;
+      if (f.el.clientWidth !== f.w || f.el.clientHeight !== f.h) paintFoil(v, f);
+    }
+    v.rectsDirty = true;
+    if (v.winCells) drawRoute(v, v.winCells, false);
+  }
+  function armView(v) {
+    layoutView(v);
+    if ('ResizeObserver' in window) {
+      let queued = false;
+      v.ro = new ResizeObserver(() => {
+        if (queued) return;
+        queued = true;
+        requestAnimationFrame(() => {
+          queued = false;
+          if (v.root.isConnected) layoutView(v);
+        });
+      });
+      v.ro.observe(v.ticket);
+    }
+  }
+  function disposeView(v) {
+    if (v && v.ro) v.ro.disconnect();
+  }
+  function repaintAll() {
+    const v = S.view;
+    if (!v) return;
+    for (const f of v.foils) {
+      f.w = 0;
+      paintFoil(v, f);
+    }
+  }
+  addEventListener('resize', () => { if (S.view) S.view.rectsDirty = true; });
+  addEventListener('scroll', () => { if (S.view) S.view.rectsDirty = true; }, { passive: true });
+  if (document.fonts && document.fonts.load) {
+    Promise.all([document.fonts.load('400 40px Bungee'), document.fonts.ready]).then(() => {
+      if (document.fonts.check('400 40px Bungee')) {
+        fontsReady = true;
+        repaintAll();
+      }
+    }).catch(() => {});
+  }
+
+  /* ---------- scratching ---------- */
+  function refreshRects(v) {
+    for (const f of v.foils) f.rect = f.el.getBoundingClientRect();
+    v.rectsDirty = false;
+  }
+  function coverAt(f, lx, ly, r) {
+    const cw = f.w / CC;
+    const ch = f.h / CR;
+    const rr = (r * 0.8) ** 2;
+    const c0 = Math.max(0, Math.floor((lx - r) / cw));
+    const c1 = Math.min(CC - 1, Math.floor((lx + r) / cw));
+    const r0 = Math.max(0, Math.floor((ly - r) / ch));
+    const r1 = Math.min(CR - 1, Math.floor((ly + r) / ch));
+    for (let row = r0; row <= r1; row++) {
+      for (let col = c0; col <= c1; col++) {
+        const k = row * CC + col;
+        if (f.cov[k]) continue;
+        const dx = (col + 0.5) * cw - lx;
+        const dy = (row + 0.5) * ch - ly;
+        if (dx * dx + dy * dy < rr) {
+          f.cov[k] = 1;
+          f.covered++;
+        }
+      }
+    }
+    return f.covered / (CC * CR);
+  }
+  // One brush stamp at viewport point (x, y) on every foil it touches (or only on `only`).
+  function stampAt(v, x, y, only) {
+    let hit = null;
+    const r = v.brushR;
+    const rot = Math.random() * Math.PI * 2;
+    for (const f of only ? [only] : v.foils) {
+      if (f.revealed || !f.rect || !f.w) continue;
+      const R = f.rect;
+      if (x < R.left - r || x > R.right + r || y < R.top - r || y > R.bottom + r) continue;
+      const lx = ((x - R.left) * f.w) / (R.width || 1);
+      const ly = ((y - R.top) * f.h) / (R.height || 1);
+      brushStamp(f.ctx, lx, ly, r, rot);
+      if (f.stamps.length < 16000) f.stamps.push(lx / f.w, ly / f.h, r / f.w, rot);
+      hit = f;
+      if (coverAt(f, lx, ly, r) >= 0.6) revealFoil(f);
+    }
+    return hit;
+  }
+  function scratchSeg(v, x0, y0, x1, y1, only) {
+    const len = Math.hypot(x1 - x0, y1 - y0);
+    const steps = Math.max(1, Math.ceil(len / (v.brushR * 0.3)));
+    let hit = null;
+    for (let i = len ? 1 : 0; i <= steps; i++) {
+      const k = len ? i / steps : 0;
+      hit = stampAt(v, x0 + (x1 - x0) * k, y0 + (y1 - y0) * k, only) || hit;
+      if (!len) break;
+    }
+    return hit;
+  }
+  function flakesAt(x, y, n, kind) {
+    fx.burst({ x, y }, { type: 'flake', count: n, angle: Math.PI / 2, spread: 2.8, speed: [30, 240], colors: FOILS[kind].flakes });
+  }
+  // Shared feel for a moving coin (pointer or Reveal all): sound follows speed, flakes follow distance.
+  function scratchFeel(st, x, y, hit, now) {
+    const dt = Math.max(4, now - st.t);
+    const d = Math.hypot(x - st.x, y - st.y);
+    st.v = st.v * 0.6 + ((d / dt) * 1000) * 0.4;
+    if (hit) {
+      scr.lastHit = now;
+      S.lastTouch = now;
+      const speed = Math.min(1, st.v / 1300);
+      setScratch(speed);
+      if (speed > 0.08) grit(now, speed);
+      tension(hit, now);
+      st.acc += d;
+      const every = rm() ? 22 : 7;
+      if (st.acc > every) {
+        const n = Math.min(4, Math.floor(st.acc / every));
+        st.acc -= n * every;
+        flakesAt(x, y, n, S.view.foilKind);
+      }
+    }
+    st.x = x;
+    st.y = y;
+    st.t = now;
+  }
+
+  // Near-miss tension without spoilers: while a pair is showing, whichever panel you scratch shivers and
+  // a heartbeat thumps (faster when the pair is a big prize). Only the reveal says if it was the one.
+  let tenseCell = null;
+  function tension(f, now) {
+    if (S.phase !== 'play' || S.won || S.pairTier < 0 || f.kind !== 'cell' || f.revealed) return;
+    if (tenseCell !== f) {
+      untense();
+      tenseCell = f;
+      if (!rm()) f.el.classList.add('tense');
+    }
+    if (now - scr.beat > (S.pairTier >= 4 ? 480 : 720)) {
+      scr.beat = now;
+      sfx.heartbeat();
+      buzz(10);
+      for (const c of tally(S.pairTier)) fx.anim(c.el, 'thump');
+    }
+  }
+  function untense() {
+    if (tenseCell) tenseCell.el.classList.remove('tense');
+    tenseCell = null;
+  }
+
+  let ptr = null;
+  let hintAt = 0;
+  function canScratch() {
+    return S.phase === 'play' && !S.hitstop && S.view && !S.view.specimen;
+  }
+  feed.addEventListener('pointerdown', (e) => {
+    const zone = e.target.closest && e.target.closest('.t-grid, .kiss-box');
+    if (!zone || !S.view || !S.view.root.contains(zone)) return;
+    if (S.phase !== 'play' || ptr) return;
+    if (e.pointerType === 'mouse' && e.button !== 0) return;
+    e.preventDefault();
+    const v = S.view;
+    ptr = { id: e.pointerId, x: e.clientX, y: e.clientY, t: performance.now(), v: 0, acc: 0, type: e.pointerType };
+    try { v.ticket.setPointerCapture(e.pointerId); } catch { /* old browsers */ }
+    refreshRects(v);
+    coinDown(true);
+    coinShow(true);
+    coinTo(e.clientX, e.clientY);
+    S.lastTouch = performance.now();
+    if (canScratch()) {
+      const hit = scratchSeg(v, e.clientX, e.clientY, e.clientX, e.clientY);
+      if (hit) flakesAt(e.clientX, e.clientY, 3, v.foilKind);
+    }
+  });
+  addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'mouse' && !ptr) {
+      const over = !!(S.view && (S.phase === 'play') && e.target.closest && e.target.closest('.t-grid, .kiss-box'));
+      coinShow(over);
+      if (over) coinTo(e.clientX, e.clientY);
+    }
+    if (!ptr || e.pointerId !== ptr.id) return;
+    const v = S.view;
+    if (!v) return;
+    if (v.rectsDirty) refreshRects(v);
+    const list = (e.getCoalescedEvents && e.getCoalescedEvents()) || [];
+    const evs = list.length ? list : [e];
+    const p = ptr; // the last panel's reveal can settle the ticket and end this stroke mid-loop
+    for (const ev of evs) {
+      if (ptr !== p) break;
+      const x = ev.clientX;
+      const y = ev.clientY;
+      const now = performance.now();
+      if (!canScratch()) {
+        p.x = x;
+        p.y = y;
+        p.t = now;
+        continue;
+      }
+      const hit = scratchSeg(v, p.x, p.y, x, y);
+      scratchFeel(p, x, y, hit, now);
+    }
+    coinTo(e.clientX, e.clientY);
+  });
+  function endStroke() {
+    if (!ptr) return;
+    const id = ptr.id;
+    const wasMouse = ptr.type === 'mouse';
+    ptr = null;
+    coinDown(false);
+    setScratch(0);
+    untense();
+    try { if (S.view) S.view.ticket.releasePointerCapture(id); } catch { /* already released */ }
+    if (!wasMouse && S.phase !== 'auto') coinShow(false);
+    keepScratches();
+  }
+  feed.addEventListener('click', (e) => {
+    const zone = e.target.closest && e.target.closest('.t-grid, .kiss-box');
+    if (zone && S.view && S.view.root.contains(zone) && (S.phase === 'idle' || S.phase === 'done')) hintBuy();
+  });
+  addEventListener('pointerup', (e) => { if (ptr && e.pointerId === ptr.id) endStroke(); });
+  addEventListener('pointercancel', (e) => { if (ptr && e.pointerId === ptr.id) endStroke(); });
+  feed.addEventListener('lostpointercapture', (e) => { if (ptr && e.pointerId === ptr.id) endStroke(); }, true);
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      endStroke();
+      setScratch(0);
+    }
+  });
+  addEventListener('blur', () => { endStroke(); });
+  addEventListener('pagehide', () => { endStroke(); });
+
+  /* ---------- coin cursor ---------- */
+  const coin = { x: -100, y: -100, px: -100, py: -100, rot: 0, vis: false, down: false, raf: 0, flip: 0, last: 0, sc: 1 };
+  function coinDown(on) {
+    coin.down = on;
+    kickLoop();
+  }
+  function coinFlip() {
+    if (!coin.vis || rm()) return;
+    coin.flip = 1;
+    kickLoop();
+  }
+  function coinShow(on) {
+    if (coin.vis === on) return;
+    coin.vis = on;
+    coinEl.classList.toggle('on', on);
+    kickLoop();
+  }
+  function coinTo(x, y) {
+    coin.x = x;
+    coin.y = y;
+    kickLoop();
+  }
+  function kickLoop() {
+    if (!coin.raf) coin.raf = requestAnimationFrame(loop);
+  }
+  // Runs only while something changes (movement, tilt, press, flip, scratch sound), then sleeps.
+  function loop(now) {
+    coin.raf = 0;
+    const dt = Math.min(0.05, Math.max(0, now - (coin.last || now)) / 1000);
+    coin.last = now;
+    const vx = coin.x - coin.px;
+    const moved = vx !== 0 || coin.y !== coin.py;
+    coin.px = coin.x;
+    coin.py = coin.y;
+    coin.rot += (clamp(vx * 1.6, -38, 38) - coin.rot) * 0.22;
+    const goal = coin.down ? 0.86 : 1;
+    coin.sc += (goal - coin.sc) * 0.35;
+    coin.flip = Math.max(0, coin.flip - dt * 2.6);
+    const fl = coin.flip;
+    const sx = fl > 0 ? Math.cos((1 - fl) * Math.PI * 2) : 1;
+    const lift = 1 + 0.24 * Math.sin(fl * Math.PI);
+    coinEl.style.transform = `translate3d(${coin.x}px, ${coin.y}px, 0) rotate(${coin.rot.toFixed(1)}deg) scale(${(coin.sc * lift * sx).toFixed(3)}, ${(coin.sc * lift).toFixed(3)})`;
+    if (scr.level > 0 && now - scr.lastHit > 70) setScratch(0);
+    if (moved || fl > 0 || scr.level > 0 || Math.abs(coin.rot) > 0.5 || Math.abs(coin.sc - goal) > 0.004) kickLoop();
+    else coin.last = 0;
+  }
+
+  /* ---------- reveals ---------- */
+  const tally = (tier) => S.view.cells.filter((c) => c.revealed && S.t.grid[c.i] === tier);
+  function revealFoil(f, instant) {
+    if (f.revealed) return;
+    const v = S.view;
+    const t = S.t;
+    if (!t || !v || !v.foils.includes(f)) return;
+    f.revealed = true;
+    if (f.kind === 'cell') t.rev[f.i] = true;
+    else t.kissRev = true;
+    saveProgress(t);
+    f.el.classList.add('rev');
+    if (tenseCell === f) untense();
+    if (instant) {
+      f.canvas.classList.add('gone-now');
+    } else {
+      f.canvas.classList.add('gone');
+      const p = fx.point(f.el);
+      flakesAt(p.x, p.y, 16, v.foilKind);
+      fx.burst(f.el, { type: 'flake', count: 10, speed: [200, 520], spread: Math.PI * 2, colors: FOILS[v.foilKind].flakes, jitter: f.el.clientWidth * 0.6 });
+      buzz(8);
+      coinFlip();
+    }
+    if (f.kind === 'cell') {
+      const T = TIERS[t.grid[f.i]];
+      const C = CLASSES[t.cls];
+      f.el.setAttribute('aria-label', `${T.name}, ${fmt(C.price * C.mults[t.grid[f.i]])} chips`);
+      onCell(f, instant);
+      S.pairTier = visiblePairTier();
+    } else {
+      onKiss(instant);
+    }
+    if (!instant) checkComplete();
+  }
+  function onCell(f, instant) {
+    const t = S.t;
+    const v = S.view;
+    const tier = t.grid[f.i];
+    const same = tally(tier);
+    const n = same.length;
+    const nRev = v.cells.filter((c) => c.revealed).length;
+    const base = Math.floor(nRev / 3) + Math.min(S.streak, 3);
+    if (n === 2) {
+      same.forEach((c) => c.el.classList.add('pair'));
+      if (tier >= 4) same.forEach((c) => c.el.classList.add('big'));
+      v.legend[tier].classList.add('hot');
+      if (instant) return;
+      for (const c of same) shockRing(v, c.el, TIERS[tier].tc, 0.55);
+      ding(base + 3);
+      setTimeout(() => ding(base + 5, 0.1), 90);
+      buzz(18);
+      if (tier >= 4) {
+        sfx.heartbeat();
+        say(f.el, `Two ${TIERS[tier].pl}...`, { color: TIERS[tier].tc, size: 22, rise: 50, ms: 1300 });
+      } else {
+        say(f.el, 'Pair!', { color: TIERS[tier].tc, size: 22, rise: 46 });
+      }
+    } else if (n === 3) {
+      v.legend[tier].classList.remove('hot');
+      if (instant) {
+        showTripleInstant(v, same, tier);
+        return;
+      }
+      ding(base + 6, 0.15);
+      startTriple(same, tier, f);
+    } else if (!instant) {
+      ding(base);
+      foilPop(1 + Math.random() * 0.15);
+    }
+  }
+  function showTripleInstant(v, cells, tier) {
+    S.won = true;
+    cells.forEach((c) => { c.el.classList.remove('pair', 'big'); c.el.classList.add('won'); });
+    v.legend[tier].classList.add('hit');
+    v.winCells = cells;
+    drawRoute(v, cells, false);
+    const C = CLASSES[S.t.cls];
+    const base = C.price * C.mults[tier];
+    const dbl = S.t.kissRev && S.t.kiss;
+    v.amt.textContent = fmt(dbl ? base * 2 : base);
+    v.amtBox.classList.add('hot');
+    if (dbl) {
+      v.amtBox.classList.add('doubled');
+      S.doubled = true;
+    }
+  }
+  // Hit-stop (everything freezes on a white zap), then MATCHED slams in with a punch zoom and shock rings.
+  function startTriple(cells, tier, last) {
+    const v = S.view;
+    const t = S.t;
+    S.won = true;
+    S.hitstop = true;
+    v.ticket.classList.add('hitstop');
+    setScratch(0);
+    untense();
+    if (S.phase === 'auto') coinShow(false); // keep the coin off the MATCHED banner
+    (last || cells[cells.length - 1]).el.classList.add('zap');
+    buzz([25, 30, 60]);
+    sfx.tone({ freq: 2900, type: 'square', dur: 0.03, vol: 0.05 });
+    const run = (async () => {
+      await sleep(rm() ? 70 : 190);
+      v.ticket.classList.remove('hitstop');
+      S.hitstop = false;
+      if (S.view !== v) return;
+      cells.forEach((c) => { c.el.classList.remove('pair', 'big', 'zap'); c.el.classList.add('won'); });
+      v.legend[tier].classList.add('hit');
+      v.matched.classList.remove('out');
+      v.matched.classList.add('show');
+      if (!rm()) fx.anim(v.ticket, 'punch');
+      cells.forEach((c, i) => setTimeout(() => shockRing(v, c.el, i === 1 ? TIERS[tier].tc : '#d7263d', 1), i * 70));
+      stab(Math.min(7, tier));
+      sfx.win(tier >= 5 ? 2 : 1);
+      fx.shake(5 + tier * 1.6, 320 + tier * 50);
+      fx.flash(TIERS[tier].tc, 220, 0.3);
+      for (const c of cells) {
+        fx.burst(c.el, { type: 'star', count: 10 + tier * 2 });
+        fx.burst(c.el, { type: 'confetti', count: 10 + tier * 3, speed: [250, 700] });
+      }
+      fx.burst(v.matched, { type: tier >= 5 ? 'kiss' : 'heart', count: 14 + tier * 3 });
+      v.winCells = cells;
+      drawRoute(v, cells, true);
+      const C = CLASSES[t.cls];
+      const base = C.price * C.mults[tier];
+      v.amtBox.classList.add('hot');
+      fx.anim(v.amtBox, 'c-pop');
+      say(v.matched, `+${fmt(base)}`, { color: '#d7263d', size: 34, rise: 90, ms: 1300 });
+      await countTo(v.amt, 0, base, 700);
+      if (t.kissRev && t.kiss && !S.doubled) await doubleCheque(v, base);
+      await sleep(650);
+      v.matched.classList.add('out');
+    })();
+    S.chain = S.chain.then(() => run);
+  }
+  function shockRing(v, el, color, scale = 1) {
+    if (rm() || !v.grid.isConnected) return;
+    const d = document.createElement('i');
+    d.className = 'shock';
+    d.style.left = `${el.offsetLeft + el.offsetWidth / 2}px`;
+    d.style.top = `${el.offsetTop + el.offsetHeight / 2}px`;
+    d.style.setProperty('--ring', color);
+    if (scale !== 1) d.style.setProperty('--sz', (7 * scale).toFixed(2));
+    v.grid.appendChild(d);
+    const gone = () => d.remove();
+    d.addEventListener('animationend', gone);
+    setTimeout(gone, 1000);
+  }
+  function countTo(el, from, to, ms) {
+    const p = fx.countUp(el, from, to, { ms: ms * SPEED });
+    return race(p, ms * SPEED + 500).then(() => p.skip());
+  }
+  async function doubleCheque(v, base) {
+    if (S.doubled) return;
+    S.doubled = true;
+    v.amtBox.classList.add('doubled');
+    sfx.kiss();
+    setTimeout(() => sfx.kiss(), 150);
+    fx.burst(v.amtBox, { type: 'kiss', count: 18 });
+    fx.anim(v.amtBox, 'c-jelly');
+    say(v.amtBox, 'x2 Sealed with a kiss!', { color: '#d7263d', size: 22, rise: 70, ms: 1300 });
+    await countTo(v.amt, base, base * 2, 650);
+  }
+  function onKiss(instant) {
+    const v = S.view;
+    const t = S.t;
+    if (t.kiss) {
+      v.kiss.el.classList.add('kissed');
+      if (instant) return;
+      sfx.kiss();
+      setTimeout(() => sfx.kiss(), 140);
+      fx.burst(v.kiss.el, { type: 'kiss', count: 22 });
+      fx.burst(v.kiss.el, { type: 'heart', count: 12 });
+      buzz([15, 40, 15]);
+      say(v.kiss.el, 'x2!', { color: '#d7263d', size: 34, rise: 60 });
+      if (S.won) {
+        const C = CLASSES[t.cls];
+        S.chain = S.chain.then(() => doubleCheque(v, C.price * C.mults[t.tier]));
+      }
+    } else if (!instant) {
+      dudKiss();
+      fx.anim($('.kiss-under', v.kiss.el), 'c-wobble');
+    }
+  }
+  let routeIds = 0;
+  function drawRoute(v, cells, animate) {
+    const svg = v.route;
+    const W = v.grid.clientWidth;
+    const H = v.grid.clientHeight;
+    if (!W || !H) return;
+    svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    const pts = cells.slice().sort((a, b) => a.i - b.i).map((c) => [c.el.offsetLeft + c.el.offsetWidth / 2, c.el.offsetTop + c.el.offsetHeight / 2]);
+    let d = `M${pts[0][0].toFixed(1)} ${pts[0][1].toFixed(1)}`;
+    for (let i = 1; i < pts.length; i++) {
+      const [ax, ay] = pts[i - 1];
+      const [bx, by] = pts[i];
+      const len = Math.hypot(bx - ax, by - ay) || 1;
+      const s = (i % 2 ? 1 : -1) * 0.2 * len;
+      const cx = (ax + bx) / 2 + (-(by - ay) / len) * s;
+      const cy = (ay + by) / 2 + ((bx - ax) / len) * s;
+      d += ` Q${cx.toFixed(1)} ${cy.toFixed(1)} ${bx.toFixed(1)} ${by.toFixed(1)}`;
+    }
+    const cw = cells[0].el.offsetWidth;
+    const chh = cells[0].el.offsetHeight;
+    const rings = pts.map(([x, y], i) => `<ellipse class="rt-ring" pathLength="1" cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" rx="${(cw * 0.5).toFixed(1)}" ry="${(chh * 0.54).toFixed(1)}" transform="rotate(${i % 2 ? 4 : -5} ${x.toFixed(1)} ${y.toFixed(1)})"/>`).join('');
+    const mid = `rtm${++routeIds}`;
+    svg.innerHTML = `<defs><mask id="${mid}" maskUnits="userSpaceOnUse" x="-60" y="-60" width="${W + 120}" height="${H + 120}"><path class="rt-mask" pathLength="1" d="${d}"/></mask></defs><path class="rt-case" pathLength="1" d="${d}"/><path class="rt-line" d="${d}" mask="url(#${mid})"/>${rings}<use class="rt-plane" href="#i-plane" width="30" height="30" x="-15" y="-15" opacity="0"/>`;
+    if (!animate || rm()) return;
+    const dur = 560 * SPEED;
+    svg.querySelectorAll('.rt-mask, .rt-case, .rt-ring').forEach((p, i) => {
+      p.style.strokeDasharray = '1';
+      p.animate([{ strokeDashoffset: 1 }, { strokeDashoffset: 0 }], { duration: i < 2 ? dur : 380 * SPEED, delay: i < 2 ? 0 : 120 * SPEED * (i - 2), easing: 'cubic-bezier(.5,0,.3,1)', fill: 'backwards' });
+    });
+    const line = svg.querySelector('.rt-line');
+    const plane = svg.querySelector('.rt-plane');
+    const L = line.getTotalLength();
+    const t0 = performance.now();
+    const fly = (now) => {
+      if (!plane.isConnected) return;
+      const k = Math.min(1, (now - t0) / (dur * 1.15));
+      const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+      const a = line.getPointAtLength(L * e);
+      const b = line.getPointAtLength(Math.min(L, L * e + 1));
+      const ang = (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+      plane.setAttribute('transform', `translate(${a.x} ${a.y}) rotate(${ang})`);
+      plane.setAttribute('opacity', k < 0.85 ? '1' : String((1 - k) / 0.15));
+      if (k < 1) requestAnimationFrame(fly);
+    };
+    requestAnimationFrame(fly);
+  }
+
+  function allRevealed() { return !!(S.view && S.t && S.view.foils.every((f) => f.revealed)); }
+  function checkComplete() {
+    if (!S.t || !S.view || S.settling) return;
+    if (allRevealed()) settle();
+  }
+
+  /* ---------- Reveal all: the coin still does the work ---------- */
+  function dramaOrder() {
+    const t = S.t;
+    const v = S.view;
+    const counts = Array(TIERS.length).fill(0);
+    t.grid.forEach((x) => counts[x]++);
+    const pri = (c) => {
+      const tier = t.grid[c.i];
+      if (tier === t.tier) return 3;
+      return counts[tier] === 2 ? (tier >= 4 ? 2 : 1) : 0;
+    };
+    const rest = rng.shuffle(v.cells.filter((c) => !c.revealed));
+    rest.sort((a, b) => pri(a) - pri(b));
+    if (!v.kiss.revealed) rest.push(v.kiss);
+    return rest;
+  }
+  function visiblePairTier() {
+    if (S.won) return -1;
+    let best = -1;
+    for (let tier = 0; tier < TIERS.length; tier++) if (tally(tier).length === 2) best = tier;
+    return best;
+  }
+  async function revealAll() {
+    if (S.phase !== 'play') return;
+    endStroke();
+    S.rush = false;
+    S.phase = 'auto';
+    clearTimeout(nudgeT);
+    updateUI();
+    const v = S.view;
+    sfx.tap();
+    while (S.hitstop && S.view === v) await Casino.sleep(30); // pressed during a hit-stop: go right after it
+    for (const f of dramaOrder()) {
+      if (S.view !== v || S.settling) break;
+      if (f.revealed) continue;
+      let slow = 1;
+      const left = v.cells.filter((c) => !c.revealed).length;
+      const pairTier = visiblePairTier();
+      if (S.rush) {
+        slow = 0.35;
+      } else if (f.kind === 'cell' && pairTier >= 0 && left <= 2) {
+        slow = pairTier >= 4 ? 2.3 : 1.7;
+        sfx.heartbeat();
+        say(f.el, left === 1 ? 'Last one...' : 'Come on...', { color: '#1d2a44', size: 20, rise: 40, ms: 900 });
+        if (pairTier >= 4) {
+          sfx.riser(0.8 * SPEED);
+          await sleep(220);
+          sfx.heartbeat();
+        }
+        await sleep(380);
+      } else if (f.kind === 'kiss' && S.won) {
+        slow = 1.8;
+        sfx.heartbeat();
+        say(f.el, 'Kiss me?', { color: '#d7263d', size: 22, rise: 40, ms: 900 });
+        await sleep(300);
+      }
+      await autoScratch(v, f, S.rush ? Math.min(slow, 0.35) : slow);
+      await S.chain;
+      await sleep(S.rush ? 20 : 50);
+    }
+    if (S.view === v && !S.settling) {
+      coinShow(false);
+      checkComplete();
+    }
+  }
+  function autoScratch(v, f, slow) {
+    return new Promise((resolve) => {
+      const r = v.brushR;
+      const w = f.el.clientWidth || 100;
+      const h = f.el.clientHeight || 60;
+      const mx = Math.min(0.3, (r * 0.5) / w);
+      const my = Math.min(0.3, (r * 0.5) / h);
+      const rows = Math.max(3, Math.ceil((h * (1 - 2 * my)) / (r * 1.05)) + 1);
+      const pts = [];
+      for (let i = 0; i < rows; i++) {
+        const y = my + ((1 - 2 * my) * i) / (rows - 1) + (Math.random() - 0.5) * 0.04;
+        pts.push([i % 2 ? 1 - mx : mx, y]);
+      }
+      const seg = [];
+      let total = 0;
+      for (let i = 1; i < pts.length; i++) {
+        const l = Math.hypot((pts[i][0] - pts[i - 1][0]) * w, (pts[i][1] - pts[i - 1][1]) * h);
+        seg.push(l);
+        total += l;
+      }
+      const dur = (rm() ? 200 : 300) * slow * SPEED;
+      const st = { x: 0, y: 0, t: performance.now(), v: 0, acc: 0 };
+      let started = false;
+      let t0 = 0;
+      coinShow(true);
+      coinDown(true);
+      const at = (k) => {
+        let dist = k * total;
+        for (let i = 0; i < seg.length; i++) {
+          if (dist <= seg[i] || i === seg.length - 1) {
+            const u = seg[i] ? Math.min(1, dist / seg[i]) : 1;
+            return [pts[i][0] + (pts[i + 1][0] - pts[i][0]) * u, pts[i][1] + (pts[i + 1][1] - pts[i][1]) * u];
+          }
+          dist -= seg[i];
+        }
+        return pts[pts.length - 1];
+      };
+      const step = (now) => {
+        if (S.view !== v || f.revealed) { finish(); return; }
+        if (!started) { started = true; t0 = now; }
+        const R = f.el.getBoundingClientRect();
+        f.rect = R;
+        const k = Math.min(1, (now - t0) / dur);
+        const e = k < 0.5 ? 2 * k * k : 1 - (-2 * k + 2) ** 2 / 2;
+        const [u, vv] = at(e);
+        const x = R.left + u * R.width;
+        const y = R.top + vv * R.height;
+        if (st.t0 === undefined) {
+          st.t0 = now;
+          st.x = x;
+          st.y = y;
+          st.t = now;
+        }
+        const hit = scratchSeg(v, st.x, st.y, x, y, f);
+        scratchFeel(st, x, y, hit, now);
+        coinTo(x, y);
+        if (k >= 1) {
+          if (!f.revealed) revealFoil(f);
+          finish();
+          return;
+        }
+        requestAnimationFrame(step);
+      };
+      const finish = () => {
+        coinDown(false);
+        setScratch(0);
+        resolve();
+      };
+      requestAnimationFrame(step);
+    });
+  }
+
+  /* ---------- settle: stamp it, pay it once ---------- */
+  const BIG_LABELS = ['', 'Upgraded!', 'First-Class Win!', 'Mile-High Win!', 'Too Good To Be True!'];
+  async function settle() {
+    if (S.settling || !S.t || !S.view) return;
+    S.settling = true;
+    endStroke();
+    untense();
+    clearTimeout(nudgeT);
+    coinShow(false);
+    S.phase = 'settling';
+    updateUI();
+    const t = S.t;
+    const v = S.view;
+    const C = CLASSES[t.cls];
+    await S.chain;
+    await sleep(200);
+    const total = payout(C, t);
+    if (total > 0) {
+      // Peek first: if another tab already cashed this restored ticket, don't celebrate money we won't pay.
+      const mine = !t.saved || (!t.claimed && !!readTickets()[t.id]);
+      if (t.kiss && !S.doubled) await doubleCheque(v, total / 2);
+      const mult = total / C.price;
+      const big = total >= 10 * C.price;
+      if (big && !rm()) {
+        // wind-up before a big stamp: riser, the cheque amount trembles
+        sfx.riser(0.5);
+        v.amtBox.classList.add('tense');
+        await sleep(460);
+        v.amtBox.classList.remove('tense');
+      }
+      v.stamp.className = 'stamp';
+      v.stamp.innerHTML = '<b>Cashed</b><small>Bank of Love</small>';
+      void v.stamp.offsetWidth;
+      v.stamp.classList.add('show');
+      await sleep(rm() ? 60 : 170);
+      stampThunk();
+      fx.shake(clamp(5 + Math.log2(mult + 1) * 1.5, 5, 14), 260 + Math.min(320, mult * 6));
+      if (mult >= 5) fx.flash('#d7263d', 200, 0.2);
+      buzz(40);
+      fx.burst(v.stamp, { type: 'ink', count: clamp(Math.round(18 + mult * 1.5), 18, 54), jitter: 120 });
+      fx.burst(v.stamp, { type: 'bill', count: clamp(Math.round(5 + mult), 6, 28), speed: [250, 650] });
+      await sleep(big ? 650 : 320); // let the stamp land before any overlay covers it
+      if (!mine) {
+        claimTicket(t);
+        announce('That cheque was already cashed in another tab. Nice try, forger.', 'bad');
+        Casino.toast('Already cashed in another tab.', 'bad');
+      } else {
+        // big wins: the overlay first, then the coins pour off the cheque into your balance
+        if (big) await Casino.bigWin(total, C.price, { label: BIG_LABELS[Casino.winTier(total, C.price)] });
+        const n = clamp(Math.round(5 + Math.log2(mult + 1) * 3), 6, 26);
+        sfx.cash();
+        await race(fx.collect(v.amtBox, null, { count: n }), 2800);
+        if (claimTicket(t)) {
+          wallet.win(total);
+          Casino.record({ bet: C.price, win: total });
+          const pill = document.querySelector('.cbar-bal');
+          say(pill || v.amtBox, `+${fmt(total)}`, { color: '#1f8a5b', size: 26, rise: -60 });
+          if (pill) fx.burst(pill, { type: 'star', count: clamp(Math.round(6 + mult), 8, 30) });
+        }
+        S.streak++;
+        const q = S.streak >= 2 ? `${S.streak} in a row! ${pick(WIN_QUIPS)}` : pick(WIN_QUIPS);
+        announce(q, 'good');
+      }
+    } else {
+      const pt = visiblePairTier();
+      if (pt >= 0) {
+        // near miss: the pair shrugs, a slide whistle falls, then the cheque bounces
+        const pair = tally(pt);
+        for (const c of pair) fx.anim(c.el, 'nudge');
+        say(v.grid, 'So close!', { color: '#d7263d', size: 34, rise: 40, ms: 1200, font: 'var(--f-retro)' });
+        sfx.tone({ freq: 1180, to: 300, type: 'sine', dur: 0.45, vol: 0.075 });
+        await sleep(rm() ? 60 : 280);
+      }
+      v.stamp.className = 'stamp bounced';
+      v.stamp.innerHTML = '<b>Bounced</b><small>Insufficient funds</small>';
+      void v.stamp.offsetWidth;
+      v.stamp.classList.add('show');
+      const ok = claimTicket(t);
+      if (ok) Casino.record({ bet: C.price, win: 0 });
+      S.streak = 0;
+      await sleep(rm() ? 40 : 150);
+      sfx.boing(0.9);
+      wahWah();
+      buzz(15);
+      v.ticket.classList.add('drooped');
+      let q = pick(LOSE_QUIPS);
+      if (pt >= 6 && rng.chance(0.6)) q = `Two ${TIERS[pt].pl} and no third. So close you could taste the champagne.`;
+      else if (t.kiss) q = "Kissed for luck. Luck didn't show up.";
+      announce(q, 'bad');
+    }
+    if (S.view === v) {
+      S.phase = 'done';
+      updateUI();
+    }
+  }
+
+  /* ---------- buying and printing ---------- */
+  function forcedOutcome() {
+    const h = hashOpts();
+    if (!h.has('force')) return null;
+    const f = h.get('force');
+    const tier = f === 'lose' ? -1 : clamp(parseInt(f, 10) || 0, 0, TIERS.length - 1);
+    const k = h.get('kiss');
+    return { tier, kiss: k === null ? rng.chance(KISS_CHANCE) : k === '1' };
+  }
+  function newId() {
+    return `${Date.now().toString(36)}-${rng.int(2 ** 30).toString(36)}`;
+  }
+  function buy() {
+    if (S.phase !== 'idle' && S.phase !== 'done') return;
+    const C = CLASSES[S.cls];
+    if (!wallet.bet(C.price)) {
+      fx.anim(mainBtn, 'c-wobble');
+      fx.anim(tags[S.cls], 'c-wobble');
+      fx.shake(4, 200);
+      sfx.buzz();
+      buzz([30, 40, 30]);
+      Casino.toast(wallet.balance < 10 ? 'Insufficient funds. Grab your residuals up top.' : 'Insufficient funds. Even forgers need start-up capital.', 'bad');
+      return;
+    }
+    const o = forcedOutcome() || drawOutcome(C, rng);
+    const t = { id: newId(), cls: C.key, tier: o.tier, kiss: o.kiss, grid: makeGrid(o.tier, rng), rev: Array(9).fill(false), kissRev: false, ts: Date.now(), saved: false, claimed: false };
+    addTicket(t);
+    sfx.chips(3);
+    buzz(10);
+    present(t, { sound: true });
+  }
+  async function present(t, { sound = true, quip } = {}) {
+    S.phase = 'printing';
+    S.t = t;
+    S.won = false;
+    S.doubled = false;
+    S.settling = false;
+    S.hitstop = false;
+    S.chain = Promise.resolve();
+    S.cls = t.cls;
+    S.pairTier = -1;
+    S.lastTouch = 0;
+    clearTimeout(nudgeT);
+    untense();
+    updateUI();
+    const old = S.view;
+    const v = buildTicket(t.cls, t);
+    v.root.style.transform = 'translateY(-101%)';
+    feed.appendChild(v.root);
+    S.view = v;
+    if (t.cov) v.foils.forEach((f, i) => covUnpack(f, t.cov[i]));
+    armView(v);
+    // tickets restored after a reload come back with their scratched panels already open
+    v.cells.forEach((f) => { if (t.rev[f.i]) revealFoil(f, true); });
+    if (t.kissRev) revealFoil(v.kiss, true);
+    if (old) tearOff(old, sound);
+    await printIn(v, sound);
+    if (S.view !== v) return;
+    S.phase = 'play';
+    updateUI();
+    if (sound) dingDong();
+    announce(quip || pick(PRINT_QUIPS));
+    const ua = navigator.userActivation;
+    if (allRevealed() && ua && !ua.hasBeenActive) {
+      // a finished ticket restored after a reload waits for a tap, so its celebration gets sound and haptics
+      announce('Welcome back. Your ticket is all scratched: tap Cash in to collect.');
+    } else {
+      checkComplete();
+    }
+    armNudge(v, 0);
+  }
+  // Idle life while a ticket waits: a panel wiggles and the captain chimes in (twice at most).
+  const NUDGES = [
+    "Psst. The foil won't scratch itself, darling.",
+    'Go on, give it a little rub. It likes that.',
+    'Shy? Press Reveal all and let the coin do the work.',
+    'The captain has switched on the "start scratching" sign.',
+  ];
+  let nudgeT = 0;
+  function armNudge(v, n) {
+    clearTimeout(nudgeT);
+    if (n >= 2) return;
+    nudgeT = setTimeout(() => {
+      if (S.view !== v || S.phase !== 'play' || allRevealed()) return;
+      if (ptr || performance.now() - S.lastTouch < 6000) {
+        armNudge(v, n);
+        return;
+      }
+      const left = v.cells.filter((c) => !c.revealed);
+      if (!left.length) return;
+      const c = rng.pick(left);
+      fx.anim(c.el, 'nudge');
+      fx.burst(c.el, { type: 'star', count: 6, speed: [80, 220] });
+      sfx.tone({ freq: 1568, to: 2093, type: 'triangle', dur: 0.09, vol: 0.06 });
+      sfx.tone({ freq: 2093, to: 2637, type: 'triangle', dur: 0.09, vol: 0.05, delay: 0.1 });
+      announce(pick(NUDGES));
+      armNudge(v, n + 1);
+    }, n ? 12000 : 8000);
+  }
+  function tearOff(v, sound) {
+    disposeView(v);
+    v.root.classList.add('leaving');
+    if (sound) rip();
+    const dur = rm() ? 160 : 620;
+    const a = v.root.animate(rm() ? [{ opacity: 1 }, { opacity: 0 }] : [
+      { transform: 'none', opacity: 1 },
+      { transform: 'translate(8px, 14px) rotate(2.5deg)', opacity: 1, offset: 0.22 },
+      { transform: 'translate(46px, 65vh) rotate(17deg)', opacity: 0 },
+    ], { duration: dur, easing: 'cubic-bezier(.45,0,.8,.4)', fill: 'forwards' });
+    race(a.finished, dur + 150).then(() => v.root.remove());
+  }
+  async function printIn(v, sound) {
+    const el = v.root;
+    const reduced = rm();
+    const dur = (reduced ? 200 : 1050) * SPEED;
+    printer.classList.add('busy');
+    if (!reduced) printer.classList.add('jiggle');
+    const a = el.animate(reduced ? [{ opacity: 0, transform: 'none' }, { opacity: 1, transform: 'none' }] : [
+      { transform: 'translateY(-101%)', easing: 'cubic-bezier(.3,.6,.4,1)' },
+      { transform: 'translateY(-70%)', offset: 0.22 },
+      { transform: 'translateY(-70%)', offset: 0.3, easing: 'cubic-bezier(.3,.6,.4,1)' },
+      { transform: 'translateY(-38%)', offset: 0.52 },
+      { transform: 'translateY(-38%)', offset: 0.6, easing: 'cubic-bezier(.3,.6,.4,1)' },
+      { transform: 'translateY(-6%)', offset: 0.8, easing: 'cubic-bezier(.2,.8,.4,1)' },
+      { transform: 'translateY(2.2%)', offset: 0.9 },
+      { transform: 'translateY(0)' },
+    ], { duration: dur });
+    el.style.transform = '';
+    if (sound) {
+      feedBrrt(1);
+      setTimeout(() => feedBrrt(1.08), dur * 0.3);
+      setTimeout(() => feedBrrt(1.16), dur * 0.6);
+      setTimeout(() => { sfx.card(); sfx.thud(1.6); }, dur * 0.86);
+    }
+    setTimeout(() => printer.classList.remove('jiggle'), dur * 0.84);
+    await race(a.finished, dur + 120);
+    printer.classList.remove('busy', 'jiggle');
+    if (!reduced) fx.anim(v.ticket, 'c-jelly');
+  }
+  function hintBuy() {
+    const now = performance.now();
+    if (now - hintAt < 900) return;
+    hintAt = now;
+    sfx.buzz();
+    fx.anim(mainBtn, 'c-wobble');
+    buzz(20);
+    Casino.toast(S.phase === 'done' ? 'That one is spent, darling. Grab the next ticket.' : 'Buy the ticket first, hotshot.', 'bad');
+  }
+
+  /* ---------- PA announcements ---------- */
+  let paTimer = 0;
+  function announce(text, tone = '') {
+    clearInterval(paTimer);
+    pa.dataset.tone = tone;
+    live.textContent = text;
+    fx.anim(pa.querySelector('svg'), 'c-pop');
+    if (rm()) {
+      paText.textContent = text;
+      return;
+    }
+    let i = 0;
+    paText.textContent = '';
+    paTimer = setInterval(() => {
+      i += 2;
+      paText.textContent = text.slice(0, i);
+      if (i >= text.length) clearInterval(paTimer);
+    }, 16);
+  }
+
+  /* ---------- UI state ---------- */
+  function updateUI() {
+    const C = CLASSES[S.cls];
+    const open = S.phase === 'idle' || S.phase === 'done';
+    for (const [k, b] of Object.entries(tags)) {
+      b.setAttribute('aria-pressed', String(k === S.cls));
+      b.disabled = !open && S.phase !== 'boot';
+      b.classList.toggle('poor', !wallet.canAfford(CLASSES[k].price));
+    }
+    let label = 'Print ticket';
+    let price = true;
+    let disabled = false;
+    if (S.phase === 'done') label = 'Next ticket';
+    else if (S.phase === 'play') { label = allRevealed() ? 'Cash in' : 'Reveal all'; price = false; }
+    else if (S.phase === 'printing') { label = 'Printing'; price = false; disabled = true; }
+    else if (S.phase === 'auto') { label = S.rush ? 'Scratching' : 'Hurry up!'; price = false; disabled = S.rush; }
+    else if (S.phase === 'settling') { label = 'Cashing'; price = false; disabled = true; }
+    else if (S.phase === 'boot') disabled = true;
+    mainLabel.textContent = label;
+    mainPrice.hidden = !price;
+    mainPrice.querySelector('b').textContent = fmt(C.price);
+    mainBtn.disabled = disabled;
+    mainBtn.classList.toggle('ready', open || (S.phase === 'play' && allRevealed()));
+    mainBtn.setAttribute('aria-label', price ? `${label}, ${C.price} chips` : label);
+    if (S.view) S.view.ticket.classList.toggle('live', S.phase === 'play');
+  }
+  wallet.onChange(() => updateUI());
+  mainBtn.addEventListener('click', () => {
+    if (mainBtn.disabled) return;
+    // A double tap is one press: the second tap of a quick pair never becomes "Reveal all" or "Hurry up".
+    const now = performance.now();
+    if ((S.phase === 'play' || S.phase === 'auto') && now - S.lastPress < 380) return;
+    S.lastPress = now;
+    fx.anim(mainBtn, 'c-jelly');
+    if (S.phase === 'idle' || S.phase === 'done') {
+      sfx.click();
+      buy();
+    } else if (S.phase === 'play' && allRevealed()) {
+      sfx.click();
+      checkComplete();
+    } else if (S.phase === 'play') {
+      revealAll();
+    } else if (S.phase === 'auto' && !S.rush) {
+      S.rush = true;
+      sfx.whoosh(0.25, 0.12);
+      updateUI();
+    }
+  });
+
+  /* ---------- help ---------- */
+  function oneIn(w) { return w ? `1 in ${fmt(WEIGHT_TOTAL / w)}` : ''; }
+  $('#helpBtn').addEventListener('click', () => {
+    sfx.tap();
+    const C = CLASSES[S.cls];
+    let hit = 0;
+    C.weights.forEach((w) => { hit += w; });
+    const rows = TIERS.map((T, i) => i).reverse().map((i) => `<tr><td><svg class="pt-ico"><use href="#${TIERS[i].icon}"/></svg>${TIERS[i].name} &times;3</td><td class="odds">${oneIn(C.weights[i])}</td><td>${fmt(C.price * C.mults[i])}</td></tr>`).join('');
+    const dlg = Casino.dialog({
+      title: 'How to fly',
+      html: `<p>Pick a class and print a Pan Amour boarding pass. Drag your lucky coin over the foil to scratch it; a panel pops open once most of it is gone. <b>Reveal all</b> lets the coin do it for you; press again to hurry it up.</p>
+        <p><b>Three identical amounts win that amount.</b> A ticket never holds more than one winning trio. Scratch the <b>Lucky Kiss</b> box too: a lipstick kiss doubles any win. It shows on about 1 ticket in 8.</p>
+        <table><thead><tr><th>${C.name} · ${fmt(C.price)} chips</th><th class="odds">Odds</th><th>Pays</th></tr></thead><tbody>${rows}</tbody></table>
+        <p>Any win: about 1 ticket in ${(WEIGHT_TOTAL / hit).toFixed(1)} (the smallest prize gives your fare back). Top prizes, kiss included: Coach ${fmt(CLASSES.coach.price * 200)}, First Class ${fmt(CLASSES.first.price * 500)}, Private Jet ${fmt(CLASSES.jet.price * 1000)}.</p>
+        <p>Return to player: Coach ${EXACT_RTP.coach}, First Class ${EXACT_RTP.first}, Private Jet ${EXACT_RTP.jet}. A 100-million-ticket simulation per class measured ${MEASURED_RTP.coach}, ${MEASURED_RTP.first} and ${MEASURED_RTP.jet}.</p>
+        <p class="fine-print">Keys: Space or Enter prints, reveals or grabs the next ticket; 1, 2, 3 pick the class. A ticket you leave half-scratched waits for you at the gate.</p>
+        <p class="fine-print">Parody. Fake chips, no real money.</p>`,
+      button: 'Fasten seatbelt',
+    });
+    dlg.scrollTop = 0;
+    requestAnimationFrame(() => { dlg.scrollTop = 0; });
+  });
+
+  /* ---------- keyboard ---------- */
+  addEventListener('keydown', (e) => {
+    const tgt = e.target;
+    if (tgt && (/^(INPUT|TEXTAREA|SELECT)$/.test(tgt.tagName) || tgt.isContentEditable)) return;
+    if (e.altKey || e.ctrlKey || e.metaKey) return;
+    if (e.repeat) {
+      if (e.key === ' ' || e.key === 'Enter') e.preventDefault(); // held Enter would re-click a focused button
+      return;
+    }
+    if (document.querySelector('dialog[open], .cbig')) return;
+    if (e.key === ' ' || e.key === 'Enter') {
+      if (tgt && tgt.closest && tgt.closest('button, a, [role="button"]')) return; // native activation
+      e.preventDefault();
+      mainBtn.click();
+    } else if (e.key === '1' || e.key === '2' || e.key === '3') {
+      selectClass(['coach', 'first', 'jet'][Number(e.key) - 1], true);
+    }
+  });
+
+  /* ---------- debug / thumbnail staging (harmless: never touches the wallet) ---------- */
+  function stageThumb() {
+    const grid = [6, 2, 7, 0, 6, 4, 7, 1, 6];
+    const t = { id: 'stage', cls: 'first', tier: 6, kiss: true, grid, rev: [true, true, true, true, true, false, true, false, true], kissRev: false, ts: Date.now(), saved: false, claimed: true };
+    S.t = t;
+    S.cls = 'first';
+    const v = buildTicket('first', t);
+    feed.appendChild(v.root);
+    S.view = v;
+    armView(v);
+    v.cells.forEach((f) => { if (t.rev[f.i]) revealFoil(f, true); });
+    S.phase = 'play';
+    updateUI();
+    announce('Ding-dong! Foil up, inhibitions down.');
+    // half-scratch the kiss box and panel 5 (paint only, no reveal), leave the coin resting on it
+    refreshRects(v);
+    const scratchPart = (f, rows) => {
+      const R = f.rect;
+      const r = v.brushR;
+      let px = 0.14;
+      let py = 0.22;
+      for (let i = 1; i <= rows; i++) {
+        const nx = i % 2 ? 0.86 : 0.16;
+        const ny = 0.22 + i * 0.15;
+        for (let k = 0; k <= 24; k++) {
+          const u = px + (nx - px) * (k / 24);
+          const w = py + (ny - py) * (k / 24);
+          const rot = Math.random() * 6;
+          brushStamp(f.ctx, u * f.w, w * f.h, r, rot);
+          f.stamps.push(u, w, r / f.w, rot);
+        }
+        px = nx;
+        py = ny;
+      }
+      return { x: R.left + px * R.width, y: R.top + py * R.height };
+    };
+    scratchPart(v.kiss, 2);
+    const p = scratchPart(v.cells[5], 3);
+    coinShow(true);
+    coinTo(p.x - 6, p.y - 4);
+    coin.rot = -18;
+    fx.fountain({ x: p.x, y: p.y + 10 }, { type: 'flake', rate: 70, ms: 60000, spread: 2.6, angle: Math.PI / 2, speed: [30, 200], colors: FOILS.gold.flakes });
+  }
+
+  /* ---------- boot ---------- */
+  window.__smiyc = {
+    get phase() { return S.phase; },
+    get ticket() { return S.t ? { ...pack(S.t), payout: payout(CLASSES[S.t.cls], S.t) } : null; },
+    get cls() { return S.cls; },
+    get audioLoop() { return !!scr.src; },
+    get coinLoop() { return !!coin.raf; },
+  };
+  const hash = hashOpts();
+  if (hash.get('stage') === 'thumb') {
+    stageThumb();
+    return;
+  }
+  const saved = restorable();
+  if (saved) {
+    present(saved, { sound: false, quip: 'Welcome back. Your ticket waited at the gate.' });
+  } else {
+    S.phase = 'idle';
+    const v = buildTicket(S.cls, null);
+    v.root.style.transform = 'translateY(-101%)';
+    feed.appendChild(v.root);
+    S.view = v;
+    armView(v);
+    printIn(v, false);
+    announce('Welcome aboard Pan Amour. Pick a class, print a ticket, scratch the foil.');
+    updateUI();
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,2541 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>The Mattress · Blue Movie Casino</title>
+<meta name="description" content="A Matrix-parody plinko game: take the blue, purple or red pill and drop it through a field of boinging bedsprings onto a quilted mattress.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;600&family=Bungee&family=Monoton&family=Shrikhand&family=Share+Tech+Mono&display=swap">
+<link rel="stylesheet" href="../shared/casino.css">
+<style>
+  :root {
+    --accent: #4dff9a;
+    --accent-2: #ff4fa8;
+    --mx: #3dff86;
+    --mx-hi: #b9ffd3;
+    --pinky: #ff4fa8;
+    --p-blue: #3b8cff;
+    --p-purple: #b45cff;
+    --p-red: #ff3347;
+    --f-mono: "Share Tech Mono", ui-monospace, "DejaVu Sans Mono", Menlo, monospace;
+  }
+  body.mx {
+    background: radial-gradient(130% 80% at 50% 0%, #072613 0%, #020c06 55%, #010402 100%) fixed #010402;
+    overflow-x: hidden;
+  }
+  #rain { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; opacity: .55; transition: opacity .4s, filter .4s }
+  body.intro-on #rain { z-index: 9650; opacity: .8 }
+  body.intro-on::before { content: ""; position: fixed; inset: 0; z-index: 9640; background: #000 }
+  body.bt-on #rain { opacity: .9; filter: saturate(1.5) brightness(1.2) }
+
+  .shake-clip { position: relative; z-index: 1; overflow: hidden; overflow: clip }
+  .mx-main {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    height: calc(100vh - var(--bar-h) - env(safe-area-inset-top, 0px));
+    height: calc(100dvh - var(--bar-h) - env(safe-area-inset-top, 0px));
+    min-height: 580px;
+    overflow-x: clip;
+    padding: 6px max(10px, env(safe-area-inset-right, 0px)) max(8px, env(safe-area-inset-bottom, 0px)) max(10px, env(safe-area-inset-left, 0px));
+  }
+
+  /* ---------- Logo ---------- */
+  .logo { display: flex; align-items: center; gap: 10px; min-width: 0 }
+  .logo-text { flex: 1 1 auto; min-width: 0 }
+  .logo h1 {
+    margin: 0;
+    font: 400 clamp(23px, 7vw, 30px)/1 var(--f-mono);
+    letter-spacing: .14em;
+    white-space: nowrap;
+    color: #a6ffc9;
+    text-shadow: 0 0 8px rgba(61, 255, 134, .85), 0 0 24px rgba(61, 255, 134, .4), 2px 0 0 rgba(255, 79, 168, .5), -2px 0 0 rgba(62, 240, 255, .3);
+  }
+  .logo h1 em { font-style: normal; color: #ff8cc8; text-shadow: 0 0 10px rgba(255, 79, 168, .95), 0 0 26px rgba(255, 79, 168, .45), -2px 0 0 rgba(61, 255, 134, .45) }
+  .logo-tag {
+    margin: 3px 0 0;
+    transform-origin: 0 50%;
+    min-height: 1.3em;
+    font: 400 13px/1.3 var(--f-retro);
+    color: #ff9fd2;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    transition: color .2s;
+  }
+  .logo-tag.quip-good { color: #fff3b0; text-shadow: 0 0 12px rgba(255, 207, 74, .6) }
+  .logo-tag.tag-in { animation: tag-in .42s var(--ease-back) }
+  @keyframes tag-in { from { opacity: 0; translate: 0 9px; letter-spacing: .12em } to { opacity: 1; translate: 0 0 } }
+  .logo-tag.quip-bad { color: #c9b6ff }
+  .logo-bunny { display: none; width: 56px; height: 56px; flex: none }
+  @keyframes bunny-idle { 0%, 70%, 100% { translate: 0 0; scale: 1 1 } 76% { scale: 1.12 .86 } 84% { translate: 0 -12px; scale: .94 1.08 } 92% { translate: 0 0; scale: 1.06 .94 } }
+  .help { flex: none; font: 800 22px/1 var(--f-cond) }
+
+  /* ---------- Board ---------- */
+  .board-wrap { position: relative; flex: 1 1 auto; min-height: 280px; overflow: hidden }
+  .board-wrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block }
+  .hud {
+    position: absolute;
+    left: 8px;
+    top: 8px;
+    z-index: 2;
+    display: grid;
+    grid-template-columns: auto auto;
+    gap: 3px 8px;
+    align-items: baseline;
+    padding: 6px 10px;
+    border-radius: 10px;
+    background: rgba(2, 16, 8, .66);
+    box-shadow: inset 0 0 0 1px rgba(77, 255, 154, .28), 0 4px 14px rgba(0, 0, 0, .35);
+    font: 400 10.5px/1.1 var(--f-mono);
+    letter-spacing: .08em;
+    color: var(--mx-hi);
+    pointer-events: none;
+  }
+  .hud b { font: 800 16px/1 var(--f-cond); letter-spacing: .02em; color: #fff; font-variant-numeric: tabular-nums; text-align: right }
+  .hud b.pos { color: #8dffbf }
+  .hud b.neg { color: #ffb3c9 }
+  .recent {
+    position: absolute;
+    right: 8px;
+    top: 8px;
+    z-index: 2;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: grid;
+    gap: 4px;
+    justify-items: end;
+    pointer-events: none;
+  }
+  .recent li {
+    min-width: 46px;
+    padding: 4px 7px 3px;
+    border-radius: 999px;
+    background: linear-gradient(180deg, var(--hi), var(--c));
+    color: var(--t);
+    font: 800 13px/1 var(--f-cond);
+    letter-spacing: .02em;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    box-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 0 1px rgba(255, 255, 255, .35) inset;
+  }
+  .recent li:first-child { box-shadow: 0 2px 0 rgba(0, 0, 0, .45), 0 0 0 1.5px #fff inset, 0 0 14px var(--c) }
+  .recent li:nth-child(n+7) { display: none }
+  .bt-fx {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .3s;
+    background: radial-gradient(ellipse at 50% 60%, transparent 38%, rgba(0, 22, 9, .78) 100%);
+  }
+  .board-wrap.bt .bt-fx { opacity: 1 }
+  /* near miss: a red heartbeat vignette while a pill could still reach a 10x+ pillow */
+  .board-wrap.tense:not(.bt) .bt-fx { opacity: 1; background: radial-gradient(ellipse at 50% 70%, transparent 42%, rgba(70, 0, 18, .62) 100%); animation: tense-beat .62s ease-in-out infinite }
+  @keyframes tense-beat { 0%, 100% { filter: brightness(1) } 18% { filter: brightness(1.9) } 34% { filter: brightness(1.15) } 50% { filter: brightness(1.6) } }
+  .bt-banner {
+    position: absolute;
+    left: 50%;
+    top: 16%;
+    z-index: 3;
+    translate: -50% 0;
+    font: 400 clamp(22px, 6.5vw, 44px)/1 var(--f-mono);
+    letter-spacing: .28em;
+    white-space: nowrap;
+    color: #e3ffee;
+    text-shadow: 3px 0 0 rgba(255, 79, 168, .85), -3px 0 0 rgba(61, 255, 134, .85), 0 0 22px rgba(61, 255, 134, .9);
+    opacity: 0;
+    scale: 1.8;
+    pointer-events: none;
+    transition: opacity .18s, scale .4s var(--ease-back);
+  }
+  .bt-banner small { display: block; margin-top: 8px; font: 400 .42em/1 var(--f-retro); letter-spacing: .06em; color: #ffc2e2; text-align: center; text-shadow: 0 2px 0 rgba(0, 0, 0, .5), 0 0 14px rgba(255, 79, 168, .9) }
+  .board-wrap.bt .bt-banner { opacity: 1; scale: 1; animation: bt-flick .14s steps(2) infinite }
+  @keyframes bt-flick { 50% { translate: calc(-50% + 1px) 0; filter: brightness(1.3) } }
+
+  /* ---------- Controls ---------- */
+  .controls { display: grid; gap: 8px; padding: 10px; background: linear-gradient(180deg, rgba(20, 30, 24, .88), rgba(10, 16, 12, .92)); box-shadow: 0 0 0 1px rgba(77, 255, 154, .16), 0 14px 40px rgba(0, 0, 0, .5) }
+  .pills { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px }
+  .pillbtn {
+    --pc: var(--p-blue);
+    position: relative;
+    cursor: pointer;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    grid-template-rows: auto auto;
+    column-gap: 8px;
+    row-gap: 2px;
+    align-items: center;
+    min-height: 50px;
+    padding: 6px 10px 6px 8px;
+    border: 0;
+    border-radius: 999px;
+    background: linear-gradient(180deg, rgba(255, 255, 255, .08), rgba(0, 0, 0, .28));
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--pc) 45%, transparent), 0 4px 0 rgba(0, 0, 0, .55);
+    text-align: left;
+    transition: translate .2s var(--ease-back), box-shadow .2s, background .2s, opacity .2s;
+    touch-action: manipulation;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+  .pillbtn[data-risk="purple"] { --pc: var(--p-purple) }
+  .pillbtn[data-risk="red"] { --pc: var(--p-red) }
+  .pillbtn[aria-checked="true"] {
+    translate: 0 -3px;
+    background: linear-gradient(180deg, color-mix(in srgb, var(--pc) 55%, #fff 4%), color-mix(in srgb, var(--pc) 28%, #000 62%));
+    box-shadow: inset 0 0 0 2px var(--pc), inset 0 1px 0 rgba(255, 255, 255, .5), 0 0 24px color-mix(in srgb, var(--pc) 65%, transparent), 0 7px 0 rgba(0, 0, 0, .55);
+  }
+  .pillbtn[aria-disabled="true"]:not([aria-checked="true"]) { opacity: .45 }
+  .pillbtn:active { translate: 0 2px }
+  .pill-ico {
+    grid-row: 1 / 3;
+    width: 30px;
+    height: 14px;
+    border-radius: 999px;
+    background: linear-gradient(90deg, var(--pc) 0 50%, #f6f1ff 50%);
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .22), inset 0 2px 0 rgba(255, 255, 255, .55), 0 0 0 1px rgba(0, 0, 0, .45), 0 0 12px color-mix(in srgb, var(--pc) 75%, transparent);
+    rotate: -28deg;
+  }
+  .pillbtn[aria-checked="true"] .pill-ico { animation: pill-bob 1.6s ease-in-out infinite }
+  @keyframes pill-bob { 50% { rotate: -14deg; translate: 0 -2px } }
+  .pb-name { font: 800 16px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase; color: #fff }
+  .pb-sub { font: 700 10.5px/1 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; color: rgba(230, 220, 245, .72) }
+
+  .row2 { display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: end }
+  .grp { display: grid; gap: 4px; min-width: 0 }
+  .grp .clabel { font-size: 10.5px; padding-left: 4px }
+  .seg { display: inline-flex; gap: 3px; padding: 3px; border-radius: 14px; background: rgba(0, 0, 0, .4); box-shadow: inset 0 0 0 1px var(--rule) }
+  .seg button {
+    cursor: pointer;
+    min-width: 44px;
+    min-height: 44px;
+    border: 0;
+    border-radius: 11px;
+    background: transparent;
+    color: var(--ink-soft);
+    font: 800 19px/1 var(--f-cond);
+    transition: background .15s, color .15s, scale .2s var(--ease-back);
+    touch-action: manipulation;
+  }
+  .seg button[aria-checked="true"] { background: linear-gradient(180deg, #9dffc8, var(--mx)); color: #032a14; box-shadow: 0 0 16px rgba(61, 255, 134, .55), inset 0 1px 0 rgba(255, 255, 255, .6) }
+  .seg[aria-disabled="true"] button:not([aria-checked="true"]) { opacity: .4 }
+  .stepper { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 3px; border-radius: 14px; background: rgba(0, 0, 0, .4); box-shadow: inset 0 0 0 1px var(--rule) }
+  .stepper .cbtn { width: 44px; min-height: 44px; padding: 0; font-size: 24px; border-radius: 11px; box-shadow: 0 3px 0 var(--b3), inset 0 1px 0 rgba(255, 255, 255, .3) }
+  .stepper output { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 0; flex: 1; font: 800 22px/1 var(--f-cond); color: var(--gold); font-variant-numeric: tabular-nums }
+  .stepper .cchip-icon { --chip: #2f7bff }
+
+  .row3 { display: grid; grid-template-columns: 1fr 1.9fr 1fr; gap: 8px; align-items: stretch }
+  .auto { flex-direction: column; gap: 1px; min-height: 58px; padding: 6px 4px; font-size: 13px; line-height: 1 }
+  .auto b { font: 800 21px/1 var(--f-cond); letter-spacing: .02em }
+  .auto.on { --b1: #ffe58a; --b2: var(--gold); --b3: #9a6500; --bt: #2b1600; text-shadow: none }
+  .auto.on::after, .drop::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; opacity: 0; box-shadow: 0 0 22px 2px rgba(255, 207, 74, .75); animation: glow-pulse .8s ease-in-out infinite }
+  .drop::after { box-shadow: 0 0 30px 4px rgba(255, 61, 154, .6); animation-duration: 2.4s }
+  @keyframes glow-pulse { 50% { opacity: 1 } }
+  .drop { min-height: 58px; padding: 8px 10px; font-size: 24px; letter-spacing: .1em }
+  .drop .di { width: 26px; height: 12px; border-radius: 999px; background: linear-gradient(90deg, #fff 0 50%, rgba(255, 255, 255, .35) 50%); box-shadow: 0 0 0 1px rgba(0, 0, 0, .3); rotate: -30deg; flex: none }
+  .drop kbd { font: 400 11px/1 var(--f-mono); padding: 3px 5px; border-radius: 5px; border: 1px solid rgba(255, 255, 255, .45); opacity: .8; letter-spacing: .04em }
+  @media (pointer: coarse) { .drop kbd { display: none } }
+  .fine { margin: 0; text-align: center; font: 700 10.5px/1.2 var(--f-cond); letter-spacing: .14em; text-transform: uppercase; color: rgba(196, 176, 216, .55) }
+  /* the shared mute button is 36px; give it a 44px touch target without changing its look */
+  .cbar-mute { position: relative }
+  .cbar-mute::after { content: ""; position: absolute; inset: -4px; border-radius: 50% }
+  .pb-sub { white-space: nowrap }
+  @media (max-width: 380px) {
+    .pillbtn { column-gap: 6px; padding: 6px 6px 6px 6px }
+    .pill-ico { width: 24px; height: 11px }
+    .pb-name { font-size: 15px }
+    .pb-sub { letter-spacing: .05em }
+  }
+
+  /* ---------- Desktop ---------- */
+  @media (min-width: 900px) and (min-height: 600px) {
+    .mx-main {
+      display: grid;
+      grid-template-columns: minmax(310px, 360px) 1fr;
+      grid-template-rows: auto minmax(0, 1fr);
+      grid-template-areas: "logo board" "controls board";
+      gap: 14px 22px;
+      padding: 14px 24px 18px;
+    }
+    .logo { grid-area: logo; display: grid; grid-template-columns: 56px 1fr 44px; grid-template-areas: "bunny . help" "text text text"; align-items: center; gap: 4px 10px }
+    .logo-bunny { display: block; grid-area: bunny; animation: bunny-idle 3.2s ease-in-out infinite; transform-origin: 50% 100% }
+    .help { grid-area: help }
+    .logo-text { grid-area: text }
+    .board-wrap { grid-area: board }
+    .controls { grid-area: controls; align-self: start; gap: 12px; padding: 16px; min-height: 0; max-height: 100%; overflow-y: auto }
+    .logo h1 { font-size: 34px; letter-spacing: .12em }
+    .logo-tag { font-size: 17px; white-space: normal; height: 2.6em; min-height: 0; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical }
+    .pills { grid-template-columns: 1fr; gap: 10px }
+    .pillbtn { min-height: 56px; padding-left: 14px; column-gap: 14px }
+    .pill-ico { width: 36px; height: 17px }
+    .pb-name { font-size: 19px }
+    .pb-sub { font-size: 12px }
+    .row2 { grid-template-columns: 1fr; gap: 12px }
+    .seg { display: flex }
+    .seg button { flex: 1 }
+    .row3 { grid-template-columns: 1fr 2fr 1fr }
+    .row3 .drop { min-height: 66px; font-size: 27px }
+    .recent li { min-width: 58px; font-size: 15px; padding: 5px 9px 4px }
+    .recent li:nth-child(n+7) { display: block }
+    .recent li:nth-child(n+10) { display: none }
+    .hud { font-size: 12px; padding: 8px 12px }
+    .hud b { font-size: 19px }
+  }
+
+  /* ---------- Intro ---------- */
+  .intro { position: fixed; inset: 0; z-index: 9700; display: grid; place-items: center; overflow: hidden; background: radial-gradient(ellipse at 50% 50%, rgba(0, 0, 0, .94) 30%, rgba(0, 0, 0, .7) 100%); color: var(--mx); cursor: pointer; transition: opacity .45s }
+  .intro.out { opacity: 0; pointer-events: none }
+  .intro-term { padding: 24px; max-width: 92vw; font: 400 clamp(21px, 5.6vw, 36px)/1.3 var(--f-mono); text-shadow: 0 0 10px rgba(61, 255, 134, .75); }
+  .intro[data-line="2"] .intro-term { color: #ff8cc8; text-shadow: 0 0 12px rgba(255, 79, 168, .8) }
+  .intro-cursor { display: inline-block; width: .55em; height: 1.05em; margin-left: 3px; vertical-align: -.16em; background: currentColor; box-shadow: 0 0 10px currentColor; animation: blink 1s steps(1) infinite }
+  @keyframes blink { 50% { opacity: 0 } }
+  .intro-skip { position: absolute; left: 50%; bottom: calc(22px + env(safe-area-inset-bottom, 0px)); translate: -50% 0; min-height: 44px; padding: 10px 18px; border: 1px solid rgba(61, 255, 134, .4); border-radius: 999px; background: none; color: rgba(140, 255, 190, .8); font: 400 13px/1 var(--f-mono); letter-spacing: .14em; cursor: pointer }
+  .intro-bunny { position: absolute; left: -100px; bottom: 20%; width: 80px; height: 80px; pointer-events: none }
+  .intro.bunny .intro-bunny { animation: bunny-run 1.6s linear forwards }
+  .intro.bunny .intro-bunny svg { animation: hop .27s ease-in-out infinite alternate }
+  @keyframes bunny-run { to { left: calc(100% + 100px) } }
+  @keyframes hop { from { translate: 0 0; rotate: -4deg } to { translate: 0 -34px; rotate: 6deg } }
+
+  /* ---------- Help ---------- */
+  .mx-help h3 { margin: 6px 0 0; font: 800 14px/1.2 var(--f-cond); letter-spacing: .14em; text-transform: uppercase; color: var(--mx) }
+  .mx-help b { color: var(--ink) }
+  .mx-help .tbl-wrap { overflow-x: auto }
+  .mx-help table { font-size: 14px }
+  .mx-help td.num, .mx-help th.num { text-align: right }
+  .mx-help .fine-print { font-size: 12px; line-height: 1.35; color: rgba(196, 176, 216, .7) }
+  .mx-help p { line-height: 1.4 }
+  .mx-help table td, .mx-help table th { padding: 4px 4px }
+  .mx-help table.rtp small { display: block; font-size: 11px; font-weight: 500; color: rgba(196, 176, 216, .75) }
+
+  @media (prefers-reduced-motion: reduce) {
+    .drop::after, .auto.on::after, .pillbtn[aria-checked="true"] .pill-ico, .board-wrap.bt .bt-banner, .logo-bunny, .board-wrap.tense .bt-fx { animation: none }
+  }
+</style>
+<body class="mx">
+<canvas id="rain" aria-hidden="true"></canvas>
+
+<div class="shake-clip">
+<main class="mx-main" data-shake>
+  <header class="logo">
+    <svg class="logo-bunny" viewBox="0 0 64 64" aria-hidden="true"><use href="#bunny"/></svg>
+    <div class="logo-text">
+      <h1 aria-label="The Mattress"><span data-txt="THE ">THE </span><span data-txt="MAT">MAT</span><em data-txt="TRESS">TRESS</em></h1>
+      <p class="logo-tag" id="tag" aria-live="polite">There is no spoon. Only spooning.</p>
+    </div>
+    <button class="cbtn cbtn--ghost cbtn--round help" id="help" type="button" aria-label="Rules, paytable and odds">?</button>
+  </header>
+
+  <div class="board-wrap" id="boardWrap">
+    <canvas id="board" role="img" aria-label="A quilted mattress full of bedsprings. Pills bounce off the springs and land on pillows that pay a multiplier."></canvas>
+    <div class="bt-fx" aria-hidden="true"></div>
+    <div class="hud" id="hud" aria-live="off">
+      <span>IN BED</span><b id="inflight">0</b>
+      <span>NET</span><b id="net">0</b>
+    </div>
+    <ol class="recent" id="recent" aria-label="Recent results"></ol>
+    <div class="bt-banner" aria-hidden="true">BULLET TIME<small>whoa.</small></div>
+  </div>
+
+  <section class="controls cpanel" aria-label="Controls">
+    <div class="pills" role="radiogroup" aria-label="Pick your pill (risk)">
+      <button class="pillbtn" type="button" role="radio" data-risk="blue" title="Blue pill: stay in bed. Gentle bounces, small steady wins."><i class="pill-ico" aria-hidden="true"></i><span class="pb-name">Blue</span><span class="pb-sub">Low risk</span></button>
+      <button class="pillbtn" type="button" role="radio" data-risk="purple" title="Purple pill: a little tingly. Medium risk."><i class="pill-ico" aria-hidden="true"></i><span class="pb-name">Purple</span><span class="pb-sub">Mid risk</span></button>
+      <button class="pillbtn" type="button" role="radio" data-risk="red" title="Red pill: see how deep the mattress goes. High risk, huge edges."><i class="pill-ico" aria-hidden="true"></i><span class="pb-name">Red</span><span class="pb-sub">High risk</span></button>
+    </div>
+    <div class="row2">
+      <div class="grp">
+        <span class="clabel" id="rowsLabel">Rows of springs</span>
+        <div class="seg" id="rowsSeg" role="radiogroup" aria-labelledby="rowsLabel">
+          <button type="button" role="radio" data-rows="8">8</button>
+          <button type="button" role="radio" data-rows="12">12</button>
+          <button type="button" role="radio" data-rows="16">16</button>
+        </div>
+      </div>
+      <div class="grp" id="stakeGrp">
+        <span class="clabel" id="stakeLabel">Stake per pill</span>
+        <div class="stepper" role="group" aria-labelledby="stakeLabel">
+          <button class="cbtn cbtn--ghost" id="stakeDown" type="button" aria-label="Lower stake">&minus;</button>
+          <output id="stakeOut" aria-live="polite"><i class="cchip-icon" aria-hidden="true"></i><span>10</span></output>
+          <button class="cbtn cbtn--ghost" id="stakeUp" type="button" aria-label="Raise stake">+</button>
+        </div>
+      </div>
+    </div>
+    <div class="row3">
+      <button class="cbtn cbtn--ghost auto" type="button" data-auto="10"><span>Auto</span><b>×10</b></button>
+      <button class="cbtn drop" id="drop" type="button"><i class="di" aria-hidden="true"></i>Drop <kbd>Space</kbd></button>
+      <button class="cbtn cbtn--ghost auto" type="button" data-auto="50"><span>Auto</span><b>×50</b></button>
+    </div>
+    <p class="fine">Parody. Fake chips, no real money.</p>
+  </section>
+</main>
+</div>
+
+<div class="intro" id="intro" hidden>
+  <div class="intro-term"><span id="introText"></span><span class="intro-cursor"></span></div>
+  <div class="intro-bunny"><svg viewBox="0 0 64 64" aria-hidden="true"><use href="#bunny"/></svg></div>
+  <button class="intro-skip" type="button">tap to skip</button>
+</div>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <g id="bunny">
+      <ellipse cx="22" cy="17" rx="6" ry="15" fill="#ff6fb5" transform="rotate(-12 22 17)"/>
+      <ellipse cx="22" cy="18" rx="2.8" ry="11" fill="#ffd0e8" transform="rotate(-12 22 18)"/>
+      <ellipse cx="42" cy="17" rx="6" ry="15" fill="#ff6fb5" transform="rotate(14 42 17)"/>
+      <ellipse cx="42" cy="18" rx="2.8" ry="11" fill="#ffd0e8" transform="rotate(14 42 18)"/>
+      <ellipse cx="32" cy="56" rx="15" ry="7" fill="#e8559f"/>
+      <circle cx="32" cy="40" r="16" fill="#ff7fc0"/>
+      <ellipse cx="25" cy="47" rx="4" ry="2.4" fill="#ffb3da"/>
+      <ellipse cx="39" cy="47" rx="4" ry="2.4" fill="#ffb3da"/>
+      <path d="M17.5 36.5h12l-1.2 4.6c-.5 1.8-2 2.9-3.8 2.9h-2c-1.8 0-3.3-1.1-3.8-2.9zM34.5 36.5h12l-1.2 4.6c-.5 1.8-2 2.9-3.8 2.9h-2c-1.8 0-3.3-1.1-3.8-2.9z" fill="#0b1a10"/>
+      <path d="M29.5 37.5h5" stroke="#0b1a10" stroke-width="2"/>
+      <path d="M20 38l3-1M37 38l3-1" stroke="#3dff86" stroke-width="1.2" stroke-linecap="round" opacity=".8"/>
+      <path d="M30 47.5q2 1.6 4 0" stroke="#7a1a4c" stroke-width="1.6" fill="none" stroke-linecap="round"/>
+      <circle cx="32" cy="45" r="1.7" fill="#c2186b"/>
+    </g>
+  </defs>
+</svg>
+
+<script src="../shared/casino.js"></script>
+<script>
+(() => {
+  'use strict';
+  const C = window.Casino;
+  C.init({ id: 'the-mattress', title: 'The Mattress', minBet: 10 });
+  const { wallet, sfx, fx, rng } = C;
+  const $ = (s, el = document) => el.querySelector(s);
+  const $$ = (s, el = document) => [...el.querySelectorAll(s)];
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const TAU = Math.PI * 2;
+  const RM = () => fx.reducedMotion;
+  // Chrome refuses vibrate() before the first real tap; only buzz once the player has interacted.
+  const vib = (p) => { if (!navigator.userActivation || navigator.userActivation.hasBeenActive) fx.vibrate(p); };
+  const easeOutBack = (t) => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * (t - 1) ** 3 + c1 * (t - 1) ** 2; };
+
+  /* MATH-BEGIN
+     The odds. Every spring is a fair coin from Casino.rng: the pill goes left or right with probability 1/2,
+     independently, so after n rows it lands on pillow k (= number of rights, 0..n) with probability C(n,k)/2^n.
+     The pill is animated along exactly that path, so what you see is what was drawn. Pillow k pays
+     stake x MULT[k]; the tables are symmetric (listed edge -> centre below).
+     Exact return to player, sum over k of C(n,k)/2^n x MULT[k]:
+                 blue (low)   purple (mid)   red (high)
+       8 rows     97.734 %     96.719 %       97.656 %
+      12 rows     96.772 %     97.905 %       97.451 %
+      16 rows     96.486 %     97.627 %       97.878 %
+     Stakes are multiples of 10 and every multiplier has at most one decimal, so stake x multiplier is always a
+     whole number of chips: nothing is lost to rounding and the exact figures above are the real RTP.
+     Monte Carlo (node, this exact block extracted from the page, crypto RNG, 20,000,000 pills per setup):
+       8 rows 97.76 / 96.76 / 97.67   12 rows 96.77 / 97.89 / 97.37   16 rows 96.49 / 97.65 / 97.95
+       (95% interval +-0.02 for blue up to +-0.29 for 16-row red, where the 1000x edge makes it noisy).
+     QA re-check: the exact sums above recomputed in integer arithmetic from this block, plus an independent
+     4,000,000-pill run per setup through choosePath, agree (e.g. 16-row red 97.95 +-0.65, 8-row blue 97.71 +-0.06).
+  */
+  const STAKES = [10, 20, 50, 100, 200, 500, 1000];
+  const RISKS = ['blue', 'purple', 'red'];
+  const ROWS = [8, 12, 16];
+  const HALF = {
+    8: { blue: [6, 2.2, 1.2, 0.9, 0.5], purple: [13, 3, 1.2, 0.7, 0.4], red: [30, 4, 1.4, 0.3, 0.2] },
+    12: { blue: [11, 3, 1.6, 1.4, 1.1, 1, 0.4], purple: [36, 10, 3.8, 2, 1.1, 0.6, 0.3], red: [180, 25, 8, 2, 0.6, 0.2, 0.2] },
+    16: { blue: [18, 9, 2, 1.4, 1.3, 1.2, 1.1, 1, 0.4], purple: [120, 40, 11, 4, 3, 1.5, 1, 0.5, 0.3], red: [1000, 150, 25, 8, 4, 2, 0.2, 0.2, 0.2] },
+  };
+  function mults(rows, risk) {
+    const h = HALF[rows][risk];
+    return h.concat(h.slice(0, -1).reverse());
+  }
+  function binom(n, k) {
+    let r = 1;
+    for (let i = 1; i <= k; i++) r = (r * (n - k + i)) / i;
+    return r;
+  }
+  function exactRTP(rows, risk) {
+    const m = mults(rows, risk);
+    let s = 0;
+    for (let k = 0; k <= rows; k++) s += (binom(rows, k) / 2 ** rows) * m[k];
+    return s;
+  }
+  function payoutFor(stake, mult) { return Math.floor(Math.round(stake * mult * 10) / 10); }
+  // rand() is a uniform float in [0, 1). forceK is a debug-only override (URL hash) that keeps the path random
+  // but makes it end on pillow forceK.
+  function choosePath(rows, rand, forceK) {
+    const bits = [];
+    if (forceK == null) {
+      for (let i = 0; i < rows; i++) bits.push(rand() < 0.5 ? 1 : 0);
+    } else {
+      for (let i = 0; i < rows; i++) bits.push(i < forceK ? 1 : 0);
+      for (let i = rows - 1; i > 0; i--) {
+        const j = Math.floor(rand() * (i + 1));
+        [bits[i], bits[j]] = [bits[j], bits[i]];
+      }
+    }
+    let k = 0;
+    for (const b of bits) k += b;
+    return { bits, k };
+  }
+  /* MATH-END */
+  const MEASURED = {
+    8: { blue: 97.76, purple: 96.76, red: 97.67 },
+    12: { blue: 96.77, purple: 97.89, red: 97.37 },
+    16: { blue: 96.49, purple: 97.65, red: 97.95 },
+  };
+
+  /* ---------- Look and feel ---------- */
+  const PILL = {
+    blue: { c: '#3b8cff', d: '#0d3f9e', l: '#9cc6ff', glow: '80,150,255' },
+    purple: { c: '#b45cff', d: '#5a139f', l: '#dcb2ff', glow: '190,110,255' },
+    red: { c: '#ff3347', d: '#9a0018', l: '#ff9aa5', glow: '255,70,90' },
+  };
+  const TIER = [
+    { c: '#4b2f78', hi: '#7a55b5', t: '#e2d5ff' },
+    { c: '#118c52', hi: '#33d68a', t: '#effff6' },
+    { c: '#0fa5bb', hi: '#62e8f6', t: '#02272d' },
+    { c: '#f2b51f', hi: '#ffe58f', t: '#3a2400' },
+    { c: '#f45a1f', hi: '#ffaa7a', t: '#fff' },
+    { c: '#e8174f', hi: '#ff86a6', t: '#fff6c8' },
+  ];
+  const tierOf = (m) => (m >= 50 ? 5 : m >= 10 ? 4 : m >= 5 ? 3 : m >= 2 ? 2 : m >= 1 ? 1 : 0);
+  const fmtMult = (m) => String(m);
+  const CHIP_COLORS = { 10: '#2f7bff', 20: '#1fae5b', 50: '#ff8a1f', 100: '#1c1c24', 200: '#d43ad6', 500: '#7b3cff', 1000: '#d4a017' };
+  const SCALES = { blue: [0, 2, 4, 7, 9], purple: [0, 3, 5, 7, 10], red: [0, 1, 4, 5, 7, 8, 10] };
+  const BIG_LABELS = [null, 'WHOA.', 'DEJA VU!', 'THE ONE!', 'KING SIZE!!!'];
+
+  const QUIPS = {
+    small: ['Ooh, springy.', 'Soft landing.', 'Fluffed and folded.', 'Pillow talk pays.', 'Tucked in nicely.', 'The springs approve.', 'Bounce with benefits.'],
+    good: ['Sheets: thoroughly ruffled.', 'Firm. Very firm.', 'Memory foam will remember this.', 'Somebody made the bed rock.', 'Free your mind. Fill your wallet.', 'Deja vu? Do that again.', 'Box spring? Box KA-CHING.'],
+    loss: ['Rolled off the edge.', 'Not tonight, dear.', 'Lumpy.', 'Wrong side of the bed.', 'That one went flat.', 'Cold side of the pillow.', 'A glitch in the mattress.', 'Snooze. You lose.', 'Ignorance is bliss. So is a nap.', 'Not even a cuddle.'],
+    near: ['SO CLOSE. The springs were almost yours.', 'Almost the one. Almost.', 'Nearly woke up rich.', 'Edged out. Rude.'],
+    big: ['Whoa. Change the sheets.', 'You are the one. Tonight, anyway.', 'Everybody out of bed. We are rich.'],
+    risk: {
+      blue: 'Blue pill: stay in bed, sweet dreams.',
+      purple: 'Purple pill: a little tingly.',
+      red: 'Red pill: see how deep the mattress goes.',
+    },
+  };
+  const bags = {};
+  function quipFrom(kind) {
+    if (!bags[kind] || !bags[kind].length) bags[kind] = rng.shuffle(QUIPS[kind].slice());
+    return bags[kind].pop();
+  }
+
+  /* ---------- State ---------- */
+  const CFG_KEY = 'bmc.mattress.cfg';
+  const saved = C.store.get(CFG_KEY, null) || {};
+  const S = {
+    rows: ROWS.includes(saved.rows) ? saved.rows : 16,
+    risk: RISKS.includes(saved.risk) ? saved.risk : 'purple',
+    stakeIdx: Number.isInteger(saved.stakeIdx) && STAKES[saved.stakeIdx] ? saved.stakeIdx : 0,
+    balls: [],
+    auto: null,
+    ts: 1,
+    btCount: 0,
+    tenseCount: 0,
+    freeze: 0,
+    paused: 0,
+    streak: 0,
+    net: 0,
+    lastDrop: 0,
+    lastCollect: 0,
+    lastLossQuip: 0,
+    rig: null,
+    boot: -1e9,
+    bootRows: -1,
+    dispT: 9,
+    introOn: false,
+    thumb: false,
+    nextId: 1,
+    dropped: 0,
+    settled: 0,
+    log: [],
+  };
+  const MAX_FLIGHT = 40;
+  const AUTO_GAP = 0.3;
+  const FALL = 0.3;
+  const hopFor = (n) => (1.5 + 0.07 * n) / (n + 1);
+  const btRowsFor = (n) => (n <= 8 ? 3 : 4);
+
+  // Debug hooks in the URL hash, e.g. #nointro&cfg=16,red&rig=edge&stake=3 (rig: a pillow index, edge, big, lose, near).
+  // Rigging outcomes only works under automation (navigator.webdriver), like the other games' test hooks.
+  const H = new URLSearchParams(location.hash.slice(1));
+  const AUTOMATED = navigator.webdriver === true;
+  if (H.has('cfg')) {
+    const [r, k] = H.get('cfg').split(',');
+    if (ROWS.includes(+r)) S.rows = +r;
+    if (RISKS.includes(k)) S.risk = k;
+  }
+  if (H.has('stake') && STAKES[+H.get('stake')]) S.stakeIdx = +H.get('stake');
+  if (AUTOMATED && H.has('rig')) S.rig = H.get('rig');
+  S.thumb = H.has('thumb');
+
+  /* ---------- Elements ---------- */
+  const wrap = $('#boardWrap');
+  const cv = $('#board');
+  const g = cv.getContext('2d');
+  const stat = document.createElement('canvas');
+  const snap = document.createElement('canvas');
+  const tagEl = $('#tag');
+  const dropBtn = $('#drop');
+  const pillBtns = $$('.pillbtn');
+  const rowsSeg = $('#rowsSeg');
+  const rowBtns = $$('#rowsSeg button');
+  const autoBtns = $$('.auto');
+  const stakeOut = $('#stakeOut');
+  const stakeGrp = $('#stakeGrp');
+  const recentEl = $('#recent');
+  const hudEl = $('#hud');
+  const inflightEl = $('#inflight');
+  const netEl = $('#net');
+  const TAG_TEXT = tagEl.textContent;
+
+  /* ---------- Sound ---------- */
+  const snd = (() => {
+    const pans = new Map();
+    let recent = [];
+    function dest(x) {
+      const c = sfx.ctx();
+      if (!c || !sfx.out || !c.createStereoPanner || !G) return undefined;
+      const span = G.s * (G.n / 2 + 1);
+      const p = Math.round(clamp((x - G.cx) / span, -1, 1) * 3) / 3;
+      const key = p.toFixed(2);
+      if (!pans.has(key)) {
+        const node = c.createStereoPanner();
+        node.pan.value = p * 0.7;
+        node.connect(sfx.out);
+        pans.set(key, node);
+      }
+      return pans.get(key);
+    }
+    function budget(max = 7) {
+      const now = performance.now();
+      recent = recent.filter((t) => now - t < 100);
+      if (recent.length >= max) return false;
+      recent.push(now);
+      return true;
+    }
+    return {
+      peg(r, n, x, risk, slow) {
+        if (!sfx.audible || !budget()) return;
+        const sc = SCALES[risk];
+        const step = Math.round((r * 9) / Math.max(1, n - 1));
+        const semi = sc[step % sc.length] + 12 * Math.floor(step / sc.length) + (Math.random() - 0.5) * 0.14;
+        let f = 392 * 2 ** (semi / 12);
+        const d = dest(x);
+        if (slow) {
+          f *= 0.5;
+          sfx.tone({ freq: f * 1.3, to: f, type: 'triangle', dur: 0.5, vol: 0.12, dest: d });
+          sfx.tone({ freq: f * 2.01, type: 'sine', dur: 0.36, vol: 0.04, dest: d });
+          sfx.tone({ freq: f * 0.5, to: f * 0.45, type: 'sine', dur: 0.4, vol: 0.08, dest: d });
+        } else {
+          sfx.tone({ freq: f * 1.22, to: f, type: 'triangle', dur: 0.13, vol: 0.075, dest: d });
+          sfx.tone({ freq: f * 2, type: 'sine', dur: 0.06, vol: 0.025, dest: d });
+        }
+      },
+      land(m, x, streak) {
+        if (!sfx.audible) return;
+        const d = dest(x);
+        if (m < 1) {
+          sfx.tone({ freq: 240, to: 120, type: 'square', dur: 0.14, vol: 0.05, filter: { type: 'lowpass', freq: 650 }, dest: d });
+          sfx.noise({ type: 'lowpass', freq: 500, dur: 0.08, vol: 0.12, dest: d });
+        } else if (m === 1) {
+          sfx.tone({ freq: 700, to: 760, type: 'triangle', dur: 0.09, vol: 0.07, dest: d });
+          sfx.noise({ type: 'lowpass', freq: 900, dur: 0.06, vol: 0.08, dest: d });
+        } else if (m < 3) {
+          sfx.chime(Math.min(14, streak + 2));
+          sfx.coin(1 + Math.min(10, streak) * 0.04);
+        } else if (m < 10) {
+          sfx.win(1);
+          sfx.coin(1.1);
+          sfx.chime(Math.min(16, streak + 5));
+        } else {
+          sfx.thud(0.75);
+          sfx.explode();
+        }
+      },
+      drop(x) {
+        if (!sfx.audible) return;
+        sfx.pop(0.9 + Math.random() * 0.25);
+        sfx.noise({ type: 'highpass', freq: 3500, dur: 0.05, vol: 0.07, dest: dest(x) });
+      },
+      gulp() {
+        sfx.tone({ freq: 330, to: 110, dur: 0.15, vol: 0.2 });
+        sfx.tone({ freq: 190, to: 90, dur: 0.11, vol: 0.12, delay: 0.1 });
+        sfx.noise({ type: 'lowpass', freq: 600, dur: 0.07, vol: 0.1, delay: 0.1 });
+      },
+      bt() {
+        sfx.whoosh(1.1, 0.26);
+        sfx.tone({ freq: 92, to: 38, type: 'sawtooth', dur: 2.4, vol: 0.09, attack: 0.15, filter: { type: 'lowpass', freq: 700, to: 180 } });
+        sfx.noise({ type: 'bandpass', freq: 5200, to: 260, dur: 1.3, vol: 0.09, attack: 0.04 });
+        sfx.heartbeat();
+      },
+      wah() {
+        sfx.tone({ freq: 233, to: 220, type: 'sawtooth', dur: 0.16, vol: 0.06, filter: { type: 'lowpass', freq: 900 } });
+        sfx.tone({ freq: 207, to: 185, type: 'sawtooth', dur: 0.34, vol: 0.06, delay: 0.17, filter: { type: 'lowpass', freq: 800 } });
+      },
+      boot(i) { sfx.tone({ freq: 600 + i * 70, to: 900 + i * 70, type: 'square', dur: 0.03, vol: 0.025 }); },
+      // the last hop into a good pillow: a swelling "wheee" that the landing chime resolves
+      whistle(dur, x, m) {
+        if (!sfx.audible || !budget(9)) return;
+        const d = dest(x);
+        const top = m >= 10 ? 1760 : m >= 5 ? 1320 : 1050;
+        sfx.tone({ freq: top * 0.42, to: top, type: 'sine', dur, vol: 0.05, attack: dur * 0.85, dest: d });
+        sfx.tone({ freq: top * 0.63, to: top * 1.5, type: 'triangle', dur, vol: 0.018, attack: dur * 0.85, dest: d });
+      },
+      // a near miss lands: the 10x pillow it almost hit gives a deflating raspberry
+      miss(x) {
+        if (!sfx.audible) return;
+        const d = dest(x);
+        sfx.tone({ freq: 620, to: 180, type: 'sawtooth', dur: 0.42, vol: 0.05, filter: { type: 'lowpass', freq: 1400, to: 400 }, dest: d });
+        sfx.noise({ type: 'bandpass', freq: 900, to: 300, q: 2, dur: 0.3, vol: 0.06, dest: d });
+      },
+      // pillow puff when a pill sinks in
+      puff(x, m) {
+        if (!sfx.audible || !budget(9)) return;
+        sfx.noise({ type: 'lowpass', freq: m >= 1 ? 1400 : 700, to: 300, dur: 0.12, vol: 0.09, dest: dest(x) });
+      },
+    };
+  })();
+
+  /* ---------- Geometry and sprites ---------- */
+  let G = null;
+  let pegs = [];
+  let buckets = [];
+  const rings = [];
+  const sparks = [];
+  const ripples = [];
+  const landers = []; // pills sinking into their pillow after landing
+  const fluff = []; // pillow fluff puffed out by a landing
+  const incoming = []; // per pillow: how close a pill on its final hop is to arriving (0..1)
+  const hot = []; // per pillow: 1 while a 10x+ pillow is still reachable by a pill in bullet time or a near miss
+  const cam = { z: 1, fx: 0, fy: 0, tx: 0, ty: 0 };
+  const spr = { coil: null, coilGlow: null, pills: {}, glows: {}, pillows: [], SW: 0, SH: 0, SB: 0 };
+
+  function mkCanvas(w, h, dpr) {
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.ceil(w * dpr));
+    c.height = Math.max(1, Math.ceil(h * dpr));
+    const x = c.getContext('2d');
+    x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    return [c, x];
+  }
+
+  function layout() {
+    const rect = wrap.getBoundingClientRect();
+    const W = Math.max(200, Math.round(rect.width));
+    const Hh = Math.max(200, Math.round(rect.height));
+    const dpr = Math.min(2, window.devicePixelRatio || 1);
+    const n = S.rows;
+    let s = Math.min((W - 14) / (n + 1.7), (Hh - 20) / (2.15 + 0.82 * (n - 0.6)), 74);
+    let geo = null;
+    for (let pass = 0; pass < 3; pass++) {
+      const cw = clamp(s * 0.4, 8, 26);
+      const ch = cw * 1.3;
+      const bh = clamp(s * 0.72, 18, 36);
+      const disp = Math.max(30, s * 0.95);
+      const fixed = 16 + disp + ch + bh;
+      const gap = clamp((Hh - fixed) / (n - 0.6), 0.82 * s, 1.3 * s);
+      const used = fixed + gap * (n - 0.6);
+      geo = { cw, ch, bh, disp, gap, used };
+      if (used <= Hh + 0.5) break;
+      s *= Hh / used;
+    }
+    const { cw, ch, bh, disp, gap, used } = geo;
+    const oy = Math.max(0, (Hh - used) / 2);
+    const top0 = oy + 6 + disp + ch / 2;
+    const lastY = top0 + (n - 1) * gap;
+    const bucketY = lastY + ch / 2 + gap * 0.4 + bh / 2;
+    const cx = W / 2;
+    const half = ((n + 1) / 2) * s + Math.max(s * 0.75, 14);
+    const mx0 = Math.max(3, cx - half);
+    const mat = { x: mx0, y: oy + 2, w: Math.min(W - 3, cx + half) - mx0, h: used - 4, r: clamp(s * 0.5, 12, 26) };
+    const pl = clamp(s * 0.56, 14, 27);
+    const changedRows = !G || G.n !== n;
+    G = {
+      W, H: Hh, dpr, n, s, gap, cw, ch, bh, bw: s * 0.9, cx, top0, lastY, bucketY, mat,
+      dispY: top0 - ch / 2 - disp * 0.55, pl, pw: pl * 0.5,
+    };
+    cv.width = Math.round(W * dpr);
+    cv.height = Math.round(Hh * dpr);
+    if (changedRows) {
+      pegs = [];
+      for (let r = 0; r < n; r++) pegs.push(Array.from({ length: r + 3 }, () => ({ t: 9, amp: 0, dir: 0 })));
+      buckets = Array.from({ length: n + 1 }, () => ({ t: 9, amp: 0, miss: 9 }));
+    }
+    landers.length = 0;
+    fluff.length = 0;
+    cam.z = 1;
+    cam.fx = cam.tx = W / 2;
+    cam.fy = cam.ty = Hh / 2;
+    for (const b of S.balls) b.trail.length = 0;
+    buildCoil();
+    buildPills();
+    buildPillows();
+    buildStatic();
+    hudEl.style.left = `${Math.round(mat.x + 8)}px`;
+    hudEl.style.top = `${Math.round(mat.y + 8)}px`;
+    recentEl.style.right = `${Math.round(W - (mat.x + mat.w) + 8)}px`;
+    recentEl.style.top = `${Math.round(mat.y + 8)}px`;
+  }
+
+  const pegX = (r, j) => G.cx + (j - (r + 2) / 2) * G.s;
+  const pegY = (r) => G.top0 + r * G.gap;
+  const contactY = (r) => pegY(r) - G.ch / 2 - G.pw * 0.42;
+  const bucketX = (k) => G.cx + (k - G.n / 2) * G.s;
+
+  function buildCoil() {
+    const { cw, ch, dpr } = G;
+    const SW = cw * 1.7;
+    const SH = ch * 1.5;
+    const SB = ch * 1.22;
+    spr.SW = SW;
+    spr.SH = SH;
+    spr.SB = SB;
+    const draw = (x, glow) => {
+      x.translate(SW / 2, SB);
+      const turns = 3.5;
+      const rx = cw * 0.5;
+      const ry = Math.max(1.3, ch * 0.1);
+      const lw = Math.max(1, cw * 0.11);
+      const top = ch * 0.84;
+      if (glow) {
+        const gr = x.createRadialGradient(0, -ch * 0.5, 0, 0, -ch * 0.5, cw * 0.85);
+        gr.addColorStop(0, 'rgba(120,255,180,.9)');
+        gr.addColorStop(1, 'rgba(61,255,134,0)');
+        x.fillStyle = gr;
+        x.fillRect(-SW / 2, -SB, SW, SH);
+      }
+      // a Bonnell bedspring: an hourglass helix, back strands dark, front strands polished
+      const N = 96;
+      const pts = [];
+      for (let i = 0; i <= N; i++) {
+        const f = i / N;
+        const th = f * turns * TAU;
+        const waist = 0.58 + 0.42 * Math.abs(2 * f - 1);
+        pts.push({ x: Math.cos(th) * rx * waist, y: -f * top + Math.sin(th) * ry * waist, front: Math.sin(th) > 0 });
+      }
+      x.lineCap = 'round';
+      x.lineJoin = 'round';
+      x.lineWidth = lw;
+      x.strokeStyle = glow ? 'rgba(150,255,200,.5)' : '#4a505d';
+      x.beginPath();
+      for (let i = 1; i <= N; i++) if (!pts[i].front) { x.moveTo(pts[i - 1].x, pts[i - 1].y); x.lineTo(pts[i].x, pts[i].y); }
+      x.stroke();
+      const gr = x.createLinearGradient(-rx, 0, rx, 0);
+      if (glow) {
+        gr.addColorStop(0, '#9dffc9');
+        gr.addColorStop(0.5, '#ffffff');
+        gr.addColorStop(1, '#9dffc9');
+      } else {
+        gr.addColorStop(0, '#8a92a2');
+        gr.addColorStop(0.35, '#ffffff');
+        gr.addColorStop(0.7, '#c3c9d6');
+        gr.addColorStop(1, '#646b79');
+      }
+      x.strokeStyle = gr;
+      x.lineWidth = lw * 1.1;
+      x.beginPath();
+      for (let i = 1; i <= N; i++) if (pts[i].front) { x.moveTo(pts[i - 1].x, pts[i - 1].y); x.lineTo(pts[i].x, pts[i].y); }
+      x.stroke();
+      // base ring
+      x.strokeStyle = glow ? 'rgba(200,255,220,.6)' : '#7b8291';
+      x.lineWidth = lw;
+      x.beginPath();
+      x.ellipse(0, 0, rx, ry, 0, 0, TAU);
+      x.stroke();
+      // the tuft button on top
+      const ty = -ch * 0.9;
+      x.fillStyle = glow ? '#eafff2' : '#ff6fb5';
+      x.beginPath();
+      x.ellipse(0, ty, rx * 0.78, ry * 1.35, 0, 0, TAU);
+      x.fill();
+      if (!glow) {
+        x.fillStyle = 'rgba(255,255,255,.55)';
+        x.beginPath();
+        x.ellipse(-rx * 0.22, ty - ry * 0.35, rx * 0.3, ry * 0.45, 0, 0, TAU);
+        x.fill();
+        x.strokeStyle = 'rgba(90,0,45,.55)';
+        x.lineWidth = 0.8;
+        x.beginPath();
+        x.ellipse(0, ty, rx * 0.78, ry * 1.35, 0, 0, TAU);
+        x.stroke();
+      }
+    };
+    let x;
+    [spr.coil, x] = mkCanvas(SW, SH, G.dpr * 1.5);
+    draw(x, false);
+    [spr.coilGlow, x] = mkCanvas(SW, SH, G.dpr * 1.5);
+    draw(x, true);
+  }
+
+  function capsule(x, w, h) {
+    const r = h / 2;
+    x.beginPath();
+    x.moveTo(-w / 2 + r, -r);
+    x.lineTo(w / 2 - r, -r);
+    x.arc(w / 2 - r, 0, r, -Math.PI / 2, Math.PI / 2);
+    x.lineTo(-w / 2 + r, r);
+    x.arc(-w / 2 + r, 0, r, Math.PI / 2, (Math.PI * 3) / 2);
+    x.closePath();
+  }
+  function buildPills() {
+    const { pl, pw, dpr } = G;
+    for (const k of RISKS) {
+      const P = PILL[k];
+      const pad = 3;
+      const [c, x] = mkCanvas(pl + pad * 2, pw + pad * 2, dpr * 2);
+      x.translate(pl / 2 + pad, pw / 2 + pad);
+      capsule(x, pl, pw);
+      x.save();
+      x.clip();
+      let gr = x.createLinearGradient(0, -pw / 2, 0, pw / 2);
+      gr.addColorStop(0, P.l);
+      gr.addColorStop(0.45, P.c);
+      gr.addColorStop(1, P.d);
+      x.fillStyle = gr;
+      x.fillRect(-pl / 2, -pw / 2, pl / 2, pw);
+      gr = x.createLinearGradient(0, -pw / 2, 0, pw / 2);
+      gr.addColorStop(0, '#ffffff');
+      gr.addColorStop(0.5, '#ece6f7');
+      gr.addColorStop(1, '#a99fbd');
+      x.fillStyle = gr;
+      x.fillRect(0, -pw / 2, pl / 2, pw);
+      x.fillStyle = 'rgba(0,0,0,.28)';
+      x.fillRect(-0.6, -pw / 2, 1.2, pw);
+      x.fillStyle = 'rgba(255,255,255,.75)';
+      x.beginPath();
+      x.ellipse(-pl * 0.12, -pw * 0.22, pl * 0.28, pw * 0.11, 0, 0, TAU);
+      x.fill();
+      x.restore();
+      capsule(x, pl, pw);
+      x.strokeStyle = 'rgba(10,0,20,.6)';
+      x.lineWidth = 1;
+      x.stroke();
+      spr.pills[k] = c;
+      const gs = pl * 2.2;
+      const [gc, gx] = mkCanvas(gs, gs, dpr);
+      const rg = gx.createRadialGradient(gs / 2, gs / 2, 0, gs / 2, gs / 2, gs / 2);
+      rg.addColorStop(0, `rgba(${P.glow},.75)`);
+      rg.addColorStop(0.4, `rgba(${P.glow},.28)`);
+      rg.addColorStop(1, `rgba(${P.glow},0)`);
+      gx.fillStyle = rg;
+      gx.fillRect(0, 0, gs, gs);
+      spr.glows[k] = gc;
+    }
+  }
+
+  function pillowPath(x, w, h) {
+    const r = h * 0.36;
+    const p = Math.min(w, h) * 0.12;
+    const L = -w / 2, R = w / 2, T = -h / 2, B = h / 2;
+    x.beginPath();
+    x.moveTo(L + r, T);
+    x.quadraticCurveTo(0, T + p, R - r, T);
+    x.quadraticCurveTo(R, T, R, T + r);
+    x.quadraticCurveTo(R - p, 0, R, B - r);
+    x.quadraticCurveTo(R, B, R - r, B);
+    x.quadraticCurveTo(0, B - p, L + r, B);
+    x.quadraticCurveTo(L, B, L, B - r);
+    x.quadraticCurveTo(L + p, 0, L, T + r);
+    x.quadraticCurveTo(L, T, L + r, T);
+    x.closePath();
+  }
+  function buildPillows() {
+    const { bw, bh, dpr, n } = G;
+    const m = mults(n, S.risk);
+    spr.tiers = m.map(tierOf);
+    spr.pillows = m.map((v) => {
+      const T = TIER[tierOf(v)];
+      const pad = 4;
+      const [c, x] = mkCanvas(bw + pad * 2, bh + pad * 2, dpr);
+      x.translate(bw / 2 + pad, bh / 2 + pad);
+      pillowPath(x, bw, bh);
+      const gr = x.createLinearGradient(0, -bh / 2, 0, bh / 2);
+      gr.addColorStop(0, T.hi);
+      gr.addColorStop(0.55, T.c);
+      gr.addColorStop(1, T.c);
+      x.fillStyle = gr;
+      x.fill();
+      x.strokeStyle = 'rgba(255,255,255,.75)';
+      x.lineWidth = 1.2;
+      x.stroke();
+      x.save();
+      pillowPath(x, bw, bh);
+      x.clip();
+      x.fillStyle = 'rgba(255,255,255,.25)';
+      x.beginPath();
+      x.ellipse(-bw * 0.12, -bh * 0.3, bw * 0.38, bh * 0.16, -0.1, 0, TAU);
+      x.fill();
+      x.restore();
+      const label = fmtMult(v) + (bw >= 34 ? '×' : '');
+      const fs = clamp((bw * (label.length >= 4 ? 1.75 : label.length === 3 ? 2 : 2.4)) / label.length, 8, Math.min(18, bh * 0.62));
+      x.font = `800 ${fs}px "Barlow Condensed", "Arial Narrow", sans-serif`;
+      x.textAlign = 'center';
+      x.textBaseline = 'middle';
+      x.fillStyle = 'rgba(0,0,0,.3)';
+      x.fillText(label, 0, 1.2);
+      x.fillStyle = T.t;
+      x.fillText(label, 0, 0);
+      return c;
+    });
+  }
+
+  function roundRect(x, r) {
+    x.beginPath();
+    x.roundRect ? x.roundRect(r.x, r.y, r.w, r.h, r.r) : x.rect(r.x, r.y, r.w, r.h);
+  }
+  function buildStatic() {
+    const { W, H: Hh, dpr, mat, s, n } = G;
+    stat.width = Math.round(W * dpr);
+    stat.height = Math.round(Hh * dpr);
+    const x = stat.getContext('2d');
+    x.setTransform(dpr, 0, 0, dpr, 0, 0);
+    x.clearRect(0, 0, W, Hh);
+    // body and drop shadow
+    x.save();
+    x.shadowColor = 'rgba(0,0,0,.65)';
+    x.shadowBlur = 26;
+    x.shadowOffsetY = 10;
+    roundRect(x, mat);
+    x.fillStyle = '#5d1749';
+    x.fill();
+    x.restore();
+    x.save();
+    roundRect(x, mat);
+    x.clip();
+    let gr = x.createLinearGradient(mat.x, mat.y, mat.x + mat.w * 0.6, mat.y + mat.h);
+    gr.addColorStop(0, '#a63c86');
+    gr.addColorStop(0.5, '#86286b');
+    gr.addColorStop(1, '#5a1850');
+    x.fillStyle = gr;
+    x.fillRect(mat.x, mat.y, mat.w, mat.h);
+    // quilting: staggered lattice of tufts, diamonds between them
+    const q = clamp(s * 1.75, 36, 84);
+    const dv = q * 0.62;
+    const ox = mat.x + ((mat.w / 2) % q) - q;
+    const oy = mat.y - dv;
+    const cols = Math.ceil(mat.w / q) + 3;
+    const rowsQ = Math.ceil(mat.h / dv) + 3;
+    for (let j = 0; j < rowsQ; j++) {
+      for (let i = 0; i < cols; i++) {
+        const px = ox + i * q + ((j + 1) % 2) * (q / 2);
+        const py = oy + j * dv;
+        const pg = x.createRadialGradient(px - q * 0.08, py - dv * 0.25, 0, px, py, q * 0.62);
+        pg.addColorStop(0, 'rgba(255,170,220,.30)');
+        pg.addColorStop(0.55, 'rgba(255,130,200,.10)');
+        pg.addColorStop(1, 'rgba(40,0,30,.18)');
+        x.fillStyle = pg;
+        x.beginPath();
+        x.moveTo(px, py - dv);
+        x.lineTo(px + q / 2, py);
+        x.lineTo(px, py + dv);
+        x.lineTo(px - q / 2, py);
+        x.closePath();
+        x.fill();
+      }
+    }
+    // stitches
+    x.lineWidth = 1;
+    x.setLineDash([3, 3]);
+    for (let pass = 0; pass < 2; pass++) {
+      x.strokeStyle = pass ? 'rgba(255,190,230,.28)' : 'rgba(50,0,35,.45)';
+      const off = pass ? 1 : 0;
+      x.beginPath();
+      for (let j = 0; j < rowsQ; j++) {
+        for (let i = 0; i < cols; i++) {
+          const vx = ox + i * q + (j % 2) * (q / 2);
+          const vy = oy + j * dv + off;
+          x.moveTo(vx, vy);
+          x.lineTo(vx + q / 2, vy + dv);
+          x.moveTo(vx, vy);
+          x.lineTo(vx - q / 2, vy + dv);
+        }
+      }
+      x.stroke();
+    }
+    x.setLineDash([]);
+    // tufts
+    const tr = Math.max(2, q * 0.055);
+    for (let j = 0; j < rowsQ; j++) {
+      for (let i = 0; i < cols; i++) {
+        const vx = ox + i * q + (j % 2) * (q / 2);
+        const vy = oy + j * dv;
+        x.fillStyle = 'rgba(40,0,28,.55)';
+        x.beginPath();
+        x.arc(vx, vy + 0.8, tr * 1.25, 0, TAU);
+        x.fill();
+        x.fillStyle = '#c24d97';
+        x.beginPath();
+        x.arc(vx, vy, tr, 0, TAU);
+        x.fill();
+        x.fillStyle = 'rgba(255,220,240,.55)';
+        x.beginPath();
+        x.arc(vx - tr * 0.3, vy - tr * 0.35, tr * 0.38, 0, TAU);
+        x.fill();
+      }
+    }
+    // satin sheen
+    gr = x.createLinearGradient(mat.x, mat.y, mat.x + mat.w, mat.y + mat.h);
+    gr.addColorStop(0, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.32, 'rgba(255,220,240,.12)');
+    gr.addColorStop(0.4, 'rgba(255,255,255,0)');
+    gr.addColorStop(0.7, 'rgba(255,200,235,.07)');
+    gr.addColorStop(1, 'rgba(0,0,0,.12)');
+    x.fillStyle = gr;
+    x.fillRect(mat.x, mat.y, mat.w, mat.h);
+    // spring shadows
+    x.fillStyle = 'rgba(30,0,20,.38)';
+    for (let r = 0; r < n; r++) {
+      for (let j = 0; j < r + 3; j++) {
+        x.beginPath();
+        x.ellipse(pegX(r, j) + 1, pegY(r) + G.ch / 2 + 0.5, G.cw * 0.55, G.cw * 0.2, 0, 0, TAU);
+        x.fill();
+      }
+    }
+    // pillow nest shadow
+    x.fillStyle = 'rgba(30,0,20,.32)';
+    x.beginPath();
+    x.ellipse(G.cx, G.bucketY + G.bh * 0.42, ((n + 1) / 2) * s, G.bh * 0.28, 0, 0, TAU);
+    x.fill();
+    // the dispenser: a glowing hole in the mattress
+    const dy = G.dispY + G.pw * 0.9;
+    const drx = Math.max(14, s * 0.55);
+    x.fillStyle = '#031008';
+    x.beginPath();
+    x.ellipse(G.cx, dy, drx, drx * 0.32, 0, 0, TAU);
+    x.fill();
+    x.restore();
+    // piping around the edge
+    roundRect(x, mat);
+    x.lineWidth = 4;
+    x.strokeStyle = '#ffb0da';
+    x.stroke();
+    x.setLineDash([2, 4]);
+    x.lineWidth = 4;
+    x.strokeStyle = 'rgba(150,20,90,.55)';
+    x.stroke();
+    x.setLineDash([]);
+    // the tag nobody is allowed to remove, tucked under the HUD where the springs leave room
+    const tagK = clamp(s / 34, 1, 1.45);
+    const tagX = mat.x + 16;
+    const tagY = mat.y + (mat.w > 600 ? 80 : 66);
+    const room = pegX(1, 0) - G.cw - tagX;
+    if (room > 84 * tagK) {
+      x.save();
+      x.translate(tagX, tagY);
+      x.rotate(-0.12);
+      x.scale(tagK, tagK);
+      x.strokeStyle = 'rgba(255,210,235,.7)';
+      x.lineWidth = 1;
+      x.beginPath();
+      x.moveTo(-6, -8);
+      x.quadraticCurveTo(-2, 0, 6, 9);
+      x.stroke();
+      x.shadowColor = 'rgba(0,0,0,.45)';
+      x.shadowBlur = 6;
+      x.shadowOffsetY = 2;
+      x.fillStyle = '#f7f3e8';
+      x.beginPath();
+      x.moveTo(4, 4);
+      x.lineTo(78, 4);
+      x.lineTo(78, 38);
+      x.lineTo(4, 38);
+      x.closePath();
+      x.fill();
+      x.shadowColor = 'transparent';
+      x.fillStyle = '#86286b';
+      x.beginPath();
+      x.arc(10, 10, 2, 0, TAU);
+      x.fill();
+      x.fillStyle = '#5d1749';
+      x.textAlign = 'center';
+      x.font = '800 8px "Barlow Condensed", "Arial Narrow", sans-serif';
+      x.fillText('DO NOT REMOVE', 43, 15, 68);
+      x.fillText('THIS TAG', 43, 24, 68);
+      x.font = '700 6.5px "Barlow Condensed", "Arial Narrow", sans-serif';
+      x.fillText('(UNLESS YOU ARE THE ONE)', 43, 33, 68);
+      x.restore();
+    }
+  }
+
+  /* ---------- Balls ---------- */
+  function rigK() {
+    let r = S.rig;
+    if (r == null) return null;
+    if (Array.isArray(r)) {
+      r = r.length ? r.shift() : null;
+      if (r == null) return null;
+    }
+    const n = S.rows;
+    const m = mults(n, S.risk);
+    const idx = (f) => m.map((v, i) => [v, i]).filter(([v]) => f(v)).map(([, i]) => i);
+    if (r === 'edge') return rng.chance(0.5) ? 0 : n;
+    if (r === 'near') return rng.chance(0.5) ? 1 : n - 1;
+    if (r === 'big') { const ks = idx((v) => v >= 10); return ks.length ? rng.pick(ks) : 0; }
+    if (r === 'lose') { const ks = idx((v) => v < 1); return ks.length ? rng.pick(ks) : null; }
+    if (r === 'win') { const ks = idx((v) => v > 1 && v < 10); return ks.length ? rng.pick(ks) : null; }
+    const k = Number(r);
+    return Number.isInteger(k) && k >= 0 && k <= n ? k : null;
+  }
+
+  function makeBall(stake) {
+    const n = S.rows;
+    // debug only: a rig entry can also be an exact path of 0/1 bits (tests use it to stage near misses)
+    const forced = Array.isArray(S.rig) && Array.isArray(S.rig[0]) && S.rig[0].length === n ? S.rig.shift() : null;
+    const { bits, k } = forced ? { bits: forced.map((v) => (v ? 1 : 0)), k: forced.reduce((a, v) => a + (v ? 1 : 0), 0) } : choosePath(n, () => rng.float(), rigK());
+    const m = mults(n, S.risk);
+    const mult = m[k];
+    const btRows = btRowsFor(n);
+    const r0 = n - btRows;
+    let kr0 = 0;
+    for (let i = 0; i < r0; i++) kr0 += bits[i];
+    let reach = 0;
+    for (let i = kr0; i <= kr0 + btRows; i++) reach = Math.max(reach, m[i]);
+    return {
+      id: S.nextId++, stake, risk: S.risk, rows: n, hop: hopFor(n), bits, k, mult, payout: payoutFor(stake, mult),
+      seg: -1, u: 0, kr: 0, x: G.cx, y: G.dispY, rot: rng.range(-0.6, 0.6), spin: rng.range(-3, 3), sq: 0,
+      trail: [], ghostT: 0, bt: mult >= 10, btOn: false, tense: mult < 10 && reach >= 10, tenseOn: false,
+      done: false, settled: false,
+    };
+  }
+
+  function ballPos(b) {
+    if (b.seg < 0) {
+      const y0 = G.dispY;
+      const y1 = contactY(0);
+      return { x: G.cx, y: y0 + (y1 - y0) * b.u * b.u };
+    }
+    const r = b.seg;
+    const x0 = G.cx + (b.kr - r / 2) * G.s;
+    const x1 = x0 + (b.bits[r] ? 0.5 : -0.5) * G.s;
+    const last = r === b.rows - 1;
+    const y0 = contactY(r);
+    const y1 = last ? G.bucketY - G.bh * 0.2 : contactY(r + 1);
+    const hgt = (last ? 0.3 : 0.5) * G.gap;
+    const u = b.u;
+    return { x: x0 + (x1 - x0) * u, y: y0 + (y1 - y0) * u - 4 * hgt * u * (1 - u) };
+  }
+
+  function toLocal(x, y) { return { x: G.W / 2 + (x - cam.fx) * cam.z, y: G.H / 2 + (y - cam.fy) * cam.z }; }
+  function toScreen(x, y) {
+    const r = cv.getBoundingClientRect();
+    const p = toLocal(x, y);
+    return { x: r.left + p.x, y: r.top + p.y };
+  }
+
+  function hitPeg(b, r, j) {
+    const p = pegs[r] && pegs[r][j];
+    const dir = r < b.rows ? (b.bits[r] ? 1 : -1) : 0;
+    const x = pegX(r, j);
+    const y = pegY(r) - G.ch / 2;
+    if (p) {
+      p.t = 0;
+      p.amp = b.btOn ? 1.4 : 1;
+      p.dir = -dir;
+    }
+    b.sq = 1;
+    b.spin = dir * rng.range(5, 9);
+    rings.push({ x, y, t: 0, dur: b.btOn ? 0.5 : 0.36, r0: G.cw * 0.35, r1: G.cw * (b.btOn ? 2.4 : 1.6), color: b.btOn ? '255,120,200' : '120,255,180' });
+    if (!RM()) {
+      const nS = b.btOn ? 6 : 3;
+      for (let i = 0; i < nS && sparks.length < 260; i++) {
+        const a = -Math.PI / 2 + rng.range(-1.3, 1.3);
+        const sp = rng.range(60, 170) * (G.s / 30);
+        sparks.push({ x, y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: rng.range(0.22, 0.4), c: rng.chance(0.3) ? '#ff8cc8' : '#9dffc8' });
+      }
+    }
+    snd.peg(r, b.rows, x, b.risk, b.btOn);
+    const btRows = btRowsFor(b.rows);
+    if (r >= b.rows - btRows) {
+      if (b.bt && !b.btOn) startBT(b, x, y);
+      else if (b.tense && !b.tenseOn) startTense(b);
+    }
+    if (b.btOn) {
+      ripples.push({ x, y, t: 0, dur: 0.55, max: G.s * 3.2, amp: 0.05 });
+      // hit-stop: every slow-motion spring lands with a tiny freeze and a thump
+      if (!RM()) {
+        S.freeze = Math.max(S.freeze, 0.05);
+        fx.shake(3, 140);
+      }
+      vib(12);
+    }
+  }
+
+  // Near miss: the pill can still reach a 10x+ pillow but will not. Same slow-down family as bullet time
+  // (milder), a heartbeat and a red vignette, so a 10x+ chance always feels like a 10x+ chance.
+  function startTense(b) {
+    b.tenseOn = true;
+    S.tenseCount += 1;
+    wrap.classList.add('tense');
+    sfx.heartbeat();
+    setTimeout(() => { if (b.tenseOn) sfx.heartbeat(); }, 620);
+    vib(15);
+  }
+  function endTense(b) {
+    if (!b.tenseOn) return;
+    b.tenseOn = false;
+    S.tenseCount = Math.max(0, S.tenseCount - 1);
+    if (!S.tenseCount) wrap.classList.remove('tense');
+  }
+
+  function stepBall(b, dt) {
+    if (b.done) return;
+    b.u += dt / (b.seg < 0 ? FALL : b.hop);
+    let guard = 0;
+    while (b.u >= 1 && !b.done && guard++ < 64) {
+      b.u -= 1;
+      if (b.seg < 0) {
+        b.seg = 0;
+        hitPeg(b, 0, 1);
+      } else {
+        b.kr += b.bits[b.seg];
+        if (b.seg < b.rows - 1) {
+          b.seg += 1;
+          hitPeg(b, b.seg, b.kr + 1);
+          if (b.seg === b.rows - 1 && b.mult >= 3) snd.whistle(clamp(b.hop / Math.max(0.2, S.ts), 0.1, 0.7), bucketX(b.k), b.mult);
+        } else {
+          b.u = 1;
+          land(b);
+        }
+      }
+    }
+    if (b.done) return;
+    const p = ballPos(b);
+    b.x = p.x;
+    b.y = p.y;
+    b.rot += b.spin * dt;
+    b.sq *= Math.exp(-dt * 13);
+    b.trail.push({ x: b.x, y: b.y, rot: b.rot });
+    const max = b.btOn ? 22 : 9;
+    while (b.trail.length > max) b.trail.shift();
+    if (b.btOn) {
+      b.ghostT -= dt;
+      if (b.ghostT <= 0) {
+        b.ghostT = 0.035;
+        rings.push({ x: b.x, y: b.y, t: 0, dur: 0.32, r0: G.pw * 0.6, r1: G.pl * 1.1, color: '200,255,225', air: true });
+      }
+    }
+  }
+
+  /* ---------- Rounds ---------- */
+  // Money. Each pill is charged once in drop() and paid once here (b.settled guards it). A pill that lands with
+  // coins flying is paid as the coins reach the balance (settleLater); a 10x+ pill is paid when its big-win
+  // overlay closes. Every delayed credit also has a timer, and pagehide or a drop that needs the chips pays
+  // everything still pending at once, so nothing can be lost or paid twice. #thumb staging never touches the wallet.
+  const pending = new Set();
+  function settle(b) {
+    if (b.settled) return;
+    b.settled = true;
+    pending.delete(b);
+    clearTimeout(b.payTimer);
+    if (!S.thumb) {
+      if (b.payout > 0) wallet.win(b.payout);
+      C.record({ bet: b.stake, win: b.payout });
+    }
+    S.net += b.payout - b.stake;
+    S.settled += 1;
+    S.log.push({ id: b.id, stake: b.stake, rows: b.rows, risk: b.risk, k: b.k, mult: b.mult, payout: b.payout });
+    if (S.log.length > 300) S.log.shift();
+    paintHud();
+  }
+  function settleLater(b, ms) {
+    if (b.settled) return;
+    pending.add(b);
+    clearTimeout(b.payTimer);
+    b.payTimer = setTimeout(() => settle(b), ms);
+  }
+  function flushPending() {
+    for (const b of [...pending]) settle(b);
+  }
+  function settleAll() {
+    for (const b of S.balls) settle(b);
+    flushPending();
+  }
+
+  function pushResult(m) {
+    const T = TIER[tierOf(m)];
+    const li = document.createElement('li');
+    li.textContent = `${fmtMult(m)}×`;
+    li.style.setProperty('--c', T.c);
+    li.style.setProperty('--hi', T.hi);
+    li.style.setProperty('--t', T.t);
+    recentEl.prepend(li);
+    fx.anim(li, 'c-slam');
+    while (recentEl.children.length > 9) recentEl.lastElementChild.remove();
+  }
+
+  const fmtNet = (v) => (v > 0 ? '+' : '') + C.fmt(v);
+  let netShown = 0;
+  let netAnim = null;
+  function paintHud() {
+    const inFlight = S.balls.filter((b) => !b.done).length;
+    if (inflightEl.textContent !== String(inFlight)) {
+      inflightEl.textContent = String(inFlight);
+      fx.anim(inflightEl, 'c-pop');
+    }
+    if (S.net !== netShown) {
+      if (netAnim) netAnim.skip();
+      const up = S.net > netShown;
+      netAnim = fx.countUp(netEl, netShown, S.net, { ms: up ? 520 : 200, sound: up && S.net - netShown >= 3 * STAKES[S.stakeIdx], format: fmtNet });
+      if (up) fx.anim(netEl, 'c-pop');
+      netShown = S.net;
+    }
+    netEl.classList.toggle('pos', S.net > 0);
+    netEl.classList.toggle('neg', S.net < 0);
+  }
+
+  function quip(text, tone = 'good') {
+    tagEl.textContent = text;
+    tagEl.classList.remove('quip-good', 'quip-bad');
+    tagEl.classList.add(tone === 'bad' ? 'quip-bad' : 'quip-good');
+    fx.anim(tagEl, 'tag-in');
+    clearTimeout(quip.timer);
+    quip.timer = setTimeout(() => {
+      tagEl.textContent = TAG_TEXT;
+      tagEl.classList.remove('quip-good', 'quip-bad');
+      fx.anim(tagEl, 'tag-in');
+    }, 2800);
+  }
+
+  // Coins fly from the pillow to the balance pill; returns false when rate-limited (busy auto runs).
+  function collectFrom(k, count) {
+    const now = performance.now();
+    if (now - S.lastCollect < 240 || document.hidden) return false;
+    S.lastCollect = now;
+    fx.collect(toScreen(bucketX(k), G.bucketY), null, { count, ms: 560 });
+    return true;
+  }
+  const COIN_ARRIVE = 520; // ms until the first coin of a collect reaches the balance pill
+
+  let bigQueue = Promise.resolve();
+  function land(b) {
+    b.done = true;
+    pushResult(b.mult);
+    const m = b.mult;
+    const t = tierOf(m);
+    const bk = buckets[b.k];
+    if (bk) {
+      bk.t = 0;
+      bk.amp = 0.55 + t * 0.15;
+    }
+    const lx = bucketX(b.k);
+    const at = toScreen(lx, G.bucketY - G.bh * 0.6);
+    const T = TIER[t];
+    const near = b.tenseOn;
+    if (m > 1) S.streak += 1;
+    else if (m < 1) S.streak = 0;
+    snd.land(m, lx, S.streak);
+    snd.puff(lx, m);
+    sinkPill(b, lx, t);
+    // a near miss that pays little says SO CLOSE instead of its multiplier (nearMiss); one message, no pile-up
+    if (!near || m >= 3) fx.floatText(at, `${fmtMult(m)}×`, { color: t ? T.hi : '#e6dcff', size: clamp(14 + t * 4 + G.s * 0.15, 16, 40), rise: 50 + t * 14, ms: 900 + t * 120 });
+    rings.push({ x: lx, y: G.bucketY, t: 0, dur: 0.45, r0: G.bw * 0.4, r1: G.bw * (1 + t * 0.35), color: hexToRgb(T.hi) });
+    if (b.btOn) endBT(b, lx);
+    if (near) {
+      endTense(b);
+      nearMiss(b);
+    }
+    let payIn = 0; // ms until the credit lands with the coins; 0 pays now
+    if (m >= 10) {
+      bigLand(b, lx);
+      settleLater(b, 30000); // bigLand pays when the overlay closes; this is only the safety net
+      return;
+    } else if (m >= 3) {
+      fx.burst(at, { type: 'heart', count: 14, speed: [180, 460] });
+      fx.burst(at, { type: 'feather', count: 5, speed: [120, 300] });
+      fx.burst(at, { type: 'star', count: 10 });
+      fx.shake(4 + t * 1.5, 320);
+      vib([18, 30, 30]);
+      fx.flash('#ff8cc8', 200, 0.16 + (t - 3) * 0.06);
+      fx.floatText({ x: at.x, y: at.y - 36 }, `+${C.fmt(b.payout)}`, { color: '#fff3b0', size: 22 + (t - 3) * 4, rise: 95, ms: 1250 });
+      fx.anim(dropBtn, 'c-pop');
+      quip(quipFrom('good'));
+      if (collectFrom(b.k, 6 + t * 2)) payIn = COIN_ARRIVE;
+    } else if (m > 1) {
+      fx.burst(at, { type: 'spark', count: 8 + Math.min(10, S.streak * 2), speed: [200, 520] });
+      if (rng.chance(0.5)) fx.burst(at, { type: 'feather', count: 2, speed: [80, 200] });
+      vib(10);
+      fx.floatText({ x: at.x, y: at.y - 28 }, `+${C.fmt(b.payout)}`, { color: '#d9ffe9', size: 15, rise: 62, ms: 850 });
+      if ((b.payout >= b.stake * 2 || S.streak >= 3) && collectFrom(b.k, 4)) payIn = COIN_ARRIVE;
+      if (S.streak >= 3) fx.floatText({ x: at.x, y: at.y - 52 }, `STREAK ×${S.streak}`, { color: S.streak >= 6 ? '#ffe58f' : '#9dffc8', size: 14 + Math.min(8, S.streak), rise: 70, ms: 900 });
+      if (!near && rng.chance(0.28)) quip(quipFrom('small'));
+    } else if (m === 1) {
+      fx.burst(at, { type: 'smoke', count: 2 });
+    } else {
+      fx.burst(at, { type: 'smoke', count: 3, speed: [30, 90] });
+      const now = performance.now();
+      if (near) {
+        sfx.lose();
+        S.lastLossQuip = now;
+      } else if (now - S.lastLossQuip > 3200 && rng.chance(0.3)) {
+        S.lastLossQuip = now;
+        snd.wah();
+        quip(quipFrom('loss'), 'bad');
+      }
+    }
+    if (payIn) settleLater(b, payIn);
+    else settle(b);
+  }
+
+  // The 10x+ pillow it almost hit shrugs and flashes red (with a raspberry if the pill still paid something);
+  // a pill that paid under 3x also floats "SO CLOSE" in place of its multiplier and swaps the quip.
+  function nearMiss(b) {
+    const m = mults(b.rows, b.risk);
+    let kk = -1;
+    for (let i = 0; i <= b.rows; i++) if (m[i] >= 10 && (kk < 0 || Math.abs(i - b.k) < Math.abs(kk - b.k))) kk = i;
+    if (kk < 0) return;
+    const bk = buckets[kk];
+    if (bk) {
+      bk.miss = 0;
+      bk.t = 0;
+      bk.amp = 0.4;
+    }
+    const mx = bucketX(kk);
+    rings.push({ x: mx, y: G.bucketY, t: 0, dur: 0.6, r0: G.bw * 0.3, r1: G.bw * 1.6, color: '255,60,90' });
+    if (b.mult >= 1) snd.miss(mx); // a loss already gets the sad trombone
+    vib([25, 40, 25]);
+    if (b.mult >= 3) return; // a decent win: the red shrug of the big pillow is enough, the win gets the words
+    fx.shake(4, 260);
+    const at = toScreen(bucketX(b.k), G.bucketY - G.bh * 0.6);
+    const el = fx.floatText(at, 'SO CLOSE', { color: '#fff0f4', size: clamp(16 + G.s * 0.25, 20, 30), rise: 70, ms: 1500 });
+    el.style.fontFamily = 'var(--f-mono)';
+    el.style.letterSpacing = '.12em';
+    el.style.textShadow = '0 0 3px #c0103f, 0 2px 0 #5a0820, 0 0 18px rgba(255, 40, 90, .95)';
+    quip(quipFrom('near'), 'bad');
+  }
+
+  // The landed pill sinks into its pillow (squash, settle flat, fade) and puffs out a little fluff.
+  function sinkPill(b, lx, t) {
+    let rot = ((b.rot % TAU) + TAU) % TAU;
+    if (rot > Math.PI) rot -= TAU;
+    landers.push({ x: lx, y: G.bucketY - G.bh * 0.2, risk: b.risk, rot, to: Math.abs(rot) > Math.PI / 2 ? Math.sign(rot) * Math.PI : 0, t: 0 });
+    if (landers.length > 24) landers.shift();
+    const n = RM() ? 2 : 4 + t * 2;
+    for (let i = 0; i < n && fluff.length < 120; i++) {
+      const a = -Math.PI / 2 + rng.range(-1.2, 1.2);
+      const sp = rng.range(25, 70 + t * 18) * (G.s / 30);
+      fluff.push({ x: lx + rng.range(-0.3, 0.3) * G.bw, y: G.bucketY - G.bh * 0.3, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, t: 0, life: rng.range(0.45, 0.8), r: rng.range(1.2, 2.6) * (G.s / 30) });
+    }
+  }
+
+  function hexToRgb(h) {
+    const n = parseInt(h.slice(1), 16);
+    return `${(n >> 16) & 255},${(n >> 8) & 255},${n & 255}`;
+  }
+
+  function bigLand(b, lx) {
+    const at = toScreen(lx, G.bucketY);
+    S.freeze = RM() ? 0.06 : 0.2;
+    fx.flash('#ffffff', 260, 0.65);
+    fx.burst(at, { type: 'star', count: 34, speed: [300, 950] });
+    fx.burst(at, { type: 'heart', count: 26, speed: [250, 700] });
+    fx.burst(at, { type: 'kiss', count: 12, speed: [200, 600] });
+    fx.burst(at, { type: 'feather', count: 14, speed: [150, 420] });
+    fx.shake(16, 650);
+    vib([30, 40, 90]);
+    ripples.push({ x: lx, y: G.bucketY, t: 0, dur: 1.0, max: Math.max(G.W, G.H) * 0.8, amp: 0.08 });
+    quip(quipFrom('big'));
+    const level = C.winTier(b.payout, b.stake);
+    bigQueue = bigQueue.then(async () => {
+      await C.sleep(260);
+      S.paused += 1;
+      try {
+        await C.bigWin(b.payout, b.stake, { label: BIG_LABELS[clamp(level, 1, 4)] });
+      } catch (err) {
+        console.error(err);
+      } finally {
+        S.paused = Math.max(0, S.paused - 1);
+      }
+      // reward: the coins pour out of the pillow into the balance, which ticks up as they arrive
+      if (G && !b.settled && !document.hidden) {
+        const c = fx.collect(toScreen(bucketX(Math.min(b.k, G.n)), G.bucketY), null, { count: 18 });
+        settleLater(b, COIN_ARRIVE);
+        await c;
+      } else settle(b);
+    }).catch((err) => {
+      console.error(err);
+      settle(b);
+    });
+  }
+
+  function startBT(b, x, y) {
+    b.btOn = true;
+    S.btCount += 1;
+    wrap.classList.add('bt');
+    document.body.classList.add('bt-on');
+    snd.bt();
+    fx.flash('#3dff86', 220, 0.22);
+    vib([20, 60, 20]);
+    ripples.push({ x, y, t: 0, dur: 0.9, max: Math.max(G.W, G.H) * 0.7, amp: 0.07 });
+  }
+  function endBT(b) {
+    if (!b.btOn) return;
+    b.btOn = false;
+    S.btCount = Math.max(0, S.btCount - 1);
+    if (!S.btCount) {
+      wrap.classList.remove('bt');
+      document.body.classList.remove('bt-on');
+    }
+  }
+
+  function drop(source = 'manual') {
+    if (S.introOn || !G) return false;
+    const inFlight = S.balls.length;
+    if (inFlight >= MAX_FLIGHT) {
+      if (source !== 'auto') {
+        C.toast('The bed is full. Let a few pills land.', 'bad');
+        sfx.buzz();
+      }
+      return false;
+    }
+    const now = performance.now();
+    if (source === 'manual' && now - S.lastDrop < 85) return false;
+    const stake = STAKES[S.stakeIdx];
+    const charge = () => S.thumb || wallet.bet(stake);
+    let paid = charge();
+    if (!paid && pending.size) {
+      // winnings still flying to the balance count: pay them now rather than refuse the pill
+      flushPending();
+      paid = charge();
+    }
+    if (!paid) {
+      fx.anim(stakeGrp, 'c-wobble');
+      sfx.buzz();
+      vib([30, 30, 30]);
+      C.toast(wallet.balance >= STAKES[0] ? 'Not enough chips for that pill. Lower the stake.' : 'Out of chips. Grab your residuals up top.', 'bad');
+      stopAuto();
+      return false;
+    }
+    S.lastDrop = now;
+    const b = makeBall(stake);
+    S.balls.push(b);
+    S.dropped += 1;
+    S.dispT = 0;
+    snd.drop(G.cx);
+    rings.push({ x: G.cx, y: G.dispY + G.pw * 0.9, t: 0, dur: 0.35, r0: G.s * 0.3, r1: G.s * 1.1, color: hexToRgb(PILL[S.risk].c) });
+    if (source === 'manual') fx.anim(dropBtn, 'c-jelly');
+    paintLocks();
+    paintHud();
+    return true;
+  }
+
+  /* ---------- Auto ---------- */
+  function startAuto(count, btn) {
+    if (S.introOn) return;
+    S.auto = { left: count, timer: 0, btn };
+    sfx.click();
+    paintAuto();
+    paintLocks();
+  }
+  function stopAuto() {
+    if (!S.auto) return;
+    S.auto = null;
+    paintAuto();
+    paintLocks();
+  }
+  function paintAuto() {
+    for (const b of autoBtns) {
+      const on = S.auto && S.auto.btn === b;
+      b.classList.toggle('on', !!on);
+      b.setAttribute('aria-pressed', String(!!on));
+      b.innerHTML = on ? `<span>Stop</span><b>${S.auto.left}</b>` : `<span>Auto</span><b>×${b.dataset.auto}</b>`;
+      b.setAttribute('aria-label', on ? `Stop auto drop, ${S.auto.left} left` : `Auto drop ${b.dataset.auto} pills`);
+    }
+  }
+
+  /* ---------- Controls ---------- */
+  const locked = () => S.balls.length > 0 || !!S.auto;
+  function paintLocks() {
+    const l = locked();
+    for (const b of pillBtns) b.setAttribute('aria-disabled', String(l));
+    rowsSeg.setAttribute('aria-disabled', String(l));
+    for (const b of rowBtns) b.setAttribute('aria-disabled', String(l));
+  }
+  function paintControls() {
+    for (const b of pillBtns) b.setAttribute('aria-checked', String(b.dataset.risk === S.risk));
+    for (const b of rowBtns) b.setAttribute('aria-checked', String(+b.dataset.rows === S.rows));
+    const v = STAKES[S.stakeIdx];
+    stakeOut.querySelector('span').textContent = C.fmt(v);
+    stakeOut.querySelector('.cchip-icon').style.setProperty('--chip', CHIP_COLORS[v]);
+    paintLocks();
+  }
+  function saveCfg() {
+    if (!S.thumb) C.store.set(CFG_KEY, { rows: S.rows, risk: S.risk, stakeIdx: S.stakeIdx });
+  }
+  function nudgeLocked(el) {
+    fx.anim(el, 'c-wobble');
+    sfx.buzz();
+    C.toast(S.auto ? 'Stop the auto drop first.' : 'Let the pills land first.', 'bad');
+  }
+  for (const btn of pillBtns) {
+    btn.addEventListener('click', () => {
+      const risk = btn.dataset.risk;
+      if (risk === S.risk) {
+        fx.anim(btn, 'c-jelly');
+        snd.gulp();
+        return;
+      }
+      if (locked()) return nudgeLocked(btn);
+      S.risk = risk;
+      saveCfg();
+      paintControls();
+      buildPillows();
+      for (let i = 0; i < buckets.length; i++) {
+        buckets[i].t = -Math.abs(i - G.n / 2) * 0.02;
+        buckets[i].amp = 0.5;
+      }
+      S.dispT = 0;
+      fx.anim(btn, 'c-jelly');
+      snd.gulp();
+      fx.burst(btn.querySelector('.pill-ico'), { type: 'spark', count: 12, speed: [150, 380], colors: [PILL[risk].l, '#ffffff', PILL[risk].c] });
+      quip(QUIPS.risk[risk]);
+    });
+  }
+  for (const btn of rowBtns) {
+    btn.addEventListener('click', () => {
+      const n = +btn.dataset.rows;
+      if (n === S.rows) {
+        fx.anim(btn, 'c-pop');
+        sfx.boing(1 + ROWS.indexOf(n) * 0.15);
+        return;
+      }
+      if (locked()) return nudgeLocked(rowsSeg);
+      S.rows = n;
+      saveCfg();
+      paintControls();
+      layout();
+      S.boot = performance.now();
+      S.bootRows = -1;
+      fx.anim(btn, 'c-pop');
+      sfx.boing(1 + ROWS.indexOf(n) * 0.15);
+    });
+  }
+  function stepStake(d) {
+    const i = S.stakeIdx + d;
+    if (i < 0 || i >= STAKES.length) {
+      fx.anim(stakeOut, 'c-wobble');
+      sfx.buzz();
+      return;
+    }
+    S.stakeIdx = i;
+    saveCfg();
+    paintControls();
+    fx.anim(stakeOut, 'c-pop');
+    sfx.chip(0.85 + i * 0.06);
+    if (d > 0) sfx.chips(2);
+  }
+  $('#stakeDown').addEventListener('click', () => stepStake(-1));
+  $('#stakeUp').addEventListener('click', () => stepStake(1));
+  for (const btn of autoBtns) {
+    btn.addEventListener('click', () => {
+      if (S.auto) {
+        const was = S.auto.btn;
+        stopAuto();
+        sfx.tap();
+        if (was === btn) return;
+      }
+      startAuto(+btn.dataset.auto, btn);
+      fx.anim(btn, 'c-pop');
+    });
+  }
+  function pressDrop() {
+    dropBtn.classList.add('is-pressed');
+    setTimeout(() => dropBtn.classList.remove('is-pressed'), 90);
+    drop('manual');
+  }
+  dropBtn.addEventListener('click', () => pressDrop());
+  addEventListener('keydown', (e) => {
+    if (e.defaultPrevented) return;
+    if (S.introOn) {
+      if (e.key === ' ' || e.key === 'Enter' || e.key === 'Escape') {
+        e.preventDefault();
+        endIntro();
+      }
+      return;
+    }
+    if (document.querySelector('dialog[open], .cbig')) return;
+    const tag = e.target && e.target.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (e.target && e.target.isContentEditable)) return;
+    if (e.target === dropBtn && (e.key === ' ' || e.key === 'Enter')) {
+      // the focused button clicks itself; just stop held keys from machine-gunning it
+      if (e.repeat) e.preventDefault();
+      return;
+    }
+    if (e.key === ' ' || e.code === 'Space') {
+      e.preventDefault();
+      if (!e.repeat) pressDrop();
+    } else if (e.key === 'Enter') {
+      const onOther = e.target && e.target.closest && e.target.closest('button, a') && e.target !== dropBtn;
+      if (onOther) return;
+      e.preventDefault();
+      if (!e.repeat) pressDrop();
+    }
+  });
+  addEventListener('keyup', (e) => {
+    if ((e.key === ' ' || e.code === 'Space') && e.target !== dropBtn && !document.querySelector('dialog[open]')) e.preventDefault();
+  });
+
+  /* ---------- Help ---------- */
+  $('#help').addEventListener('click', () => {
+    sfx.tap();
+    const n = S.rows;
+    const m = mults(n, S.risk);
+    const pct = (p) => (p < 0.001 ? `1 in ${C.fmt(1 / p)}` : `${(p * 100).toFixed(p < 0.01 ? 2 : 1)}%`);
+    let rows = '';
+    for (let k = 0; k <= n / 2; k++) {
+      const p = binom(n, k) / 2 ** n;
+      rows += `<tr><td>${k === 0 ? 'Edge' : k === n / 2 ? 'Centre' : `${k + 1}${['', '', 'nd', 'rd'][k + 1] || 'th'} in`}</td><td class="num">${pct(p)}${k < n / 2 ? ' each side' : ''}</td><td>${fmtMult(m[k])}×</td></tr>`;
+    }
+    let rtp = '';
+    for (const r of ROWS) {
+      rtp += `<tr><td>${r} rows</td>${RISKS.map((k) => `<td class="num">${(exactRTP(r, k) * 100).toFixed(2)}%<small>${MEASURED[r][k].toFixed(2)}%</small></td>`).join('')}</tr>`;
+    }
+    const riskName = { blue: 'blue pill', purple: 'purple pill', red: 'red pill' }[S.risk];
+    const dlg = C.dialog({
+      title: 'The Mattress',
+      button: 'Back to bed',
+      html: `<div class="mx-help">
+        <p><b>Take a pill, drop it on the mattress.</b> The pill is your risk (<b>blue</b> low, <b>purple</b> mid, <b>red</b> high). Pick 8, 12 or 16 rows of springs and a stake per pill, then <b>Drop</b> (or Space).</p>
+        <p>Each spring bounces the pill left or right, 50/50, and the pillow it lands on pays stake × its number. Pills can bounce together: each is charged on drop and paid on landing. Auto ×10 / ×50 drops for you; tap again to stop. Headed for <b>10× or more</b>? <b>BULLET TIME</b>. Could still get there but won't? Your heart will know.</p>
+        <h3>Pillows now: ${n} rows, ${riskName}</h3>
+        <div class="tbl-wrap"><table><tr><th>Pillow</th><th class="num">Chance</th><th>Pays</th></tr>${rows}</table></div>
+        <h3>Return to player</h3>
+        <div class="tbl-wrap"><table class="rtp"><tr><th></th><th class="num">Blue</th><th class="num">Purple</th><th>Red</th></tr>${rtp}</table></div>
+        <p class="fine-print">Big figure: exact, from the binomial odds. Small: measured over 20 million simulated pills per setup. Payouts are whole chips, nothing lost to rounding.</p>
+        <p class="fine-print">Parody. Fake chips, no real money.</p>
+      </div>`,
+    });
+    // the shared dialog focuses its bottom button, which scrolls a tall dialog to the end on phones
+    requestAnimationFrame(() => { dlg.scrollTop = 0; });
+  });
+
+  /* ---------- Rain ---------- */
+  const rain = (() => {
+    const c = $('#rain');
+    const x = c.getContext('2d');
+    const GLY = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789:+=*<>#'.split('');
+    const WORDS = ['SPOON', 'WAKE UP', 'XXX', 'PILLOW', 'SNUGGLE', 'NEON', 'SPRINGS', 'TUCK IN', 'OOH', 'WINK', 'BED', 'XOXO'];
+    let W = 0, Hh = 0, fs = 16, drops = [], acc = 0;
+    function newDrop(initial) {
+      const word = Math.random() < 0.07 ? WORDS[(Math.random() * WORDS.length) | 0] : null;
+      return { y: initial ? Math.random() * (Hh / fs) : -Math.random() * 25, speed: 7 + Math.random() * 13, pink: Math.random() < 0.28, word, wi: 0, last: -1 };
+    }
+    function resize() {
+      W = c.width = innerWidth;
+      Hh = c.height = innerHeight;
+      fs = W < 600 ? 14 : 17;
+      drops = Array.from({ length: Math.ceil(W / fs) }, () => newDrop(true));
+      x.clearRect(0, 0, W, Hh);
+    }
+    function glyph(d) {
+      if (d.word) {
+        const ch = d.word[d.wi % d.word.length];
+        d.wi += 1;
+        return ch;
+      }
+      return GLY[(Math.random() * GLY.length) | 0];
+    }
+    function draw(ch, cx, cy, mirror) {
+      if (mirror) {
+        x.save();
+        x.translate(cx + fs, cy);
+        x.scale(-1, 1);
+        x.fillText(ch, 0, 0);
+        x.restore();
+      } else x.fillText(ch, cx, cy);
+    }
+    // ~20 fps is plenty for the rain (it is choppy in the films too) and it is the page's biggest idle cost
+    function frame(dt, speed) {
+      acc += dt;
+      if (acc < 1 / 20) return;
+      const step = acc;
+      acc = 0;
+      x.globalCompositeOperation = 'destination-out';
+      x.fillStyle = `rgba(0,0,0,${1 - Math.pow(0.9, step * 30)})`;
+      x.fillRect(0, 0, W, Hh);
+      x.globalCompositeOperation = 'source-over';
+      x.font = `${fs}px "Share Tech Mono", ui-monospace, monospace`;
+      x.textBaseline = 'top';
+      const sp = speed * (RM() ? 0.25 : 1);
+      for (let i = 0; i < drops.length; i++) {
+        const d = drops[i];
+        d.y += d.speed * step * sp;
+        const cell = Math.floor(d.y);
+        if (cell !== d.last) {
+          const px = i * fs;
+          if (d.last >= 0) {
+            x.fillStyle = d.word ? '#ff6fb5' : d.pink ? '#ff4fa8' : '#2fe07a';
+            draw(d.prevCh || 'X', px, d.last * fs, !d.word);
+          }
+          const ch = glyph(d);
+          x.fillStyle = d.word ? '#ffe3f2' : d.pink ? '#ffd3ea' : '#d8ffe8';
+          draw(ch, px, cell * fs, !d.word);
+          d.prevCh = ch;
+          d.last = cell;
+        }
+        if (d.y * fs > Hh + 40 && Math.random() < 0.03) drops[i] = newDrop(false);
+      }
+    }
+    addEventListener('resize', resize);
+    resize();
+    return { frame, resize };
+  })();
+
+  /* ---------- Rendering ---------- */
+  function bootScale(r) {
+    const t = (performance.now() - S.boot) / 1000 - r * 0.035;
+    if (t <= 0) return 0;
+    if (t >= 0.3) return 1;
+    return Math.max(0, easeOutBack(t / 0.3));
+  }
+
+  function drawPegs() {
+    const { SW, SH, SB } = spr;
+    const ch = G.ch;
+    for (let r = 0; r < G.n; r++) {
+      const bs = bootScale(r);
+      if (bs <= 0) continue;
+      const y = pegY(r) + ch / 2;
+      for (let j = 0; j < r + 3; j++) {
+        const p = pegs[r][j];
+        const x = pegX(r, j);
+        if (p.t > 1.2 && bs === 1) {
+          g.drawImage(spr.coil, x - SW / 2, y - SB, SW, SH);
+          continue;
+        }
+        let c = 0, sk = 0, glow = 0;
+        if (p.t <= 1.2) {
+          const e = Math.exp(-7 * p.t);
+          c = p.amp * 0.42 * e * Math.cos(32 * p.t);
+          sk = p.dir * p.amp * 0.3 * Math.exp(-6 * p.t) * Math.sin(22 * p.t);
+          glow = Math.min(1, p.amp) * Math.exp(-8 * p.t);
+        }
+        const sx = (1 + c * 0.35) * bs;
+        const sy = (1 - c) * bs;
+        g.save();
+        g.translate(x, y);
+        if (sk) g.transform(1, 0, -sk, 1, 0, 0);
+        g.drawImage(spr.coil, (-SW / 2) * sx, -SB * sy, SW * sx, SH * sy);
+        if (glow > 0.03) {
+          g.globalCompositeOperation = 'lighter';
+          g.globalAlpha = glow;
+          g.drawImage(spr.coilGlow, (-SW / 2) * sx, -SB * sy, SW * sx, SH * sy);
+        }
+        g.restore();
+      }
+    }
+  }
+
+  function drawBuckets() {
+    const { bw, bh } = G;
+    const pad = 4;
+    const t0 = (performance.now() - S.boot) / 1000 - G.n * 0.035;
+    for (let k = 0; k <= G.n; k++) {
+      const sp = spr.pillows[k];
+      if (!sp) continue;
+      const bk = buckets[k];
+      const x = bucketX(k);
+      let bt = clamp((t0 - Math.abs(k - G.n / 2) * 0.025) / 0.3, 0, 1);
+      if (bt <= 0) continue;
+      bt = easeOutBack(bt);
+      let dy = 0, sy = 1, flash = 0;
+      if (bk.t >= 0 && bk.t < 1.4) {
+        const e = Math.exp(-7 * bk.t);
+        const w = Math.cos(24 * bk.t);
+        dy = bk.amp * bh * 0.32 * e * w;
+        sy = 1 - bk.amp * 0.22 * e * w;
+        flash = Math.min(1, bk.amp) * Math.exp(-5 * bk.t);
+      }
+      // a pill on its final hop: the pillow it is heading for puffs up and glows to meet it
+      const inc = incoming[k] || 0;
+      const lift = inc * inc;
+      let miss = 0;
+      if (bk.miss < 1.6) miss = Math.exp(-1.7 * bk.miss) * (0.55 + 0.45 * Math.cos(bk.miss * 15));
+      if (hot[k]) {
+        // a jackpot pillow still in reach throbs; when the pill drifts out of reach the glow dies
+        const pulse = 0.5 + 0.5 * Math.sin(performance.now() * 0.014);
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.globalAlpha = 0.25 + pulse * 0.45;
+        g.drawImage(sp, x - bw * 0.75, G.bucketY - bh * 0.85, bw * 1.5, bh * 1.7);
+        g.restore();
+      }
+      const w = (bw + pad * 2) * bt * (2 - sy) * (1 + lift * 0.08);
+      const h = (bh + pad * 2) * bt * sy * (1 + lift * 0.1) * (1 - miss * 0.14);
+      const y = G.bucketY + dy - lift * bh * 0.16 + (bh + pad * 2) * (1 - sy) * 0.5;
+      if (lift > 0.02) {
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.globalAlpha = lift * (0.3 + (spr.tiers[k] || 0) * 0.1);
+        g.drawImage(sp, x - w * 0.65, y - h * 0.72, w * 1.3, h * 1.44);
+        g.restore();
+      }
+      g.drawImage(sp, x - w / 2, y - h / 2, w, h);
+      if (flash > 0.03) {
+        g.save();
+        g.globalCompositeOperation = 'lighter';
+        g.globalAlpha = flash * 0.85;
+        g.drawImage(sp, x - w / 2, y - h / 2, w, h);
+        g.restore();
+      }
+      if (miss > 0.03) {
+        g.save();
+        g.translate(x, y);
+        pillowPath(g, w - pad * 2, h - pad * 2);
+        g.globalAlpha = miss * 0.7;
+        g.fillStyle = '#ff1f55';
+        g.fill();
+        g.restore();
+      }
+    }
+  }
+
+  function drawLanders() {
+    if (!landers.length) return;
+    const { pl, pw } = G;
+    for (const L of landers) {
+      const k = clamp(L.t / 0.34, 0, 1);
+      const e = 1 - (1 - k) ** 3;
+      const sq = Math.sin(Math.min(1, k * 2.4) * Math.PI) * 0.38;
+      g.save();
+      g.globalAlpha = 1 - k * k;
+      g.translate(L.x, L.y + G.bh * 0.3 * e);
+      g.scale((1 + sq) * (1 - 0.25 * e), (1 - sq) * (1 - 0.45 * e));
+      g.rotate(L.rot + (L.to - L.rot) * Math.min(1, e * 1.7));
+      g.drawImage(spr.pills[L.risk], -pl / 2 - 3, -pw / 2 - 3, pl + 6, pw + 6);
+      g.restore();
+    }
+  }
+
+  function drawFluff() {
+    if (!fluff.length) return;
+    g.save();
+    g.fillStyle = '#fff2fa';
+    for (const f of fluff) {
+      const k = f.t / f.life;
+      g.globalAlpha = (1 - k) * 0.8;
+      g.beginPath();
+      g.arc(f.x, f.y, f.r * (1 + k * 0.7), 0, TAU);
+      g.fill();
+    }
+    g.restore();
+  }
+
+  function drawDispenser(now) {
+    const pill = spr.pills[S.risk];
+    const dy = G.dispY + G.pw * 0.9;
+    const drx = Math.max(14, G.s * 0.55);
+    const pulse = 0.5 + 0.5 * Math.sin(now * 0.004);
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.strokeStyle = `rgba(61,255,134,${0.45 + pulse * 0.4})`;
+    g.lineWidth = 2;
+    g.beginPath();
+    g.ellipse(G.cx, dy, drx, drx * 0.32, 0, 0, TAU);
+    g.stroke();
+    g.strokeStyle = `rgba(255,79,168,${0.25 + pulse * 0.25})`;
+    g.lineWidth = 1;
+    g.beginPath();
+    g.ellipse(G.cx, dy, drx * 1.25, drx * 0.42, 0, 0, TAU);
+    g.stroke();
+    g.restore();
+    const appear = clamp((S.dispT - 0.12) / 0.3, 0, 1);
+    if (appear <= 0) return;
+    const sc = easeOutBack(appear);
+    const bob = Math.sin(now * 0.005) * 2.2;
+    const gs = G.pl * 2.2;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.globalAlpha = 0.7 * sc;
+    g.drawImage(spr.glows[S.risk], G.cx - gs / 2, G.dispY + bob - gs / 2, gs, gs);
+    g.restore();
+    g.save();
+    g.translate(G.cx, G.dispY + bob);
+    g.rotate(Math.sin(now * 0.0016) * 0.5);
+    g.scale(sc, sc);
+    g.drawImage(pill, -G.pl / 2 - 3, -G.pw / 2 - 3, G.pl + 6, G.pw + 6);
+    g.restore();
+  }
+
+  function drawRings() {
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    for (const r of rings) {
+      const k = r.t / r.dur;
+      if (k >= 1 || k < 0) continue;
+      const e = 1 - (1 - k) ** 3;
+      const rad = r.r0 + (r.r1 - r.r0) * e;
+      g.strokeStyle = `rgba(${r.color},${(1 - k) * (r.air ? 0.4 : 0.85)})`;
+      g.lineWidth = r.air ? 1.2 : 2.4 * (1 - k) + 0.6;
+      g.beginPath();
+      if (r.air) g.ellipse(r.x, r.y, rad, rad * 0.4, 0, 0, TAU);
+      else g.ellipse(r.x, r.y, rad, rad * 0.55, 0, 0, TAU);
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  function drawBalls(now) {
+    const { pl, pw } = G;
+    const gs = pl * 2.2;
+    for (const b of S.balls) {
+      if (b.done) continue;
+      const P = PILL[b.risk];
+      // trail
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      const n = b.trail.length;
+      for (let i = 0; i < n - 1; i++) {
+        const p = b.trail[i];
+        const f = (i + 1) / n;
+        g.globalAlpha = f * (b.btOn ? 0.5 : 0.42);
+        g.fillStyle = `rgb(${P.glow})`;
+        g.beginPath();
+        g.arc(p.x, p.y, pw * 0.48 * f, 0, TAU);
+        g.fill();
+      }
+      g.restore();
+      if (b.btOn) {
+        for (let i = 0; i < n - 1; i += 4) {
+          const p = b.trail[i];
+          g.save();
+          g.globalAlpha = 0.18 + (i / n) * 0.25;
+          g.translate(p.x, p.y);
+          g.rotate(p.rot);
+          g.drawImage(spr.pills[b.risk], -pl / 2 - 3, -pw / 2 - 3, pl + 6, pw + 6);
+          g.restore();
+        }
+      }
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.globalAlpha = b.btOn ? 1 : 0.75;
+      g.drawImage(spr.glows[b.risk], b.x - gs / 2, b.y - gs / 2, gs, gs);
+      g.restore();
+      if (b.tenseOn) {
+        const pulse = 0.5 + 0.5 * Math.sin(now * 0.02);
+        g.strokeStyle = `rgba(255,60,90,${0.4 + pulse * 0.5})`;
+        g.lineWidth = 2;
+        g.beginPath();
+        g.arc(b.x, b.y, pl * (0.75 + pulse * 0.2), 0, TAU);
+        g.stroke();
+      }
+      const sq = b.sq * 0.32;
+      g.save();
+      g.translate(b.x, b.y);
+      g.scale(1 + sq, 1 - sq);
+      g.rotate(b.rot);
+      const sc = b.btOn ? 1.25 : 1;
+      g.drawImage(spr.pills[b.risk], (-pl / 2 - 3) * sc, (-pw / 2 - 3) * sc, (pl + 6) * sc, (pw + 6) * sc);
+      g.restore();
+    }
+  }
+
+  function drawSparks() {
+    if (!sparks.length) return;
+    g.save();
+    g.globalCompositeOperation = 'lighter';
+    g.lineCap = 'round';
+    g.lineWidth = Math.max(1.2, G.s * 0.05);
+    for (const p of sparks) {
+      const k = p.t / p.life;
+      g.globalAlpha = 1 - k;
+      g.strokeStyle = p.c;
+      g.beginPath();
+      g.moveTo(p.x, p.y);
+      g.lineTo(p.x - p.vx * 0.04, p.y - p.vy * 0.04);
+      g.stroke();
+    }
+    g.restore();
+  }
+
+  function drawRipples() {
+    const sw = cv.width, sh = cv.height;
+    if (snap.width !== sw || snap.height !== sh) {
+      snap.width = sw;
+      snap.height = sh;
+    }
+    const sg = snap.getContext('2d');
+    sg.setTransform(1, 0, 0, 1, 0, 0);
+    sg.clearRect(0, 0, sw, sh);
+    sg.drawImage(cv, 0, 0);
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    const d = G.dpr;
+    for (const rp of ripples) {
+      const k = rp.t / rp.dur;
+      if (k >= 1) continue;
+      const c = toLocal(rp.x, rp.y);
+      const cx = c.x * d, cy = c.y * d;
+      const e = 1 - (1 - k) ** 2;
+      const R = (6 + e * rp.max) * d * cam.z;
+      const th = (8 + 16 * (1 - k)) * d;
+      const sc = 1 + rp.amp * (1 - k);
+      g.save();
+      g.beginPath();
+      g.arc(cx, cy, R + th, 0, TAU);
+      g.arc(cx, cy, Math.max(0.1, R - th), 0, TAU, true);
+      g.clip();
+      g.drawImage(snap, cx - cx * sc, cy - cy * sc, sw * sc, sh * sc);
+      g.restore();
+      g.save();
+      g.globalCompositeOperation = 'lighter';
+      g.lineWidth = 2 * d;
+      g.strokeStyle = `rgba(255,79,168,${0.7 * (1 - k)})`;
+      g.beginPath();
+      g.arc(cx, cy, R, 0, TAU);
+      g.stroke();
+      g.strokeStyle = `rgba(61,255,134,${0.6 * (1 - k)})`;
+      g.beginPath();
+      g.arc(cx, cy, R + 3 * d, 0, TAU);
+      g.stroke();
+      g.restore();
+    }
+  }
+
+  function render(now) {
+    const { W, H: Hh, dpr } = G;
+    g.setTransform(1, 0, 0, 1, 0, 0);
+    g.clearRect(0, 0, cv.width, cv.height);
+    const z = cam.z;
+    g.setTransform(dpr * z, 0, 0, dpr * z, dpr * (W / 2 - cam.fx * z), dpr * (Hh / 2 - cam.fy * z));
+    g.drawImage(stat, 0, 0, W, Hh);
+    drawDispenser(now);
+    drawBuckets();
+    drawLanders();
+    drawPegs();
+    drawRings();
+    drawBalls(now);
+    drawSparks();
+    drawFluff();
+    if (ripples.length && !RM()) drawRipples();
+  }
+
+  /* ---------- Simulation ---------- */
+  let idleT = 1.5;
+  function simulate(dt, rdt) {
+    if (S.auto && dt > 0) {
+      S.auto.timer -= dt;
+      if (S.auto.timer <= 0 && S.balls.length < MAX_FLIGHT) {
+        if (drop('auto')) {
+          if (S.auto) {
+            S.auto.left -= 1;
+            S.auto.timer = AUTO_GAP;
+            if (S.auto.left <= 0) stopAuto();
+            else paintAuto();
+          }
+        }
+      }
+    }
+    if (dt > 0) {
+      for (const b of S.balls) stepBall(b, dt);
+      const before = S.balls.length;
+      S.balls = S.balls.filter((b) => !b.done);
+      if (S.balls.length !== before) {
+        paintLocks();
+        paintHud();
+      }
+    }
+    for (const row of pegs) for (const p of row) if (p.t < 9) p.t += dt;
+    for (const bk of buckets) {
+      if (bk.t < 9) bk.t += dt;
+      if (bk.miss < 9) bk.miss += dt;
+    }
+    incoming.length = G.n + 1;
+    incoming.fill(0);
+    for (const b of S.balls) if (!b.done && b.seg === b.rows - 1 && b.k <= G.n) incoming[b.k] = Math.max(incoming[b.k], b.u);
+    hot.length = G.n + 1;
+    hot.fill(0);
+    for (const b of S.balls) {
+      if (b.done || !(b.btOn || b.tenseOn) || b.seg < 0) continue;
+      const lo = b.kr + b.bits[b.seg];
+      const hi = Math.min(G.n, lo + b.rows - 1 - b.seg);
+      for (let k = lo; k <= hi; k++) if (spr.tiers[k] >= 4) hot[k] = 1;
+    }
+    for (let i = landers.length - 1; i >= 0; i--) {
+      landers[i].t += dt;
+      if (landers[i].t >= 0.34) landers.splice(i, 1);
+    }
+    for (let i = fluff.length - 1; i >= 0; i--) {
+      const f = fluff[i];
+      f.t += dt;
+      const kd = Math.exp(-3.2 * dt);
+      f.vx *= kd;
+      f.vy = f.vy * kd + 40 * (G.s / 30) * dt;
+      f.x += f.vx * dt;
+      f.y += f.vy * dt;
+      if (f.t >= f.life) fluff.splice(i, 1);
+    }
+    for (let i = rings.length - 1; i >= 0; i--) {
+      rings[i].t += dt;
+      if (rings[i].t >= rings[i].dur) rings.splice(i, 1);
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i];
+      p.t += dt;
+      p.vy += 600 * (G.s / 30) * dt;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      if (p.t >= p.life) sparks.splice(i, 1);
+    }
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      ripples[i].t += rdt;
+      if (ripples[i].t >= ripples[i].dur) ripples.splice(i, 1);
+    }
+    S.dispT += rdt;
+    idleT -= rdt;
+    if (idleT <= 0 && G) {
+      idleT = rng.range(0.7, 1.6);
+      const r = rng.int(G.n);
+      const p = pegs[r][rng.int(r + 3)];
+      if (p.t > 1.2) {
+        p.t = 0;
+        p.amp = 0.22;
+        p.dir = rng.chance(0.5) ? 1 : -1;
+      }
+    }
+    // boot ticks
+    const bt = (performance.now() - S.boot) / 1000;
+    const row = Math.floor(bt / 0.035);
+    if (row > S.bootRows && row < G.n) {
+      S.bootRows = row;
+      if (row % 2 === 0) snd.boot(row);
+    }
+    // camera
+    const btBall = S.balls.find((b) => b.btOn);
+    if (btBall) {
+      cam.tx = btBall.x;
+      cam.ty = btBall.y;
+    }
+    const zT = btBall && !RM() ? (S.thumb ? 1 : 1.2) : 1; // the #thumb still keeps the whole bed in frame
+    cam.z += (zT - cam.z) * (1 - Math.exp(-rdt * (zT > cam.z ? 3.2 : 5)));
+    if (Math.abs(cam.z - zT) < 0.001) cam.z = zT;
+    const k = (cam.z - 1) / 0.2;
+    let fxp = G.W / 2 + (cam.tx - G.W / 2) * k;
+    let fyp = G.H / 2 + (cam.ty - G.H / 2) * k;
+    const hw = G.W / (2 * cam.z), hh = G.H / (2 * cam.z);
+    cam.fx = clamp(fxp, hw, G.W - hw);
+    cam.fy = clamp(fyp, hh, G.H - hh);
+  }
+
+  let last = performance.now();
+  let thumbFrozen = false;
+  let calmAcc = 0;
+  // Nothing moving but the idle bob and twitches: the board only needs ~30 fps (saves a phone's battery).
+  function calm(now) {
+    if (S.balls.length || rings.length || sparks.length || ripples.length || landers.length || fluff.length) return false;
+    if (cam.z !== 1 || S.ts !== 1 || S.freeze > 0 || S.dispT < 0.6 || now - S.boot < 2500) return false;
+    for (const bk of buckets) if (bk.t < 1.4 || bk.miss < 1.6) return false;
+    return true;
+  }
+  function frame(now) {
+    const rdt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    const target = S.btCount > 0 ? (RM() ? 0.5 : 0.25) : S.tenseCount > 0 ? (RM() ? 0.75 : 0.55) : 1;
+    S.ts += (target - S.ts) * (1 - Math.exp(-rdt * (target < S.ts ? 9 : 5)));
+    if (Math.abs(target - S.ts) < 0.004) S.ts = target;
+    let dt = rdt * S.ts;
+    if (S.freeze > 0) {
+      S.freeze -= rdt;
+      dt = 0;
+    }
+    if (S.paused > 0 || thumbFrozen) dt = 0;
+    try {
+      if (G) {
+        simulate(dt, thumbFrozen ? 0 : rdt);
+        calmAcc += rdt;
+        if (S.introOn) calmAcc = 0; // the intro covers the board completely
+        else if (!calm(now) || calmAcc >= 1 / 32) {
+          render(now);
+          calmAcc = 0;
+        }
+      }
+      rain.frame(rdt, thumbFrozen ? 0 : S.paused > 0 ? 0.35 : S.ts);
+      if (S.thumb) thumbStep();
+    } catch (err) {
+      console.error(err);
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---------- Logo scramble (idle) ---------- */
+  const logoSpans = $$('.logo h1 [data-txt]');
+  const SCR = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#*+';
+  function scramble() {
+    if (RM() || document.hidden || S.thumb) return;
+    const t0 = performance.now();
+    const total = logoSpans.reduce((a, s) => a + s.dataset.txt.length, 0);
+    const tick = () => {
+      const t = performance.now() - t0;
+      let idx = 0;
+      let busy = false;
+      for (const sp of logoSpans) {
+        const src = sp.dataset.txt;
+        let out = '';
+        for (const ch of src) {
+          const resolveAt = 120 + (idx / total) * 520;
+          if (ch === ' ' || t >= resolveAt) out += ch;
+          else {
+            out += SCR[(Math.random() * SCR.length) | 0];
+            busy = true;
+          }
+          idx += 1;
+        }
+        sp.textContent = out;
+      }
+      if (busy) setTimeout(tick, 45);
+    };
+    tick();
+  }
+  setInterval(() => { if (!S.introOn && Math.random() < 0.7) scramble(); }, 5200);
+
+  /* ---------- Intro ---------- */
+  const INTRO_KEY = 'bmc.mattress.intro';
+  let introDone = null;
+  function seenIntro() {
+    try { return sessionStorage.getItem(INTRO_KEY) === '1'; } catch { return false; }
+  }
+  function endIntro() {
+    if (introDone) introDone();
+  }
+  function runIntro(onReveal) {
+    const el = $('#intro');
+    const txt = $('#introText');
+    const lines = ['Wake up, Neon...', 'The mattress has you...', 'Follow the pink bunny.'];
+    S.introOn = true;
+    el.hidden = false;
+    document.body.classList.add('intro-on');
+    return new Promise((resolve) => {
+      const timers = [];
+      const later = (fn, ms) => timers.push(setTimeout(fn, ms));
+      let finished = false;
+      introDone = () => {
+        if (finished) return;
+        finished = true;
+        timers.forEach(clearTimeout);
+        try { sessionStorage.setItem(INTRO_KEY, '1'); } catch { /* private mode */ }
+        el.classList.add('out');
+        document.body.classList.remove('intro-on');
+        S.introOn = false;
+        introDone = null;
+        onReveal();
+        setTimeout(() => {
+          el.hidden = true;
+          resolve();
+        }, 460);
+      };
+      el.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        endIntro();
+      });
+      let t = 350;
+      lines.forEach((line, li) => {
+        later(() => {
+          txt.textContent = '';
+          el.dataset.line = li;
+        }, t);
+        for (let i = 0; i < line.length; i++) {
+          t += line[i] === '.' ? 150 : line[i] === ' ' ? 70 : 48 + Math.random() * 40;
+          later(() => {
+            txt.textContent = line.slice(0, i + 1);
+            sfx.tick(1.5 + Math.random() * 0.4);
+          }, t);
+        }
+        t += li === lines.length - 1 ? 450 : 1000;
+      });
+      later(() => {
+        el.classList.add('bunny');
+        sfx.boing(1.3);
+      }, t);
+      t += 1500;
+      later(endIntro, t);
+    });
+  }
+
+  /* ---------- Thumbnail staging (#thumb) ---------- */
+  let thumbPlan = null;
+  function thumbStep() {
+    if (thumbFrozen || !thumbPlan) return;
+    thumbPlan.t += S.ts * (1 / 60);
+    while (thumbPlan.queue.length && thumbPlan.queue[0][0] <= thumbPlan.t) {
+      const [, k] = thumbPlan.queue.shift();
+      S.rig = [k];
+      drop('auto');
+    }
+    const bt = S.balls.find((b) => b.btOn);
+    if (bt && bt.seg >= bt.rows - 2 && bt.u > 0.45) thumbFrozen = true;
+  }
+
+  /* ---------- Start ---------- */
+  function start() {
+    paintControls();
+    paintAuto();
+    paintHud();
+    layout();
+    new ResizeObserver(() => {
+      const r = wrap.getBoundingClientRect();
+      if (!G || Math.round(r.width) !== G.W || Math.round(r.height) !== G.H) {
+        layout();
+        render(performance.now());
+      }
+    }).observe(wrap);
+    addEventListener('orientationchange', () => setTimeout(() => { layout(); render(performance.now()); }, 120));
+    if (document.fonts && document.fonts.load) {
+      Promise.all([
+        document.fonts.load('800 14px "Barlow Condensed"'),
+        document.fonts.load('700 14px "Barlow Condensed"'),
+        document.fonts.load('16px "Share Tech Mono"'),
+      ]).then(() => { buildPillows(); buildStatic(); render(performance.now()); }).catch(() => {});
+    }
+    // Leaving mid-drop: every pill already paid for (in the air or with its coins still flying) is settled now.
+    addEventListener('pagehide', settleAll);
+    requestAnimationFrame((t) => {
+      last = t;
+      requestAnimationFrame(frame);
+    });
+    const boot = () => {
+      S.boot = performance.now();
+      S.bootRows = -1;
+    };
+    if (S.thumb) {
+      S.boot = -1e9;
+      for (const k of [12, 8, 2, 11, 9, 4, 13, 7]) {
+        S.rig = [k];
+        const b = makeBall(STAKES[S.stakeIdx]);
+        settle(b); // sandboxed: #thumb never charges or pays the real wallet
+        pushResult(b.mult);
+      }
+      S.rig = null;
+      const balNum = document.querySelector('.cbar-bal b');
+      if (balNum) balNum.textContent = C.fmt(wallet.balance + S.net);
+      thumbPlan = { t: 0, queue: [[0, 0], [0.3, 12], [0.55, 4], [0.8, 11], [1.05, 5], [1.3, 9], [1.5, 6], [1.7, 10], [1.88, 7], [2.02, 9], [2.12, 6]] };
+      return;
+    }
+    if (H.has('nointro') || seenIntro()) boot();
+    else {
+      S.boot = Infinity;
+      runIntro(boot);
+    }
+  }
+  if (S.thumb) {
+    S.rows = 16;
+    S.risk = 'red';
+    S.stakeIdx = 2;
+  }
+  start();
+
+  // Small hook for automated tests.
+  if (AUTOMATED) window.__mattress = {
+    get state() { return S; },
+    get geo() { return G; },
+    drop: () => drop('manual'),
+    rig(v) { S.rig = v; },
+    mults,
+    exactRTP,
+    settleAll,
+    get pending() { return pending.size; },
+    get pendingOwed() { let s = 0; for (const b of pending) s += b.payout; return s; },
+  };
+})();
+</script>
+</body>
+</html>

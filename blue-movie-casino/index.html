@@ -1,0 +1,686 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Blue Movie Casino</title>
+<meta name="description" content="Eight cheeky casino games, each a parody of a film you'd never admit to renting: slots, blackjack, roulette, crash, scratch cards, mines, plinko and dice on one wallet of fake chips.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;600&family=Bungee&family=Monoton&family=Shrikhand&display=swap">
+<link rel="stylesheet" href="shared/casino.css">
+<style>
+/* Layout: a late-night cinema lobby. Neon sign and the free Spin the Bottle table on top,
+   a scrolling marquee, then one VHS box per game ("Now showing"), then the small print. */
+:root { --accent: var(--pink) }
+body {
+  background:
+    radial-gradient(ellipse 90% 60% at 50% -10%, rgba(255, 61, 154, .22), transparent 60%),
+    radial-gradient(ellipse 60% 50% at 100% 30%, rgba(62, 240, 255, .08), transparent 60%),
+    linear-gradient(180deg, #160a26, var(--velvet) 40%, #0c0515);
+  background-attachment: fixed;
+}
+.wrap {
+  max-width: 1240px;
+  margin: 0 auto;
+  padding: 22px max(16px, env(safe-area-inset-right, 0px)) 56px max(16px, env(safe-area-inset-left, 0px));
+  display: grid;
+  gap: 34px;
+}
+
+/* ---------- Hero ---------- */
+/* Phones put the games before the bottle; wide screens set the sign and the bottle side by side. */
+.wrap { grid-template-areas: "sign" "ticker" "now" "bottle" "foot" }
+.sign { grid-area: sign } .bottle { grid-area: bottle } .ticker { grid-area: ticker } .now { grid-area: now } .foot { grid-area: foot }
+@media (min-width: 940px) {
+  .wrap { grid-template-columns: minmax(0, 1.25fr) minmax(340px, .9fr); grid-template-areas: "sign bottle" "ticker ticker" "now now" "foot foot"; column-gap: 40px; align-items: center }
+  .jump { display: none !important }
+  .sign .neon { font-size: min(96px, 6.9vw) } /* Monoton is wide: keep the sign inside its column */
+}
+.sign { display: grid; gap: 16px; justify-items: start; min-width: 0 }
+.jump { display: inline-flex; align-items: center; gap: 8px; font: 800 14px/1 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; color: var(--gold); text-decoration: none; padding: 10px 14px; border-radius: 999px; background: rgba(255, 207, 74, .1); box-shadow: inset 0 0 0 1px rgba(255, 207, 74, .45) }
+.jump[hidden] { display: none }
+.sign-kicker { margin: 0; font: 700 13px/1 var(--f-cond); letter-spacing: .28em; text-transform: uppercase; color: var(--cyan); text-shadow: 0 0 10px rgba(62, 240, 255, .6) }
+.sign-title { margin: 0; display: grid; justify-items: start; gap: 18px; font-weight: 400 }
+.neon {
+  display: block;
+  font: 400 clamp(34px, 9.6vw, 104px)/1.05 var(--f-neon);
+  letter-spacing: .02em;
+  color: #ffe6f3;
+  text-shadow: 0 0 3px #fff, 0 0 10px var(--pink), 0 0 24px var(--pink), 0 0 56px rgba(255, 61, 154, .7);
+  animation: neon-on 2.6s steps(1) both;
+  white-space: nowrap;
+}
+.neon .bad { animation: neon-buzz 7s 3s infinite steps(1) }
+.casino {
+  display: inline-block;
+  padding: 10px 22px 8px;
+  border-radius: 14px;
+  background: linear-gradient(180deg, #2a1040, #1a0a2a);
+  box-shadow: inset 0 0 0 2px rgba(255, 207, 74, .5), 0 10px 40px rgba(0, 0, 0, .5);
+  font: 400 clamp(30px, 8vw, 64px)/1 var(--f-marquee);
+  letter-spacing: .22em;
+  color: var(--gold);
+  text-shadow: 0 3px 0 #8a4b00, 0 0 22px rgba(255, 207, 74, .55);
+}
+.sign-sub { margin: 0; max-width: 46ch; font-size: 18px; line-height: 1.45; color: var(--ink-soft) }
+.sign-sub b { color: var(--ink); font-weight: 600 }
+.night {
+  margin: 0;
+  padding: 8px 14px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, .3);
+  box-shadow: inset 0 0 0 1px var(--rule);
+  font: 600 15px/1.35 var(--f-cond);
+  letter-spacing: .04em;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+.night b { color: var(--gold); font-weight: 800 }
+.night .up { color: var(--mint) }
+.night .down { color: #ff9db0 }
+
+/* ---------- Spin the Bottle ---------- */
+.bottle { position: relative; display: grid; justify-items: center; gap: 12px; padding: 20px 18px 18px; text-align: center; overflow: hidden }
+.bottle h2 { margin: 0; font: 400 clamp(28px, 7vw, 36px)/1 var(--f-retro); color: var(--gold); text-shadow: 0 3px 0 #5a2a00, 0 0 20px rgba(255, 207, 74, .35) }
+.bottle > p { margin: 0; max-width: 34ch; color: var(--ink-soft); font-size: 15px }
+.table { width: min(300px, 78vw); height: auto; display: block; overflow: visible; touch-action: manipulation; cursor: pointer; -webkit-user-select: none; user-select: none }
+.table .seg { transition: filter .2s }
+.table .seg.hit { animation: seg-hit .9s ease-out 3 }
+.table .peg { fill: #5b3a1c; transition: fill .12s }
+.table .peg.lit { fill: #fff6c8 }
+.table .prize { font: 800 15px var(--f-cond); fill: #fff; letter-spacing: .02em; pointer-events: none }
+.table .prize.big { fill: #2b1600 }
+#bottleSpin { transform-box: view-box; transform-origin: 0 0 }
+#bottleIdle { transform-box: view-box; transform-origin: 0 0 }
+.bottle.ready #bottleIdle { animation: sway 2.8s ease-in-out infinite }
+.cool { margin: 0; min-height: 1.4em; font: 700 14px/1.4 var(--f-cond); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft); font-variant-numeric: tabular-nums }
+.bottle .cbtn { min-width: 220px }
+
+/* ---------- Marquee ticker ---------- */
+.ticker {
+  position: relative;
+  overflow: hidden;
+  margin-inline: calc(-1 * max(16px, env(safe-area-inset-left, 0px)));
+  padding: 12px 0;
+  background: linear-gradient(180deg, #2a0f3d, #1a0828);
+  border-block: 2px solid rgba(255, 207, 74, .55);
+  box-shadow: 0 0 30px rgba(255, 61, 154, .2);
+}
+.ticker-track { display: flex; width: max-content; animation: ticker 38s linear infinite }
+.ticker-track span { padding-right: 28px; font: 400 20px/1 var(--f-marquee); letter-spacing: .1em; color: var(--gold); white-space: nowrap; text-shadow: 0 0 12px rgba(255, 207, 74, .45) }
+.ticker-track i { font-style: normal; color: var(--pink); padding-right: 28px }
+
+/* ---------- Now showing ---------- */
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin-bottom: 18px }
+.section-head h2 { margin: 0; font: 400 clamp(28px, 6vw, 44px)/1 var(--f-retro); color: var(--ink) }
+.section-head p { margin: 0; font: 700 13px/1 var(--f-cond); letter-spacing: .2em; text-transform: uppercase; color: var(--ink-soft) }
+.posters { list-style: none; margin: 0; padding: 0; display: grid; gap: 18px; grid-template-columns: repeat(auto-fill, minmax(min(100%, 268px), 1fr)) }
+.poster { --c: var(--pink); --rx: 0deg; --ry: 0deg; --gx: 50%; --gy: 0%; perspective: 900px }
+.poster-link {
+  position: relative;
+  display: grid;
+  height: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  text-decoration: none;
+  color: inherit;
+  background: linear-gradient(180deg, #24123a, #160b26);
+  box-shadow: 0 0 0 1px var(--rule), 0 14px 34px rgba(0, 0, 0, .5);
+  transform: rotateX(var(--rx)) rotateY(var(--ry));
+  transition: transform .25s var(--ease-out), box-shadow .25s;
+  will-change: transform;
+}
+.poster-link::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 7px; background: var(--c); box-shadow: 0 0 18px var(--c); z-index: 2 }
+.poster:hover .poster-link, .poster-link:focus-visible { box-shadow: 0 0 0 1px color-mix(in srgb, var(--c) 70%, transparent), 0 20px 46px rgba(0, 0, 0, .6), 0 0 40px color-mix(in srgb, var(--c) 28%, transparent) }
+.poster.tilting .poster-link { transition: transform .06s linear, box-shadow .25s }
+.poster.picked .poster-link { animation: pick .5s var(--ease-back) forwards }
+.poster-art { position: relative; display: block; aspect-ratio: 16 / 10; overflow: hidden; background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--c) 55%, #000), #12081f 75%) }
+.poster-art img { display: block; width: 100%; height: 100%; object-fit: cover; transition: scale .5s var(--ease-out) }
+.poster:hover .poster-art img { scale: 1.06 }
+.poster-art .fallback { position: absolute; inset: 0; display: none; place-items: center; padding: 16px; text-align: center; font: 400 30px/1 var(--f-retro); color: var(--c); text-shadow: 0 0 20px var(--c) }
+.poster-art.noimg img { display: none }
+.poster-art.noimg .fallback { display: grid }
+.poster-glare { position: absolute; inset: 0; background: radial-gradient(circle at var(--gx) var(--gy), rgba(255, 255, 255, .28), transparent 45%); opacity: 0; transition: opacity .25s; pointer-events: none; mix-blend-mode: screen }
+.poster:hover .poster-glare { opacity: 1 }
+.sticker {
+  position: absolute;
+  top: 12px;
+  right: -36px;
+  z-index: 3;
+  width: 140px;
+  padding: 5px 0;
+  rotate: 35deg;
+  background: var(--c);
+  color: #160a20;
+  font: 800 11px/1 var(--f-cond);
+  letter-spacing: .14em;
+  text-align: center;
+  text-transform: uppercase;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, .4);
+}
+.poster-body { display: grid; align-content: start; gap: 8px; padding: 14px 16px 16px 22px }
+.poster-kind { font: 700 12px/1 var(--f-cond); letter-spacing: .2em; text-transform: uppercase; color: var(--c) }
+.poster-title { font: 400 clamp(26px, 6.4vw, 30px)/1.05 var(--f-retro); color: var(--ink); text-shadow: 0 2px 0 rgba(0, 0, 0, .5); text-wrap: balance }
+.poster-tag { font-style: italic; color: var(--ink-soft); line-height: 1.35 }
+.poster-rating { display: flex; align-items: center; gap: 8px; margin-top: 2px; padding: 5px 8px 5px 5px; border: 1.5px solid rgba(251, 241, 255, .35); border-radius: 4px; font: 600 11.5px/1.25 var(--f-cond); letter-spacing: .04em; text-transform: uppercase; color: var(--ink-soft) }
+.poster-rating b { flex: none; display: grid; place-items: center; width: 26px; height: 26px; background: var(--ink); color: #12081f; font: 800 20px/1 var(--f-cond) }
+.poster-stats { display: flex; justify-content: space-between; gap: 10px; padding-top: 8px; border-top: 1px dashed var(--rule); font: 700 13px/1.3 var(--f-cond); letter-spacing: .06em; text-transform: uppercase; color: var(--ink-soft); font-variant-numeric: tabular-nums }
+.poster-stats b { color: var(--gold) }
+.poster-stats .up { color: var(--mint) }
+.poster-stats .down { color: #ff9db0 }
+.poster-play { color: var(--c) }
+
+/* ---------- Small print ---------- */
+.foot { display: grid; gap: 12px; justify-items: start; padding-top: 22px; border-top: 1px solid var(--rule); color: var(--ink-soft); font-size: 14px }
+.foot p { margin: 0; max-width: 70ch }
+.foot a { color: var(--ink) }
+
+/* ---------- Velvet rope ---------- */
+.rope {
+  position: fixed;
+  inset: 0;
+  z-index: 9550;
+  display: grid;
+  place-items: center;
+  padding: 16px;
+  background: radial-gradient(circle at 50% 40%, rgba(70, 10, 50, .92), rgba(8, 2, 16, .97) 70%);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.rope.out { animation: c-fadeout .5s .45s ease-in forwards }
+.rope-card { width: min(520px, 100%); display: grid; gap: 14px; justify-items: center; text-align: center; animation: c-rise .6s var(--ease-back) both }
+.rope-kicker { margin: 0; font: 700 12px/1 var(--f-cond); letter-spacing: .26em; text-transform: uppercase; color: var(--cyan) }
+.rope h2 { margin: 0; font: 400 clamp(34px, 9vw, 54px)/1 var(--f-retro); color: var(--pink); text-shadow: 0 0 24px rgba(255, 61, 154, .55) }
+.rope-card > p { margin: 0; color: var(--ink-soft); font-size: 17px; line-height: 1.45 }
+.rope-line { width: min(360px, 90%); height: auto; overflow: visible }
+#ropeSwing { transform-box: view-box; transform-origin: 36px 34px; transition: rotate .9s var(--ease-back) }
+.rope.lifted #ropeSwing { rotate: 74deg }
+.rope-btns { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center }
+
+@keyframes neon-on { 0% { opacity: .15 } 8% { opacity: 1 } 12% { opacity: .2 } 20% { opacity: 1 } 26% { opacity: .35 } 30%, 100% { opacity: 1 } }
+@keyframes neon-buzz { 0%, 91%, 93%, 95%, 100% { opacity: 1 } 92%, 94% { opacity: .25 } }
+@keyframes seg-hit { 0%, 100% { filter: brightness(1) } 40% { filter: brightness(1.9) drop-shadow(0 0 6px #fff6c8) } }
+@keyframes sway { 0%, 100% { rotate: -3deg } 50% { rotate: 3deg } }
+@keyframes ticker { to { translate: -50% 0 } }
+@keyframes pick { 0% { scale: 1 } 40% { scale: .94 } 100% { scale: 1.04 } }
+
+@media (max-width: 520px) {
+  .wrap { gap: 28px; padding-top: 16px }
+  .sign-sub { font-size: 16px }
+  .ticker-track span { font-size: 17px }
+}
+@media (prefers-reduced-motion: reduce) {
+  .neon, .neon .bad, .bottle.ready #bottleIdle, .ticker-track, .table .seg.hit { animation: none }
+  .poster-link, .poster-art img, #ropeSwing { transition: none }
+}
+</style>
+
+<body class="c-vhs">
+<div class="rope" id="rope" role="dialog" aria-modal="true" aria-labelledby="ropeTitle" hidden>
+  <div class="rope-card">
+    <p class="rope-kicker">Members’ entrance</p>
+    <h2 id="ropeTitle">Strictly grown-up giggles</h2>
+    <p>This parlour runs on innuendo: peaches, eggplants and puns that should know better. No nudity, no real money, nothing to lose but your dignity.</p>
+    <svg class="rope-line" viewBox="0 0 360 120" aria-hidden="true">
+      <defs>
+        <linearGradient id="brass" x1="0" x2="1"><stop offset="0" stop-color="#8a5a10"/><stop offset=".45" stop-color="#ffe08a"/><stop offset="1" stop-color="#9a6a18"/></linearGradient>
+        <linearGradient id="velvetRope" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ff4d7d"/><stop offset=".5" stop-color="#c3123f"/><stop offset="1" stop-color="#6e0820"/></linearGradient>
+      </defs>
+      <g id="ropeSwing"><path d="M36 34 Q180 112 324 34" fill="none" stroke="url(#velvetRope)" stroke-width="11" stroke-linecap="round"/><circle cx="324" cy="34" r="7" fill="url(#brass)"/></g>
+      <g fill="url(#brass)">
+        <rect x="31" y="30" width="10" height="80" rx="4"/><ellipse cx="36" cy="112" rx="24" ry="6"/><circle cx="36" cy="24" r="10"/>
+        <rect x="319" y="30" width="10" height="80" rx="4"/><ellipse cx="324" cy="112" rx="24" ry="6"/><circle cx="324" cy="24" r="10"/>
+      </g>
+    </svg>
+    <div class="rope-btns">
+      <button class="cbtn cbtn--gold cbtn--big" id="ropeYes" type="button">I’m 18+, lift the rope</button>
+      <a class="cbtn cbtn--ghost" href="../">Take me back</a>
+    </div>
+  </div>
+</div>
+
+<main class="wrap" data-shake>
+  <div class="sign">
+      <p class="sign-kicker">Open all night · Fake chips only</p>
+      <h1 class="sign-title"><span class="neon">Blue Mo<span class="bad">v</span>ie</span><span class="casino c-bulbs">Casino</span></h1>
+      <p class="sign-sub">Eight cheeky casino games, each a pun on a film you’d never admit to renting. <b>One wallet of fake chips, zero shame.</b></p>
+      <p class="night" id="night">Doors just opened. Your 1,000 house chips are waiting.</p>
+      <a class="jump" id="jump" href="#bottle" hidden>Free chips: spin the bottle ↓</a>
+  </div>
+
+    <aside class="bottle cpanel" id="bottle" aria-labelledby="bottleTitle">
+      <h2 id="bottleTitle">Spin the Bottle</h2>
+      <p>Free chips on the house, once an hour. Wherever it points, you score.</p>
+      <svg class="table" id="table" viewBox="-112 -112 224 224" role="img" aria-label="A champagne bottle on a round table of eight prizes">
+        <defs>
+          <radialGradient id="wood" r=".5"><stop offset=".86" stop-color="#7a3d16"/><stop offset=".93" stop-color="#a65a24"/><stop offset="1" stop-color="#4a200a"/></radialGradient>
+          <linearGradient id="glass" x1="0" x2="1"><stop offset="0" stop-color="#0b3a22"/><stop offset=".35" stop-color="#1f7a4a"/><stop offset=".55" stop-color="#3fae72"/><stop offset="1" stop-color="#0a3220"/></linearGradient>
+          <linearGradient id="foil" x1="0" x2="1"><stop offset="0" stop-color="#9a6a00"/><stop offset=".5" stop-color="#ffe7a0"/><stop offset="1" stop-color="#a87400"/></linearGradient>
+        </defs>
+        <circle r="110" fill="url(#wood)"/>
+        <circle r="98" fill="#3a0d2c"/>
+        <g id="segs"></g>
+        <g id="pegs"></g>
+        <circle r="40" fill="#25081d" stroke="rgba(255,207,74,.5)" stroke-width="1.5"/>
+        <g id="bottleSpin"><g id="bottleIdle">
+          <ellipse cx="3" cy="6" rx="16" ry="58" fill="rgba(0,0,0,.35)"/>
+          <path d="M-15 58 Q-17 62 -12 64 L12 64 Q17 62 15 58 L15 2 Q15 -14 6 -26 L5 -52 L-5 -52 L-6 -26 Q-15 -14 -15 2 Z" fill="url(#glass)" stroke="#06200f" stroke-width="1"/>
+          <path d="M-6 -50 L6 -50 L7 -26 L-7 -26 Z" fill="url(#foil)"/>
+          <rect x="-6.5" y="-62" width="13" height="13" rx="3" fill="url(#foil)"/>
+          <rect x="-12" y="14" width="24" height="26" rx="3" fill="#fff3d6"/>
+          <text x="0" y="26" text-anchor="middle" font-family="Shrikhand, serif" font-size="9" fill="#c3123f">Bubbly</text>
+          <text x="0" y="35" text-anchor="middle" font-family="Barlow Condensed, sans-serif" font-weight="800" font-size="6" fill="#5a2a00" letter-spacing=".6">BRUT · XXX</text>
+          <path d="M-10 -6 Q-12 20 -10 52" fill="none" stroke="rgba(255,255,255,.35)" stroke-width="3" stroke-linecap="round"/>
+        </g></g>
+      </svg>
+      <button class="cbtn cbtn--gold cbtn--big" id="spinBtn" type="button">Spin the bottle</button>
+      <p class="cool" id="cool" aria-live="polite"></p>
+  </aside>
+
+  <div class="ticker" aria-hidden="true"><div class="ticker-track" id="ticker"></div></div>
+
+  <section class="now" aria-labelledby="nowTitle">
+    <div class="section-head">
+      <h2 id="nowTitle">Now showing</h2>
+      <p>Eight features · One wallet</p>
+    </div>
+    <ul class="posters" id="posters">
+      <li class="poster" style="--c:#f4c430" data-slug="pulp-friction">
+        <a class="poster-link" href="pulp-friction/">
+          <span class="sticker">Staff pick</span>
+          <span class="poster-art"><img src="pulp-friction/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">Pulp Friction</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Slots · 5 reels</span>
+            <span class="poster-title">Pulp Friction</span>
+            <span class="poster-tag">Say ‘spin’ one more time. I double-dare you.</span>
+            <span class="poster-rating"><b>R</b>Relentless reels and fuzzy handcuffs</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#e3c16f" data-slug="licence-to-thrill">
+        <a class="poster-link" href="licence-to-thrill/">
+          <span class="sticker">New release</span>
+          <span class="poster-art"><img src="licence-to-thrill/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">Licence to Thrill</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Blackjack</span>
+            <span class="poster-title">Licence to Thrill</span>
+            <span class="poster-tag">The name’s Bet. Double-Oh Bet.</span>
+            <span class="poster-rating"><b>R</b>Shaken nerves and stirred drinks</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#ff3b5c" data-slug="moulin-rougette">
+        <a class="poster-link" href="moulin-rougette/">
+          <span class="sticker">Cult classic</span>
+          <span class="poster-art"><img src="moulin-rougette/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">Moulin Rougette</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Roulette · single zero</span>
+            <span class="poster-title">Moulin Rougette</span>
+            <span class="poster-tag">Voulez-vous spinner avec moi?</span>
+            <span class="poster-rating"><b>R</b>Feather boas and a very bouncy ball</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#ff8a2a" data-slug="top-buns">
+        <a class="poster-link" href="top-buns/">
+          <span class="sticker">New release</span>
+          <span class="poster-art"><img src="top-buns/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">Top Buns</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Crash · cash out in time</span>
+            <span class="poster-title">Top Buns</span>
+            <span class="poster-tag">I feel the need… the need for greed.</span>
+            <span class="poster-rating"><b>R</b>High altitude and higher multipliers</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#2ec4b6" data-slug="scratch-me-if-you-can">
+        <a class="poster-link" href="scratch-me-if-you-can/">
+          <span class="sticker">Feel-good hit</span>
+          <span class="poster-art"><img src="scratch-me-if-you-can/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">Scratch Me If You Can</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Scratch cards</span>
+            <span class="poster-title">Scratch Me If You Can</span>
+            <span class="poster-tag">Too good to be true? Scratch and see.</span>
+            <span class="poster-rating"><b>R</b>Heavy petting of foil</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#d8c38e" data-slug="the-flirt-locker">
+        <a class="poster-link" href="the-flirt-locker/">
+          <span class="sticker">Explosive</span>
+          <span class="poster-art"><img src="the-flirt-locker/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">The Flirt Locker</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Mines · 5×5 lockers</span>
+            <span class="poster-title">The Flirt Locker</span>
+            <span class="poster-tag">Every locker hides a crush. Some hide a mood killer.</span>
+            <span class="poster-rating"><b>R</b>Explosive chemistry throughout</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#39ff88" data-slug="the-mattress">
+        <a class="poster-link" href="the-mattress/">
+          <span class="sticker">Mind-bending</span>
+          <span class="poster-art"><img src="the-mattress/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">The Mattress</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Plinko · pick your pill</span>
+            <span class="poster-title">The Mattress</span>
+            <span class="poster-tag">There is no spoon. Only spooning.</span>
+            <span class="poster-rating"><b>R</b>Bouncing, springs and bullet time</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+      <li class="poster" style="--c:#ff7a6b" data-slug="dirty-dicing">
+        <a class="poster-link" href="dirty-dicing/">
+          <span class="sticker">Crowd pleaser</span>
+          <span class="poster-art"><img src="dirty-dicing/thumb.jpg" alt="" loading="lazy" width="1200" height="750"><span class="fallback">Dirty Dicing</span><span class="poster-glare"></span></span>
+          <span class="poster-body">
+            <span class="poster-kind">Dice · two fuzzy ones</span>
+            <span class="poster-title">Dirty Dicing</span>
+            <span class="poster-tag">Nobody puts your chips in a corner.</span>
+            <span class="poster-rating"><b>R</b>Hip action and fuzzy dice</span>
+            <span class="poster-stats"><span class="poster-play">Play now →</span><span class="s"></span></span>
+          </span>
+        </a>
+      </li>
+    </ul>
+  </section>
+
+  <footer class="foot">
+    <p><b>Parody. Fake chips, no real money, no prizes.</b> Every title here is a pun; none of these games is connected to any film, studio or casino. Chips live in this browser only.</p>
+    <button class="cbtn cbtn--ghost cbtn--sm" id="reset" type="button">Reset my chips to 1,000</button>
+  </footer>
+</main>
+
+<script src="shared/casino.js"></script>
+<script>
+(() => {
+  const { wallet, sfx, fx, rng, fmt, store } = Casino;
+  Casino.init({ back: '../', backLabel: 'RemoteFunLand', minBet: 1 });
+  const $ = (s) => document.querySelector(s);
+  const SVGNS = 'http://www.w3.org/2000/svg';
+  const reduced = () => fx.reducedMotion;
+
+  /* ---------- Velvet rope (first visit only) ---------- */
+  const ROPE_KEY = 'bmc.rope.v1';
+  const rope = $('#rope');
+  if (!store.get(ROPE_KEY, false)) {
+    rope.hidden = false;
+    document.body.style.overflow = 'hidden';
+    $('#ropeYes').focus({ preventScroll: true });
+  }
+  $('#ropeYes').addEventListener('click', () => {
+    store.set(ROPE_KEY, true);
+    rope.classList.add('lifted');
+    sfx.whoosh(0.5, 0.14);
+    setTimeout(() => { sfx.kiss(); sfx.chips(5); }, 380);
+    fx.burst($('#ropeYes'), { type: 'kiss', count: 18 });
+    setTimeout(() => rope.classList.add('out'), 150);
+    setTimeout(() => {
+      rope.hidden = true;
+      document.body.style.overflow = '';
+      Casino.toast(`Welcome in. ${fmt(wallet.balance)} chips on the house.`, 'good');
+      fx.collect({ x: innerWidth / 2, y: innerHeight * 0.45 }, null, { count: 14 });
+    }, 1000);
+  });
+
+  /* ---------- Box office ---------- */
+  const NAMES = {};
+  document.querySelectorAll('.poster').forEach((li) => { NAMES[li.dataset.slug] = li.querySelector('.poster-title').textContent; });
+  function signed(n) { return `${n >= 0 ? '+' : '−'}${fmt(Math.abs(n))}`; }
+  function paintStats() {
+    const all = Casino.stats();
+    let plays = 0, net = 0, best = 0, bestGame = '';
+    for (const li of document.querySelectorAll('.poster')) {
+      const s = all[li.dataset.slug];
+      const out = li.querySelector('.poster-stats .s');
+      if (!s || !s.plays) { out.textContent = 'World premiere'; continue; }
+      const n = s.won - s.wagered;
+      plays += s.plays; net += n;
+      if (s.best > best) { best = s.best; bestGame = NAMES[li.dataset.slug]; }
+      out.innerHTML = `<span class="${n >= 0 ? 'up' : 'down'}">${signed(n)}</span> · ${fmt(s.plays)} play${s.plays === 1 ? '' : 's'}`;
+    }
+    const night = $('#night');
+    if (!plays) {
+      night.innerHTML = `Doors just opened. Your <b>${fmt(wallet.balance)}</b> house chips are waiting.`;
+      return;
+    }
+    night.innerHTML = `Your box office: <b>${fmt(plays)}</b> rounds · net <span class="${net >= 0 ? 'up' : 'down'}">${signed(net)}</span>` +
+      (best ? ` · biggest hit <b>${fmt(best)}</b> in ${bestGame}` : '');
+  }
+  paintStats();
+  addEventListener('pageshow', paintStats);
+  addEventListener('storage', (e) => { if (e.key === 'bmc.stats.v1') paintStats(); });
+
+  /* ---------- Ticker ---------- */
+  const titles = Object.values(NAMES);
+  const run = () => `<span>NOW SHOWING</span><i>★</i>` + titles.map((t) => `<span>${t.toUpperCase()}</span><i>★</i>`).join('');
+  $('#ticker').innerHTML = run() + run();
+
+  /* ---------- Posters: tilt, glare and a ticket-tear on the way in ---------- */
+  const fine = matchMedia('(hover: hover) and (pointer: fine)');
+  document.querySelectorAll('.poster').forEach((li) => {
+    const link = li.querySelector('.poster-link');
+    const art = li.querySelector('.poster-art');
+    const img = art.querySelector('img');
+    const broken = () => art.classList.add('noimg');
+    img.addEventListener('error', broken);
+    if (img.complete && !img.naturalWidth) broken();
+    li.addEventListener('pointerenter', () => { if (fine.matches) sfx.tick(1.6); });
+    li.addEventListener('pointermove', (e) => {
+      if (!fine.matches || reduced()) return;
+      const r = link.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width;
+      const y = (e.clientY - r.top) / r.height;
+      li.classList.add('tilting');
+      li.style.setProperty('--ry', `${(x - 0.5) * 12}deg`);
+      li.style.setProperty('--rx', `${(0.5 - y) * 10}deg`);
+      li.style.setProperty('--gx', `${x * 100}%`);
+      li.style.setProperty('--gy', `${y * 100}%`);
+    });
+    li.addEventListener('pointerleave', () => {
+      li.classList.remove('tilting');
+      li.style.setProperty('--rx', '0deg');
+      li.style.setProperty('--ry', '0deg');
+    });
+    link.addEventListener('click', (e) => {
+      if (e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey || li.classList.contains('picked')) return;
+      e.preventDefault();
+      li.classList.add('picked');
+      sfx.noise({ type: 'bandpass', freq: 1400, to: 5200, q: 1.4, dur: 0.16, vol: 0.2 });
+      sfx.chime(7);
+      fx.burst(link, { type: 'star', count: 16, colors: ['#fff', getComputedStyle(li).getPropertyValue('--c').trim() || '#ffcf4a'] });
+      setTimeout(() => { location.href = link.href; }, reduced() ? 60 : 320);
+    });
+  });
+  // Coming back with the back button restores the page from cache; un-press the card.
+  addEventListener('pageshow', () => document.querySelectorAll('.poster.picked').forEach((li) => li.classList.remove('picked')));
+
+  /* ---------- Spin the Bottle ---------- */
+  const BOTTLE_KEY = 'bmc.bottle.v1';
+  const COOLDOWN = 60 * 60 * 1000;
+  const LOW = 50;
+  // Clockwise from the top. Weights are out of 100; the average spin pays about 184 chips.
+  const PRIZES = [
+    { v: 100, w: 22 }, { v: 500, w: 6 }, { v: 50, w: 24 }, { v: 250, w: 12 },
+    { v: 75, w: 18 }, { v: 1000, w: 3 }, { v: 150, w: 14 }, { v: 2500, w: 1 },
+  ];
+  const N = PRIZES.length;
+  const SEG = 360 / N;
+  const COLORS = ['#ff3d9a', '#4a1468', '#c8126a', '#2c0d48'];
+  const segsG = $('#segs');
+  const pegsG = $('#pegs');
+  const pegs = [];
+  const segEls = [];
+  const rad = (d) => (d - 90) * Math.PI / 180;
+  const pt = (r, d) => `${(r * Math.cos(rad(d))).toFixed(2)} ${(r * Math.sin(rad(d))).toFixed(2)}`;
+  PRIZES.forEach((p, i) => {
+    const a0 = i * SEG - SEG / 2;
+    const a1 = a0 + SEG;
+    const path = document.createElementNS(SVGNS, 'path');
+    path.setAttribute('d', `M${pt(40, a0)} L${pt(96, a0)} A96 96 0 0 1 ${pt(96, a1)} L${pt(40, a1)} A40 40 0 0 0 ${pt(40, a0)} Z`);
+    const big = p.v >= 1000;
+    path.setAttribute('fill', big ? '#ffcf4a' : COLORS[i % COLORS.length]);
+    path.setAttribute('class', 'seg');
+    segsG.appendChild(path);
+    segEls.push(path);
+    const t = document.createElementNS(SVGNS, 'text');
+    t.setAttribute('class', `prize${big ? ' big' : ''}`);
+    t.setAttribute('text-anchor', 'middle');
+    t.setAttribute('dominant-baseline', 'central');
+    const a = i * SEG;
+    t.setAttribute('transform', `rotate(${a}) translate(0 -70)${a > 90 && a < 270 ? ' rotate(180)' : ''}`);
+    t.textContent = p.v >= 1000 ? `${p.v / 1000}K` : p.v;
+    segsG.appendChild(t);
+    const peg = document.createElementNS(SVGNS, 'circle');
+    const [px, py] = pt(97, a0).split(' ');
+    peg.setAttribute('cx', px);
+    peg.setAttribute('cy', py);
+    peg.setAttribute('r', '4');
+    peg.setAttribute('class', 'peg');
+    pegsG.appendChild(peg);
+    pegs.push(peg);
+  });
+
+  const bottleBox = $('#bottle');
+  const spinG = $('#bottleSpin');
+  const btn = $('#spinBtn');
+  const cool = $('#cool');
+  let angle = 0;
+  let spinning = false;
+  const lastSpin = () => Number(store.get(BOTTLE_KEY, 0)) || 0;
+  const waitLeft = () => Math.max(0, lastSpin() + COOLDOWN - Date.now());
+  const ready = () => waitLeft() === 0 || wallet.balance < LOW;
+  const setAngle = (a) => { angle = a; spinG.style.rotate = `${a}deg`; };
+
+  function paintCooldown() {
+    if (spinning) return;
+    const ok = ready();
+    bottleBox.classList.toggle('ready', ok);
+    $('#jump').hidden = !ok;
+    btn.disabled = !ok;
+    if (ok) {
+      cool.textContent = waitLeft() > 0 ? 'Running low? This one’s on the house.' : 'Ready when you are, darling.';
+    } else {
+      const s = Math.ceil(waitLeft() / 1000);
+      cool.textContent = `Next spin in ${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+    }
+  }
+  paintCooldown();
+  setInterval(() => { if (!document.hidden) paintCooldown(); }, 1000);
+  wallet.onChange(() => { paintCooldown(); });
+
+  const easeOut = (t) => 1 - (1 - t) ** 4;
+  function animate(from, to, ms, ease, onFrame) {
+    return new Promise((resolve) => {
+      const t0 = performance.now();
+      const f = (t) => {
+        const k = Math.min(1, (t - t0) / ms);
+        onFrame(from + (to - from) * ease(k));
+        if (k < 1) requestAnimationFrame(f); else resolve();
+      };
+      requestAnimationFrame(f);
+    });
+  }
+
+  let lastIdx = 0;
+  function tickPegs(a) {
+    const idx = Math.floor((a + SEG / 2) / SEG);
+    if (idx === lastIdx) return;
+    lastIdx = idx;
+    const peg = pegs[((idx % N) + N) % N];
+    peg.classList.add('lit');
+    setTimeout(() => peg.classList.remove('lit'), 110);
+    sfx.tick(1.3 + rng.float() * 0.2);
+  }
+
+  async function spin() {
+    if (spinning) return;
+    if (!ready()) {
+      fx.anim(spinG.parentNode, 'c-wobble');
+      sfx.buzz();
+      Casino.toast('Patience, darling. The bottle needs a breather.', 'bad');
+      return;
+    }
+    spinning = true;
+    btn.disabled = true;
+    bottleBox.classList.remove('ready');
+    store.set(BOTTLE_KEY, Date.now());
+    const pick = rng.weighted(PRIZES.map((p, i) => [i, p.w]));
+    const prize = PRIZES[pick].v;
+    cool.textContent = 'Round and round it goes…';
+    segEls.forEach((s) => s.classList.remove('hit'));
+
+    const start = ((angle % 360) + 360) % 360;
+    setAngle(start);
+    lastIdx = Math.floor((start + SEG / 2) / SEG);
+    const turns = reduced() ? 1 : 5 + rng.int(2);
+    const inSeg = (rng.float() - 0.5) * SEG * 0.7;
+    let target = pick * SEG + inSeg;
+    while (target <= start) target += 360;
+    target += turns * 360;
+
+    if (!reduced()) {
+      sfx.whoosh(0.25, 0.08);
+      await animate(start, start - 24, 260, (t) => t * t, (a) => { setAngle(a); tickPegs(a); });
+    }
+    sfx.whoosh(0.6, 0.16);
+    const over = reduced() ? 0 : 7;
+    const from = angle;
+    await animate(from, target + over, reduced() ? 1100 : 4300, easeOut, (a) => { setAngle(a); tickPegs(a); });
+    if (over) await animate(target + over, target, 380, (t) => 1 - (1 - t) ** 2, (a) => { setAngle(a); tickPegs(a); });
+    setAngle(target);
+
+    // Land: the winning wedge flashes, the bottle shivers, chips fly from the neck into the balance.
+    const seg = segEls[pick];
+    seg.classList.add('hit');
+    fx.anim(spinG.parentNode, 'c-jelly');
+    sfx.kiss();
+    fx.vibrate([30, 40, 30]);
+    const tableRect = $('#table').getBoundingClientRect();
+    const r = tableRect.width / 224;
+    const cx = tableRect.left + tableRect.width / 2;
+    const cy = tableRect.top + tableRect.height / 2;
+    const neck = { x: cx + Math.sin(target * Math.PI / 180) * 66 * r, y: cy - Math.cos(target * Math.PI / 180) * 66 * r };
+    fx.burst(neck, { type: prize >= 500 ? 'star' : 'heart', count: prize >= 500 ? 30 : 18 });
+    fx.floatText(neck, `+${fmt(prize)}`, { size: 34, color: '#ffcf4a' });
+    fx.shake(prize >= 1000 ? 12 : 5, 360);
+    await fx.collect(neck, null, { count: prize >= 500 ? 18 : 10 });
+    wallet.win(prize, 'bonus');
+    if (prize >= 1000) await Casino.bigWin(prize, 0, { label: prize >= 2500 ? 'JACKPOT!' : 'BOTTLE SERVICE!', level: prize >= 2500 ? 4 : 3 });
+    else sfx.win(prize >= 250 ? 2 : 1);
+    cool.textContent = `It points at you: +${fmt(prize)} chips.`;
+    spinning = false;
+    setTimeout(paintCooldown, 2600);
+  }
+  btn.addEventListener('click', spin);
+  $('#table').addEventListener('click', spin);
+
+  /* ---------- Reset (two taps, so nobody does it by accident) ---------- */
+  const reset = $('#reset');
+  let armed = 0;
+  reset.addEventListener('click', () => {
+    if (!armed) {
+      reset.textContent = 'Sure? Tap again to reset';
+      sfx.tap();
+      armed = setTimeout(() => { armed = 0; reset.textContent = 'Reset my chips to 1,000'; }, 3000);
+      return;
+    }
+    clearTimeout(armed);
+    armed = 0;
+    reset.textContent = 'Reset my chips to 1,000';
+    wallet.set(wallet.START);
+    sfx.chips(6);
+    fx.burst(reset, { type: 'chip', count: 16 });
+    Casino.toast('Fresh start: 1,000 chips.', 'good');
+  });
+})();
+</script>
+</body>
+</html>
