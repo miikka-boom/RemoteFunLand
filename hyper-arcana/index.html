@@ -1,0 +1,1467 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hyper Arcana</title>
+<meta name="description" content="A 2:38 happy-hardcore music video: a shouting MC calls the Fool through all 22 Major Arcana while lasers draw each card over a jumping crowd. Every sound and light is synthesized in the browser.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anton&family=Cinzel:wght@700;900&display=swap">
+<style>
+:root {
+  --bg: #07040f;
+  --ink: #fff6e0;
+  --soft: #c9b8e8;
+  --dim: #9d8fbb;
+  --gold: #ffcf3a;
+  --hot: #ff3ea5;
+  --pill: #ffffff14;
+  --pill-line: #ffffff2e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; height: 100%; overflow: hidden }
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font: 500 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -webkit-tap-highlight-color: transparent;
+}
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block }
+
+.hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 7;
+  display: flex; align-items: center; gap: 6px;
+  padding: max(10px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) 18px max(12px, env(safe-area-inset-left));
+  background: linear-gradient(#07040fd0, #07040f00);
+  pointer-events: none;
+}
+.hud > * { pointer-events: auto }
+.hud .spacer { flex: 1; pointer-events: none }
+.back, .hud button {
+  font: 600 13px/1 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--ink); text-decoration: none; white-space: nowrap;
+  padding: 8px 11px; border-radius: 999px;
+  background: var(--pill); border: 1px solid var(--pill-line);
+  cursor: pointer;
+}
+.back:hover, .hud button:hover { background: #ffffff24 }
+.back:focus-visible, button:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px }
+.hud button[aria-pressed="false"] { color: var(--dim); text-decoration: line-through; text-decoration-color: #ffffff66 }
+.hud .time { white-space: nowrap; font: 500 12px/1 ui-monospace, Menlo, Consolas, monospace; color: var(--soft); font-variant-numeric: tabular-nums; pointer-events: none }
+.hud [hidden] { display: none }
+.progress { position: fixed; left: 0; bottom: 0; height: 3px; width: 0; z-index: 7; background: linear-gradient(90deg, var(--hot), var(--gold)) }
+
+.overlay {
+  position: fixed; inset: 0; z-index: 6;
+  display: grid; place-items: center;
+  padding: 76px 16px 28px;
+  background: radial-gradient(120% 80% at 50% 45%, #07040f55, #07040fe6 70%);
+  overflow-y: auto;
+}
+.overlay[hidden] { display: none }
+.panel { max-width: 560px; display: grid; justify-items: center; gap: 16px; text-align: center }
+.kicker { margin: 0; font: 600 12px/1.3 ui-monospace, Menlo, Consolas, monospace; letter-spacing: .16em; color: var(--gold); text-transform: uppercase }
+.title {
+  margin: 0;
+  font: 400 clamp(64px, 19vw, 136px)/.84 Anton, Impact, "Arial Narrow", sans-serif;
+  letter-spacing: .01em;
+  transform: skewX(-9deg);
+  background: linear-gradient(#ffffff 0%, #ffe7a3 44%, #ff8a1e 50%, #ffcf5a 57%, #fffbe8 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 5px 0 #2b0d3e) drop-shadow(0 0 22px #ff3ea580);
+}
+.sub { margin: 0; max-width: 40ch; color: var(--soft); font-size: 16px; text-wrap: balance }
+.play {
+  font: 400 26px/1 Anton, Impact, sans-serif; letter-spacing: .04em;
+  padding: 16px 30px; border: 0; border-radius: 999px; cursor: pointer;
+  color: #1d0a24;
+  background: linear-gradient(180deg, #fff3b8, #ffb92e 55%, #ff7a1a);
+  box-shadow: 0 0 0 3px #2b0d3e, 0 0 32px #ff3ea5aa;
+}
+.play:hover { filter: brightness(1.08) }
+.opts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; color: var(--soft); font-size: 14px }
+.opts label { display: inline-flex; align-items: center; gap: 7px; cursor: pointer }
+.opts input { accent-color: var(--hot); width: 17px; height: 17px; margin: 0 }
+.warn { margin: 0; max-width: 46ch; color: var(--dim); font-size: 12.5px }
+.endlink { color: var(--soft) }
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="Hyper Arcana music video" role="img"></canvas>
+
+<header class="hud">
+  <a class="back" href="../">← Gallery</a>
+  <span class="spacer"></span>
+  <span class="time" id="time" hidden>0:00 / 2:38</span>
+  <button id="pause" type="button" hidden aria-label="Pause">Pause</button>
+  <button id="mcBtn" type="button" hidden aria-pressed="true" title="MC voice (your browser's speech synthesis)">MC</button>
+  <button id="fxBtn" type="button" hidden aria-pressed="true" title="Strobe flashes">Strobe</button>
+</header>
+<div class="progress" id="progress"></div>
+
+<section class="overlay" id="start">
+  <div class="panel">
+    <p class="kicker">Music video · 145 BPM · 2:38</p>
+    <h1 class="title">Hyper<br>Arcana</h1>
+    <p class="sub">An MC with a megaphone calls the Fool through all 22 Major Arcana. Lasers draw each card, the crowd jumps.</p>
+    <button class="play" id="play" type="button">▶ Shuffle &amp; play</button>
+    <div class="opts">
+      <label><input type="checkbox" id="mcOpt" checked> MC voice</label>
+      <label><input type="checkbox" id="fxOpt" checked> Strobe flashes</label>
+    </div>
+    <p class="warn">Sound on. Contains flashing lights (never faster than the beat). The MC voice uses your browser's speech synthesis, so it sounds different on every device.</p>
+  </div>
+</section>
+
+<section class="overlay" id="end" hidden>
+  <div class="panel">
+    <p class="kicker">XXI → 0</p>
+    <h2 class="title" style="font-size:clamp(52px,14vw,104px)">Shuffle<br>again?</h2>
+    <button class="play" id="replay" type="button">▶ Play again</button>
+    <a class="endlink" href="../">Back to the gallery</a>
+  </div>
+</section>
+
+<script>
+(() => {
+'use strict';
+
+/* ================================================================
+   Song map. 145 BPM, 96 bars, F# minor. Every bar has one card.
+   ================================================================ */
+const TAU = Math.PI * 2;
+const BPM = 145, SPB = 60 / BPM, STEP = SPB / 4, BAR = SPB * 4, BARS = 96;
+const END_T = BARS * BAR + 3.2;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, t) => a + (b - a) * t;
+const ease = t => t * t * (3 - 2 * t);
+const mtof = m => 440 * Math.pow(2, (m - 69) / 12);
+
+const SECTIONS = [
+  ['intro', 8], ['roll', 16], ['drop1', 32], ['break', 40], ['build', 48],
+  ['drop2', 64], ['moon', 72], ['final', 88], ['outro', 96],
+];
+function secAt(bar) { for (const [n, to] of SECTIONS) if (bar < to) return n; return 'end'; }
+const isDropSec = s => s === 'drop1' || s === 'drop2' || s === 'final';
+
+const CARDS = [
+  ['0', 'THE FOOL'], ['I', 'THE MAGICIAN'], ['II', 'THE HIGH PRIESTESS'], ['III', 'THE EMPRESS'],
+  ['IV', 'THE EMPEROR'], ['V', 'THE HIEROPHANT'], ['VI', 'THE LOVERS'], ['VII', 'THE CHARIOT'],
+  ['VIII', 'STRENGTH'], ['IX', 'THE HERMIT'], ['X', 'WHEEL OF FORTUNE'], ['XI', 'JUSTICE'],
+  ['XII', 'THE HANGED MAN'], ['XIII', 'DEATH'], ['XIV', 'TEMPERANCE'], ['XV', 'THE DEVIL'],
+  ['XVI', 'THE TOWER'], ['XVII', 'THE STAR'], ['XVIII', 'THE MOON'], ['XIX', 'THE SUN'],
+  ['XX', 'JUDGEMENT'], ['XXI', 'THE WORLD'],
+];
+// [first bar, card]. Before bar 6 the deck is face down (-1).
+const CARD_SPANS = [[0, -1], [6, 0], [8, 1], [9, 2], [10, 3], [11, 4], [12, 5], [13, 6], [14, 7], [16, 8], [20, 9],
+  [24, 10], [28, 11], [32, 12], [36, 13], [40, 14], [44, 15], [48, 16], [56, 17], [64, 18], [72, 19], [78, 20],
+  [82, 21], [88, 0]];
+function cardSpan(bar) { let r = CARD_SPANS[0]; for (const c of CARD_SPANS) { if (bar >= c[0]) r = c; else break; } return r; }
+const cardAt = bar => cardSpan(bar)[1];
+
+// Laser colours per card: [a, b].
+const PAL_HEX = [
+  ['#ffd23f', '#3fd0ff'], ['#ff3b3b', '#ffd23f'], ['#4a7bff', '#cfd8ff'], ['#3dff8a', '#ff6bd6'],
+  ['#ff4a1f', '#ffae00'], ['#ffcc33', '#a24bff'], ['#ff4fa3', '#ff2a4d'], ['#00e5ff', '#2b6bff'],
+  ['#ff8a00', '#ffd200'], ['#ffb347', '#3858ff'], ['#ff00d4', '#00f0ff'], ['#ff2d55', '#f5e663'],
+  ['#2bffd5', '#3b6cff'], ['#ffffff', '#8a8aa0'], ['#b26bff', '#5af2ff'], ['#ff1a1a', '#ff6a00'],
+  ['#ff6a00', '#fff2c4'], ['#6be7ff', '#ffffff'], ['#5c7cff', '#d0e0ff'], ['#ffe600', '#ff7a00'],
+  ['#ffffff', '#ff3355'], ['#00ff9d', '#b84dff'],
+];
+const DECK_HEX = ['#b76bff', '#ffc94a'];
+const hex = h => [parseInt(h.slice(1, 3), 16), parseInt(h.slice(3, 5), 16), parseInt(h.slice(5, 7), 16)];
+const PALS = PAL_HEX.map(p => p.map(hex));
+const DECK_PAL = DECK_HEX.map(hex);
+const palOf = i => (i < 0 ? DECK_PAL : PALS[i]);
+const mix = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+const rgba = (c, a = 1) => `rgba(${c[0] | 0},${c[1] | 0},${c[2] | 0},${a})`;
+const WHITE = [255, 255, 255], BLACK = [0, 0, 0];
+
+// The MC. [bar, on-screen text ("|" breaks a line), what the voice says]
+const MC = [
+  [0.25, 'LADIES AND|GENTLEMEN', 'Ladies and gentlemen!'],
+  [2, 'THE CARDS ARE|ON THE TABLE', 'The cards are on the table!'],
+  [4, 'SHUFFLE!', 'Shuffle!'],
+  [5, '22 CARDS', 'Twenty two cards!'],
+  [6, 'ONE FOOL', 'One fool!'],
+  [7, 'AND THE FOOL|IS YOU!', 'And the fool is you!'],
+  [8, 'RESPECT TO|THE MAGICIAN!', 'Respect to the Magician!'],
+  [9, 'THE HIGH|PRIESTESS!', 'The High Priestess!'],
+  [10, 'THE EMPRESS!', 'The Empress!'],
+  [11, 'THE EMPEROR!', 'The Emperor!'],
+  [12, 'THE|HIEROPHANT!', 'The Hierophant!'],
+  [13, 'THE LOVERS!', 'The Lovers!'],
+  [14, 'THE CHARIOT!', 'The Chariot!'],
+  [15, 'MEET YOUR|FATE!', 'Are you ready to meet your fate?'],
+  [16, 'HYPER|ARCANA!', 'Hyper arcana!'],
+  [18, 'FEEL THE|STRENGTH!', 'Feel the strength!'],
+  [20, 'HERMIT!|LIGHT THE WAY', 'Hermit! Light the way!'],
+  [24, 'SPIN THE|WHEEL!', 'Spin the wheel!'],
+  [26, 'ROUND AND|ROUND!', 'Round and round!'],
+  [28, 'JUSTICE!', 'Justice!'],
+  [30, 'BALANCE|THE BASS!', 'Balance the bass!'],
+  [32, 'HANG ON...', 'Hang on.'],
+  [33.5, 'UPSIDE|DOWN!', 'The world is upside down!'],
+  [36, 'DEATH!', 'Death!'],
+  [37.5, 'IS JUST|A CHANGE', 'is just a change.'],
+  [40, 'TEMPERANCE', 'Temperance.'],
+  [41.5, 'MIX IT|SLOWLY', 'Mix it, slowly.'],
+  [44, "THE DEVIL'S|ON THE DECKS!", 'The devil is on the decks!'],
+  [46, 'THE TOWER|IS SHAKING', 'The tower is shaking!'],
+  [47, 'COMING|DOWN!', 'Coming down!'],
+  [48, 'THE TOWER!', 'The tower!'],
+  [50, 'EVERYTHING|MUST FALL!', 'Everything must fall!'],
+  [54, 'FROM THE|RUBBLE...', 'From the rubble...'],
+  [56, 'A STAR|IS BORN!', 'A star is born!'],
+  [58, 'MAKE A|WISH!', 'Make a wish!'],
+  [62, 'HOWL AT|THE MOON!', 'Howl at the moon!'],
+  [64, 'THE MOON!', 'The moon!'],
+  [66, 'AWOOOOO!', 'Awoooooo!'],
+  [68, 'REAL OR|A DREAM?', 'Is it real, or a dream?'],
+  [70, 'WAKE UP!', 'Wake up!'],
+  [72, 'SUNRISE IN|THE HOUSE!', 'Sunrise in the house!'],
+  [74, 'HANDS UP FOR|THE SUN!', 'Hands up for the sun!'],
+  [78, 'JUDGEMENT!', 'Judgement!'],
+  [80, 'RISE UP!', 'Rise up!'],
+  [82, 'THE WORLD!', 'The world!'],
+  [84, 'ALL 22!', 'All twenty two!'],
+  [86, 'ONE MORE|TIME!', 'One more time!'],
+  [88, 'THE JOURNEY|ENDS...', 'The journey ends...'],
+  [90, 'WHERE IT|BEGAN', 'where it began.'],
+  [92, 'ZERO!', 'Zero!'],
+  [94, 'SHUFFLE|AGAIN!', 'Shuffle again!'],
+];
+
+/* ---------------- rhythm rules, shared by sound and picture ---------------- */
+function kickOn(bar, s) {
+  if (s % 4) return false;
+  const sec = secAt(bar);
+  if (sec === 'intro') return bar >= 4;
+  if (sec === 'break' || sec === 'end') return false;
+  if (sec === 'outro') return bar < 92;
+  if ((bar === 15 || bar === 47) && s >= 12) return false;
+  return true;
+}
+const GROOVE = ['roll', 'drop1', 'drop2', 'moon', 'final', 'build'];
+function bassOn(bar, s) {
+  return s % 4 === 2 && GROOVE.includes(secAt(bar)) && !((bar === 15 || bar === 47) && s >= 12);
+}
+function heyOn(bar, s) {
+  const sec = secAt(bar);
+  return (isDropSec(sec) || sec === 'moon') && (bar & 3) === 3 && (s === 8 || s === 12);
+}
+function snareOn(bar, s) {
+  if (bar === 15) return s >= 4 && s < 12;
+  if (bar === 44) return s % 4 === 0;
+  if (bar === 45) return s % 2 === 0;
+  if (bar === 46) return true;
+  if (bar === 47) return s < 12;
+  return false;
+}
+const RISERS = { 6: 2, 12: 3, 30: 2, 44: 4, 70: 2 };
+const IMPACTS = { 8: 1, 16: 1, 32: 0.6, 48: 1, 64: 0.7, 72: 1, 88: 0.6, 94: 0.9 };
+const BOLTS = [48, 50, 52, 54];
+
+// F#m – D – A – E
+const CH_ROOT = [42, 38, 45, 40];
+const CH_PAD = [[54, 57, 61, 66], [50, 54, 57, 62], [52, 57, 61, 64], [52, 56, 59, 64]];
+const CH_HOOV = [54, 50, 57, 52];
+const HOOK = [
+  [[0, 78, 1.5], [2, 78, 1], [3, 76, 1], [4, 73, 1.5], [6, 73, 1.5], [8, 69, 1.5], [10, 71, 1], [11, 73, 1], [12, 76, 1.5], [14, 73, 1.5]],
+  [[0, 74, 1.5], [2, 74, 1], [3, 73, 1], [4, 69, 1.5], [6, 69, 1.5], [8, 66, 1.5], [10, 69, 1], [11, 71, 1], [12, 74, 1.5], [14, 73, 1.5]],
+  [[0, 73, 1.5], [2, 73, 1], [3, 71, 1], [4, 69, 1.5], [6, 76, 1.5], [8, 73, 1.5], [10, 76, 1], [11, 78, 1], [12, 81, 1.5], [14, 80, 1.5]],
+  [[0, 80, 1.5], [2, 76, 1.5], [4, 71, 1.5], [6, 76, 1.5], [8, 80, 1.5], [10, 78, 1.5], [12, 76, 1.5], [14, 71, 1.5]],
+];
+// The "pipes" melody for the Moon and the last chorus.
+const PIPES = [
+  [[0, 73], [2, 71], [3, 69], [4, 71], [6, 73], [8, 76], [12, 73]],
+  [[0, 71], [2, 69], [3, 68], [4, 69], [6, 71], [8, 73], [14, 69]],
+  [[0, 66], [2, 68], [4, 69], [6, 71], [8, 73], [10, 76], [12, 78]],
+  [[0, 76], [2, 73], [4, 71], [6, 69], [8, 68], [12, 66]],
+];
+const HOOV = [[0, 3], [3, 3], [6, 2], [10, 4], [14, 2]];
+const byStep = pat => pat.map(bar => { const a = new Array(16).fill(null); for (const n of bar) a[n[0]] = n; return a; });
+const HOOK_S = byStep(HOOK), PIPES_S = byStep(PIPES);
+const HOOV_S = (() => { const a = new Array(16).fill(null); for (const n of HOOV) a[n[0]] = n; return a; })();
+
+/* ================================================================
+   Sound. Everything is synthesized with Web Audio.
+   ================================================================ */
+let ac = null, out = null, noiseBuf = null, pipes = null;
+
+function makeCurve(k) {
+  const n = 2048, c = new Float32Array(n), d = Math.tanh(k);
+  for (let i = 0; i < n; i++) { const x = i / (n - 1) * 2 - 1; c[i] = Math.tanh(k * x) / d; }
+  return c;
+}
+function makeImpulse(c, sec) {
+  const len = Math.floor(c.sampleRate * sec), b = c.createBuffer(2, len, c.sampleRate);
+  for (let ch = 0; ch < 2; ch++) {
+    const d = b.getChannelData(ch);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / len, 3.2);
+  }
+  return b;
+}
+
+function buildAudio(c) {
+  ac = c;
+  const G = v => { const n = c.createGain(); n.gain.value = v; return n; };
+  const comp = c.createDynamicsCompressor();
+  comp.threshold.value = -14; comp.knee.value = 8; comp.ratio.value = 5; comp.attack.value = 0.002; comp.release.value = 0.14;
+  const master = G(0.9); master.connect(comp); comp.connect(c.destination);
+  const music = G(1); music.connect(master);
+  const pump = G(1); pump.connect(music);
+  const drums = G(1); drums.connect(master);
+
+  const kickIn = G(1.5), shaper = c.createWaveShaper(), kickLP = c.createBiquadFilter(), kickOut = G(0.55);
+  shaper.curve = makeCurve(2.6); shaper.oversample = '2x';
+  kickLP.type = 'lowpass'; kickLP.frequency.value = 18000; kickLP.Q.value = 0.8;
+  kickIn.connect(shaper); shaper.connect(kickLP); kickLP.connect(kickOut); kickOut.connect(drums);
+
+  const conv = c.createConvolver(); conv.buffer = makeImpulse(c, 2.8);
+  const revOut = G(0.42); conv.connect(revOut); revOut.connect(music);
+  const rev = G(1); rev.connect(conv);
+  const drumRev = G(0.22); drumRev.connect(conv);
+
+  const leadLP = c.createBiquadFilter(); leadLP.type = 'lowpass'; leadLP.frequency.value = 11000; leadLP.Q.value = 1.4;
+  const lead = G(0.85); leadLP.connect(lead); lead.connect(pump);
+  const dSend = G(0.22), delay = c.createDelay(1), dFb = G(0.36), dLP = c.createBiquadFilter();
+  delay.delayTime.value = STEP * 3; dLP.type = 'lowpass'; dLP.frequency.value = 3200;
+  lead.connect(dSend); dSend.connect(delay); delay.connect(dLP); dLP.connect(dFb); dFb.connect(delay); dLP.connect(music);
+  const lRev = G(0.16); lead.connect(lRev); lRev.connect(conv);
+
+  noiseBuf = c.createBuffer(1, c.sampleRate * 2, c.sampleRate);
+  const nd = noiseBuf.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+
+  out = { master, music, pump, drums, kickIn, kickLP, rev, drumRev, leadLP };
+  pipes = null;
+}
+
+function gainNode(v) { const g = ac.createGain(); g.gain.value = v; return g; }
+function send(node, amt) { const g = gainNode(amt); node.connect(g); g.connect(out.rev); }
+function osc(type, f, det = 0) { const o = ac.createOscillator(); o.type = type; o.frequency.value = f; o.detune.value = det; return o; }
+function filt(type, f, q = 0.7) { const b = ac.createBiquadFilter(); b.type = type; b.frequency.value = f; b.Q.value = q; return b; }
+
+function nz(t, dur, type, freq, q, peak, dests, attack = 0.001) {
+  const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const f = filt(type, freq, q), g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  s.connect(f); f.connect(g); for (const d of [].concat(dests)) g.connect(d);
+  s.start(t, Math.random() * 1.5); s.stop(t + dur + 0.05);
+  return f;
+}
+
+function kick(t, v) {
+  const o = osc('sine', 200), g = ac.createGain();
+  o.frequency.setValueAtTime(210, t);
+  o.frequency.exponentialRampToValueAtTime(56, t + 0.07);
+  o.frequency.exponentialRampToValueAtTime(41, t + 0.36);
+  g.gain.setValueAtTime(v, t); g.gain.setValueAtTime(v, t + 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.38);
+  o.connect(g); g.connect(out.kickIn); o.start(t); o.stop(t + 0.4);
+  nz(t, 0.012, 'highpass', 2500, 0.7, 0.3 * v, out.kickIn);
+  const p = out.pump.gain; p.setValueAtTime(0.25, t); p.setTargetAtTime(1, t + 0.03, 0.085);
+}
+function clap(t, v) {
+  for (let k = 0; k < 3; k++) nz(t + k * 0.011, 0.022, 'bandpass', 1400, 1.1, v, [out.drums, out.drumRev]);
+  nz(t + 0.03, 0.2, 'bandpass', 1150, 0.9, v * 0.8, [out.drums, out.drumRev]);
+}
+function hat(t, open, v) { nz(t, open ? 0.13 : 0.035, 'highpass', open ? 7000 : 8500, 0.7, v, out.drums); }
+function snare(t, v) {
+  nz(t, 0.13, 'bandpass', 1900, 0.7, v, [out.drums, out.drumRev]);
+  const o = osc('triangle', 230), g = ac.createGain();
+  o.frequency.exponentialRampToValueAtTime(160, t + 0.08);
+  g.gain.setValueAtTime(v * 0.6, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.09);
+  o.connect(g); g.connect(out.drums); o.start(t); o.stop(t + 0.1);
+}
+function bass(t, midi, v) {
+  const f = mtof(midi), lp = filt('lowpass', 2600, 5), g = ac.createGain();
+  lp.frequency.setValueAtTime(2600, t); lp.frequency.exponentialRampToValueAtTime(240, t + 0.13);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.004);
+  g.gain.setValueAtTime(v, t + 0.07); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.2);
+  for (const d of [-8, 8]) { const o = osc('sawtooth', f, d); o.connect(lp); o.start(t); o.stop(t + 0.22); }
+  const sub = osc('sine', f / 2); sub.connect(g); sub.start(t); sub.stop(t + 0.22);
+  lp.connect(g); g.connect(out.pump);
+}
+function supersaw(t, midi, dur, v) {
+  const f = mtof(midi), g = ac.createGain(), hold = Math.max(0.12, dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.005);
+  g.gain.exponentialRampToValueAtTime(v * 0.6, t + 0.12); g.gain.setValueAtTime(v * 0.6, t + hold);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + hold + 0.12);
+  for (const d of [-24, -12, -5, 5, 12, 24]) { const o = osc('sawtooth', f, d); o.connect(g); o.start(t); o.stop(t + hold + 0.15); }
+  const o8 = osc('square', f / 2); const g8 = gainNode(0.5); o8.connect(g8); g8.connect(g); o8.start(t); o8.stop(t + hold + 0.15);
+  g.connect(out.leadLP);
+}
+function pad(t, notes, dur, v) {
+  const lp = filt('lowpass', 1500, 0.6), g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.35);
+  g.gain.setValueAtTime(v, t + dur - 0.1); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.7);
+  for (const m of notes) for (const d of [-7, 7]) { const o = osc('sawtooth', mtof(m), d); o.connect(lp); o.start(t); o.stop(t + dur + 0.8); }
+  lp.connect(g); g.connect(out.pump); send(g, 0.5);
+}
+function hoover(t, midi, dur, v) {
+  const f = mtof(midi), lp = filt('lowpass', 2800, 2), g = ac.createGain();
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + 0.015);
+  g.gain.setValueAtTime(v, t + dur); g.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.16);
+  const voice = (type, ff, det, amp) => {
+    const o = osc(type, ff, det), a = gainNode(amp);
+    o.frequency.setValueAtTime(ff * 0.62, t); o.frequency.exponentialRampToValueAtTime(ff, t + 0.08);
+    o.frequency.setValueAtTime(ff, t + dur); o.frequency.exponentialRampToValueAtTime(ff * 0.8, t + dur + 0.15);
+    o.connect(a); a.connect(lp); o.start(t); o.stop(t + dur + 0.2);
+  };
+  for (const d of [-28, -10, 10, 28]) voice('sawtooth', f, d, 1);
+  voice('square', f / 2, 0, 0.7);
+  lp.connect(g); g.connect(out.pump); send(g, 0.15);
+}
+function hey(t, v) {
+  // A crowd shouting "HEY!": five sawtooth voices through vowel formants that glide from "eh" to "ee".
+  const o = gainNode(v); o.connect(out.music); send(o, 0.35);
+  const F = [[560, 1850, 2500], [300, 2250, 3000]], A = [1, 0.55, 0.3];
+  for (const f0 of [138, 162, 196, 228, 262]) {
+    const tt = t + Math.random() * 0.03, s = osc('sawtooth', f0 * 1.12), g = ac.createGain();
+    s.frequency.setValueAtTime(f0 * 1.14, tt); s.frequency.exponentialRampToValueAtTime(f0 * 0.86, tt + 0.3);
+    g.gain.setValueAtTime(0.0001, tt); g.gain.exponentialRampToValueAtTime(1, tt + 0.025);
+    g.gain.setValueAtTime(1, tt + 0.15); g.gain.exponentialRampToValueAtTime(0.0001, tt + 0.32);
+    s.connect(g);
+    for (let k = 0; k < 3; k++) {
+      const bp = filt('bandpass', F[0][k], 9), a = gainNode(A[k]);
+      bp.frequency.setValueAtTime(F[0][k], tt); bp.frequency.linearRampToValueAtTime(F[1][k], tt + 0.26);
+      g.connect(bp); bp.connect(a); a.connect(o);
+    }
+    s.start(tt); s.stop(tt + 0.35);
+  }
+  nz(t - 0.035, 0.06, 'bandpass', 1700, 1, 0.5, o, 0.01);
+}
+function riser(t, dur, v) {
+  const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const bp = filt('bandpass', 300, 2), g = ac.createGain();
+  bp.frequency.setValueAtTime(300, t); bp.frequency.exponentialRampToValueAtTime(9000, t + dur);
+  g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(v, t + dur); g.gain.linearRampToValueAtTime(0, t + dur + 0.02);
+  s.connect(bp); bp.connect(g); g.connect(out.music); send(g, 0.4);
+  s.start(t); s.stop(t + dur + 0.05);
+  const o = osc('sawtooth', mtof(42)), og = ac.createGain(), ol = filt('lowpass', 1800);
+  o.frequency.setValueAtTime(mtof(42), t); o.frequency.exponentialRampToValueAtTime(mtof(78), t + dur);
+  og.gain.setValueAtTime(0.0001, t); og.gain.exponentialRampToValueAtTime(v * 0.35, t + dur); og.gain.linearRampToValueAtTime(0, t + dur + 0.02);
+  o.connect(ol); ol.connect(og); og.connect(out.music); o.start(t); o.stop(t + dur + 0.05);
+}
+function impact(t, v) {
+  nz(t, 2.4, 'highpass', 400, 0.5, 0.3 * v, [out.music, out.rev]);
+  const o = osc('sine', 80), g = ac.createGain();
+  o.frequency.setValueAtTime(90, t); o.frequency.exponentialRampToValueAtTime(28, t + 1.2);
+  g.gain.setValueAtTime(0.8 * v, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.4);
+  o.connect(g); g.connect(out.drums); o.start(t); o.stop(t + 1.5);
+}
+function thunder(t, v) {
+  const s = ac.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
+  const lp = filt('lowpass', 700, 0.8), g = ac.createGain();
+  lp.frequency.setValueAtTime(900, t); lp.frequency.exponentialRampToValueAtTime(140, t + 3);
+  g.gain.setValueAtTime(0.0001, t);
+  let tt = t;
+  for (let k = 0; k < 12; k++) {
+    tt += 0.03 + Math.random() * 0.07;
+    g.gain.setValueAtTime(v * (0.4 + Math.random() * 0.6), tt);
+    g.gain.exponentialRampToValueAtTime(v * 0.12, tt + 0.05);
+  }
+  g.gain.exponentialRampToValueAtTime(0.0001, t + 3.4);
+  s.connect(lp); lp.connect(g); g.connect(out.music); send(g, 0.5);
+  s.start(t); s.stop(t + 3.5);
+}
+function startPipes(t, dur) {
+  // Drones plus a nasal chanter that plays legato; notes are frequency jumps with a grace note before each.
+  const o = ac.createGain();
+  o.gain.setValueAtTime(0.0001, t); o.gain.exponentialRampToValueAtTime(1, t + 0.25);
+  o.gain.setValueAtTime(1, t + dur - 0.3); o.gain.exponentialRampToValueAtTime(0.0001, t + dur + 0.2);
+  o.connect(out.music); send(o, 0.3);
+  const dl = filt('lowpass', 1100), dg = gainNode(0.045); dl.connect(dg); dg.connect(o);
+  for (const m of [42, 49, 54]) { const x = osc('sawtooth', mtof(m), (Math.random() - 0.5) * 6); x.connect(dl); x.start(t); x.stop(t + dur + 0.3); }
+  const hp = filt('highpass', 450), pk = ac.createBiquadFilter(), lp = filt('lowpass', 5200), cg = gainNode(0.075);
+  pk.type = 'peaking'; pk.frequency.value = 1700; pk.gain.value = 10; pk.Q.value = 1.2;
+  hp.connect(pk); pk.connect(lp); lp.connect(cg); cg.connect(o);
+  const c1 = osc('sawtooth', mtof(73)), c2 = osc('square', mtof(73), 6), c2g = gainNode(0.45);
+  c1.connect(hp); c2.connect(c2g); c2g.connect(hp);
+  c1.start(t); c2.start(t); c1.stop(t + dur + 0.3); c2.stop(t + dur + 0.3);
+  pipes = { oscs: [c1, c2], until: t + dur };
+}
+function pipeNote(t, midi) {
+  if (!pipes || t > pipes.until) return;
+  for (const o of pipes.oscs) { o.frequency.setValueAtTime(mtof(81), Math.max(0, t - 0.035)); o.frequency.setValueAtTime(mtof(midi), t); }
+}
+
+function leadCut(b, sec) {
+  if (sec === 'build') return 500 * Math.pow(22, clamp((b - 40) / 8));
+  if (sec === 'break') return 1500;
+  if (sec === 'outro') return 1200;
+  return 11000;
+}
+function kickCut(b, sec) {
+  if (sec === 'intro') return b < 6 ? 300 : 300 * Math.pow(60, clamp((b - 6) / 2));
+  if (sec === 'outro') return 600;
+  return 18000;
+}
+function automate(bpos, t, sec) {
+  const end = Math.floor(bpos) + 0.999, dt = (end - bpos) * BAR;
+  for (const [p, fn] of [[out.leadLP.frequency, leadCut], [out.kickLP.frequency, kickCut]]) {
+    p.cancelScheduledValues(t);
+    p.setValueAtTime(fn(bpos, sec), t);
+    p.exponentialRampToValueAtTime(fn(end, sec), t + dt);
+  }
+}
+
+let firstStep = 0;
+function playStep(i, t) {
+  const bar = i >> 4, s = i & 15, sec = secAt(bar), ch = bar & 3, first = i === firstStep;
+  if (sec === 'end') return;
+  const drop = isDropSec(sec);
+  if (s === 0 || first) automate(bar + s / 16, t, sec);
+
+  if (kickOn(bar, s)) kick(t, sec === 'intro' || sec === 'outro' ? 0.85 : 1);
+  if (bassOn(bar, s)) bass(t, CH_ROOT[ch], 0.26);
+  if ((s === 4 || s === 12) && (drop || sec === 'moon' || (sec === 'roll' && bar >= 12 && bar < 15))) clap(t, 0.5);
+  if (s % 4 === 2 && GROOVE.includes(sec) && !((bar === 15 || bar === 47) && s >= 12)) hat(t, true, drop ? 0.15 : 0.11);
+  if (s % 2 === 1 && drop) hat(t, false, s % 4 === 3 ? 0.1 : 0.06);
+  if (snareOn(bar, s)) snare(t, bar === 15 ? 0.3 : 0.12 + 0.3 * ((bar - 44) * 16 + s) / 64);
+  if (heyOn(bar, s)) hey(t, 1.6);
+
+  // pads
+  if (s === 0) {
+    let pv = 0;
+    if (sec === 'intro') pv = bar < 4 ? 0.07 : 0.045;
+    else if (sec === 'break') pv = bar < 36 ? 0.06 : 0.08;
+    else if (sec === 'build') pv = 0.03;
+    else if (sec === 'outro') pv = bar < 94 ? 0.045 : 0;
+    else if (drop || sec === 'moon') pv = 0.012;
+    if (bar === 94) pad(t, CH_PAD[0], BAR * 2, 0.06);
+    else if (pv) pad(t, CH_PAD[ch], BAR, pv);
+  }
+
+  // the hook
+  const hn = HOOK_S[ch][s];
+  if (hn) {
+    let hv = 0, len = hn[2] * STEP;
+    if (sec === 'drop1') hv = 0.05;
+    else if (sec === 'drop2') hv = 0.04;
+    else if (sec === 'final' && bar < 80) hv = 0.05;
+    else if (sec === 'build') hv = 0.03 + 0.02 * (bar - 40) / 8;
+    else if ((sec === 'break' && bar < 36) || (sec === 'outro' && bar < 92)) { hv = 0.045; len = STEP * 0.7; }
+    if (hv) supersaw(t, hn[1], len, hv);
+  }
+
+  // hoover riff
+  if ((sec === 'drop2' || (sec === 'final' && bar >= 80)) && HOOV_S[s]) {
+    const [, d] = HOOV_S[s];
+    hoover(t, CH_HOOV[ch], d * STEP * 0.9, 0.034);
+    hoover(t, CH_HOOV[ch] + 7, d * STEP * 0.9, 0.022);
+  }
+
+  // pipes
+  const pipeSec = sec === 'moon' || (sec === 'final' && bar >= 80);
+  if (pipeSec) {
+    const from = sec === 'moon' ? 64 : 80;
+    if ((bar === from && s === 0) || first) startPipes(t, (from + 8 - bar - s / 16) * BAR);
+    const pn = PIPES_S[ch][s];
+    if (pn) pipeNote(t, pn[1]);
+  }
+
+  // effects
+  if (s === 0) {
+    if (RISERS[bar]) riser(t, RISERS[bar] * BAR, 0.22);
+    if (IMPACTS[bar]) impact(t, IMPACTS[bar]);
+    if (BOLTS.includes(bar)) thunder(t, 0.55);
+  }
+}
+
+// Scheduler: plays the song ahead of the audio clock.
+let t0 = 0, nextStep = 0, schedTimer = 0;
+function schedule() {
+  const ahead = ac.currentTime + 0.22;
+  while (nextStep < BARS * 16 && t0 + nextStep * STEP < ahead) {
+    const t = t0 + nextStep * STEP;
+    if (t >= ac.currentTime - 0.01) playStep(nextStep, Math.max(t, ac.currentTime));
+    nextStep++;
+  }
+}
+
+/* ================================================================
+   Card art: every glyph is a set of polylines, drawn like a laser.
+   Unit box about x ∈ [-1, 1], y ∈ [-1.15, 1.15], y down.
+   ================================================================ */
+const P = (...c) => { const p = []; for (let i = 0; i < c.length; i += 2) p.push([c[i], c[i + 1]]); return p; };
+const arc = (cx, cy, r, a0 = 0, a1 = TAU, n) => {
+  n = n || Math.max(6, Math.ceil(Math.abs(a1 - a0) / TAU * 44));
+  const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return p;
+};
+const ell = (cx, cy, rx, ry, a0 = 0, a1 = TAU, n = 44) => {
+  const p = []; for (let i = 0; i <= n; i++) { const a = a0 + (a1 - a0) * i / n; p.push([cx + Math.cos(a) * rx, cy + Math.sin(a) * ry]); }
+  return p;
+};
+const rect = (x, y, w, h) => P(x, y, x + w, y, x + w, y + h, x, y + h, x, y);
+const star = (cx, cy, r1, r2, n, rot = -Math.PI / 2) => {
+  const p = []; for (let i = 0; i <= n * 2; i++) { const a = rot + i * Math.PI / n, r = i % 2 ? r2 : r1; p.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return p;
+};
+const pent = (cx, cy, r, rot = -Math.PI / 2) => {
+  const p = []; for (let k = 0; k <= 5; k++) { const a = rot + k * 4 * Math.PI / 5; p.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return p;
+};
+const tri = (cx, cy, r, rot) => {
+  const p = []; for (let k = 0; k <= 3; k++) { const a = rot + k * TAU / 3; p.push([cx + Math.cos(a) * r, cy + Math.sin(a) * r]); }
+  return p;
+};
+const rays = (cx, cy, r1, r2, n, rot = 0) => {
+  const o = []; for (let i = 0; i < n; i++) { const a = rot + i * TAU / n; o.push(P(cx + Math.cos(a) * r1, cy + Math.sin(a) * r1, cx + Math.cos(a) * r2, cy + Math.sin(a) * r2)); }
+  return o;
+};
+const lemn = (cx, cy, a, n = 64) => {
+  const p = []; for (let i = 0; i <= n; i++) { const t = i / n * TAU, d = 1 + Math.sin(t) ** 2; p.push([cx + a * Math.cos(t) / d, cy + a * Math.sin(t) * Math.cos(t) / d]); }
+  return p;
+};
+const heart = (cx, cy, s, n = 64) => {
+  const p = []; for (let i = 0; i <= n; i++) {
+    const t = i / n * TAU;
+    p.push([cx + 16 * Math.sin(t) ** 3 * s / 17, cy - (13 * Math.cos(t) - 5 * Math.cos(2 * t) - 2 * Math.cos(3 * t) - Math.cos(4 * t)) * s / 17]);
+  }
+  return p;
+};
+const spiral = (cx, cy, r, turns, dir, n = 50) => {
+  const p = []; for (let i = 0; i <= n; i++) { const f = i / n, a = -Math.PI / 2 + f * turns * TAU, rr = r * (1 - 0.8 * f); p.push([cx + dir * Math.cos(a) * rr, cy + Math.sin(a) * rr]); }
+  return p;
+};
+const xf = (pts, ox, oy, a) => { const c = Math.cos(a), s = Math.sin(a); return pts.map(([x, y]) => [ox + x * c - y * s, oy + x * s + y * c]); };
+const around = (pts, px, py, a) => xf(pts.map(([x, y]) => [x - px, y - py]), px, py, a);
+const wave = (x0, x1, y, amp, k, ph, n = 36) => { const p = []; for (let i = 0; i <= n; i++) { const x = lerp(x0, x1, i / n); p.push([x, y + Math.sin(x * k * Math.PI + ph) * amp]); } return p; };
+const wavySeg = (x0, y0, x1, y1, amp, k, ph, n = 30) => {
+  const dx = x1 - x0, dy = y1 - y0, l = Math.hypot(dx, dy), nx = -dy / l, ny = dx / l, p = [];
+  for (let i = 0; i <= n; i++) { const f = i / n, o = Math.sin(f * k * TAU + ph) * amp * Math.sin(f * Math.PI); p.push([x0 + dx * f + nx * o, y0 + dy * f + ny * o]); }
+  return p;
+};
+const beatPh = t => (t / SPB) % 1;
+const pulse = (t, k = 6) => Math.exp(-beatPh(t) * k);
+const mirrorX = pts => pts.map(([x, y]) => [-x, y]);
+
+const G = [
+  // 0 The Fool: walks toward the cliff with a bindle, a rose and a little dog.
+  t => {
+    const st = Math.sin(t * Math.PI / SPB) * 0.05;
+    return [P(-1, .92, .52, .92, .66, 1.2), arc(-.12, -.5, .15), P(-.3, -.6, -.12, -.7, .06, -.6, .14, -.86),
+      P(-.12, -.35, -.08, .3), P(-.08, .3, -.34, .9), P(-.08, .3, .14 + st, .88),
+      P(-.1, -.2, -.56, -.64), arc(-.64, -.72, .12), P(-.1, -.16, .26, -.02), arc(.31, -.02, .06),
+      arc(.6, -.92, .16), ...rays(.6, -.92, .23, .33, 10, t * .5),
+      ell(.33, .74, .14, .07), arc(.5, .62, .07), P(.19, .72, .1, .57 - st), P(.24, .79, .22, .9), P(.42, .79, .44, .9)];
+  },
+  // I The Magician
+  t => [lemn(0, -.92, .36 * (1 + pulse(t) * .08)), P(0, -.62, 0, .3), arc(0, -.62, .05), P(-.9, .5, .9, .5), P(-.75, .5, -.75, 1.02), P(.75, .5, .75, 1.02),
+    P(-.64, .14, -.6, .32, -.5, .4, -.4, .32, -.36, .14, -.64, .14), P(-.5, .4, -.5, .5), arc(.48, .3, .14), pent(.48, .3, .13),
+    P(-.25, .45, .2, .45), P(-.18, .4, -.18, .5), ...rays(0, -.62, .1, .2, 8, t)],
+  // II The High Priestess
+  t => [rect(-.88, -.9, .26, 1.9), rect(.62, -.9, .26, 1.9), arc(0, -.74, .13), arc(-.2, -.74, .11, Math.PI / 2, Math.PI * 1.5), arc(.2, -.74, .11, -Math.PI / 2, Math.PI / 2),
+    rect(-.22, -.2, .44, .55), P(-.14, -.05, .14, -.05), P(-.14, .08, .14, .08), P(-.14, .21, .14, .21),
+    [...arc(0, .5, .36, .12 * Math.PI, .88 * Math.PI), ...arc(0, .4, .3, .85 * Math.PI, .15 * Math.PI)], P(0, -.52, 0, -.3), P(-.1, -.42, .1, -.42)],
+  // III The Empress
+  t => {
+    const o = [arc(0, -.1, .38), P(0, .28, 0, .95), P(-.27, .6, .27, .6)];
+    for (let k = 0; k < 7; k++) { const a = Math.PI * (1.12 + .76 * k / 6); o.push(star(Math.cos(a) * .74, -.12 + Math.sin(a) * .74, .1 * (1 + .3 * Math.sin(t * 4 + k)), .04, 5)); }
+    for (const x of [-.66, .66]) { o.push(P(x, 1, x, .4)); for (let j = 0; j < 4; j++) o.push(P(x - .1, .42 + j * .13, x, .5 + j * .13, x + .1, .42 + j * .13)); }
+    return o;
+  },
+  // IV The Emperor
+  t => [rect(-.55, -.12, 1.1, 1.02), P(-.42, -.3, -.42, -.72, -.21, -.5, 0, -.86, .21, -.5, .42, -.72, .42, -.3, -.42, -.3),
+    spiral(-.76, -.1, .22, 2, 1), spiral(.76, -.1, .22, 2, -1), ell(0, .14, .1, .14), P(0, .28, 0, .74), P(-.18, .38, .18, .38), arc(0, -.86, .05)],
+  // V The Hierophant
+  t => [P(0, -1, 0, .4), P(-.17, -.82, .17, -.82), P(-.29, -.63, .29, -.63), P(-.41, -.44, .41, -.44),
+    arc(0, -.3, .86, Math.PI * 1.08, Math.PI * 1.92), P(-.833, -.515, -.833, 1), P(.833, -.515, .833, 1),
+    P(-.45, .95, .42, .42), arc(.48, .38, .08), P(-.38, .91, -.45, .82), P(-.3, .86, -.37, .77),
+    P(.45, .95, -.42, .42), arc(-.48, .38, .08), P(.38, .91, .45, .82), P(.3, .86, .37, .77)],
+  // VI The Lovers
+  t => {
+    const wing = P(.16, -.66, .5, -.92, .8, -.78, .62, -.6, .34, -.56, .16, -.66);
+    return [heart(0, .3, .5 * (1 + pulse(t, 5) * .1)), arc(0, -.74, .14), ...rays(0, -.74, .2, .29, 12, t * .6), wing, mirrorX(wing),
+      P(-.82, .68, .8, -.04), P(.8, -.04, .65, -.06), P(.8, -.04, .73, .09), P(-.82, .68, -.86, .56), P(-.82, .68, -.7, .72)];
+  },
+  // VII The Chariot
+  t => {
+    const a = t * 5, o = [P(-.6, .05, .6, .05, .5, .55, -.5, .55, -.6, .05), arc(-.42, .74, .2), arc(.42, .74, .2),
+      P(-.55, .05, -.55, -.62), P(.55, .05, .55, -.62), ell(0, -.62, .62, .16),
+      star(-.3, -.66, .06, .025, 5), star(0, -.7, .07, .028, 5), star(.3, -.66, .06, .025, 5),
+      arc(0, .3, .08), P(-.08, .3, -.32, .22), P(.08, .3, .32, .22), arc(0, -.18, .12), P(-.25, .05, -.2, -.02, .2, -.02, .25, .05)];
+    for (let k = 0; k < 3; k++) {
+      const an = a + k * Math.PI / 3;
+      for (const cx of [-.42, .42]) o.push(P(cx - Math.cos(an) * .2, .74 - Math.sin(an) * .2, cx + Math.cos(an) * .2, .74 + Math.sin(an) * .2));
+    }
+    return o;
+  },
+  // VIII Strength
+  t => {
+    const r = 1 + pulse(t) * .07;
+    return [lemn(0, -.9, .3), arc(0, .3, .32 * r), star(0, .3, .62 * r, .45 * r, 14, t * .3), arc(-.12, .2, .05), arc(.12, .2, .05),
+      P(-.07, .34, .07, .34, 0, .43, -.07, .34), P(-.13, .52 + pulse(t) * .05, 0, .46, .13, .52 + pulse(t) * .05)];
+  },
+  // IX The Hermit
+  t => {
+    const lx = -.52;
+    return [P(.1, -.95, -.42, 1, .6, 1, .1, -.95), arc(.1, -.58, .12), P(-.02, -.18, lx, -.26), P(lx, -.26, lx, -.15), rect(lx - .14, -.15, .28, .36),
+      tri(lx, .03, .1, -Math.PI / 2), tri(lx, .03, .1, Math.PI / 2), ...rays(lx, .03, .24, .34 + pulse(t) * .08, 8, t * .7), P(.52, -.6, .7, 1.02)];
+  },
+  // X Wheel of Fortune
+  t => {
+    const a = t * 1.1, o = [arc(0, 0, .86), arc(0, 0, .62), arc(0, 0, .16)];
+    for (let k = 0; k < 8; k++) { const an = a + k * Math.PI / 4; o.push(P(Math.cos(an) * .16, Math.sin(an) * .16, Math.cos(an) * .86, Math.sin(an) * .86)); }
+    for (let k = 0; k < 4; k++) { const an = a + Math.PI / 8 + k * Math.PI / 2; o.push(arc(Math.cos(an) * .74, Math.sin(an) * .74, .05)); }
+    return o;
+  },
+  // XI Justice: the scales tip with the bar.
+  t => {
+    const tilt = Math.sin(t * Math.PI / BAR) * .14, bx = Math.cos(tilt) * .7, by = Math.sin(tilt) * .7, o = [];
+    o.push(P(0, -1.08, .05, -.98, .05, -.12, -.05, -.12, -.05, -.98, 0, -1.08), P(-.2, -.12, .2, -.12), P(0, -.12, 0, .04), arc(0, .08, .04),
+      P(0, .15, 0, .95), P(-.3, .95, .3, .95), P(-bx, .35 - by, bx, .35 + by));
+    for (const [px, py] of [[-bx, .35 - by], [bx, .35 + by]]) o.push(P(px, py, px - .18, py + .35), P(px, py, px + .18, py + .35), arc(px, py + .35, .18, 0, Math.PI));
+    return o;
+  },
+  // XII The Hanged Man
+  t => {
+    const sw = Math.sin(t * 1.6) * .07;
+    const fig = [P(0, -.78, 0, -.05), P(0, -.05, .3, -.32, .04, -.56), P(0, -.05, 0, .4), P(0, .12, -.2, .3, 0, .4), P(0, .12, .2, .3, 0, .4),
+      arc(0, .55, .14), arc(0, .55, .26), ...rays(0, .55, .3, .4, 10, t * .5)].map(l => around(l, 0, -.78, sw));
+    return [P(-.75, -.95, .75, -.95), P(-.62, -.95, -.62, 1), P(.62, -.95, .62, 1), P(0, -.95, 0, -.78), ...fig];
+  },
+  // XIII Death: the jaw chatters on the beat.
+  t => {
+    const j = pulse(t, 8) * .07, o = [arc(0, -.25, .5, Math.PI * .78, Math.PI * 2.22), P(-.39, .07, -.3, .3), P(.39, .07, .3, .3),
+      arc(-.2, -.2, .13), arc(.2, -.2, .13), P(-.06, .08, 0, -.02, .06, .08, -.06, .08),
+      P(-.3, .3 + j, -.25, .55 + j, .25, .55 + j, .3, .3 + j), P(-.3, .3, .3, .3),
+      P(-.85, 1.05, .75, -.85), arc(.75, -.4, .45, -Math.PI / 2, -Math.PI * .95)];
+    for (let k = -2; k <= 2; k++) o.push(P(k * .1, .3, k * .1, .4 + j));
+    return o;
+  },
+  // XIV Temperance
+  t => {
+    const cup = P(-.13, -.12, -.1, .1, .1, .1, .13, -.12);
+    return [xf(cup, -.5, -.25, .7), xf(cup, .45, .45, 0), wavySeg(-.42, -.32, .38, .32, .06, 2.5, t * 9),
+      arc(0, -.2, .9, Math.PI * 1.12, Math.PI * 1.42), arc(0, -.2, .9, Math.PI * 1.58, Math.PI * 1.88),
+      arc(0, -.2, .72, Math.PI * 1.15, Math.PI * 1.4), arc(0, -.2, .72, Math.PI * 1.6, Math.PI * 1.85),
+      tri(0, -.62, .12, -Math.PI / 2), wave(-1, 1, .9, .04, 3, t * 2)];
+  },
+  // XV The Devil
+  t => {
+    const horn = P(-.22, -.5, -.42, -.72, -.5, -1.02, -.32, -.86, -.12, -.56);
+    const o = [arc(0, .08, .62 * (1 + pulse(t) * .05)), pent(0, .08, .58, Math.PI / 2), horn, mirrorX(horn)];
+    for (let k = -2; k <= 2; k++) o.push(ell(k * .15, .9 + (k & 1) * .05, .08, .05));
+    return o;
+  },
+  // XVI The Tower: the crown keeps falling off.
+  t => {
+    const f = ((t / SPB) % 4) / 4, cr = P(-.2, .1, -.2, -.12, -.1, 0, 0, -.16, .1, 0, .2, -.12, .2, .1, -.2, .1);
+    return [P(-.32, 1, -.26, -.4, -.15, -.48, -.05, -.38, .08, -.5, .26, -.4, .32, 1),
+      rect(-.08, -.15, .16, .22), rect(-.14, .35, .1, .18), rect(.06, .55, .1, .18),
+      xf(cr, .32 + f * .3, -.72 + f * f * .9, .5 + f * 2), P(.95, -1.15, .55, -.8, .72, -.78, .22, -.44),
+      arc(-.6, -.35 + f * .9, .06), P(-.6, -.29 + f * .9, -.62, -.08 + f * .9), P(-.75, -.3 + f * .9, -.6, -.2 + f * .9, -.45, -.32 + f * .9),
+      P(-.08, -.15, -.14, -.3, -.05, -.24, 0, -.36, .05, -.24, .14, -.3, .08, -.15)];
+  },
+  // XVII The Star
+  t => {
+    const o = [star(0, -.5, .45, .13, 8, t * .3)];
+    [[-.7, -.88], [.7, -.88], [-.8, -.25], [.8, -.25], [-.6, .22], [.6, .22], [0, .12]].forEach(([x, y], i) =>
+      o.push(star(x, y, .11 * (1 + .35 * Math.sin(t * 3 + i * 1.7)), .035, 8)));
+    o.push(wave(-1, 1, .75, .04, 3, t * 2), wave(-1, 1, .9, .04, 3, t * 2 + 1.5), P(-.4, .3, -.3, .5, -.22, .72), P(.4, .3, .3, .5, .22, .72));
+    return o;
+  },
+  // XVIII The Moon
+  t => {
+    const o = [arc(0, -.55, .38), arc(.13, -.6, .3, -Math.PI * .55, Math.PI * .55), ...rays(0, -.55, .46, .56, 16, t * .2),
+      rect(-.9, 0, .25, .62), P(-.9, 0, -.775, -.15, -.65, 0), rect(.65, 0, .25, .62), P(.65, 0, .775, -.15, .9, 0),
+      wave(-1, 1, .9, .03, 4, t * 1.5), P(-.05, .85, .1, .65, -.08, .45, .06, .25),
+      P(-.16, .82, -.08, .78, 0, .82, .08, .78, .16, .82)];
+    for (let k = 0; k < 5; k++) {
+      const x = -.4 + k * .2, y = ((t * .35 + k * .23) % 1) * .9 - .1;
+      o.push(P(x, y, x + .03, y + .06, x, y + .09, x - .03, y + .06, x, y));
+    }
+    return o;
+  },
+  // XIX The Sun
+  t => {
+    const o = [arc(0, -.35, .4), arc(-.14, -.42, .04), arc(.14, -.42, .04), arc(0, -.32, .2, .2 * Math.PI, .8 * Math.PI),
+      P(-1, .6, 1, .6), P(-1, .95, 1, .95)];
+    for (let i = 0; i < 16; i++) {
+      const a = t * .4 + i * TAU / 16, r0 = .5, r1 = .8 + pulse(t) * .08;
+      if (i % 2) o.push(P(Math.cos(a) * r0, -.35 + Math.sin(a) * r0, Math.cos(a) * r1, -.35 + Math.sin(a) * r1));
+      else { const p = []; for (let k = 0; k <= 8; k++) { const r = lerp(r0, r1, k / 8), aa = a + Math.sin(k * 1.6) * .05; p.push([Math.cos(aa) * r, -.35 + Math.sin(aa) * r]); } o.push(p); }
+    }
+    for (let k = 0; k < 8; k++) o.push(P(-1 + k * .25 + (k & 1) * .125, .6, -1 + k * .25 + (k & 1) * .125, .95));
+    for (const x of [-.6, -.2, .2, .6]) o.push(arc(x, .46, .07), P(x, .53, x, .6));
+    return o;
+  },
+  // XX Judgement
+  t => {
+    const wing = P(.1, -.86, .42, -1.04, .7, -.94, .5, -.76, .2, -.74);
+    const o = [arc(0, -.86, .12), wing, mirrorX(wing), P(-.05, -.72, .38, -.36), P(.05, -.76, .46, -.42), P(.3, -.3, .6, -.52),
+      rect(.12, -.6, .2, .2), P(.22, -.58, .22, -.42), P(.14, -.5, .3, -.5),
+      rect(-.85, .78, .5, .2), rect(.35, .78, .5, .2)];
+    for (const [x, y] of [[-.6, .4], [0, .25], [.6, .4]]) o.push(P(x, .98, x, y), P(x, y + .1, x - .17, y - .12), P(x, y + .1, x + .17, y - .12), arc(x, y - .08, .07));
+    const ph = (t / SPB) % 1;
+    for (let k = 0; k < 2; k++) { const r = .15 + ((ph + k * .5) % 1) * .4; o.push(arc(.45, -.4, r, -Math.PI * .45, Math.PI * .05)); }
+    return o;
+  },
+  // XXI The World
+  t => {
+    const o = [ell(0, 0, .55, .85), ell(0, 0, .45, .75)];
+    for (let k = 0; k < 18; k++) { const a = k * TAU / 18; o.push(P(Math.cos(a) * .45, Math.sin(a) * .75, Math.cos(a + .12) * .55, Math.sin(a + .12) * .85)); }
+    o.push(P(-.12, -.86, .12, -.72), P(.12, -.86, -.12, -.72), P(-.12, .86, .12, .72), P(.12, .86, -.12, .72));
+    const d = Math.sin(t * Math.PI / SPB) * .06;
+    o.push(arc(0, -.42, .08), P(0, -.34, 0, .15), P(0, .15, -.15, .52), P(0, .15, .14, .3, -.04, .44),
+      P(-.26, -.38 + d, 0, -.26, .26, -.12 - d), P(-.26, -.48 + d, -.26, -.28 + d), P(.26, -.22 - d, .26, -.02 - d));
+    for (const [x, y] of [[-.82, -1], [.82, -1], [-.82, 1], [.82, 1]]) o.push(arc(x, y, .12));
+    return o;
+  },
+];
+
+function glyphPath(lines, cx, cy, s, prog = 1, rot = 0) {
+  const p = new Path2D(), c = Math.cos(rot), sn = Math.sin(rot);
+  const X = (x, y) => cx + (x * c - y * sn) * s, Y = (x, y) => cy + (x * sn + y * c) * s;
+  let budget = Infinity;
+  if (prog < 1) {
+    let total = 0;
+    for (const l of lines) for (let i = 1; i < l.length; i++) total += Math.hypot(l[i][0] - l[i - 1][0], l[i][1] - l[i - 1][1]);
+    budget = total * Math.max(0, prog);
+  }
+  for (const l of lines) {
+    let [x0, y0] = l[0];
+    p.moveTo(X(x0, y0), Y(x0, y0));
+    for (let i = 1; i < l.length; i++) {
+      const [x1, y1] = l[i];
+      if (budget !== Infinity) {
+        const d = Math.hypot(x1 - x0, y1 - y0);
+        if (budget <= 0) return p;
+        if (d > budget) { const f = budget / d, xm = x0 + (x1 - x0) * f, ym = y0 + (y1 - y0) * f; p.lineTo(X(xm, ym), Y(xm, ym)); return p; }
+        budget -= d;
+      }
+      p.lineTo(X(x1, y1), Y(x1, y1));
+      x0 = x1; y0 = y1;
+    }
+  }
+  return p;
+}
+function strokeGlow(g, path, col, w, k = 1, lite = false) {
+  g.lineJoin = 'round'; g.lineCap = 'round';
+  g.strokeStyle = rgba(col);
+  if (!lite) { g.globalAlpha = 0.13 * k; g.lineWidth = w * 5; g.stroke(path); }
+  g.globalAlpha = 0.3 * k; g.lineWidth = w * 2.2; g.stroke(path);
+  g.globalAlpha = Math.min(1, k); g.strokeStyle = rgba(mix(col, WHITE, 0.6)); g.lineWidth = w * 0.85; g.stroke(path);
+  g.globalAlpha = 1;
+}
+
+/* ================================================================
+   Card faces and backs, cached per size.
+   ================================================================ */
+const cardCache = new Map();
+function rr(c, x, y, w, h, r) {
+  c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath();
+}
+function cardBase(i, h) {
+  const hq = Math.max(24, Math.round(h / 6) * 6), key = i + '|' + hq;
+  let cv = cardCache.get(key);
+  if (cv) return [cv, hq];
+  if (cardCache.size > 140) cardCache.clear();
+  const w = hq * 0.58, pad = Math.ceil(hq * 0.02);
+  cv = document.createElement('canvas'); cv.width = Math.ceil(w + pad * 2); cv.height = Math.ceil(hq + pad * 2);
+  const c = cv.getContext('2d'); c.translate(cv.width / 2, cv.height / 2);
+  const r = hq * 0.045, gold = '#e8c36a', m = hq * 0.032;
+  const bg = c.createLinearGradient(0, -hq / 2, 0, hq / 2); bg.addColorStop(0, '#1d1239'); bg.addColorStop(1, '#08061a');
+  rr(c, -w / 2, -hq / 2, w, hq, r); c.fillStyle = bg; c.fill();
+  c.lineWidth = Math.max(1, hq * 0.01); c.strokeStyle = gold; c.stroke();
+  rr(c, -w / 2 + m, -hq / 2 + m, w - 2 * m, hq - 2 * m, r * 0.6); c.lineWidth = Math.max(1, hq * 0.004); c.strokeStyle = 'rgba(232,195,106,.6)'; c.stroke();
+  if (i < 0) {
+    c.save(); c.clip();
+    c.strokeStyle = 'rgba(232,195,106,.22)'; c.lineWidth = Math.max(1, hq * 0.004);
+    const step = hq * 0.075;
+    for (let k = -14; k <= 14; k++) {
+      c.beginPath(); c.moveTo(k * step - hq, -hq); c.lineTo(k * step + hq, hq); c.stroke();
+      c.beginPath(); c.moveTo(k * step + hq, -hq); c.lineTo(k * step - hq, hq); c.stroke();
+    }
+    c.restore();
+    const R = w * 0.3;
+    c.beginPath(); c.arc(0, 0, R, 0, TAU); c.fillStyle = '#0d0820'; c.fill(); c.lineWidth = Math.max(1, hq * 0.008); c.strokeStyle = gold; c.stroke();
+    c.beginPath(); star(0, 0, R * 0.92, R * 0.42, 8).forEach(([x, y], k) => (k ? c.lineTo(x, y) : c.moveTo(x, y)));
+    c.closePath(); c.lineWidth = Math.max(1, hq * 0.005); c.stroke();
+    c.beginPath(); c.moveTo(-R * 0.55, 0); c.quadraticCurveTo(0, -R * 0.42, R * 0.55, 0); c.quadraticCurveTo(0, R * 0.42, -R * 0.55, 0);
+    c.fillStyle = '#1d1239'; c.fill(); c.stroke();
+    c.beginPath(); c.arc(0, 0, R * 0.16, 0, TAU); c.fillStyle = gold; c.fill();
+  } else {
+    c.fillStyle = '#f3d98c'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = `900 ${hq * 0.068}px Cinzel, Georgia, serif`; c.fillText(CARDS[i][0], 0, -hq * 0.405);
+    let fs = hq * 0.05; c.font = `700 ${fs}px Cinzel, Georgia, serif`;
+    const mw = c.measureText(CARDS[i][1]).width;
+    if (mw > w * 0.8) { fs *= w * 0.8 / mw; c.font = `700 ${fs}px Cinzel, Georgia, serif`; }
+    c.fillText(CARDS[i][1], 0, hq * 0.41);
+    c.strokeStyle = 'rgba(232,195,106,.45)'; c.lineWidth = Math.max(1, hq * 0.003);
+    c.beginPath(); c.moveTo(-w * 0.32, -hq * 0.355); c.lineTo(w * 0.32, -hq * 0.355); c.moveTo(-w * 0.32, hq * 0.36); c.lineTo(w * 0.32, hq * 0.36); c.stroke();
+  }
+  cardCache.set(key, cv);
+  return [cv, hq];
+}
+function drawCard(g, i, x, y, h, rot, sx, prog, tS, pal, opt = {}) {
+  const w = h * 0.58;
+  g.save(); g.translate(x, y); g.rotate(rot); g.scale(Math.max(0.002, sx), 1);
+  if (!opt.lite) {
+    g.globalCompositeOperation = 'lighter';
+    const gl = g.createRadialGradient(0, 0, h * 0.2, 0, 0, h * 0.85);
+    gl.addColorStop(0, rgba(pal[0], 0.32 * (opt.glow ?? 1))); gl.addColorStop(1, rgba(pal[0], 0));
+    g.fillStyle = gl; g.fillRect(-h, -h, h * 2, h * 2);
+    g.globalCompositeOperation = 'source-over';
+  }
+  const [cv, hq] = cardBase(i, h), k = h / hq;
+  g.drawImage(cv, -cv.width * k / 2, -cv.height * k / 2, cv.width * k, cv.height * k);
+  if (i >= 0) {
+    const s = Math.min(w * 0.4, h * 0.3 / 1.15);
+    g.globalCompositeOperation = 'lighter';
+    strokeGlow(g, glyphPath(G[i](tS), 0, -h * 0.015, s, prog), pal[0], Math.max(1, h * 0.006), 1, opt.lite);
+    g.globalCompositeOperation = 'source-over';
+  }
+  g.restore();
+}
+
+/* ================================================================
+   Picture
+   ================================================================ */
+const cv = document.getElementById('stage');
+const g = cv.getContext('2d');
+let W = 0, H = 0, U = 1, dpr = Math.min(2, window.devicePixelRatio || 1), quality = 1;
+let crowd = [], stars = [], vignette = null;
+
+function rng(seed) { return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+function resize() {
+  const s = dpr * quality;
+  W = Math.max(1, Math.round(innerWidth * s)); H = Math.max(1, Math.round(innerHeight * s));
+  cv.width = W; cv.height = H; U = Math.min(W, H) / 100;
+  // on a tall phone the crowd scales with the height so it stays a crowd, not a fringe
+  const Uc = Math.max(U, H / 135), r = rng(7); crowd = [];
+  const n = Math.ceil(W / (Uc * 6.6));
+  for (const row of [0, 1]) for (let i = -1; i <= n + 1; i++) {
+    crowd.push({ x: (i + (r() - 0.5) * 0.7 + row * 0.5) / n * W, sc: Uc * (row ? 10 : 7.6) * (0.85 + r() * 0.3), ph: r() * TAU, row, light: r() < 0.35, j: 0.6 + r() * 0.6 });
+  }
+  const sr = rng(3); stars = [];
+  for (let i = 0; i < 150; i++) stars.push([sr(), sr() * 0.75, sr() * TAU, 0.4 + sr()]);
+  vignette = g.createRadialGradient(W / 2, H * 0.45, Math.min(W, H) * 0.35, W / 2, H * 0.45, Math.hypot(W, H) * 0.62);
+  vignette.addColorStop(0, 'rgba(0,0,0,0)'); vignette.addColorStop(1, 'rgba(0,0,0,.7)');
+}
+addEventListener('resize', resize);
+
+function energyAt(bp) {
+  if (bp < 4) return 0;
+  if (bp < 8) return 0.3 + (bp - 4) / 4 * 0.2;
+  if (bp < 16) return bp < 12 ? 0.6 : 0.75;
+  if (bp < 32) return 1;
+  if (bp < 40) return 0.3;
+  if (bp < 48) return 0.4 + (bp - 40) / 8 * 0.5;
+  if (bp < 64) return 1;
+  if (bp < 72) return 0.75;
+  if (bp < 88) return 1;
+  if (bp < 96) return Math.max(0, 0.5 * (1 - (bp - 88) / 7));
+  return 0;
+}
+function laserMode(bar) {
+  const s = secAt(bar), alt = (bar >> 1) & 1;
+  if (s === 'intro') return bar < 4 ? 'none' : 'fan';
+  if (s === 'roll') return bar < 12 ? 'fan' : 'cross';
+  if (s === 'drop1') return bar >= 24 && bar < 28 ? 'tunnel' : ['cross', 'fan', 'rain', 'scan'][(bar >> 1) & 3];
+  if (s === 'break') return bar < 36 ? 'scan' : 'rain';
+  if (s === 'build') return bar < 44 ? 'fan' : 'cross';
+  if (s === 'drop2') return bar < 56 ? (alt ? 'cross' : 'fan') : (alt ? 'tunnel' : 'rain');
+  if (s === 'moon') return 'scan';
+  if (s === 'final') return bar < 78 ? 'tunnel' : bar < 82 ? 'rain' : (alt ? 'cross' : 'fan');
+  return 'fan';
+}
+function handsAt(bp) {
+  const s = secAt(Math.floor(bp));
+  if (isDropSec(s)) return 1;
+  if (s === 'moon') return 0.75;
+  if (s === 'roll') return bp >= 12 ? 0.8 : 0.45;
+  if (s === 'build') return 0.3 + (bp - 40) / 8 * 0.6;
+  if (s === 'intro') return bp >= 6 ? 0.35 : 0.1;
+  if (s === 'outro') return Math.max(0, 0.7 - (bp - 88) * 0.09);
+  return 0.15;
+}
+
+function drawLasers(bp, mode, e, kEnv, A, B) {
+  if (mode === 'none' || e <= 0.01) return;
+  const tt = bp * BAR * (reduceMotion ? 0.35 : 1), beams = [];
+  const L = Math.hypot(W, H) * 1.3;
+  if (mode === 'fan') {
+    for (let i = 0; i < 5; i++) {
+      const base = -Math.PI / 2 + Math.sin(tt * 0.9 + i * 1.3) * 0.55;
+      for (let j = 0; j < 4; j++) beams.push([W * (i + 0.5) / 5, H * 0.9, base + (j - 1.5) * 0.075, (i + j) & 1, 0]);
+    }
+  } else if (mode === 'cross') {
+    const base = -0.75 + Math.sin(tt * 1.1) * 0.45;
+    for (let j = 0; j < 8; j++) {
+      const a = base + (j - 3.5) * 0.06;
+      beams.push([-W * 0.02, H * 0.92, a, 0, 0], [W * 1.02, H * 0.92, -Math.PI - a, 1, 0]);
+    }
+  } else if (mode === 'tunnel') {
+    const r0 = Math.min(W, H) * 0.12;
+    for (let i = 0; i < 16; i++) beams.push([W / 2, H * 0.44, tt * 0.6 + i * TAU / 16, i & 1, r0]);
+  } else if (mode === 'rain') {
+    for (let i = 0; i < 6; i++) {
+      const a = Math.PI / 2 + Math.sin(tt * 1.3 + i * 0.7) * 0.35;
+      for (let j = 0; j < 2; j++) beams.push([W * (i + 0.5) / 6 + Math.sin(tt * 0.7 + i) * W * 0.08, -10, a + (j - 0.5) * 0.05, j, 0]);
+    }
+  } else if (mode === 'scan') {
+    const base = Math.sin(tt * 0.8) * 0.25;
+    for (let j = 0; j < 6; j++) {
+      const a = base + (j - 2.5) * 0.05;
+      beams.push([-10, H * 0.32, a, 0, 0], [W + 10, H * 0.32, Math.PI - a, 1, 0]);
+    }
+  }
+  g.globalCompositeOperation = 'lighter'; g.lineCap = 'round';
+  const k = e * (0.5 + 0.5 * kEnv);
+  for (const [x, y, a, c, r0] of beams) {
+    const cx = Math.cos(a), sy = Math.sin(a), x0 = x + cx * r0, y0 = y + sy * r0, x1 = x + cx * L, y1 = y + sy * L;
+    const col = c ? B : A;
+    g.beginPath(); g.moveTo(x0, y0); g.lineTo(x1, y1);
+    g.strokeStyle = rgba(col, 0.12 * k); g.lineWidth = U * 1.6; g.stroke();
+    g.strokeStyle = rgba(mix(col, WHITE, 0.4), 0.85 * k); g.lineWidth = Math.max(1, U * 0.3); g.stroke();
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+function drawSpots(bp, A, e) {
+  if (e <= 0.01) return;
+  g.globalCompositeOperation = 'lighter';
+  for (let i = 0; i < 4; i++) {
+    const x = W * (0.14 + i * 0.24), a = Math.sin(bp * BAR * 0.5 + i * 1.7) * 0.35, len = H * 1.15, hw = W * 0.12 + U * 8;
+    const ex = x + Math.sin(a) * len, ey = Math.cos(a) * len;
+    const gr = g.createLinearGradient(x, 0, ex, ey);
+    gr.addColorStop(0, rgba(A, 0.2 * e)); gr.addColorStop(1, rgba(A, 0));
+    g.fillStyle = gr; g.beginPath(); g.moveTo(x - U, 0); g.lineTo(x + U, 0);
+    g.lineTo(ex + Math.cos(a) * hw, ey - Math.sin(a) * hw); g.lineTo(ex - Math.cos(a) * hw, ey + Math.sin(a) * hw); g.closePath(); g.fill();
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+
+const bandW = new Map();
+function drawBand(text, bp, col, e) {
+  const fs = H * 0.2; g.font = `400 ${fs}px Anton, Impact, sans-serif`;
+  const t = text + '  ✦  ';
+  let w = bandW.get(t + fs); if (!w) { w = g.measureText(t).width; bandW.set(t + fs, w); }
+  const off = -((bp * BAR * W * 0.06) % w);
+  g.save(); g.textBaseline = 'middle'; g.strokeStyle = rgba(col, 0.12 + 0.12 * e); g.lineWidth = Math.max(1, U * 0.25);
+  for (let x = off; x < W; x += w) g.strokeText(t, x, H * 0.44);
+  g.restore();
+}
+
+function drawCrowd(bp, kEnv, hands, A, lights, e) {
+  const gr = g.createLinearGradient(0, H, 0, H * 0.62);
+  gr.addColorStop(0, rgba(A, 0.3 + 0.25 * e)); gr.addColorStop(1, rgba(A, 0));
+  g.globalCompositeOperation = 'lighter'; g.fillStyle = gr; g.fillRect(0, H * 0.62, W, H * 0.38);
+  g.globalCompositeOperation = 'source-over';
+  const tS = bp * BAR;
+  for (const p of crowd) {
+    const sc = p.sc, jump = kEnv * sc * 0.16 * p.j * (0.3 + 0.7 * hands) * (reduceMotion ? 0.3 : 1);
+    const shY = H - sc * (p.row ? 0.36 : 0.62) - jump, x = p.x + Math.sin(tS * 1.3 + p.ph) * sc * 0.04;
+    g.fillStyle = p.row ? '#030208' : rgba(mix(A, [10, 6, 22], 0.85));
+    g.strokeStyle = g.fillStyle;
+    const up = clamp(hands * 1.4 - (p.ph / TAU) * 0.6);
+    g.lineCap = 'round'; g.lineWidth = sc * 0.11;
+    for (const sd of [-1, 1]) {
+      const sx = x + sd * sc * 0.25, sy = shY + sc * 0.06;
+      const aDown = Math.PI / 2 - sd * 0.25, aUp = -Math.PI / 2 + sd * (0.4 + Math.sin(tS * 2.4 + p.ph + sd) * 0.18);
+      const a = lerp(aDown, aUp, up), len = sc * 0.62;
+      const hx = sx + Math.cos(a) * len, hy = sy + Math.sin(a) * len;
+      g.beginPath(); g.moveTo(sx, sy); g.lineTo(hx, hy); g.stroke();
+      if (lights && p.light && sd === 1 && up > 0.5) {
+        g.globalCompositeOperation = 'lighter';
+        g.fillStyle = 'rgba(255,250,230,.9)'; g.beginPath(); g.arc(hx, hy, sc * 0.05, 0, TAU); g.fill();
+        g.fillStyle = 'rgba(255,240,200,.18)'; g.beginPath(); g.arc(hx, hy, sc * 0.2, 0, TAU); g.fill();
+        g.globalCompositeOperation = 'source-over';
+        g.fillStyle = p.row ? '#030208' : rgba(mix(A, [10, 6, 22], 0.85));
+      }
+    }
+    g.beginPath();
+    g.moveTo(x - sc * 0.33, H + 2); g.lineTo(x - sc * 0.33, shY + sc * 0.14);
+    g.quadraticCurveTo(x - sc * 0.32, shY, x - sc * 0.12, shY); g.lineTo(x + sc * 0.12, shY);
+    g.quadraticCurveTo(x + sc * 0.32, shY, x + sc * 0.33, shY + sc * 0.14); g.lineTo(x + sc * 0.33, H + 2); g.closePath(); g.fill();
+    g.beginPath(); g.arc(x, shY - sc * 0.2, sc * 0.15, 0, TAU); g.fill();
+  }
+}
+
+function fitShout(lines, maxW, base) {
+  g.font = `400 ${base}px Anton, Impact, sans-serif`;
+  let m = 0; for (const l of lines) m = Math.max(m, g.measureText(l).width);
+  return m > maxW ? base * maxW / m : base;
+}
+function drawShout(text, age, life, kEnv, A) {
+  const lines = text.split('|');
+  const fs = fitShout(lines, W * 0.88, Math.min(W * 0.17, H * 0.115));
+  const lh = fs * 1.0, slam = 1 + 1.1 * Math.exp(-age * 16), alpha = clamp((life - age) / 0.18) * clamp(age / 0.03);
+  const cy = H * 0.83 - (lines.length - 1) * lh * 0.5;
+  g.save();
+  g.translate(W / 2 + (reduceMotion ? 0 : (Math.random() - 0.5) * kEnv * fs * 0.05), cy);
+  g.rotate(-0.045); g.scale(slam, slam); g.transform(1, 0, -0.18, 1, 0, 0);
+  g.globalAlpha = alpha; g.textAlign = 'center'; g.textBaseline = 'alphabetic';
+  g.font = `400 ${fs}px Anton, Impact, sans-serif`; g.lineJoin = 'round';
+  lines.forEach((l, i) => {
+    const y = i * lh + fs * 0.36;
+    g.shadowColor = rgba(A, 0.9); g.shadowBlur = fs * 0.35;
+    g.strokeStyle = '#14081f'; g.lineWidth = fs * 0.13; g.strokeText(l, 0, y);
+    g.shadowBlur = 0;
+    const gr = g.createLinearGradient(0, y - fs * 0.74, 0, y);
+    gr.addColorStop(0, '#ffffff'); gr.addColorStop(0.45, '#ffe7a3'); gr.addColorStop(0.5, '#ff8a1e'); gr.addColorStop(0.56, '#ffcf5a'); gr.addColorStop(1, '#fffbe8');
+    g.fillStyle = gr; g.fillText(l, 0, y);
+  });
+  g.restore();
+}
+function drawHeys(bp) {
+  const cur = Math.floor(bp * 16);
+  for (let k = 0; k < 6; k++) {
+    const st = cur - k, bar = st >> 4, s = st & 15;
+    if (st < 0 || !heyOn(bar, s)) continue;
+    const age = (bp * 16 - st) * STEP; if (age > 0.45) continue;
+    const r = rng(st * 13 + 5), fs = Math.min(W, H) * 0.12;
+    const x = W * (0.18 + r() * 0.64), y = H * (0.14 + r() * 0.2);
+    g.save(); g.translate(x, y); g.rotate((r() - 0.5) * 0.5); const sc = 1 + 0.8 * Math.exp(-age * 18); g.scale(sc, sc);
+    g.globalAlpha = clamp((0.45 - age) / 0.15);
+    g.font = `400 ${fs}px Anton, Impact, sans-serif`; g.textAlign = 'center'; g.textBaseline = 'middle'; g.lineJoin = 'round';
+    g.strokeStyle = '#14081f'; g.lineWidth = fs * 0.14; g.strokeText('HEY!', 0, 0);
+    g.fillStyle = '#ff3ea5'; g.fillText('HEY!', 0, 0);
+    g.restore();
+  }
+}
+
+const parts = [];
+function spawn(kind, n, A, B) {
+  for (let i = 0; i < n && parts.length < 320; i++) {
+    const p = { kind, life: 0, x: 0, y: 0, vx: 0, vy: 0, r: Math.random() * TAU, vr: (Math.random() - 0.5) * 6, s: U * (0.6 + Math.random()), col: Math.random() < 0.5 ? A : B };
+    if (kind === 'brick') { p.x = W / 2 + (Math.random() - 0.5) * W * 0.5; p.y = -U * 4; p.vy = U * (10 + Math.random() * 20); p.vx = (Math.random() - 0.5) * U * 30; p.s = U * (1.2 + Math.random() * 1.6); p.max = 4; }
+    else if (kind === 'confetti') { p.x = Math.random() * W; p.y = -U * 3; p.vy = U * (12 + Math.random() * 10); p.vx = (Math.random() - 0.5) * U * 8; p.max = 7; p.col = [[255, 62, 165], [255, 207, 58], [0, 240, 255], [0, 255, 157], [255, 255, 255]][i % 5]; }
+    else { p.x = Math.random() * W; p.y = H * (0.2 + Math.random() * 0.6); p.vy = -U * (0.5 + Math.random()); p.vx = (Math.random() - 0.5) * U; p.max = 3 + Math.random() * 3; p.s = U * (0.15 + Math.random() * 0.3); }
+    parts.push(p);
+  }
+}
+function updateParts(dt, bp, A, B) {
+  const bar = Math.floor(bp);
+  if (dt > 0) {
+    const rate = (n) => Math.floor(n * dt + Math.random());
+    if (bar >= 48 && bar < 56) spawn('brick', rate(9 + 30 * Math.exp(-((bp - BOLTS.reduce((m, b) => (bp >= b ? b : m), 48)) * BAR) * 3)), A, B);
+    else if (bar >= 82 && bar < 88) spawn('confetti', rate(40), A, B);
+    else if (bar >= 72 && bar < 82) spawn('confetti', rate(14), A, B);
+    else spawn('dust', rate(5), A, B);
+  }
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const p = parts[i];
+    p.life += dt;
+    if (p.kind === 'brick') p.vy += U * 60 * dt;
+    if (p.kind === 'confetti') p.vx += Math.sin(p.life * 4 + p.r) * U * 10 * dt;
+    p.x += p.vx * dt; p.y += p.vy * dt; p.r += p.vr * dt;
+    if (p.life > p.max || p.y > H + U * 10) { parts.splice(i, 1); continue; }
+    g.save(); g.translate(p.x, p.y); g.rotate(p.r);
+    if (p.kind === 'brick') { g.fillStyle = rgba(mix(p.col, BLACK, 0.55)); g.fillRect(-p.s, -p.s * 0.5, p.s * 2, p.s); g.strokeStyle = rgba(p.col, 0.8); g.lineWidth = Math.max(1, U * 0.15); g.strokeRect(-p.s, -p.s * 0.5, p.s * 2, p.s); }
+    else if (p.kind === 'confetti') { g.fillStyle = rgba(p.col); g.fillRect(-p.s * 0.5, -p.s * 0.25, p.s, p.s * 0.5 * (0.3 + Math.abs(Math.sin(p.life * 6 + p.r)))); }
+    else { g.globalCompositeOperation = 'lighter'; g.fillStyle = rgba(p.col, 0.35 * Math.sin(Math.PI * p.life / p.max)); g.beginPath(); g.arc(0, 0, p.s, 0, TAU); g.fill(); }
+    g.restore();
+  }
+  g.globalCompositeOperation = 'source-over';
+}
+
+function bolt(seed, x1, y1, A) {
+  const r = rng(seed), p = new Path2D();
+  let x = W * (0.15 + r() * 0.7), y = -U * 2; p.moveTo(x, y);
+  const n = 11;
+  for (let i = 1; i <= n; i++) {
+    const f = i / n; x = lerp(x, x1, 1 / (n - i + 1)) + (i < n ? (r() - 0.5) * W * 0.09 : 0); y = lerp(-U * 2, y1, f);
+    p.lineTo(x, y);
+    if (i === 4 || i === 7) { const q = new Path2D(); q.moveTo(x, y); q.lineTo(x + (r() - 0.5) * W * 0.25, y + H * 0.12); p.addPath(q); p.moveTo(x, y); }
+  }
+  g.globalCompositeOperation = 'lighter';
+  strokeGlow(g, p, A, U * 0.5, 1);
+  g.globalCompositeOperation = 'source-over';
+}
+
+function flashAt(bp) {
+  const bt = bp * 4, fr = bt - Math.floor(bt), bar = Math.floor(bp), bi = Math.floor(bt) % 4;
+  let f = 0;
+  if (bar === 16 || bar === 48 || bar === 72) f = Math.exp(-fr * 7) * 0.7;
+  if ((bar === 15 || bar === 47) && bi < 3) f = Math.max(f, Math.exp(-fr * 9) * 0.3);
+  for (const b of BOLTS) { const d = (bp - b) * BAR; if (d >= 0 && d < 0.6) f = Math.max(f, d < 0.07 ? 0.85 : 0.85 * Math.exp(-(d - 0.07) * 9)); }
+  return f;
+}
+
+let lastPal = null;
+function render(bp, dt, idle) {
+  const bar = Math.floor(bp), sec = secAt(bar), tS = bp * BAR;
+  const beatPos = bp * 4, beatFrac = beatPos - Math.floor(beatPos), sIdx = (Math.floor(beatPos) % 4) * 4;
+  const kEnv = !idle && kickOn(bar, sIdx) ? Math.exp(-beatFrac * SPB * 9) : 0;
+  const e = idle ? 0 : energyAt(bp);
+  const [start, ci] = cardSpan(bar), prevCi = start > 0 ? cardAt(start - 1) : ci;
+  const pt = ease(clamp((bp - start) / 0.5));
+  const P0 = palOf(prevCi), P1 = palOf(ci);
+  const A = mix(P0[0], P1[0], pt), B = mix(P0[1], P1[1], pt);
+  lastPal = A;
+
+  // background
+  const bgc = g.createRadialGradient(W / 2, H * 0.42, 0, W / 2, H * 0.42, Math.hypot(W, H) * 0.62);
+  bgc.addColorStop(0, rgba(mix(A, BLACK, 0.72 - 0.08 * kEnv * e)));
+  bgc.addColorStop(0.55, rgba(mix(B, BLACK, 0.9)));
+  bgc.addColorStop(1, '#000');
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  g.fillStyle = bgc; g.fillRect(0, 0, W, H);
+
+  // camera: zoom on the kick, shake in the Tower, upside down for the Hanged Man
+  const hang = reduceMotion ? 0 : Math.PI * ease(clamp((bp - 32.5) / 1)) * (1 - ease(clamp((bp - 35.25) / 0.75)));
+  const shakeK = reduceMotion ? 0 : (bar >= 48 && bar < 56 ? 1 : isDropSec(sec) ? 0.3 : 0) * kEnv * U * 0.9;
+  const zoom = 1 + (reduceMotion ? 0 : kEnv * 0.014 * e);
+  g.translate(W / 2 + (Math.random() - 0.5) * shakeK, H / 2 + (Math.random() - 0.5) * shakeK);
+  g.rotate(hang); g.scale(zoom, zoom); g.translate(-W / 2, -H / 2);
+
+  const cardH = Math.min(H * 0.56, W * 0.62 / 0.58), cx = W / 2, cy = H * 0.44;
+
+  // stars and the moon
+  const starK = clamp((bp - 54) / 2) * (1 - clamp((bp - 72) / 1)) + (bar >= 90 ? clamp((bp - 90) / 2) * 0.6 : 0) + (idle ? 0.4 : 0);
+  if (starK > 0) {
+    g.globalCompositeOperation = 'lighter';
+    for (const [sx, sy, ph, sz] of stars) {
+      g.fillStyle = `rgba(255,255,255,${(0.25 + 0.6 * (0.5 + 0.5 * Math.sin(tS * 3 * sz + ph))) * starK})`;
+      g.fillRect(sx * W, sy * H, U * 0.25 * sz, U * 0.25 * sz);
+    }
+    g.globalCompositeOperation = 'source-over';
+  }
+  const moonK = clamp((bp - 62) / 2) * (1 - clamp((bp - 72) / 0.5));
+  if (moonK > 0) {
+    const R = Math.min(W, H) * 0.34, my = H * 0.3;
+    const mg = g.createRadialGradient(cx, my, R * 0.2, cx, my, R * 1.6);
+    mg.addColorStop(0, `rgba(220,230,255,${0.55 * moonK})`); mg.addColorStop(0.45, `rgba(120,140,255,${0.2 * moonK})`); mg.addColorStop(1, 'rgba(0,0,0,0)');
+    g.fillStyle = mg; g.fillRect(0, 0, W, H);
+  }
+
+  drawSpots(bp, A, e);
+  if (!idle && bar >= 6) drawBand(ci >= 0 ? CARDS[ci][1] : 'HYPER ARCANA', bp, B, e);
+
+  // the laser projection behind the card
+  const glyphProg = clamp((bp - start - 0.1) / (bar >= 8 && bar < 16 ? 0.45 : 0.8));
+  if (ci >= 0 && !idle) {
+    const S = Math.min(W, H) * (ci === 10 ? 0.55 : 0.42);
+    const rot = ci === 10 ? tS * 0.9 : Math.sin(tS * 0.3) * 0.08;
+    g.globalCompositeOperation = 'lighter';
+    if (ci === 19) {
+      for (let i = 0; i < 18; i++) {
+        const a = tS * 0.25 + i * TAU / 18, L = Math.hypot(W, H);
+        g.fillStyle = rgba(i & 1 ? A : B, 0.07 + 0.05 * kEnv);
+        g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + Math.cos(a - 0.08) * L, cy + Math.sin(a - 0.08) * L); g.lineTo(cx + Math.cos(a + 0.08) * L, cy + Math.sin(a + 0.08) * L); g.fill();
+      }
+    }
+    strokeGlow(g, glyphPath(G[ci](tS), cx, cy, S, glyphProg, rot), B, U * 0.35, 0.28 + 0.22 * e * (0.6 + 0.4 * kEnv));
+    g.globalCompositeOperation = 'source-over';
+  }
+
+  drawLasers(bp, idle ? 'none' : laserMode(bar), e, kEnv, A, B);
+
+  // lightning in the Tower
+  for (const b of BOLTS) { const d = (bp - b) * BAR; if (d >= 0 && d < 0.35 && !idle) bolt(b, cx, cy - cardH * 0.45, B); }
+
+  // cards
+  const tilt = reduceMotion ? 0 : Math.sin(tS * Math.PI / BAR / 2) * 0.05 * e;
+  const bob = -kEnv * cardH * 0.015;
+  if (ci < 0 || idle) {
+    // the face-down deck, fanned while the MC shuffles
+    const fan = idle ? 0 : ease(clamp((bp - 4) / 0.75)) * (1 - ease(clamp((bp - 5.25) / 0.65)));
+    const h = cardH * 0.82, n = fan > 0.01 ? 22 : 6;
+    for (let k = 0; k < n; k++) {
+      const f = n === 1 ? 0 : k / (n - 1) - 0.5;
+      const a = f * 1.9 * fan + Math.sin(tS * 0.7) * 0.03, piv = h * 0.9;
+      const x = cx + Math.sin(a) * piv + (1 - fan) * (k - n / 2) * U * 0.25, y = cy + h * 0.1 + piv - Math.cos(a) * piv - (1 - fan) * k * U * 0.25;
+      drawCard(g, -1, x, y + bob, h, a, 1, 1, tS, DECK_PAL, { lite: k < n - 1, glow: 0.6 });
+    }
+  } else if (ci === 21 && bar >= 82 && bar < 88) {
+    // The World: all 22 cards circle the dancer
+    const tall = H > W * 1.2, rx = Math.min(W * 0.44, cardH * 1.05), ry = cardH * (tall ? 0.52 : 0.2), h = cardH * (tall ? 0.3 : 0.36), items = [];
+    for (let k = 0; k < 22; k++) { const a = k / 22 * TAU + tS * 0.45; items.push([Math.sin(a), k, a]); }
+    items.sort((p, q) => p[0] - q[0]);
+    const drawRing = (front) => {
+      for (const [d, k, a] of items) {
+        if ((d > 0) !== front) continue;
+        const s = 0.75 + 0.25 * (d + 1) / 2;
+        drawCard(g, k, cx + Math.cos(a) * rx, cy + cardH * 0.05 + d * ry + bob, h * s, Math.cos(a) * 0.15, 1, 1, tS, PALS[k], { lite: true });
+      }
+    };
+    drawRing(false);
+    drawCard(g, 21, cx, cy + bob, cardH * 0.86, tilt, 1, glyphProg, tS, P1);
+    drawRing(true);
+  } else {
+    let face = ci, sx = 1;
+    const fp = (bp - start) / 0.25;
+    if (fp < 1 && start > 0) { sx = Math.abs(Math.cos(Math.PI * fp)); if (fp < 0.5) face = prevCi; }
+    if (bar === 15) { const sp = Math.cos(bp * Math.PI * 8); sx = Math.abs(sp); if (sp < 0) face = -1; }
+    const pop = 1 + 0.12 * Math.exp(-(bp - start) * BAR * 5) + kEnv * 0.025 * e;
+    let rot = tilt;
+    if (reduceMotion && ci === 12) rot += Math.PI;
+    const outroShrink = bar >= 92 ? 1 - 0.25 * ease(clamp((bp - 92) / 3)) : 1;
+    drawCard(g, face, cx, cy + bob, cardH * pop * outroShrink, rot, sx, face === ci ? glyphProg : 1, tS, palOf(face));
+  }
+
+  updateParts(dt, bp, A, B);
+  drawCrowd(bp, kEnv, idle ? 0.05 : handsAt(bp), A, sec === 'break' || sec === 'moon' || sec === 'outro' || idle, e);
+
+  if (!idle) {
+    // the MC
+    let li = -1; for (let k = 0; k < MC.length; k++) if (MC[k][0] <= bp) li = k;
+    if (li >= 0) {
+      const [b0, text] = MC[li], next = li + 1 < MC.length ? MC[li + 1][0] : 999;
+      const life = (Math.min(next, b0 + 1.9) - b0) * BAR, age = (bp - b0) * BAR;
+      if (age < life) drawShout(text, age, life, kEnv, A);
+    }
+    drawHeys(bp);
+    if (bp >= 92) {
+      const k = clamp((bp - 92) / 1);
+      g.save(); g.globalAlpha = k; g.textAlign = 'center'; g.fillStyle = '#fff6e0';
+      g.font = `400 ${Math.min(W * 0.09, H * 0.06)}px Anton, Impact, sans-serif`;
+      g.fillText('HYPER ARCANA', cx, H * 0.13);
+      g.font = `600 ${Math.min(W * 0.034, H * 0.022)}px system-ui, sans-serif`; g.fillStyle = '#c9b8e8';
+      g.fillText('Every sound and light synthesized live in your browser', cx, H * 0.13 + Math.min(W * 0.06, H * 0.04));
+      g.restore();
+    }
+  }
+
+  g.setTransform(1, 0, 0, 1, 0, 0);
+  // flashes, capped at the beat rate
+  const f = idle ? 0 : flashAt(bp);
+  if (f > 0.01) {
+    g.fillStyle = flashes ? `rgba(255,255,255,${f})` : rgba(A, f * 0.12);
+    g.fillRect(0, 0, W, H);
+  }
+  g.fillStyle = vignette; g.fillRect(0, 0, W, H);
+}
+
+/* ================================================================
+   Playback and controls
+   ================================================================ */
+const $ = id => document.getElementById(id);
+const startEl = $('start'), endEl = $('end'), timeEl = $('time'), progEl = $('progress');
+const pauseBtn = $('pause'), mcBtn = $('mcBtn'), fxBtn = $('fxBtn'), mcOpt = $('mcOpt'), fxOpt = $('fxOpt');
+const store = { get(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }, set(k, v) { try { localStorage.setItem(k, v); } catch (e) { /* private mode */ } } };
+
+let state = 'idle', mcOn = store.get('ha-mc') !== '0', flashes = store.get('ha-fx') ? store.get('ha-fx') === '1' : !reduceMotion;
+let mcIdx = 0, voice = null;
+mcOpt.checked = mcOn; fxOpt.checked = flashes;
+const syncBtns = () => { mcBtn.setAttribute('aria-pressed', String(mcOn)); fxBtn.setAttribute('aria-pressed', String(flashes)); };
+syncBtns();
+mcOpt.onchange = () => { mcOn = mcOpt.checked; store.set('ha-mc', mcOn ? '1' : '0'); syncBtns(); };
+fxOpt.onchange = () => { flashes = fxOpt.checked; store.set('ha-fx', flashes ? '1' : '0'); syncBtns(); };
+mcBtn.onclick = () => { mcOn = !mcOn; mcOpt.checked = mcOn; store.set('ha-mc', mcOn ? '1' : '0'); syncBtns(); if (!mcOn) hush(); };
+fxBtn.onclick = () => { flashes = !flashes; fxOpt.checked = flashes; store.set('ha-fx', flashes ? '1' : '0'); syncBtns(); };
+
+const synth = window.speechSynthesis;
+function pickVoice() {
+  if (!synth) return;
+  const vs = synth.getVoices().filter(v => /^en/i.test(v.lang));
+  voice = vs.find(v => /male|daniel|fred|alex|david|george|ralph/i.test(v.name) && !/female/i.test(v.name)) || vs.find(v => /en-GB/i.test(v.lang)) || vs[0] || null;
+}
+if (synth) { pickVoice(); synth.onvoiceschanged = pickVoice; }
+function say(text) {
+  if (!mcOn || !synth) return;
+  try {
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(text);
+    u.rate = 1.1; u.pitch = 0.45; u.volume = 1; if (voice) u.voice = voice;
+    synth.speak(u);
+  } catch (e) { /* no speech here */ }
+}
+function hush() { try { synth && synth.cancel(); } catch (e) { /* ignore */ } }
+
+function startBarFromHash() {
+  const m = /bar=([\d.]+)/.exec(location.hash);
+  return m ? clamp(parseFloat(m[1]), 0, BARS - 1) : 0;
+}
+async function start(fromBar = 0) {
+  if (!ac) {
+    const C = window.AudioContext || window.webkitAudioContext;
+    if (!C) { alert('This browser has no Web Audio.'); return; }
+    buildAudio(new C({ latencyHint: 'playback' }));
+  }
+  if (ac.state !== 'running') await ac.resume();
+  // re-route so a replay starts from a clean graph
+  if (state === 'ended') buildAudio(ac);
+  t0 = ac.currentTime + 0.12 - fromBar * BAR;
+  nextStep = Math.ceil(fromBar * 16); firstStep = nextStep;
+  mcIdx = MC.findIndex(m => m[0] >= fromBar); if (mcIdx < 0) mcIdx = MC.length;
+  parts.length = 0;
+  clearInterval(schedTimer); schedTimer = setInterval(schedule, 30); schedule();
+  state = 'playing';
+  startEl.hidden = true; endEl.hidden = true;
+  for (const b of [timeEl, pauseBtn, mcBtn, fxBtn]) b.hidden = false;
+  pauseBtn.textContent = 'Pause'; pauseBtn.setAttribute('aria-label', 'Pause');
+}
+async function togglePause() {
+  if (state === 'playing') { await ac.suspend(); state = 'paused'; hush(); pauseBtn.textContent = 'Play'; pauseBtn.setAttribute('aria-label', 'Play'); }
+  else if (state === 'paused') { await ac.resume(); state = 'playing'; pauseBtn.textContent = 'Pause'; pauseBtn.setAttribute('aria-label', 'Pause'); }
+}
+function finish() {
+  state = 'ended'; clearInterval(schedTimer); hush();
+  endEl.hidden = false; pauseBtn.hidden = true;
+  $('replay').focus({ preventScroll: true });
+}
+$('play').onclick = () => start(startBarFromHash());
+$('replay').onclick = () => start(0);
+pauseBtn.onclick = togglePause;
+addEventListener('keydown', e => { if (e.key === ' ' && (state === 'playing' || state === 'paused') && e.target === document.body) { e.preventDefault(); togglePause(); } });
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'playing') togglePause(); });
+
+const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+const TOTAL = fmt(BARS * BAR);
+let lastNow = performance.now(), slow = 0, fast = 0;
+function frame(now) {
+  requestAnimationFrame(frame);
+  let dt = Math.min(0.05, (now - lastNow) / 1000); lastNow = now;
+  // adapt resolution to the device
+  if (dt > 0.026) { slow++; fast = 0; } else if (dt < 0.014) { fast++; slow = Math.max(0, slow - 1); }
+  if (slow > 40 && quality > 0.5) { quality = Math.max(0.5, quality - 0.15); slow = 0; resize(); }
+  else if (fast > 240 && quality < 1) { quality = Math.min(1, quality + 0.1); fast = 0; resize(); }
+
+  let bp, idle = false;
+  if (state === 'idle') { bp = (now / 1000 / BAR) % 4; idle = true; }
+  else {
+    const t = state === 'ended' ? BARS * BAR : ac.currentTime - t0;
+    bp = clamp(t / BAR, 0, BARS - 0.001);
+    if (state === 'paused') dt = 0;
+    if (state === 'playing') {
+      while (mcIdx < MC.length && MC[mcIdx][0] <= bp) { if (bp - MC[mcIdx][0] < 0.5) say(MC[mcIdx][2]); mcIdx++; }
+      timeEl.textContent = `${fmt(Math.max(0, t))} / ${TOTAL}`;
+      progEl.style.width = (clamp(t / (BARS * BAR)) * 100) + '%';
+      if (t > END_T) finish();
+    }
+  }
+  render(bp, dt, idle);
+}
+
+resize();
+requestAnimationFrame(frame);
+if (document.fonts && document.fonts.load) {
+  Promise.all(['400 40px Anton', '700 40px Cinzel', '900 40px Cinzel'].map(f => document.fonts.load(f))).then(() => { cardCache.clear(); bandW.clear(); }, () => {});
+}
+
+// For checks: render a stretch of the song offline and report its levels.
+window.__hyperArcana = {
+  async levels(fromBar, toBar, only) {
+    const sr = 22050, len = Math.ceil((toBar - fromBar) * BAR * sr) + sr;
+    const oc = new OfflineAudioContext(2, len, sr);
+    const saved = [ac, out, noiseBuf, pipes, firstStep];
+    buildAudio(oc);
+    if (only === 'drums') out.music.disconnect();
+    if (only === 'music') out.drums.disconnect();
+    const base = 0.05 - fromBar * BAR;
+    firstStep = fromBar * 16;
+    for (let i = fromBar * 16; i < toBar * 16; i++) playStep(i, base + i * STEP);
+    const buf = await oc.startRendering();
+    [ac, out, noiseBuf, pipes, firstStep] = saved;
+    const d = buf.getChannelData(0); let peak = 0, sum = 0;
+    for (let i = 0; i < d.length; i++) { const v = Math.abs(d[i]); if (v > peak) peak = v; sum += d[i] * d[i]; }
+    return { peak: +peak.toFixed(3), rms: +Math.sqrt(sum / d.length).toFixed(3) };
+  },
+};
+})();
+</script>
+</body>
+</html>
