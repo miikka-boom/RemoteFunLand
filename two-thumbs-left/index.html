@@ -1,0 +1,385 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#07090d">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Two Thumbs Left</title>
+<meta name="description" content="Prototype 0 of a top-down zombie horde run for phones: two floating thumb sticks, a flashlight, a shove, and a feel lab for tuning the controls.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700;800&family=Barlow:wght@400;500;600&display=swap">
+<style>
+/* Layout: a full-screen canvas. During play only a thin HUD sits on top: health and objective top-left,
+   weapon top-right, and round thumb buttons placed by script around the two stick homes.
+   Title, pause, end and the feel lab are overlays on the same canvas. */
+:root {
+  --bg: #07090d;
+  --panel: rgba(12, 15, 21, .86);
+  --panel-solid: #0f131a;
+  --ink: #ece8df;
+  --ink-soft: #a7a9a6;
+  --rule: rgba(236, 232, 223, .14);
+  --orange: #ff7a2f;
+  --red: #ff4b2f;
+  --blood: #c3272b;
+  --green: #3bd16f;
+  --sodium: #ffc66b;
+  --f-cond: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Barlow", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body {
+  margin: 0; height: 100%; overflow: hidden;
+  background: var(--bg); color: var(--ink);
+  font: 400 15px/1.45 var(--f-body);
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior: none;
+  touch-action: none;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+button { font: inherit; color: inherit; -webkit-user-select: none; user-select: none; touch-action: manipulation }
+a { color: inherit }
+:focus-visible { outline: 2px solid var(--orange); outline-offset: 2px }
+[hidden] { display: none !important }
+
+#game { position: fixed; inset: 0; display: block; width: 100%; height: 100%; touch-action: none; background: var(--bg) }
+body:not(.playing) #game { cursor: default }
+body.playing #game { cursor: crosshair }
+#insetProbe {
+  position: fixed; visibility: hidden; pointer-events: none; inset: 0;
+  padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
+}
+
+/* ---------- HUD ---------- */
+.hud { position: fixed; inset: 0; pointer-events: none; z-index: 2 }
+.hud button, .hud .weapon { pointer-events: auto }
+.topbar {
+  position: absolute; top: 0; left: 0; right: 0;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 10px;
+  padding: max(8px, env(safe-area-inset-top, 0px)) max(10px, env(safe-area-inset-right, 0px)) 0 max(10px, env(safe-area-inset-left, 0px));
+}
+.left { display: flex; gap: 8px; align-items: flex-start; min-width: 0 }
+.iconbtn {
+  width: 44px; height: 44px; flex: none; border: 0; border-radius: 12px; cursor: pointer;
+  display: grid; place-items: center;
+  background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule);
+}
+.iconbtn svg { width: 20px; height: 20px }
+.vitals { display: grid; gap: 4px; min-width: 0; padding-top: 2px }
+.hp {
+  position: relative; width: clamp(120px, 26vw, 220px); height: 18px; border-radius: 4px; overflow: hidden;
+  background: rgba(0, 0, 0, .55); box-shadow: inset 0 0 0 1px var(--rule);
+}
+.hp-fill, .hp-temp { position: absolute; inset: 0; transform-origin: 0 50%; }
+.hp-temp { background: repeating-linear-gradient(135deg, rgba(255,255,255,.55) 0 5px, rgba(255,255,255,.25) 5px 10px) }
+.hp-fill { background: linear-gradient(90deg, #2eb35e, var(--green)) }
+.hp-fill.low { background: linear-gradient(90deg, #b3261e, var(--red)) }
+.hp span {
+  position: absolute; inset: 0 6px; display: flex; align-items: center; justify-content: space-between;
+  font: 700 13px/1 var(--f-cond); letter-spacing: .06em; text-shadow: 0 1px 2px #000;
+}
+.objective {
+  font: 600 14px/1.2 var(--f-cond); letter-spacing: .04em; color: var(--ink);
+  text-shadow: 0 1px 3px #000, 0 0 10px #000; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  max-width: 46vw;
+}
+.weapon {
+  display: grid; justify-items: end; gap: 0; border: 0; cursor: pointer; text-align: right;
+  padding: 4px 10px 5px; border-radius: 12px; background: var(--panel); box-shadow: inset 0 0 0 1px var(--rule);
+  min-width: 108px;
+}
+.weapon .wname { font: 700 12px/1.1 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft) }
+.weapon .ammo { font: 800 26px/1 var(--f-cond); font-variant-numeric: tabular-nums; letter-spacing: .01em }
+.weapon .ammo small { font-size: 16px; font-weight: 600; color: var(--ink-soft) }
+.weapon.low .ammo b { color: var(--red) }
+.weapon .swaphint { font: 600 10px/1.2 var(--f-cond); letter-spacing: .1em; color: var(--ink-soft); text-transform: uppercase }
+
+/* thumb buttons, positioned by script */
+.tb {
+  position: absolute; left: 0; top: 0; width: 56px; height: 56px; margin: 0; padding: 0; border: 0; cursor: pointer;
+  border-radius: 50%; display: grid; place-items: center; align-content: center; gap: 0;
+  background: rgba(12, 15, 21, .62); box-shadow: inset 0 0 0 2px rgba(236, 232, 223, .32);
+  font: 800 11px/1 var(--f-cond); letter-spacing: .1em; text-transform: uppercase; color: var(--ink);
+  transition: opacity .15s, box-shadow .15s;
+}
+.tb svg { width: 24px; height: 24px; margin-bottom: 1px }
+.tb .n { position: absolute; right: -2px; top: -2px; min-width: 20px; height: 20px; padding: 0 5px; border-radius: 10px; display: grid; place-items: center; background: var(--orange); color: #1a0d05; font: 800 12px/1 var(--f-cond) }
+.tb.empty { opacity: .35 }
+.tb.empty .n { background: #444; color: #ccc }
+.tb.active { box-shadow: inset 0 0 0 3px var(--green) }
+.tb.big { width: 66px; height: 66px }
+.tb.shove { box-shadow: inset 0 0 0 2px rgba(255, 122, 47, .75) }
+.tb.shove.cool { opacity: .5 }
+.tb.shove .pips { display: flex; gap: 3px; margin-top: 3px }
+.tb.shove .pips i { width: 5px; height: 5px; border-radius: 50%; background: rgba(236,232,223,.25) }
+.tb.shove .pips i.on { background: var(--red) }
+.tb.use {
+  width: auto; min-width: 66px; height: 54px; padding: 0 18px; border-radius: 27px;
+  background: rgba(59, 209, 111, .22); box-shadow: inset 0 0 0 2px var(--green);
+  font-size: 15px; letter-spacing: .06em; overflow: hidden;
+}
+.tb.use .fill { position: absolute; inset: 0; background: rgba(59, 209, 111, .45); transform-origin: 0 50%; transform: scaleX(0) }
+.tb.use span { position: relative; white-space: nowrap }
+body.lefty .weapon { order: -1 }
+
+.banner {
+  position: absolute; left: 50%; top: calc(max(8px, env(safe-area-inset-top, 0px)) + 58px);
+  transform: translate(-50%, -6px); opacity: 0; transition: opacity .2s, transform .2s;
+  padding: 7px 14px; border-radius: 10px; background: rgba(8, 10, 14, .78);
+  font: 700 17px/1.2 var(--f-cond); letter-spacing: .06em; text-align: center; max-width: min(92vw, 560px);
+  white-space: normal; pointer-events: none;
+}
+.banner.show { opacity: 1; transform: translate(-50%, 0) }
+.banner.danger { color: #fff; background: rgba(150, 18, 14, .85); font-size: 22px; letter-spacing: .14em }
+.banner.go { color: #0b1a10; background: rgba(59, 209, 111, .92) }
+.banner.tip { color: var(--ink); background: rgba(8, 10, 14, .82); box-shadow: inset 0 0 0 1px rgba(255,122,47,.5) }
+.gatebar {
+  position: absolute; left: 50%; transform: translateX(-50%);
+  top: calc(max(8px, env(safe-area-inset-top, 0px)) + 30px);
+  width: min(44vw, 260px); height: 8px; border-radius: 4px; overflow: hidden; background: rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px var(--rule);
+}
+.gatebar i { position: absolute; inset: 0; background: var(--sodium); transform-origin: 0 50%; transform: scaleX(0) }
+.fps { position: absolute; right: max(10px, env(safe-area-inset-right, 0px)); top: calc(max(8px, env(safe-area-inset-top, 0px)) + 62px); font: 500 11px/1 ui-monospace, Menlo, monospace; color: #9f9; text-shadow: 0 1px 2px #000 }
+
+/* ---------- overlays ---------- */
+.overlay {
+  position: fixed; inset: 0; z-index: 5; overflow-y: auto; touch-action: pan-y; -webkit-user-select: none; user-select: none;
+  display: flex; flex-direction: column; align-items: center; gap: 12px;
+  padding: max(16px, env(safe-area-inset-top, 0px)) max(16px, env(safe-area-inset-right, 0px)) max(16px, env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  background: radial-gradient(ellipse 80% 70% at 50% 45%, rgba(7, 9, 13, .35), rgba(7, 9, 13, .86));
+}
+.overlay.dim { background: rgba(5, 7, 10, .78) }
+.back {
+  align-self: flex-start; flex: none;
+  text-decoration: none; font: 600 14px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase;
+  padding: 9px 13px; border-radius: 999px; background: rgba(12, 15, 21, .8); box-shadow: inset 0 0 0 1px var(--rule);
+}
+.back:hover { color: var(--orange) }
+.card { width: min(560px, 100%); display: grid; gap: 16px; justify-items: start; margin: auto 0 }
+.tcol { display: grid; gap: 16px; justify-items: start; min-width: 0 }
+.kicker { margin: 0; font: 700 13px/1 var(--f-cond); letter-spacing: .28em; text-transform: uppercase; color: var(--orange) }
+h1 {
+  margin: 0; font: 800 clamp(46px, 11vw, 92px)/.86 var(--f-cond); letter-spacing: -.01em; text-transform: uppercase;
+  text-shadow: 0 4px 30px rgba(0, 0, 0, .8);
+}
+h1 em { font-style: normal; color: var(--orange) }
+h2 { margin: 0; font: 800 clamp(36px, 8vw, 60px)/.95 var(--f-cond); text-transform: uppercase }
+.sub { margin: 0; color: var(--ink-soft); max-width: 46ch; font-size: 16px }
+.howto { margin: 0; padding: 0; list-style: none; display: grid; gap: 8px; width: 100% }
+.howto li { display: grid; grid-template-columns: 34px 1fr; gap: 10px; align-items: center; color: var(--ink-soft); font-size: 15px }
+.howto b { color: var(--ink); font-weight: 600 }
+.howto .ic { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; box-shadow: inset 0 0 0 2px rgba(236,232,223,.35) }
+.howto .ic.r { box-shadow: inset 0 0 0 2px var(--orange) }
+.howto .ic svg { width: 18px; height: 18px }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; width: 100% }
+.btn {
+  border: 0; cursor: pointer; border-radius: 14px; padding: 13px 22px; min-height: 50px;
+  font: 800 19px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase;
+  background: rgba(236, 232, 223, .1); box-shadow: inset 0 0 0 1px var(--rule); text-decoration: none; display: inline-flex; align-items: center; gap: 8px;
+}
+.btn.primary { background: var(--orange); color: #1a0b03; box-shadow: 0 6px 30px rgba(255, 122, 47, .35) }
+.btn.primary:hover { background: #ff8d4a }
+.btn:not(.primary):hover { background: rgba(236, 232, 223, .16) }
+.btn.small { font-size: 15px; padding: 10px 14px; min-height: 44px; border-radius: 12px }
+.btn svg { width: 18px; height: 18px }
+.fine { margin: 0; color: var(--ink-soft); font-size: 13px; max-width: 52ch }
+.rotate { display: none }
+html.portrait .rotate { display: flex; gap: 8px; align-items: center; color: var(--sodium) }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 18px; margin: 0; width: 100% }
+.stats div { border-top: 1px solid var(--rule); padding-top: 6px }
+.stats dt { font: 600 12px/1.2 var(--f-cond); letter-spacing: .12em; text-transform: uppercase; color: var(--ink-soft) }
+.stats dd { margin: 0; font: 800 28px/1.1 var(--f-cond); font-variant-numeric: tabular-nums }
+
+/* ---------- feel lab ---------- */
+.lab {
+  position: fixed; z-index: 6; top: 0; bottom: 0; right: 0; width: min(420px, 100%);
+  display: grid; grid-template-rows: auto 1fr;
+  background: var(--panel-solid); box-shadow: -20px 0 60px rgba(0, 0, 0, .6);
+  padding-top: env(safe-area-inset-top, 0px); padding-right: env(safe-area-inset-right, 0px); padding-bottom: env(safe-area-inset-bottom, 0px);
+  touch-action: pan-y;
+}
+.lab header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px 8px; border-bottom: 1px solid var(--rule) }
+.lab header h2 { font-size: 30px }
+.lab .presets { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 8px 0 4px }
+.lab .presets button { flex: 1 1 auto; border: 0; cursor: pointer; border-radius: 10px; padding: 8px 10px; min-height: 40px; background: rgba(236,232,223,.08); box-shadow: inset 0 0 0 1px var(--rule); font: 700 14px/1.1 var(--f-cond); letter-spacing: .04em; text-align: left }
+.lab .presets button small { display: block; font: 500 11px/1.2 var(--f-body); color: var(--ink-soft); letter-spacing: 0 }
+.lab .presets button[aria-pressed="true"] { box-shadow: inset 0 0 0 2px var(--orange) }
+.lab .body { overflow-y: auto; padding: 8px 16px 18px; overscroll-behavior: contain; touch-action: pan-y; min-height: 0 }
+.lab .body > .hint { margin: 0 }
+.lab h3 { margin: 18px 0 6px; font: 700 13px/1 var(--f-cond); letter-spacing: .18em; text-transform: uppercase; color: var(--orange) }
+.lab .row { padding: 8px 0; border-bottom: 1px solid var(--rule) }
+.lab .row label { display: flex; justify-content: space-between; align-items: center; gap: 10px; cursor: pointer }
+.lab .row output { font: 600 14px/1 var(--f-cond); color: var(--sodium); font-variant-numeric: tabular-nums; white-space: nowrap }
+.lab input[type="range"] { width: 100%; margin: 8px 0 2px; accent-color: var(--orange); height: 28px; touch-action: pan-x }
+.lab .tog input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.lab .tog i { flex: none; width: 46px; height: 28px; border-radius: 14px; background: rgba(236,232,223,.18); position: relative; transition: background .15s }
+.lab .tog i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); transition: transform .15s }
+.lab .tog input:checked + i { background: var(--orange) }
+.lab .tog input:checked + i::after { transform: translateX(18px) }
+.lab .tog input:focus-visible + i { outline: 2px solid var(--orange); outline-offset: 2px }
+.lab .row-seg { display: grid; gap: 6px }
+.lab .seg { display: flex; gap: 4px; background: rgba(0,0,0,.35); border-radius: 10px; padding: 3px }
+.lab .seg button { flex: 1; border: 0; cursor: pointer; border-radius: 8px; padding: 8px 6px; min-height: 36px; background: none; font: 700 14px/1 var(--f-cond); letter-spacing: .05em }
+.lab .seg button[aria-checked="true"] { background: var(--orange); color: #1a0b03 }
+.lab .hint { margin: 4px 0 0; font-size: 12.5px; color: var(--ink-soft) }
+.lab .labactions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding-top: 16px }
+.lab .labactions .btn { justify-content: center }
+
+.toast {
+  position: fixed; z-index: 9; left: 50%; bottom: calc(max(16px, env(safe-area-inset-bottom, 0px)) + 8px); transform: translate(-50%, 10px);
+  padding: 10px 16px; border-radius: 12px; background: rgba(236, 232, 223, .95); color: #111; font: 700 15px/1.2 var(--f-cond); letter-spacing: .04em;
+  opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: 90vw; text-align: center;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0) }
+
+/* short landscape phones: the title card splits into two columns so it fits without scrolling */
+@media (max-height: 520px) and (min-width: 600px) {
+  .overlay { padding-top: max(10px, env(safe-area-inset-top, 0px)); padding-bottom: max(10px, env(safe-area-inset-bottom, 0px)) }
+  .card { gap: 10px }
+  .titlecard { width: min(960px, 100%); grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr); column-gap: 32px; align-items: center }
+  .tcol { gap: 10px }
+  h1 { font-size: clamp(40px, 8.5vh + 3vw, 76px) }
+  .sub { font-size: 14px }
+  .howto li { font-size: 14px }
+  .btn { min-height: 46px; padding: 11px 18px; font-size: 17px }
+}
+@media (prefers-reduced-motion: reduce) {
+  .banner, .toast, .tb, .lab .tog i, .lab .tog i::after { transition: none }
+}
+</style>
+
+<body>
+<canvas id="game" aria-label="Game view: a top-down night street seen from above"></canvas>
+<div id="insetProbe" aria-hidden="true"></div>
+
+<div id="hud" class="hud" hidden>
+  <div class="topbar">
+    <div class="left">
+      <button id="btnPause" class="iconbtn" type="button" aria-label="Pause">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>
+      </button>
+      <div class="vitals">
+        <div class="hp" role="img" aria-label="Health"><div class="hp-temp" id="hpTemp"></div><div class="hp-fill" id="hpFill"></div><span><b id="hpNum">100</b><small id="hpTag"></small></span></div>
+        <div class="objective" id="objective">Grab a weapon</div>
+      </div>
+    </div>
+    <button id="btnWeapon" class="weapon" type="button" aria-label="Weapon: tap to swap">
+      <span class="wname" id="wName">Pistol</span>
+      <span class="ammo"><b id="ammoMag">15</b> <small>/ <span id="ammoRes">∞</span></small></span>
+      <span class="swaphint" id="swapHint">tap to swap</span>
+    </button>
+  </div>
+  <div id="gateBar" class="gatebar" hidden><i id="gateFill"></i></div>
+  <div id="banner" class="banner" role="status" aria-live="polite"></div>
+  <div id="fps" class="fps" hidden></div>
+
+  <button id="btnShove" class="tb big shove" type="button" aria-label="Shove">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 11V7a2 2 0 0 1 4 0v3m0-1a2 2 0 0 1 4 0v2m0-1a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.5 14a1.8 1.8 0 0 1 2.9-2.1L9 14"/></svg>
+    Shove<span class="pips" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+  </button>
+  <button id="btnReload" class="tb" type="button" aria-label="Reload">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>
+    Reload
+  </button>
+  <button id="btnBomb" class="tb" type="button" aria-label="Throw noise bomb">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><rect x="4" y="9" width="13" height="6" rx="2"/><path d="M17 12h3M8 9V7m4 2V7"/><circle cx="7.5" cy="12" r="1" fill="currentColor"/></svg>
+    Lure<span class="n" id="bombCount">0</span>
+  </button>
+  <button id="btnMed" class="tb" type="button" aria-label="Use medkit">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="6" width="18" height="13" rx="2"/><path d="M12 9.5v6M9 12.5h6M9 6V4h6v2"/></svg>
+    Heal<span class="n" id="medCount">0</span>
+  </button>
+  <button id="btnPills" class="tb" type="button" aria-label="Take pills">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><rect x="3" y="8.5" width="18" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.3 8.2l5.4 7.6"/></svg>
+    Pills<span class="n" id="pillCount">0</span>
+  </button>
+  <button id="btnUse" class="tb use" type="button" hidden><i class="fill" id="useFill"></i><span id="useLabel">Use</span></button>
+</div>
+
+<section id="title" class="overlay" aria-labelledby="titleH">
+  <a class="back" href="../">← RemoteFunLand</a>
+  <div class="card titlecard">
+    <div class="tcol">
+      <p class="kicker">Prototype 0 · single player</p>
+      <h1 id="titleH">Two Thumbs <em>Left</em></h1>
+      <p class="sub">A night city, one flashlight and a horde that runs faster than you. Fight from the start room to the safe room across town, and tune the thumb sticks until they feel right.</p>
+      <div class="actions">
+        <button id="playBtn" class="btn primary" type="button">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15l12-7.5z"/></svg>Play
+        </button>
+        <button id="labBtnTitle" class="btn" type="button">Feel lab</button>
+      </div>
+    </div>
+    <div class="tcol">
+      <ul class="howto">
+        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><span><b>Left thumb</b> anywhere on the left: move.</span></li>
+        <li><span class="ic r" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ff7a2f" stroke-width="2"><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="3" fill="#ff7a2f"/></svg></span><span><b>Right thumb</b>: aim the light. Push past the ring to <b>fire</b>.</span></li>
+        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 11V7a2 2 0 0 1 4 0v3m0-1a2 2 0 0 1 4 0v2m0-1a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.5 14"/></svg></span><span><b>Tap</b> the right side to <b>shove</b> when they get close.</span></li>
+      </ul>
+      <div class="actions">
+        <button id="muteBtn" class="btn small" type="button" aria-pressed="false"><span>Sound on</span></button>
+        <button id="fullBtn" class="btn small" type="button">Full screen</button>
+      </div>
+      <p class="fine rotate">↻ Turn your phone sideways for the widest view.</p>
+      <p class="fine">Desktop: WASD to move, mouse to aim, click to fire, Space to shove, R reload, Q swap, E use, H heal, C pills, G lure. Gamepads work too.</p>
+    </div>
+  </div>
+</section>
+
+<section id="pause" class="overlay dim" aria-labelledby="pauseH" hidden>
+  <a class="back" href="../">← RemoteFunLand</a>
+  <div class="card">
+    <h2 id="pauseH">Paused</h2>
+    <div class="actions">
+      <button id="resumeBtn" class="btn primary" type="button">Resume</button>
+      <button id="labBtnPause" class="btn" type="button">Feel lab</button>
+      <button id="restartBtn" class="btn" type="button">New run</button>
+    </div>
+    <p class="fine" id="seedLine"></p>
+  </div>
+</section>
+
+<section id="end" class="overlay dim" aria-labelledby="endTitle" hidden>
+  <a class="back" href="../">← RemoteFunLand</a>
+  <div class="card">
+    <h2 id="endTitle">Overrun.</h2>
+    <p class="sub" id="endSub"></p>
+    <dl class="stats" id="endStats"></dl>
+    <div class="actions">
+      <button id="againBtn" class="btn primary" type="button">Run again</button>
+      <button id="labBtnEnd" class="btn" type="button">Feel lab</button>
+    </div>
+  </div>
+</section>
+
+<aside id="lab" class="lab" aria-labelledby="labH" hidden>
+  <header>
+    <h2 id="labH">Feel lab</h2>
+    <button id="labClose" class="btn small" type="button">Done</button>
+  </header>
+  <div class="body" id="labScroll">
+    <p class="hint">Changes apply live and are saved on this device. Presets only touch the firing settings.</p>
+    <div class="presets" id="labPresets" role="group" aria-label="Firing presets"></div>
+    <div id="labBody"></div>
+    <div class="labactions">
+      <button id="labReset" class="btn small" type="button">Defaults</button>
+      <button id="labShare" class="btn small" type="button">Copy link</button>
+      <button id="labHorde" class="btn small" type="button">Horde now</button>
+      <button id="labCresc" class="btn small" type="button">Skip to gate</button>
+    </div>
+  </div>
+</aside>
+
+<div id="toast" class="toast" role="status" aria-live="polite" hidden></div>
+
+<script src="input.js"></script>
+<script src="audio.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
