@@ -118,7 +118,23 @@
   MO.energy = (t) => { const b = t / BAR, i = Math.min(S.energy.length - 1, Math.floor(b)), j = Math.min(S.energy.length - 1, i + 1); return MO.mix(S.energy[i], S.energy[j], MO.smooth(b - i)); };
   MO.chordIndex = (t) => Math.min(S.chords.length - 1, Math.floor(t / BAR));
   // words of the rap / hook with absolute times: [{text, t, line, lineIndex}]
-  MO.words = (part) => S.vocals[part].flatMap((line, li) => line.words.map(([w, step]) => ({ text: w, t: MO.barTime(line.bar, 0, step), line, li })));
+  // Lines without `words` (announcer entries, chops) are skipped; an unknown part gives [].
+  MO.words = (part) => ((S.vocals && S.vocals[part]) || []).flatMap((line, li) => Array.isArray(line.words) && line.bar != null
+    ? line.words.map(([w, step]) => ({ text: w, t: MO.barTime(line.bar, 0, step), line, li })) : []);
+  // Shared lookups for shot factories (times in seconds, half-open windows [a, b)).
+  // MO.wordsIn(re, a, b, parts): words whose text matches re (RegExp or string, case-insensitive) in [a, b).
+  MO.wordsIn = (re, a, b, parts = ['rap', 'hook', 'sung', 'spoken']) => {
+    const rx = re instanceof RegExp ? re : new RegExp(re == null ? '' : String(re), 'i');
+    return parts.flatMap((p) => MO.words(p)).filter((w) => w.t >= a - 1e-6 && w.t < b - 1e-6 && rx.test(w.text)).sort((x, y) => x.t - y.t);
+  };
+  // MO.fxIn(type, a, b): score fx entries (type 'flash' | 'impact' | 'shake' | null for all) in [a, b), with t added.
+  MO.fxIn = (type, a, b) => (S.fx || []).map((f) => ({ ...f, t: f.beat * BEAT }))
+    .filter((f) => (!type || f.type === type) && f.t >= a - 1e-6 && f.t < b - 1e-6).sort((x, y) => x.t - y.t);
+  // MO.eventsIn(name, a, b): drum / hits / chakras events of MO.events[name] in [a, b).
+  MO.eventsIn = (name, a, b) => (MO.events[name] || []).filter((e) => e.t >= a - 1e-6 && e.t < b - 1e-6);
+  // Match-cut constants shared by shots that must line up across a cut (spec risk 8). Scene files add
+  // their entries with `MO.MATCH.key = MO.MATCH.key || {...}` and read the others' entries at cue time.
+  MO.MATCH = MO.MATCH || {};
 
   MO.globals = (t) => ({
     uTime: t,
