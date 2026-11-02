@@ -113,7 +113,14 @@
   // ---------------------------------------------------------------- WebGL plumbing
   let gl, canvas, hdr = false, quad, W = 1280, H = 720;
   let sceneT = null, bloomLv = [], overlayCanvas, overlayCtx, overlayTex;
+  let vsShader = null;
+  let ready = false;       // programs and targets exist for the current context
+  let warming = false;     // init's pre-warm may render before the engine is ready for the page
+  let stale = false;       // GL objects belong to a context that was lost (drop them, don't delete them)
+  let initGen = 0;         // a newer MO.init call supersedes an older one still in flight
   const progs = {};
+  MO.ready = false;
+  MO.contextLost = false;
   const overlayErrors = new Set();
   MO.noOverlay = params.has('nooverlay');
   const VS = `#version 300 es
@@ -185,24 +192,40 @@ void main() {
   float c = mod(floor(p.x) + floor(p.y), 2.0);
   fragColor = vec4(mix(vec3(0.6, 0.0, 0.5), vec3(0.1, 0.0, 0.1), c), 1.0);
 }`;
-  function compile(type, src, label) {
-    const s = gl.createShader(type);
-    gl.shaderSource(s, src); gl.compileShader(s);
-    if (!gl.getShaderParameter(s, gl.COMPILE_STATUS)) {
-      const log = gl.getShaderInfoLog(s);
-      const off = label.lineOffset || 0;
-      const nice = log.replace(/ERROR: 0:(\d+)/g, (m, n) => `ERROR: ${label.name} line ${Number(n) - off}`);
-      throw new Error(`[shader ${label.name}] ${nice}`);
-    }
-    return s;
+  // Programs are built in two phases. startProgram() only issues compile + link, without asking
+  // for any status, so the driver can work on every program at once (in parallel where
+  // KHR_parallel_shader_compile exists) while the page keeps painting. finishProgram() then
+  // reads the result, which blocks only if that program is not done yet.
+  const lostError = () => Object.assign(new Error('The WebGL context was lost'), { contextLost: true });
+  function shaderLog(s, name, lineOffset) {
+    const log = gl.getShaderInfoLog(s) || '';
+    return `[shader ${name}] ` + log.replace(/ERROR: 0:(\d+)/g, (m, n) => `ERROR: ${name} line ${Number(n) - lineOffset}`);
   }
-  function program(fsSrc, name, lineOffset = 0) {
+  function startProgram(fsSrc, name, lineOffset = 0) {
+    const fs = gl.createShader(gl.FRAGMENT_SHADER);
+    gl.shaderSource(fs, fsSrc); gl.compileShader(fs);
     const p = gl.createProgram();
-    gl.attachShader(p, compile(gl.VERTEX_SHADER, VS, { name: name + ' (vs)' }));
-    gl.attachShader(p, compile(gl.FRAGMENT_SHADER, fsSrc, { name, lineOffset }));
+    gl.attachShader(p, vsShader); gl.attachShader(p, fs);
     gl.bindAttribLocation(p, 0, 'aPos');
     gl.linkProgram(p);
-    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(`[link ${name}] ${gl.getProgramInfoLog(p)}`);
+    return { p, fs, name, lineOffset };
+  }
+  function finishProgram(job) {
+    const { p, fs, name, lineOffset } = job;
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      if (gl.isContextLost()) throw lostError();
+      let msg;
+      if (!gl.getShaderParameter(vsShader, gl.COMPILE_STATUS)) msg = shaderLog(vsShader, name + ' (vs)', 0);
+      else if (!gl.getShaderParameter(fs, gl.COMPILE_STATUS)) msg = shaderLog(fs, name, lineOffset);
+      else msg = `[link ${name}] ${gl.getProgramInfoLog(p)}`;
+      gl.deleteProgram(p); gl.deleteShader(fs);
+      throw new Error(msg);
+    }
+    gl.deleteShader(fs);   // flagged only; freed with the program
+    return programInfo(p, name);
+  }
+  function program(fsSrc, name, lineOffset = 0) { return finishProgram(startProgram(fsSrc, name, lineOffset)); }
+  function programInfo(p, name) {
     const info = {};
     const n = gl.getProgramParameter(p, gl.ACTIVE_UNIFORMS);
     for (let i = 0; i < n; i++) {
@@ -259,48 +282,68 @@ void main() {
   function draw() { gl.drawArrays(gl.TRIANGLES, 0, 3); }
 
   // ---------------------------------------------------------------- init
+  // Yield to the browser so it can paint (status text, progress) between steps. The timeout
+  // keeps init moving in a background tab, where requestAnimationFrame does not run.
+  const nextFrame = () => new Promise((res) => {
+    let done = false; const go = () => { if (!done) { done = true; res(); } };
+    requestAnimationFrame(go); setTimeout(go, 50);
+  });
+
+  // Forget every GL object. After a context loss they are already gone, so only drop them.
+  function releaseGL() {
+    const del = gl && !stale && !gl.isContextLost();
+    if (del) {
+      for (const k in progs) if (progs[k]) gl.deleteProgram(progs[k].p);
+      for (const sc of MO.scenes) if (sc.prog) gl.deleteProgram(sc.prog.p);
+      freeTarget(sceneT); bloomLv.forEach(freeTarget);
+      if (overlayTex) gl.deleteTexture(overlayTex);
+      if (quad) gl.deleteBuffer(quad);
+      if (vsShader) gl.deleteShader(vsShader);
+    }
+    for (const k in progs) delete progs[k];
+    for (const sc of MO.scenes) sc.prog = null;
+    sceneT = null; bloomLv = []; overlayTex = null; quad = null; vsShader = null;
+    stale = false;
+  }
+
+  // MO.init is re-entrant: calling it again (for example after the WebGL context was lost and
+  // restored) rebuilds every program and target on the canvas's current context.
+  // opts: { canvas, width, height, preserve, onProgress(done, total), warmAt (seconds), warm (false skips the pre-warm) }
   MO.init = async function init(opts) {
+    const gen = ++initGen;
+    const check = () => {
+      if (gen !== initGen) throw new Error('MO.init was superseded by a newer call');
+      if (gl.isContextLost()) throw lostError();
+    };
+    ready = false; MO.ready = false;
+    if (canvas && canvas !== opts.canvas) stale = true;   // a different canvas: never touch the old objects
     canvas = opts.canvas;
     W = opts.width; H = opts.height;
     canvas.width = W; canvas.height = H;
+    if (!canvas.__moLossHooks) {
+      canvas.__moLossHooks = true;
+      // preventDefault lets the browser restore the context; the page decides what to show meanwhile
+      canvas.addEventListener('webglcontextlost', (e) => { e.preventDefault(); ready = false; MO.ready = false; stale = true; MO.contextLost = true; });
+      canvas.addEventListener('webglcontextrestored', () => { MO.contextLost = false; });
+    }
     gl = canvas.getContext('webgl2', { antialias: false, alpha: false, depth: false, stencil: false, premultipliedAlpha: true, preserveDrawingBuffer: !!opts.preserve, powerPreference: 'high-performance' });
     if (!gl) throw new Error('WebGL2 is not available');
+    if (gl.isContextLost()) throw lostError();
     MO.gl = gl;
+    MO.contextLost = false;
+    releaseGL();
     hdr = !!gl.getExtension('EXT_color_buffer_float');
     gl.getExtension('OES_texture_float_linear');
+    const parallel = gl.getExtension('KHR_parallel_shader_compile');
     quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
     gl.enableVertexAttribArray(0);
     gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
 
-    progs.down = program(FS_DOWN, 'bloom-down');
-    progs.up = program(FS_UP, 'bloom-up');
-    progs.post = program(FS_POST, 'post');
-    const prefix = window.MO_HEADER + window.MO_LIB + '\n#line 1\n';
-    const prefixLines = 0; // #line 1 resets numbering to the scene's own source
-    // a section without a registered scene gets a visible placeholder
-    for (const sec of S.sections) {
-      if (!MO.scenes.some((sc) => (sc.section || sc.id) === sec.id)) MO.scenes.push({ id: sec.id + '-missing', section: sec.id, fs: ERROR_FS });
-    }
-    for (const sc of MO.scenes) {
-      const sec = S.sections.find((s) => s.id === sc.section || s.id === sc.id);
-      sc.from = sc.from ?? (sec ? sec.bars[0] * BAR : 0);
-      sc.to = sc.to ?? (sec ? sec.bars[1] * BAR : DUR);
-      try { sc.prog = program(prefix + sc.fs, 'scene ' + sc.id, prefixLines); }
-      catch (e) {
-        // one broken scene must not take the whole piece down: log it and draw a warning pattern
-        console.error(String(e.message || e));
-        sc.error = String(e.message || e);
-        sc.prog = program(prefix + ERROR_FS, 'scene ' + sc.id + ' (error)', prefixLines);
-        sc.uniforms = null;
-      }
-    }
-    MO.scenes.sort((a, b) => a.from - b.from);
-
-    overlayCanvas = document.createElement('canvas');
-    overlayCanvas.width = W; overlayCanvas.height = H;
-    overlayCtx = overlayCanvas.getContext('2d');
+    // the overlay canvas survives a context loss; only its texture is per context
+    if (!overlayCanvas) { overlayCanvas = document.createElement('canvas'); overlayCtx = overlayCanvas.getContext('2d'); }
+    if (overlayCanvas.width !== W || overlayCanvas.height !== H) { overlayCanvas.width = W; overlayCanvas.height = H; }
     overlayTex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, overlayTex);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -309,20 +352,121 @@ void main() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
 
+    // a section without a registered scene gets a visible placeholder
+    for (const sec of S.sections) {
+      if (!MO.scenes.some((sc) => (sc.section || sc.id) === sec.id)) MO.scenes.push({ id: sec.id + '-missing', section: sec.id, fs: ERROR_FS });
+    }
+    for (const sc of MO.scenes) {
+      const sec = S.sections.find((s) => s.id === sc.section || s.id === sc.id);
+      sc.from = sc.from ?? (sec ? sec.bars[0] * BAR : 0);
+      sc.to = sc.to ?? (sec ? sec.bars[1] * BAR : DUR);
+    }
+    MO.scenes.sort((a, b) => a.from - b.from);
+
+    // phase 1: issue every compile and link without querying anything
+    const prefix = window.MO_HEADER + window.MO_LIB + '\n#line 1\n';
+    const prefixLines = 0; // #line 1 resets numbering to the scene's own source
+    vsShader = gl.createShader(gl.VERTEX_SHADER);
+    gl.shaderSource(vsShader, VS); gl.compileShader(vsShader);
+    const jobs = [
+      { key: 'down', job: startProgram(FS_DOWN, 'bloom-down') },
+      { key: 'up', job: startProgram(FS_UP, 'bloom-up') },
+      { key: 'post', job: startProgram(FS_POST, 'post') },
+      ...MO.scenes.map((sc) => ({ sc, job: startProgram(prefix + sc.fs, 'scene ' + sc.id, prefixLines) })),
+    ];
+    // capture renders offline (no hitch to avoid, and a few stills would pay for every scene): no warm-up
+    const warm = !MO.capture && opts.warm !== false;
+    const total = jobs.length + (warm ? MO.scenes.length + 1 : 0);
+    const report = (n) => { try { opts.onProgress && opts.onProgress(n, total); } catch (e) { /* UI only */ } };
+    report(0);
+    await nextFrame(); check();
+
+    // phase 2: wait for completion without blocking where the driver can tell us, then read results
+    if (parallel) {
+      for (;;) {
+        const done = jobs.filter((j) => gl.getProgramParameter(j.job.p, parallel.COMPLETION_STATUS_KHR)).length;
+        report(done);
+        if (done === jobs.length) break;
+        await nextFrame(); check();
+      }
+    }
+    let slice = performance.now();
+    for (let i = 0; i < jobs.length; i++) {
+      const j = jobs[i];
+      if (j.key) progs[j.key] = finishProgram(j.job);   // engine programs must work
+      else {
+        const sc = j.sc;
+        try { sc.prog = finishProgram(j.job); }
+        catch (e) {
+          if (e.contextLost) throw e;
+          // one broken scene must not take the whole piece down: log it and draw a warning pattern
+          console.error(String(e.message || e));
+          sc.error = String(e.message || e);
+          sc.prog = program(prefix + ERROR_FS, 'scene ' + sc.id + ' (error)', prefixLines);
+          sc.uniforms = null;
+        }
+      }
+      report(i + 1);
+      // without the extension each status read can block; give the page a frame every ~40 ms
+      if (performance.now() - slice > 40) { await nextFrame(); check(); slice = performance.now(); }
+    }
+
     buildTargets();
+    if (warm) {
+      // Pre-warm: draw every scene once into the smallest bloom target (same format and blend
+      // state as the scene pass), then one real frame for the bloom and post passes, and wait for
+      // the GPU each time. Drivers that finish compiling on first use (ANGLE on Metal/D3D,
+      // SwiftShader) then do it here, under "Compiling shaders…", instead of at a shot cut.
+      const waitGPU = async () => {
+        const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+        gl.flush();
+        if (!sync) return;
+        try {
+          // a sync object's status only updates between tasks: poll without blocking the page
+          while (gl.getSyncParameter(sync, gl.SYNC_STATUS) !== gl.SIGNALED) { await new Promise((r) => setTimeout(r, 8)); check(); }
+        } finally { gl.deleteSync(sync); }
+      };
+      let n = jobs.length;
+      warming = true;
+      try {
+        for (const sc of MO.scenes) {
+          buildTargets();   // picks up a resize that arrived meanwhile
+          const tiny = bloomLv[bloomLv.length - 1];
+          gl.bindFramebuffer(gl.FRAMEBUFFER, tiny.fb); gl.viewport(0, 0, tiny.w, tiny.h);
+          gl.disable(gl.BLEND);
+          gl.useProgram(sc.prog.p);
+          const t = Math.min(DUR - 1e-3, sc.from + 0.05);
+          const u = MO.globals(t);
+          u.uRes = [tiny.w, tiny.h]; u.uLocal = t - sc.from; u.uDur = sc.to - sc.from;
+          setUniforms(sc.prog, u);
+          if (sc.uniforms) { try { setUniforms(sc.prog, sc.uniforms(t, t - sc.from, MO) || {}); } catch (e) { /* reported on first real render */ } }
+          draw();
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          await waitGPU(); check(); report(++n);
+        }
+        MO.render(MO.clamp(+opts.warmAt || 0, 0, DUR - 1e-3));   // the frame the page is about to show
+        await waitGPU(); check(); report(++n);
+      } finally { warming = false; }
+    }
+
     await Promise.all(MO.pending);
+    check();
     MO.hdr = hdr;
+    ready = true; MO.ready = true;
     return MO;
   };
 
+  // Safe to call at any time: before init (or while it runs) it only records the size.
   MO.resize = function resize(w, h) {
     if (w === W && h === H) return;
-    W = w; H = h; canvas.width = W; canvas.height = H;
-    overlayCanvas.width = W; overlayCanvas.height = H;
+    W = w; H = h;
+    if (canvas) { canvas.width = W; canvas.height = H; }
+    if (overlayCanvas) { overlayCanvas.width = W; overlayCanvas.height = H; }
+    if (!ready) return;
     sceneT && freeTarget(sceneT); sceneT = null; buildTargets();
   };
-  MO.setQuality = function setQuality(q) { MO.quality = MO.clamp(q, 0.3, 1); buildTargets(); };
-  MO.size = () => ({ W, H, sw: sceneT.w, sh: sceneT.h, hdr });
+  MO.setQuality = function setQuality(q) { MO.quality = MO.clamp(q, 0.3, 1); if (ready) buildTargets(); };
+  MO.size = () => ({ W, H, sw: sceneT ? sceneT.w : 0, sh: sceneT ? sceneT.h : 0, hdr });
 
   MO.sceneAt = (t) => {
     let pick = MO.scenes[0];
@@ -334,6 +478,7 @@ void main() {
   // ---------------------------------------------------------------- render one frame
   MO.render = function render(t) {
     MO.t = t;
+    if (!(ready || warming) || gl.isContextLost()) return null;   // nothing to draw with until (re)init
     buildTargets();
     const sc = MO.sceneAt(t);
     const local = t - sc.from;

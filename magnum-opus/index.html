@@ -22,8 +22,9 @@
 * { box-sizing: border-box }
 html, body { margin: 0; background: var(--bg); color: var(--ink) }
 body { font: 400 15px/1.55 var(--f-body); -webkit-font-smoothing: antialiased; min-height: 100vh; min-height: 100dvh }
+html.noscroll, html.noscroll body { overflow: hidden }
 a { color: inherit }
-a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 4px }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible, label:focus-within { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 4px }
 
 .top {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
@@ -33,55 +34,140 @@ a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid v
 .top a { text-decoration: none }
 .top a:hover { color: var(--gold) }
 
-.wrap { width: min(100%, 1280px, calc((100dvh - 150px) * 16 / 9)); min-width: min(100%, 320px); margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)) }
-@media (max-width: 720px) { .wrap { width: 100%; } }
-
-.stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 1px var(--rule), 0 30px 80px -30px rgba(232, 182, 74, .25) }
-.stage canvas, .stage video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #000 }
-.stage video { object-fit: contain }
-.stage:fullscreen { border-radius: 0; box-shadow: none; width: 100vw; height: 100vh; aspect-ratio: auto }
-.stage:fullscreen canvas { object-fit: contain; height: 100%; width: auto; max-width: 100%; margin: auto; }
-
-.gate {
-  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: clamp(8px, 2.2vw, 18px);
-  padding: 16px; text-align: center;
-  background: radial-gradient(ellipse at 50% 40%, rgba(7, 6, 10, .25), rgba(7, 6, 10, .82) 70%), var(--poster, none) center / cover no-repeat, #07060a;
+/* the stage and its transport fit the viewport height; the stage is always 16:9 */
+.wrap {
+  width: min(100%, 1280px, calc((100vh - 150px) * 16 / 9)); width: min(100%, 1280px, calc((100dvh - 150px) * 16 / 9));
+  min-width: min(100%, 320px); margin: 0 auto;
+  padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left));
 }
-.gate[hidden], .stage [hidden] { display: none !important }
+/* landscape phones and short windows: tighter chrome so the stage gets the height */
+@media (orientation: landscape) and (max-height: 520px) {
+  .top { padding-top: max(6px, env(safe-area-inset-top)); padding-bottom: 6px }
+  .wrap { width: min(100%, 1280px, calc((100vh - 88px) * 16 / 9 + 32px)); width: min(100%, 1280px, calc((100dvh - 88px) * 16 / 9 + 32px)) }
+  .bar { padding-top: 6px }
+}
+
+.player { position: relative }
+.stage {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; border-radius: 6px;
+  box-shadow: 0 0 0 1px var(--rule), 0 30px 80px -30px rgba(232, 182, 74, .25);
+  container: stage / size;
+}
+.stage canvas, .stage video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #000; object-fit: contain }
+.stage [hidden], .player [hidden] { display: none !important }
+
+/* ---- the gate: sized to the stage (container units), never to the viewport */
+.gate {
+  position: absolute; inset: 0; z-index: 2; display: flex; flex-direction: column;
+  padding: 16px; padding: clamp(8px, 3.2cqh, 28px) clamp(10px, 4cqw, 40px);
+  text-align: center; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin;
+  background:
+    radial-gradient(ellipse 64% 74% at 50% 50%, rgba(7, 6, 10, .80), rgba(7, 6, 10, .66) 60%, rgba(7, 6, 10, .90)),
+    var(--poster, none) center / cover no-repeat, #07060a;
+}
+/* auto margins centre the content when it fits and let it start at the top when it doesn't */
+.gate-in { margin: auto 0; display: flex; flex-direction: column; align-items: center; gap: 12px; gap: clamp(6px, 2.3cqh, 18px) }
 .gate h1 {
-  margin: 0; font: 900 clamp(30px, 7.4vw, 92px)/.95 var(--f-display); letter-spacing: .06em;
+  margin: 0; font: 900 clamp(26px, 7.4vw, 92px)/.95 var(--f-display); letter-spacing: .06em;
+  font-size: clamp(22px, min(8.2cqw, 14cqh), 92px);
   background: linear-gradient(180deg, #fff6dc 0%, #f3c867 42%, #a5631c 52%, #ffe3a1 64%, #fff 100%);
   -webkit-background-clip: text; background-clip: text; color: transparent;
-  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .6)) drop-shadow(0 0 24px rgba(255, 170, 60, .35));
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .7)) drop-shadow(0 0 24px rgba(255, 170, 60, .35));
 }
-.gate .sub { margin: 0; max-width: 46ch; font-size: clamp(12px, 1.6vw, 16px); color: var(--ink-soft) }
-.gate .stages { margin: 0; font: 600 clamp(9px, 1.15vw, 12px)/1 var(--f-display); letter-spacing: .22em; color: var(--ink-soft) }
+.gate .stages, .gate .sub, .warn, .gate .fine, .status { text-shadow: 0 1px 2px #000, 0 0 12px rgba(0, 0, 0, .9) }
+.gate .sub, .warn .wt { text-wrap: balance }
+.gate .stages { margin: 0; font: 600 clamp(9px, 1.15vw, 12px)/1 var(--f-display); font-size: clamp(9px, 1.1cqw, 12px); letter-spacing: .22em }
 .gate .stages b { font-weight: 600 }
+.gate .sub { margin: 0; max-width: 46ch; font-size: clamp(12px, 1.6vw, 16px); font-size: clamp(12px, 1.5cqw, 16px); color: #e8e0cf }
+
+.warn {
+  margin: 0; max-width: 62ch; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 4px 14px;
+  font-size: clamp(11px, 1.3vw, 14px); font-size: clamp(11px, 1.3cqw, 14px); line-height: 1.35; color: var(--ink);
+}
+.warn .wt { display: inline }
+.warn .wt b { color: var(--gold); font-weight: 700 }
+.warn svg { width: 1.15em; height: 1.15em; vertical-align: -.2em; margin-right: .35em; fill: var(--gold) }
+.check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; font-weight: 600; white-space: nowrap; padding: 2px 0 }
+.check input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0 }
+
 .btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px }
 .btn {
-  appearance: none; border: 1px solid var(--gold); background: linear-gradient(180deg, rgba(232, 182, 74, .22), rgba(232, 182, 74, .06));
-  color: var(--ink); font: 700 clamp(12px, 1.4vw, 15px)/1 var(--f-display); letter-spacing: .12em; text-transform: uppercase;
-  padding: clamp(10px, 1.4vw, 14px) clamp(14px, 2vw, 22px); border-radius: 999px; cursor: pointer; touch-action: manipulation;
+  appearance: none; border: 1px solid var(--gold); background: linear-gradient(180deg, rgba(232, 182, 74, .26), rgba(232, 182, 74, .10)), rgba(7, 6, 10, .55);
+  color: var(--ink); font: 700 clamp(12px, 1.4vw, 15px)/1 var(--f-display); font-size: clamp(11px, 1.3cqw, 15px); letter-spacing: .12em; text-transform: uppercase;
+  padding: clamp(9px, 1.3cqw, 14px) clamp(12px, 2cqw, 22px); border-radius: 999px; cursor: pointer; touch-action: manipulation;
 }
-.btn:hover { background: rgba(232, 182, 74, .3) }
-.btn.alt { border-color: rgba(241, 233, 216, .45); background: rgba(255, 255, 255, .04) }
-.btn.alt:hover { background: rgba(255, 255, 255, .12) }
+.btn:hover { background: rgba(232, 182, 74, .34) }
+.btn.alt { border-color: rgba(241, 233, 216, .5); background: rgba(7, 6, 10, .55) }
+.btn.alt:hover { background: rgba(255, 255, 255, .14) }
 .btn[disabled] { opacity: .5; cursor: progress }
-.fine { margin: 0; font-size: clamp(11px, 1.2vw, 13px); color: var(--ink-soft); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; align-items: center }
-.fine label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer }
-.fine input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0 }
+.btn .ff { display: none; margin-top: 4px; font: 700 .72em/1 var(--f-body); letter-spacing: .1em; color: var(--gold) }
+.reduced .btn .ff { display: block }
+.gate .fine { margin: 0; font-size: 12px; color: #d9d0bd }
 .status { min-height: 1.3em; margin: 0; font-size: 13px; color: var(--gold) }
+.prog { display: block; width: min(220px, 60cqw); height: 2px; background: rgba(241, 233, 216, .18); border-radius: 1px; overflow: hidden }
+.prog i { display: block; height: 100%; width: 0; background: var(--gold) }
 
-.bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 12px 0 0 }
-.icon { appearance: none; border: 1px solid var(--rule); background: transparent; color: var(--ink); width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; cursor: pointer; touch-action: manipulation }
+/* small stages: drop the extras first, never the warning, the toggle or the buttons */
+@container stage (max-height: 340px) { .gate .sub { display: none } }
+@container stage (max-height: 250px) { .gate .stages, .gate .fine { display: none } .status { min-height: 0 } }
+@container stage (max-width: 440px) { .gate .sub, .gate .stages, .gate .fine { display: none } }
+@supports not (container-type: size) {
+  @media (max-width: 600px), (max-height: 500px) {
+    .gate .sub, .gate .stages, .gate .fine { display: none }
+    .gate h1 { font-size: clamp(24px, 8vw, 40px) }
+    .btn { font-size: 11px; padding: 9px 12px }
+    .warn { font-size: 11px }
+  }
+}
+
+/* ---- chips on the stage: notices and the "running slowly" hint */
+.chips { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 3; display: grid; justify-items: center; gap: 6px; width: max-content; max-width: calc(100% - 20px); pointer-events: none }
+.chip {
+  pointer-events: auto; margin: 0; padding: 6px 12px; border-radius: 999px; border: 1px solid rgba(232, 182, 74, .55);
+  background: rgba(7, 6, 10, .86); color: var(--ink); font: 500 12px/1.35 var(--f-body); text-align: center;
+}
+button.chip { cursor: pointer; appearance: none }
+button.chip:hover { border-color: var(--gold) }
+
+/* ---- transport */
+.bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; padding: 12px 0 0; container: bar / inline-size }
+.icon { appearance: none; border: 1px solid var(--rule); background: transparent; color: var(--ink); min-width: 40px; height: 40px; border-radius: 999px; display: inline-grid; grid-auto-flow: column; place-items: center; gap: 8px; padding: 0 11px; cursor: pointer; touch-action: manipulation; font: 600 11px/1 var(--f-display); letter-spacing: .1em; text-transform: uppercase }
 .icon:hover { border-color: var(--gold) }
-.icon svg { width: 16px; height: 16px; fill: currentColor }
-.track { position: relative; display: grid; grid-template-columns: 4fr 4fr 4fr 4fr 1fr; gap: 3px; height: 40px; align-items: center; cursor: pointer; touch-action: none }
+.icon svg { width: 16px; height: 16px; fill: currentColor; flex: none }
+.rf .slash { display: none }
+.rf[aria-pressed="true"] { border-color: var(--gold); color: var(--gold); background: rgba(232, 182, 74, .14) }
+.rf[aria-pressed="true"] .slash { display: inline }
+.rf .lbl { display: none }
+@container bar (min-width: 700px) { .rf .lbl { display: inline } }
+.track { position: relative; display: grid; grid-template-columns: 4fr 4fr 4fr 4fr 1fr; gap: 3px; height: 40px; align-items: center; cursor: pointer; touch-action: none; container: track / inline-size; border-radius: 4px }
 .seg { height: 6px; border-radius: 3px; background: var(--c); opacity: .35; position: relative }
 .seg span { position: absolute; top: 12px; left: 0; font: 600 9.5px/1 var(--f-display); letter-spacing: .14em; color: var(--ink-soft); white-space: nowrap; text-transform: uppercase }
+@container track (max-width: 420px) { .seg span { display: none } }
 .head { position: absolute; top: 50%; width: 2px; height: 22px; margin-top: -11px; background: var(--ink); left: 0; border-radius: 1px; pointer-events: none; box-shadow: 0 0 8px rgba(255, 255, 255, .6) }
-.time { font: 500 12px/1 ui-monospace, Menlo, Consolas, monospace; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 9ch; text-align: right }
-@media (max-width: 560px) { .seg span { display: none } .bar { gap: 8px } .time { min-width: 0 } }
+.time { font: 500 12px/1 ui-monospace, Menlo, Consolas, monospace; color: var(--ink-soft); font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right }
+@container bar (max-width: 520px) { .time .dur { display: none } }
+@supports not (container-type: inline-size) {
+  @media (max-width: 560px) { .seg span, .time .dur { display: none } }
+  @media (min-width: 900px) { .rf .lbl { display: inline } }
+}
+@media (max-width: 560px) { .bar { gap: 8px } }
+
+.modeline { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; margin: 10px 0 0; font-size: 13px; color: var(--ink-soft) }
+.modeline[hidden], .linkbtn[hidden] { display: none }
+.linkbtn { appearance: none; border: 0; background: none; padding: 4px 0; color: var(--gold); font: inherit; text-decoration: underline; text-underline-offset: 3px; cursor: pointer }
+
+/* ---- full screen: the player (stage + transport) fills the screen; the transport hides while playing */
+.player.fs { position: fixed; inset: 0; z-index: 100; width: 100%; height: 100%; background: #000 }
+.player.fs .stage { position: absolute; inset: 0; width: 100%; height: 100%; aspect-ratio: auto; border-radius: 0; box-shadow: none }
+.player.fs .bar {
+  position: absolute; left: 0; right: 0; bottom: 0; z-index: 5;
+  padding: 30px max(16px, env(safe-area-inset-right)) max(14px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: linear-gradient(rgba(0, 0, 0, 0), rgba(0, 0, 0, .78) 55%); transition: opacity .3s;
+}
+.player.fs .icon { background: rgba(7, 6, 10, .5) }
+.player.fs.idle-ui .bar { opacity: 0; pointer-events: none }
+.player.fs.idle-ui { cursor: none }
+.player.pseudo-fs { height: 100vh; height: 100dvh }
 
 .about { display: grid; gap: 14px; padding: 26px 0 48px; max-width: 70ch }
 .about h2 { margin: 0; font: 700 13px/1.3 var(--f-display); letter-spacing: .18em; text-transform: uppercase; color: var(--gold) }
@@ -90,21 +176,15 @@ a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid v
 .about ol { margin: 0; padding-left: 1.2em; color: var(--ink-soft) }
 .about li { margin: 2px 0 }
 .about li b { color: var(--ink); font-weight: 600 }
+.about .warnline { color: var(--ink) }
+.about .warnline b { color: var(--gold) }
 .dl { display: inline-flex; gap: 14px; flex-wrap: wrap }
 .dl a { color: var(--gold); text-underline-offset: 3px }
 
-.err { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px; background: rgba(120, 10, 10, .85); color: #fff; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; max-height: 50%; overflow: auto }
-.hud { position: absolute; right: 8px; top: 8px; padding: 4px 8px; background: rgba(0, 0, 0, .6); font: 11px/1.3 ui-monospace, monospace; color: #9f9; pointer-events: none; white-space: pre }
+.err { position: absolute; left: 0; right: 0; bottom: 0; z-index: 4; padding: 10px 14px; background: rgba(120, 10, 10, .85); color: #fff; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; max-height: 50%; overflow: auto }
+.hud { position: absolute; right: 8px; top: 8px; z-index: 4; padding: 4px 8px; background: rgba(0, 0, 0, .6); font: 11px/1.3 ui-monospace, monospace; color: #9f9; pointer-events: none; white-space: pre }
 
-@media (max-width: 600px) {
-  .gate { gap: 8px; padding: 10px }
-  .gate .sub, .gate .stages { display: none }
-  .gate h1 { font-size: clamp(24px, 8vw, 34px) }
-  .btn { font-size: 11px; padding: 9px 12px }
-  .fine { font-size: 11px; gap: 2px 10px }
-  .fine input { width: 14px; height: 14px }
-}
-@media (prefers-reduced-motion: reduce) { .btn, .icon { transition: none } }
+@media (prefers-reduced-motion: reduce) { .btn, .icon, .player.fs .bar { transition: none } }
 </style>
 </head>
 <body>
@@ -114,45 +194,59 @@ a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid v
 </header>
 
 <main class="wrap">
-  <div class="stage" id="stage">
-    <canvas id="gl" aria-label="Magnum Opus, real-time render"></canvas>
-    <video id="vid" hidden playsinline controls preload="none" poster="poster.jpg">
-      <source src="magnum-opus.mp4" type="video/mp4">
-    </video>
-    <div class="gate" id="gate">
-      <h1>Magnum Opus</h1>
-      <p class="stages"><b style="color:#b7a9c9">Nigredo</b> · <b style="color:#dfeeff">Albedo</b> · <b style="color:#f3c867">Citrinitas</b> · <b style="color:#ff6a4d">Rubedo</b></p>
-      <p class="sub">A 30-second Jungian eurodance in four alchemical operations. Rendered live in your browser, or watch the same thing as a video.</p>
-      <div class="btns">
-        <button class="btn" id="playLive">▶ Play live</button>
-        <button class="btn alt" id="playVideo">▶ Watch the MP4</button>
+  <div class="player" id="player">
+    <div class="stage" id="stage">
+      <canvas id="gl" aria-label="Magnum Opus, real-time render"></canvas>
+      <video id="vid" hidden playsinline preload="metadata" poster="poster.jpg" aria-label="Magnum Opus, video">
+        <source src="magnum-opus.mp4" type="video/mp4">
+      </video>
+      <div class="gate" id="gate">
+        <div class="gate-in">
+          <h1>Magnum Opus</h1>
+          <p class="stages"><b style="color:#c9bcdb">Nigredo</b> · <b style="color:#dfeeff">Albedo</b> · <b style="color:#f3c867">Citrinitas</b> · <b style="color:#ff7a5e">Rubedo</b></p>
+          <p class="sub">A 30-second Jungian eurodance in four alchemical operations. Rendered live in your browser, or watch the same thing as a video.</p>
+          <div class="warn" id="warn">
+            <p class="wt" style="margin:0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 15.6 14.6H.4zm-.9 5v4.6h1.8V5.8zm0 5.9v1.8h1.8v-1.8z" fill-rule="evenodd"/></svg><b>Photosensitivity warning:</b> flashing lights and fast strobing, strongest from 0:21 to 0:29.</p>
+            <label class="check"><input type="checkbox" id="reduce"> Reduce flashing</label>
+          </div>
+          <div class="btns">
+            <button class="btn" id="playLive"><span class="lbl">▶ Play live</span></button>
+            <button class="btn alt" id="playVideo"><span class="lbl">▶ Watch the MP4</span><span class="ff">full flashing</span></button>
+          </div>
+          <p class="fine">Sound on · 0:30</p>
+          <p class="status" id="status" role="status" aria-live="polite"></p>
+          <span class="prog" id="prog" aria-hidden="true" hidden><i></i></span>
+        </div>
       </div>
-      <p class="fine">
-        <span>Sound on</span>
-        <span>Contains flashing light</span>
-        <label><input type="checkbox" id="reduce"> Reduce flashing</label>
-      </p>
-      <p class="status" id="status" role="status" aria-live="polite"></p>
+      <div class="chips">
+        <p class="chip" id="note" role="status" aria-live="polite" hidden></p>
+        <button class="chip" id="slowChip" hidden></button>
+      </div>
     </div>
-  </div>
 
-  <div class="bar">
-    <button class="icon" id="toggle" aria-label="Play">
-      <svg viewBox="0 0 16 16" id="iconPlay"><path d="M4 2.5v11l9-5.5z"/></svg>
-    </button>
-    <div class="track" id="track" role="slider" aria-label="Position" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" tabindex="0">
-      <div class="seg" style="--c:#6e5a86"><span>Nigredo</span></div>
-      <div class="seg" style="--c:#cfe3ff"><span>Albedo</span></div>
-      <div class="seg" style="--c:#f3c867"><span>Citrinitas</span></div>
-      <div class="seg" style="--c:#ff4b33"><span>Rubedo</span></div>
-      <div class="seg" style="--c:#fff1c9"></div>
-      <div class="head" id="head"></div>
+    <div class="bar" id="bar">
+      <button class="icon" id="toggle" aria-label="Play">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>
+      </button>
+      <div class="track" id="track" role="slider" aria-label="Position" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" aria-valuetext="0:00 of 0:30, Nigredo" tabindex="0">
+        <div class="seg" style="--c:#6e5a86"><span>Nigredo</span></div>
+        <div class="seg" style="--c:#cfe3ff"><span>Albedo</span></div>
+        <div class="seg" style="--c:#f3c867"><span>Citrinitas</span></div>
+        <div class="seg" style="--c:#ff4b33"><span>Rubedo</span></div>
+        <div class="seg" style="--c:#fff1c9"></div>
+        <div class="head" id="head"></div>
+      </div>
+      <span class="time" id="time"><span id="cur">0:00</span><span class="dur"> / 0:30</span></span>
+      <button class="icon rf" id="rf" aria-pressed="false" aria-label="Reduce flashing" title="Reduce flashing (live render; the MP4 always has full flashing)">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M9.6 .8 3 9.2h4.1L6.2 15.2l6.7-8.6H8.7z"/><path class="slash" d="M1.6 2.9 2.9 1.6l11.5 11.5-1.3 1.3z"/></svg>
+        <span class="lbl" aria-hidden="true">Reduce flashing</span>
+      </button>
+      <button class="icon" id="fs" aria-label="Full screen">
+        <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h5v2H4v3H2zm7 0h5v5h-2V4H9zM2 9h2v3h3v2H2zm10 0h2v5H9v-2h3z"/></svg>
+      </button>
     </div>
-    <span class="time" id="time">0:00 / 0:30</span>
-    <button class="icon" id="fs" aria-label="Full screen">
-      <svg viewBox="0 0 16 16"><path d="M2 2h5v2H4v3H2zm7 0h5v5h-2V4H9zM2 9h2v3h3v2H2zm10 0h2v5H9v-2h3z"/></svg>
-    </button>
   </div>
+  <p class="modeline" id="modeline" hidden><span id="modeText"></span><button class="linkbtn" id="switchMode" type="button"></button></p>
 
   <section class="about">
     <h2>The Great Work, in thirty seconds</h2>
@@ -164,6 +258,7 @@ a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid v
       <li><b>Rubedo · XXI The World.</b> The drop: the mandala of the Self, the chemical wedding, and a chorus that turns lead to gold.</li>
     </ol>
     <p>After Carl Jung, the paintings of Alex Grey, the Tarot, Alejandro Jodorowsky’s <cite>The Holy Mountain</cite>, anime title cards and 1990s eurodance. Every frame is drawn by fragment shaders from the time code; the music, the vocoder and the voices were synthesized from code too.</p>
+    <p class="warnline"><b>Photosensitivity warning:</b> the piece has rapid flashing and strobing light, strongest from 0:21 to 0:29. “Reduce flashing” tones it down in the live render; the MP4 and the download always have full flashing.</p>
     <p class="dl"><a href="magnum-opus.mp4" download>Download the MP4</a><a href="magnum-opus.mp3" download>Download the track</a></p>
   </section>
 </main>
@@ -200,24 +295,32 @@ a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid v
     return;
   }
 
-  const reduce = $('reduce');
-  try { reduce.checked = localStorage.getItem('mo-reduce') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { reduce.checked = matchMedia('(prefers-reduced-motion: reduce)').matches; }
-  reduce.addEventListener('change', () => { MO.reduced = reduce.checked; try { localStorage.setItem('mo-reduce', reduce.checked ? '1' : '0'); } catch (e) {} });
-  MO.reduced = reduce.checked;
+  const player = $('player'), bar = $('bar'), track = $('track'), head = $('head'), cur = $('cur');
+  const playLiveBtn = $('playLive'), playVideoBtn = $('playVideo'), toggleBtn = $('toggle'), rfBtn = $('rf'), fsBtn = $('fs');
+  const reduce = $('reduce'), note = $('note'), slowChip = $('slowChip'), prog = $('prog');
+  const modeline = $('modeline'), modeText = $('modeText'), switchBtn = $('switchMode');
+  const clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  const hasGL2 = (() => {
+    try { return !!document.createElement('canvas').getContext('webgl2'); } catch (e) { return false; }
+  })();
 
-  const poster = new Image();
-  poster.onload = () => gate.style.setProperty('--poster', 'url(poster.jpg)');
-  poster.src = 'poster.jpg';
-
-  const audio = new Audio();
-  audio.preload = 'auto';
-  audio.src = 'magnum-opus.mp3';
-  let audioOk = true;
-  audio.addEventListener('error', () => { audioOk = false; });
-
+  // ---- state
   let mode = 'idle';           // idle | live | video
-  let inited = null, playing = false, anchor = 0, pausedAt = 0, raf = 0;
-  let ema = 16, lastTs = 0, lastQ = 0;
+  let inited = null;           // MO.init promise for the current WebGL context
+  let playing = false;         // live playback running
+  let anchor = 0;              // performance.now() at audio time 0 (the clock follows audio.currentTime)
+  let startFrom = 0;           // where this live run started; the frame holds there while the first sound is still in the output buffer
+  let lastVis = 0;             // live time is monotonic within a run
+  let pausedAt = 0;            // live position while paused
+  let shownT = 0;              // time of the frame on the canvas
+  let raf = 0, vraf = 0;
+  let session = 0;             // bumped by every start/switch so a slow init never resumes a stale request
+  let gateFrom = 0;            // where the gate's buttons start (0, or the paused time after a graphics reset)
+  let pendingSeek = null;      // video seek waiting for metadata
+  let videoFailed = false;
+  let qSet = false;
+  let initTarget = null;       // a seek made while a live start waits for init moves the start point
   const debug = P.has('debug');
   let hud = null;
   if (debug) { hud = document.createElement('div'); hud.className = 'hud'; stage.appendChild(hud); }
@@ -226,146 +329,555 @@ a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid v
     console.error(e);
     const d = document.createElement('div'); d.className = 'err'; d.textContent = String(e && e.message || e); stage.appendChild(d);
   }
-
-  function sizeCanvas() {
-    const r = canvas.getBoundingClientRect();
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let w = Math.round(Math.max(320, r.width) * dpr);
-    w = Math.min(w, 1920);
-    const h = Math.round(w * 9 / 16);
-    if (inited && MO.gl) MO.resize(w, h);
-    return { w, h };
+  let noteTimer = 0;
+  function say(msg, ms = 0) {     // a message where the viewer is looking: the gate if it is up, else a chip on the stage
+    clearTimeout(noteTimer);
+    if (!gate.hidden) { status.textContent = msg; note.hidden = true; return; }
+    note.textContent = msg; note.hidden = !msg;
+    if (msg && ms) noteTimer = setTimeout(() => { note.hidden = true; }, ms);
   }
+  function setProgress(done, total) {
+    prog.hidden = !(total && done < total);
+    prog.firstChild.style.width = total ? `${(done / total) * 100}%` : '0';
+  }
+  // two frames: the status text paints before the main thread gets busy with shader work
+  const nextPaint = () => new Promise((res) => {
+    let done = false; const go = () => { if (!done) { done = true; res(); } };
+    requestAnimationFrame(() => setTimeout(go, 0)); setTimeout(go, 120);
+  });
 
-  async function ensureInit() {
+  // ---- reduce flashing: one state shared by the gate checkbox, the transport button and the engine
+  const prm = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function floorQ() { return MO.reduced ? 0.45 : 0.31; }   // fine line work shimmers at very low scale
+  function applyReduced(on) {
+    MO.reduced = on;                       // the engine reads it every frame, so it applies at once
+    reduce.checked = on;
+    rfBtn.setAttribute('aria-pressed', String(on));
+    player.classList.toggle('reduced', on);
+    if (MO.ready && MO.quality < floorQ()) MO.setQuality(floorQ());
+    if (mode === 'live' && !playing) drawPaused();
+    updateModeline(); updateSlowChip();
+  }
+  function setReducedByUser(on) {
+    try { localStorage.setItem('mo-reduce', on ? '1' : '0'); } catch (e) { /* private mode */ }
+    applyReduced(on);
+    if (on && mode === 'video') {
+      // the MP4 has the flashes baked in; only the live render can reduce them
+      if (hasGL2) { const t = vid.ended ? 0 : vid.currentTime, go = !vid.paused && !vid.ended; startLive(t, go).then(() => say('Reduce flashing is on, so this is the live render now. The MP4 always has full flashing.', 6000)); }
+      else { vid.pause(); say('The MP4 always has full flashing, and this browser can’t run the live render.', 8000); }
+    }
+  }
+  reduce.addEventListener('change', () => setReducedByUser(reduce.checked));
+  rfBtn.addEventListener('click', () => setReducedByUser(!MO.reduced));
+
+  const poster = new Image();
+  poster.onload = () => gate.style.setProperty('--poster', 'url(poster.jpg)');
+  poster.src = 'poster.jpg';
+
+  // ---- audio, and the output latency the visuals have to wait for
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = 'magnum-opus.mp3';
+  let audioOk = true;
+  audio.addEventListener('error', () => { audioOk = false; });
+  // The <audio> element can't be routed through WebAudio (file:// media would go silent), so a
+  // separate AudioContext on the same output only reports the device latency (Bluetooth adds
+  // 150-250 ms). The picture runs that much behind audio.currentTime. Falls back to 0.
+  let actx = null, outLat = 0;
+  function wakeAudioCtx() {           // call from a click: a context made in a gesture starts running
+    if (!audioOk) return;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!actx && AC) { try { actx = new AC(); } catch (e) { actx = null; } }
+    if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+  }
+  function sleepAudioCtx() { if (actx && actx.state === 'running') actx.suspend().catch(() => {}); }
+  function readLatency() {
+    if (!actx || actx.state !== 'running') return outLat;
+    const l = actx.outputLatency || actx.baseLatency || 0;
+    return Number.isFinite(l) ? clamp(l, 0, 0.5) : 0;
+  }
+  // iOS only lets a media element start inside a gesture; the shader compile can outlast that,
+  // so on a first play the element starts muted inside the click and is unmuted once we're ready
+  function primeAudio() { if (!audioOk) return; audio.muted = true; audio.play().catch(() => {}); }
+
+  // ---- WebGL init
+  function canvasSize() {
+    const r = stage.getBoundingClientRect();
+    const cssW = Math.min(r.width, r.height * 16 / 9) || 640;   // the picture is letterboxed in odd-shaped full screens
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const w = Math.min(1920, Math.round(Math.max(320, cssW * dpr)));
+    return { w, h: Math.round(w * 9 / 16) };
+  }
+  function sizeCanvas() {
+    // never size a hidden canvas: the stage would measure for the video and shrink it
+    if (!MO.ready || canvas.hidden) return;
+    const { w, h } = canvasSize(), s = MO.size();
+    if (w === s.W && h === s.H) return;
+    MO.resize(w, h);                          // this clears the drawing buffer...
+    if (mode === 'live' && !playing) drawPaused();   // ...so a paused frame is drawn again before the next paint
+  }
+  function ensureInit(at = 0) {
     if (!inited) {
-      const { w, h } = sizeCanvas();
-      const coarse = matchMedia('(pointer: coarse)').matches;
-      MO.quality = coarse ? 0.6 : 0.85;
-      inited = MO.init({ canvas, width: w, height: h });
+      const { w, h } = canvasSize();
+      if (!qSet) { MO.quality = coarse ? 0.6 : 0.85; qSet = true; }
+      const p = MO.init({ canvas, width: w, height: h, warmAt: at, onProgress: setProgress });
+      inited = p;
+      p.then(() => setProgress(0, 0), () => { setProgress(0, 0); if (inited === p) inited = null; });
     }
     return inited;
   }
+  async function initForSession(my, at) {
+    for (let i = 0; i < 3; i++) {
+      try { await ensureInit(at); return true; }
+      catch (e) {
+        if (my !== session) return false;
+        if (e && /superseded/.test(e.message)) continue;      // a context restore started a fresh init
+        throw e;
+      }
+    }
+    return false;
+  }
 
-  const clock = () => (performance.now() - anchor) / 1000;
+  // ---- clock
+  const clock = () => (performance.now() - anchor) / 1000;   // tracks audio.currentTime
+  function liveTime() {
+    let t = clock() - outLat;
+    if (t < startFrom) t = startFrom;     // the first sound is still in the output buffer: hold the start frame
+    if (t < lastVis) t = lastVis;         // audio stall or latency update: hold rather than step back
+    return t;
+  }
 
-  function fmt(t) { t = Math.max(0, Math.min(DUR, t)); return `0:${String(Math.floor(t)).padStart(2, '0')}`; }
+  function fmt(t) { t = clamp(t, 0, DUR); return `0:${String(Math.floor(t)).padStart(2, '0')}`; }
+  let lastAria = '';
   function progress(t) {
-    $('head').style.left = `calc(${(Math.min(t, DUR) / DUR) * 100}% - 1px)`;
-    $('time').textContent = `${fmt(t)} / 0:30`;
-    $('track').setAttribute('aria-valuenow', t.toFixed(1));
+    head.style.left = `calc(${(clamp(t, 0, DUR) / DUR) * 100}% - 1px)`;
+    const f = fmt(t);
+    if (cur.textContent !== f) cur.textContent = f;
+    const sec = MO.section(Math.min(t, DUR - 1e-3)).stage;
+    const txt = `${f} of 0:30, ${sec}`;
+    if (txt !== lastAria) {
+      lastAria = txt;
+      track.setAttribute('aria-valuenow', String(Math.floor(clamp(t, 0, DUR))));
+      track.setAttribute('aria-valuetext', txt);
+    }
   }
   function setIcon(isPlaying) {
-    $('toggle').innerHTML = isPlaying
-      ? '<svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4zm5 0h3v11H9z"/></svg>'
-      : '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>';
-    $('toggle').setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+    toggleBtn.innerHTML = isPlaying
+      ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5h3v11H4zm5 0h3v11H9z"/></svg>'
+      : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4 2.5v11l9-5.5z"/></svg>';
+    toggleBtn.setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+    poke();
+  }
+  function drawPaused() {
+    if (MO.ready && !canvas.hidden && mode === 'live') MO.render(shownT);
+    progress(shownT); updateHud(shownT);
   }
 
-  function loop(ts) {
-    if (!playing) return;
-    let t = clock();
-    if (audioOk && !audio.paused && audio.readyState >= 2) {
-      const drift = audio.currentTime - t;
-      if (Math.abs(drift) > 0.25) anchor = performance.now() - audio.currentTime * 1000;
-      else anchor -= drift * 1000 * 0.08;
-      t = clock();
-    }
-    if (t >= DUR) { finish(); return; }
-    MO.render(Math.max(0, t));
-    progress(t);
-    // adapt render scale to keep the frame rate up
+  // ---- adaptive quality: render scale follows the frame rate, relative to the display's own cadence
+  let cadence = 1000 / 60;   // display frame interval, measured while idle
+  const dts = [];
+  let lastTs = 0, lastChange = 0, qCeil = 1, slowSince = 0, slowShown = false, fps = 0, fpsN = 0, fpsT0 = 0;
+  function probeCadence() {
+    const iv = []; let last = 0;
+    const f = (now) => {
+      if (last) iv.push(now - last);
+      last = now;
+      if (iv.length < 30) requestAnimationFrame(f);
+      else { iv.sort((a, b) => a - b); cadence = clamp(iv[iv.length >> 1], 4, 100); }
+    };
+    requestAnimationFrame(f);
+  }
+  if (document.readyState === 'complete') setTimeout(probeCadence, 300); else addEventListener('load', () => setTimeout(probeCadence, 300), { once: true });
+  function resetAdapt() { dts.length = 0; lastTs = 0; fpsN = 0; fpsT0 = 0; slowSince = 0; }
+  function adapt(ts) {
+    const now = performance.now();
+    if (!fpsT0) fpsT0 = now;
+    fpsN++;
+    if (now - fpsT0 >= 1000) { fps = Math.round((fpsN * 1000) / (now - fpsT0)); fpsN = 0; fpsT0 = now; }
     if (lastTs) {
-      const dt = Math.min(100, ts - lastTs); ema = ema * 0.9 + dt * 0.1;
-      const now = performance.now();
-      if (ema > 24 && MO.quality > 0.35 && now - lastQ > 700) { MO.setQuality(MO.quality * 0.85); lastQ = now; }
-      else if (ema < 17.5 && MO.quality < 1 && now - lastQ > 2000) { MO.setQuality(MO.quality * 1.08); lastQ = now; }
+      dts.push(Math.min(250, ts - lastTs));
+      if (dts.length > 30) dts.shift();
+      // decide on ~12 frames, or on fewer when frames are very slow (2-5 fps on software GL)
+      if (dts.length >= 12 || (dts.length >= 4 && dts.reduce((a, b) => a + b, 0) > 800)) {
+        const s = dts.slice().sort((a, b) => a - b);
+        const med = s[s.length >> 1];
+        if (med < cadence * 0.85) cadence = Math.max(4, med);   // the display is faster than the idle probe said
+        const base = Math.max(1000 / 60, cadence);              // aim for 60 fps, or the display's rate if it is slower (30 Hz battery saver)
+        if (med > base * 1.45 && MO.quality > floorQ() + 0.005 && now - lastChange > 600) {
+          qCeil = Math.min(qCeil, MO.quality * 0.92);            // never climb back near a scale that was too slow
+          MO.setQuality(Math.max(floorQ(), MO.quality * 0.85));
+          lastChange = now; dts.length = 0;
+        } else if (med < base * 1.1 && dts.length >= 24 && MO.quality < qCeil - 0.01 && now - lastChange > 3000) {
+          MO.setQuality(Math.min(qCeil, MO.quality * 1.08));
+          lastChange = now; dts.length = 0;
+        }
+        // at the floor and still slow: offer the MP4, without interrupting
+        if (MO.quality <= floorQ() + 0.01 && med > 45) { if (!slowSince) slowSince = now; else if (now - slowSince > 3000) showSlow(); }
+        else slowSince = 0;
+      }
     }
     lastTs = ts;
-    if (hud) { const sz = MO.size(); hud.textContent = `t ${t.toFixed(2)}  bar ${(t / MO.BAR).toFixed(2)}  ${MO.sceneAt(t).id}\n${Math.round(1000 / ema)} fps  q ${MO.quality.toFixed(2)}  ${sz.sw}×${sz.sh}${sz.hdr ? ' hdr' : ''}`; }
+  }
+  function updateHud(t) {
+    if (!hud || !MO.ready) return;
+    const sz = MO.size();
+    hud.textContent = `t ${t.toFixed(2)}  bar ${(t / MO.BAR).toFixed(2)}  ${MO.sceneAt(t).id}\n${playing ? fps + ' fps' : 'paused'}  q ${MO.quality.toFixed(2)}  ${sz.sw}×${sz.sh}${sz.hdr ? ' hdr' : ''}  vsync ${cadence.toFixed(1)} ms  out ${Math.round(outLat * 1000)} ms`;
+  }
+
+  // ---- live playback
+  function loop(ts) {
+    if (!playing) return;
+    if (audioOk && !audio.paused && audio.readyState >= 2) {
+      const drift = audio.currentTime - clock();
+      if (Math.abs(drift) > 0.25) anchor = performance.now() - audio.currentTime * 1000;
+      else anchor -= drift * 1000 * 0.08;
+    }
+    if (actx) outLat += (readLatency() - outLat) * 0.1;
+    const t = liveTime();
+    if (t >= DUR) { finish(); return; }
+    MO.render(t); shownT = lastVis = t;
+    progress(t);
+    adapt(ts);
+    updateHud(t);
     raf = requestAnimationFrame(loop);
   }
 
-  async function startLive(from = 0) {
-    mode = 'live';
-    vid.pause(); vid.hidden = true; canvas.hidden = false;
-    $('playLive').disabled = true; status.textContent = 'Compiling shaders…';
-    try { await ensureInit(); } catch (e) { $('playLive').disabled = false; status.textContent = 'This browser can’t run the live version. Try the MP4.'; showError(e); return; }
-    status.textContent = ''; $('playLive').disabled = false;
-    gate.hidden = true;
-    sizeCanvas();
-    if (audioOk) {
-      try { audio.currentTime = from; await audio.play(); } catch (e) { audioOk = false; }
+  function stopLive() {
+    if (playing) pausedAt = shownT;
+    playing = false; cancelAnimationFrame(raf);
+    audio.pause(); audio.muted = false; sleepAudioCtx();
+  }
+  async function startLive(from = 0, autoplay = true) {
+    const my = ++session;
+    if (!hasGL2) { say('No WebGL2 here, so the live version is off. The MP4 works.', 6000); return; }
+    stopVideo();
+    stopLive();
+    mode = 'live'; canvas.hidden = false; updateModeline();
+    if (autoplay) wakeAudioCtx();
+    if (!MO.ready) {
+      if (autoplay) primeAudio();
+      playLiveBtn.disabled = true;
+      say('Compiling shaders…');
+      initTarget = from;
+      await nextPaint();
+      let ok = false;
+      try { ok = await initForSession(my, from); }
+      catch (e) {
+        if (my !== session) return;
+        initTarget = null;
+        audio.pause(); audio.muted = false;
+        playLiveBtn.disabled = false;
+        if (e && e.contextLost) {
+          // stay in live mode: the restore handler rebuilds and the gate resumes from here
+          pausedAt = shownT = gateFrom = from;
+          showGate('reset', 'The graphics are being reset. Press play again in a moment.');
+        } else {
+          mode = 'idle'; updateModeline();
+          showGate(gateKind, 'This browser can’t run the live version. Try the MP4.'); showError(e);
+        }
+        return;
+      }
+      if (my !== session || !ok) return;
+      if (initTarget !== null) { from = initTarget; initTarget = null; }
+      playLiveBtn.disabled = false;
     }
-    anchor = performance.now() - (audioOk ? audio.currentTime : from) * 1000;
-    playing = true; lastTs = 0; setIcon(true);
+    gate.hidden = true; status.textContent = ''; say('');
+    sizeCanvas();
+    from = clamp(from, 0, DUR - 0.05);
+    if (!autoplay) {
+      audio.pause(); audio.muted = false;
+      pausedAt = shownT = from; setIcon(false); drawPaused();
+      return;
+    }
+    startFrom = lastVis = from;
+    if (audioOk) {
+      audio.muted = false;
+      try { audio.currentTime = from; } catch (e) { /* not seekable yet */ }
+      try { await audio.play(); } catch (e) { /* blocked or interrupted: the picture runs on its own clock */ }
+      if (my !== session) return;
+    }
+    anchor = performance.now() - (audioOk && !audio.paused ? audio.currentTime : from) * 1000;
+    if (actx) outLat = readLatency();
+    playing = true; resetAdapt(); setIcon(true);
     cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
   }
-  function pauseLive() { if (!playing) return; playing = false; pausedAt = clock(); audio.pause(); setIcon(false); }
-  async function resumeLive() {
+  function pauseLive() {
+    if (!playing) return;
+    stopLive(); setIcon(false); updateHud(shownT);
+  }
+  function resumeLive() {
     if (pausedAt >= DUR - 0.05) pausedAt = 0;
-    await startLive(pausedAt);
+    return startLive(pausedAt);
+  }
+  let gateKind = 'start';
+  const GATE = {
+    start: ['▶ Play live', '▶ Watch the MP4'],
+    end: ['↻ Play live again', '▶ Watch the MP4'],
+    'video-end': ['▶ Play live', '↻ Watch the MP4 again'],
+    reset: ['▶ Resume live', '▶ Watch the MP4'],
+    'video-error': ['▶ Play live', '↻ Try the MP4 again'],
+    'video-error-resume': ['▶ Resume live', '↻ Try the MP4 again'],
+  };
+  function showGate(kind, msg = '') {
+    gateKind = kind;
+    playLiveBtn.querySelector('.lbl').textContent = GATE[kind][0];
+    playVideoBtn.querySelector('.lbl').textContent = GATE[kind][1];
+    gate.hidden = false; note.hidden = true; slowChip.hidden = true;
+    status.textContent = msg;
+    poke();
   }
   function finish() {
-    playing = false; audio.pause(); setIcon(false); pausedAt = 0;
-    MO.render(DUR - 1e-3); progress(DUR);
-    $('playLive').textContent = '↻ Play live again';
-    gate.hidden = false;
+    stopLive(); setIcon(false);
+    shownT = DUR - 1e-3; MO.render(shownT); progress(DUR); pausedAt = 0; gateFrom = 0;
+    showGate('end');
   }
-  function startVideo() {
-    pauseLive();
-    mode = 'video';
-    gate.hidden = true; canvas.hidden = true; vid.hidden = false;
-    if (!vid.currentSrc) vid.load();
-    vid.play().catch(() => {});
-  }
-  vid.addEventListener('timeupdate', () => { if (mode === 'video') progress(vid.currentTime); });
-  vid.addEventListener('play', () => { if (mode === 'video') setIcon(true); });
-  vid.addEventListener('pause', () => { if (mode === 'video') setIcon(false); });
 
-  $('playLive').addEventListener('click', () => startLive(0));
-  $('playVideo').addEventListener('click', startVideo);
-  $('toggle').addEventListener('click', () => {
-    if (mode === 'video') { vid.paused ? vid.play() : vid.pause(); return; }
-    if (playing) pauseLive(); else if (mode === 'live') resumeLive(); else startLive(0);
+  // ---- video mode
+  function seekVideo(t) {
+    t = clamp(t, 0, DUR - 0.05);
+    if (vid.readyState >= 1) { pendingSeek = null; try { vid.currentTime = t; } catch (e) { pendingSeek = t; } }
+    else pendingSeek = t;
+  }
+  vid.addEventListener('loadedmetadata', () => { if (pendingSeek !== null) { const t = pendingSeek; pendingSeek = null; try { vid.currentTime = t; } catch (e) { /* ignore */ } } });
+  function stopVideo() { cancelAnimationFrame(vraf); vraf = 0; if (!vid.paused) vid.pause(); vid.hidden = true; }
+  let videoFrom = 0;
+  function startVideo(from = 0, autoplay = true) {
+    ++session;
+    videoFrom = clamp(from, 0, DUR - 0.05);
+    stopLive();
+    mode = 'video';
+    gate.hidden = true; status.textContent = ''; note.hidden = true; slowChip.hidden = true;
+    canvas.hidden = true; vid.hidden = false;
+    if (videoFailed || vid.networkState === 3 /* NETWORK_NO_SOURCE */) { videoFailed = false; pendingSeek = null; vid.load(); }
+    seekVideo(from);
+    progress(from);
+    if (autoplay) vid.play().catch(() => {}); else vid.pause();
+    setIcon(autoplay); updateModeline();
+  }
+  function vloop() {
+    if (mode !== 'video' || vid.paused) { vraf = 0; return; }
+    progress(vid.currentTime);
+    vraf = requestAnimationFrame(vloop);
+  }
+  vid.addEventListener('play', () => { if (mode !== 'video') return; gate.hidden = true; setIcon(true); updateModeline(); if (!vraf) vraf = requestAnimationFrame(vloop); });
+  vid.addEventListener('pause', () => { if (mode === 'video') { setIcon(false); progress(vid.currentTime); } });
+  vid.addEventListener('seeked', () => { if (mode === 'video') progress(vid.currentTime); });
+  vid.addEventListener('ended', () => { if (mode !== 'video') return; setIcon(false); progress(DUR); gateFrom = 0; showGate('video-end'); updateModeline(); });
+  // the capture phase also sees errors fired on <source>, which is where a missing file reports
+  vid.addEventListener('error', () => {
+    videoFailed = true;
+    if (mode !== 'video') return;
+    ++session; cancelAnimationFrame(vraf); vraf = 0;
+    vid.hidden = true; canvas.hidden = false; mode = 'idle'; setIcon(false); updateModeline();
+    gateFrom = videoFrom; progress(videoFrom);   // the live render can pick up where the viewer was
+    showGate(gateFrom > 0.05 ? 'video-error-resume' : 'video-error', hasGL2 ? 'The MP4 could not be loaded. The live render still works.' : 'The MP4 could not be loaded.');
+  }, true);
+
+  // ---- mode line and the "running slowly" hint
+  function mp4Label() { return MO.reduced ? 'Watch the MP4 (full flashing)' : 'Watch the MP4 instead'; }
+  function updateModeline() {
+    modeline.hidden = mode === 'idle';
+    if (mode === 'live') {
+      modeText.textContent = slowShown ? 'Live render, running slowly on this device.' : 'Live render in your browser.';
+      switchBtn.textContent = mp4Label(); switchBtn.hidden = false;
+    } else if (mode === 'video') {
+      modeText.textContent = (vid.ended ? 'The MP4 has ended.' : 'Playing the MP4.') + (MO.reduced ? ' It always has full flashing.' : '');
+      switchBtn.textContent = 'Switch to the live render'; switchBtn.hidden = !hasGL2;
+    }
+  }
+  function updateSlowChip() { slowChip.textContent = `Running slowly here. ${MO.reduced ? 'Watch the MP4 (full flashing)' : 'Watch the MP4'} →`; }
+  let slowTimer = 0;
+  function showSlow() {
+    if (slowShown || mode !== 'live') return;
+    slowShown = true; updateSlowChip(); updateModeline();
+    slowChip.hidden = false;
+    slowTimer = setTimeout(() => { slowChip.hidden = true; }, 12000);
+  }
+  slowChip.addEventListener('click', () => { clearTimeout(slowTimer); startVideo(shownT, true); });
+  switchBtn.addEventListener('click', () => {
+    if (mode === 'live') startVideo(shownT, playing);
+    else if (mode === 'video') startLive(vid.ended ? 0 : vid.currentTime, !vid.paused && !vid.ended);
   });
 
-  function seekTo(t) {
-    t = Math.max(0, Math.min(DUR - 0.05, t));
-    if (mode === 'video') { vid.currentTime = t; return; }
-    if (mode !== 'live') { startLive(t); return; }
-    if (playing) { if (audioOk) audio.currentTime = t; anchor = performance.now() - t * 1000; }
-    else { pausedAt = t; MO.render(t); progress(t); }
+  // ---- transport
+  function toggle() {
+    if (mode === 'video') { if (vid.paused || vid.ended) { gate.hidden = true; vid.play().catch(() => {}); } else vid.pause(); return; }
+    if (playing) pauseLive();
+    else if (mode === 'live') resumeLive();
+    else startLive(gateFrom);
   }
-  const track = $('track');
+  playLiveBtn.addEventListener('click', () => startLive(gateFrom));
+  playVideoBtn.addEventListener('click', () => startVideo(gateFrom));
+  toggleBtn.addEventListener('click', toggle);
+
+  function curT() { return mode === 'video' ? vid.currentTime : shownT; }
+  function seekTo(t) {
+    t = clamp(t, 0, DUR - 0.05);
+    if (mode === 'video') { seekVideo(t); progress(t); return; }
+    if (mode !== 'live') { startLive(t); return; }
+    if (playing) {
+      if (audioOk && !audio.paused) audio.currentTime = t;
+      anchor = performance.now() - t * 1000; startFrom = lastVis = t;
+    } else {
+      pausedAt = shownT = t;
+      if (initTarget !== null) initTarget = t;
+      if (MO.ready) gate.hidden = true;     // seeking means "show me": reveal the frame
+      drawPaused();
+    }
+  }
   let dragging = false;
   const posT = (e) => { const r = track.getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * DUR; };
-  track.addEventListener('pointerdown', (e) => { dragging = true; track.setPointerCapture(e.pointerId); seekTo(posT(e)); });
+  track.addEventListener('pointerdown', (e) => { dragging = true; try { track.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ } seekTo(posT(e)); });
   track.addEventListener('pointermove', (e) => { if (dragging) seekTo(posT(e)); });
   track.addEventListener('pointerup', () => { dragging = false; });
+  track.addEventListener('pointercancel', () => { dragging = false; });
   track.addEventListener('keydown', (e) => {
-    const cur = mode === 'video' ? vid.currentTime : (playing ? clock() : pausedAt);
-    if (e.key === 'ArrowRight') { seekTo(cur + MO.BAR); e.preventDefault(); }
-    if (e.key === 'ArrowLeft') { seekTo(cur - MO.BAR); e.preventDefault(); }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    const k = e.key;
+    let handled = true;
+    if (k === ' ' || k === 'k' || k === 'K' || k === 'Enter') toggle();
+    else if (k === 'ArrowRight' || k === 'ArrowUp') seekTo(curT() + MO.BAR);
+    else if (k === 'ArrowLeft' || k === 'ArrowDown') seekTo(curT() - MO.BAR);
+    else if (k === 'PageUp') seekTo(curT() + 4 * MO.BAR);
+    else if (k === 'PageDown') seekTo(curT() - 4 * MO.BAR);
+    else if (k === 'Home') seekTo(0);
+    else if (k === 'End') seekTo(DUR - 0.05);
+    else handled = false;
+    if (handled) { e.preventDefault(); e.stopPropagation(); }
   });
 
-  $('fs').addEventListener('click', () => {
-    if (mode === 'video' && vid.webkitEnterFullscreen && !stage.requestFullscreen) { vid.webkitEnterFullscreen(); return; }
-    if (document.fullscreenElement) document.exitFullscreen();
-    else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
-    else if (vid.webkitEnterFullscreen) { startVideo(); vid.webkitEnterFullscreen(); }
+  // tap or click on the picture plays and pauses (on touch in full screen, a tap first brings the controls back)
+  let lastPointer = 'mouse', wasIdle = false;
+  // capture phase: runs before the player's pointerdown handler brings the controls back
+  stage.addEventListener('pointerdown', (e) => { lastPointer = e.pointerType; wasIdle = player.classList.contains('idle-ui'); }, true);
+  stage.addEventListener('click', (e) => {
+    if (e.target !== canvas && e.target !== vid) return;
+    if (mode === 'idle') return;
+    if (isFs() && lastPointer === 'touch' && wasIdle) { poke(); return; }
+    toggle();
   });
-  addEventListener('resize', () => { if (inited) sizeCanvas(); });
-  document.addEventListener('fullscreenchange', () => { if (inited) setTimeout(sizeCanvas, 50); });
+
+  // ---- full screen: the player (stage + transport) goes full screen; iPhone gets a CSS full screen
+  let pseudoFs = false;
+  const fsElement = () => document.fullscreenElement || document.webkitFullscreenElement || null;
+  const isFs = () => pseudoFs || fsElement() === player;
+  function setPseudoFs(on) {
+    pseudoFs = on;
+    player.classList.toggle('pseudo-fs', on);
+    document.documentElement.classList.toggle('noscroll', on);
+    fsChanged();
+  }
+  function enterFs() {
+    const req = player.requestFullscreen || player.webkitRequestFullscreen;
+    if (req) {
+      let p = null;
+      try { p = req.call(player, { navigationUI: 'hide' }); } catch (e) { setPseudoFs(true); return; }
+      if (p && p.then) p.then(() => { if (coarse && screen.orientation && screen.orientation.lock) screen.orientation.lock('landscape').catch(() => {}); }, () => setPseudoFs(true));
+      return;
+    }
+    // no element full screen (iPhone): the MP4 can use the native player since it is already
+    // the source; the live render stays live in a CSS full screen, never silently swapped for the MP4
+    if (mode === 'video' && vid.webkitEnterFullscreen && vid.readyState >= 1) { try { vid.webkitEnterFullscreen(); return; } catch (e) { /* fall through */ } }
+    setPseudoFs(true);
+  }
+  function exitFs() {
+    if (pseudoFs) { setPseudoFs(false); return; }
+    const ex = document.exitFullscreen || document.webkitExitFullscreen;
+    if (fsElement() && ex) { try { const p = ex.call(document); if (p && p.catch) p.catch(() => {}); } catch (e) { /* ignore */ } }
+  }
+  function fsChanged() {
+    const on = isFs();
+    player.classList.toggle('fs', on);
+    fsBtn.setAttribute('aria-label', on ? 'Exit full screen' : 'Full screen');
+    fsBtn.innerHTML = on
+      ? '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M5 2h2v5H2V5h3zm4 0h2v3h3v2H9zM2 9h5v5H5v-3H2zm7 0h5v2h-3v3H9z"/></svg>'
+      : '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 2h5v2H4v3H2zm7 0h5v5h-2V4H9zM2 9h2v3h3v2H2zm10 0h2v5H9v-2h3z"/></svg>';
+    if (!on) { try { screen.orientation && screen.orientation.unlock && screen.orientation.unlock(); } catch (e) { /* ignore */ } }
+    poke();
+  }
+  fsBtn.addEventListener('click', () => (isFs() ? exitFs() : enterFs()));
+  document.addEventListener('fullscreenchange', fsChanged);
+  document.addEventListener('webkitfullscreenchange', fsChanged);
+  document.addEventListener('fullscreenerror', () => setPseudoFs(true));
+  document.addEventListener('webkitfullscreenerror', () => setPseudoFs(true));
+
+  // transport auto-hides in full screen while playing; any pointer or key brings it back
+  let idleTimer = 0;
+  const anyPlaying = () => playing || (mode === 'video' && !vid.paused && !vid.ended);
+  function poke() {
+    player.classList.remove('idle-ui');
+    clearTimeout(idleTimer);
+    if (isFs() && anyPlaying()) {
+      idleTimer = setTimeout(() => {
+        if (isFs() && anyPlaying() && !bar.matches(':hover') && !bar.querySelector(':focus-visible')) player.classList.add('idle-ui');
+      }, 2500);
+    }
+  }
+  player.addEventListener('pointermove', poke);
+  player.addEventListener('pointerdown', poke);
+  addEventListener('keydown', poke, true);
+
+  // keyboard: Space/K play-pause (Space keeps its own meaning on buttons and inputs), F full screen
+  addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey || e.defaultPrevented) return;
+    const tg = e.target instanceof Element ? e.target : document.body;
+    if (tg.closest('input, textarea, select, [contenteditable]')) return;
+    const onControl = !!tg.closest('button, a, label, [role="slider"]');
+    if (e.key === ' ' && !onControl) { e.preventDefault(); toggle(); }
+    else if (e.key === 'k' || e.key === 'K') { e.preventDefault(); toggle(); }
+    else if (e.key === 'f' || e.key === 'F') { e.preventDefault(); isFs() ? exitFs() : enterFs(); }
+    else if (e.key === 'Escape' && pseudoFs) setPseudoFs(false);
+    else if (isFs() && (e.key === 'ArrowRight' || e.key === 'ArrowLeft') && !onControl) { e.preventDefault(); seekTo(curT() + (e.key === 'ArrowRight' ? 1 : -1) * MO.BAR); }
+  });
+
+  // ---- resize, rotation, full screen: resize the canvas and redraw a paused frame at once
+  if (window.ResizeObserver) new ResizeObserver(() => sizeCanvas()).observe(stage);
+  addEventListener('resize', sizeCanvas);
   document.addEventListener('visibilitychange', () => { if (document.hidden) pauseLive(); });
-  addEventListener('keydown', (e) => { if (e.key === ' ' && e.target === document.body) { e.preventDefault(); $('toggle').click(); } });
+  addEventListener('pagehide', () => { pauseLive(); vid.pause(); });
 
-  if (!document.createElement('canvas').getContext('webgl2')) {
-    $('playLive').disabled = true;
+  // ---- WebGL context loss (mobile memory pressure, GPU reset): pause, explain, rebuild on restore
+  canvas.addEventListener('webglcontextlost', (e) => {
+    e.preventDefault();                 // lets the browser restore the context (the engine does this too)
+    inited = null;
+    if (mode !== 'live') return;
+    const t = playing ? shownT : pausedAt;
+    stopLive(); setIcon(false);
+    pausedAt = shownT = t; gateFrom = t;
+    showGate('reset', 'The graphics were reset. Press play to continue.');
+  });
+  canvas.addEventListener('webglcontextrestored', () => {
+    inited = null;
+    if (mode !== 'live' && gateKind !== 'reset') return;
+    ensureInit().then(() => {
+      sizeCanvas(); drawPaused();
+      if (!gate.hidden && gateKind === 'reset') status.textContent = 'Graphics restored. Press play to continue.';
+    }).catch(() => { /* the next Play tries again */ });
+  });
+
+  // ---- start-up
+  {
+    let stored = null;
+    try { stored = localStorage.getItem('mo-reduce'); } catch (e) { /* private mode */ }
+    // an explicit choice wins, also over prefers-reduced-motion; without one, follow the system setting
+    applyReduced(stored === '1' || stored === '0' ? stored === '1' : prm);
+  }
+  progress(0);
+  if (!hasGL2) {
+    playLiveBtn.disabled = true;
     status.textContent = 'No WebGL2 here, so the live version is off. The MP4 works.';
   }
-  // ?t=12.5 jumps straight into the live render at that time (handy for testing)
-  if (P.has('t')) { const t0 = +P.get('t') || 0; ensureInit().then(() => { mode = 'live'; gate.hidden = true; pausedAt = t0; MO.render(t0); progress(t0); }).catch(showError); }
+  // ?t=12.5 opens the live render paused at that time (handy for testing); ?debug adds a HUD
+  if (P.has('t') && hasGL2) {
+    const t0 = clamp(+P.get('t') || 0, 0, DUR - 0.05);
+    const my = session;
+    status.textContent = 'Compiling shaders…';
+    ensureInit(t0).then(() => {
+      if (session !== my || mode !== 'idle') return;    // the viewer already chose something
+      mode = 'live'; gate.hidden = true; status.textContent = '';
+      pausedAt = shownT = t0; sizeCanvas(); drawPaused(); updateModeline();
+    }).catch((e) => { status.textContent = 'This browser can’t run the live version. Try the MP4.'; showError(e); });
+  }
 })();
 </script>
 </body>

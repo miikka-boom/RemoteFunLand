@@ -1,13 +1,16 @@
 // MAGNUM OPUS typography layer (owner: type). Everything here is Canvas 2D, drawn by one
-// MO.overlay() callback after tone mapping, so colours appear exactly as drawn; the post
-// pass's flash / impact / vignette / grain land on top. Pure function of t; all times come
-// from score.js (overlayWindows, vocals, drums), never from hard-coded seconds.
+// MO.overlay() callback after tone mapping, so colours appear exactly as drawn. The post
+// pass's flashes go under the type (it stays legible through them); its impact frames,
+// vignette and grain land on top. Pure function of t; all times come from score.js
+// (overlayWindows, vocals, drums), never from hard-coded seconds (the one exception is the
+// measured consonant pre-roll of a few rap words, see PRE_ROLL).
 // The frame is laid out in 1920x1080 units (ctx.scale(H / 1080)).
 (() => {
   'use strict';
   const S = window.SCORE, BEAT = MO.BEAT, BAR = MO.BAR;
   const { clamp, mix, remap, easeOut, easeIn, easeInOut } = MO;
   const TAU = Math.PI * 2;
+  const FRAME = 1 / 30;                 // one frame of the 30 fps master
   const bt = (b) => b * BEAT;
   const hash = (n) => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
   const easeOutBack = (x, c = 1.7) => { x = clamp(x); const y = x - 1; return 1 + (c + 1) * y * y * y + c * y * y; };
@@ -49,7 +52,7 @@
   const MARKS = [
     { id: 'nigredo', a: N1, b: SEC.nigredo.t1 },
     { id: 'albedo', a: A1, b: SEC.albedo.t1 },
-    { id: 'citrinitas', a: C1, b: R0 },
+    { id: 'citrinitas', a: C1, b: R0 - 0.095, out: 0.15 },   // clear before the gap, with the gauge
     { id: 'rubedo', a: R1, b: SEC.rubedo.t1 },
   ];
 
@@ -224,9 +227,15 @@
       hg.addColorStop(0, 'rgba(255,255,255,0)'); hg.addColorStop(0.5, logo ? 'rgba(255,240,200,0.55)' : 'rgba(255,220,170,0.35)'); hg.addColorStop(1, 'rgba(255,255,255,0)');
       h.fillStyle = hg; h.fillRect(0, hy - px * 0.05, c.width, px * 0.1);
       h.globalCompositeOperation = 'source-over';
-      // crisp light edge
-      h.strokeStyle = logo ? 'rgba(255,248,220,0.7)' : 'rgba(255,255,255,0.55)'; h.lineWidth = Math.max(1, px * 0.012);
-      h.strokeText(str, ox, oy);
+      // crisp light edge, hugging the face from outside: stroke at double width, then cut the
+      // glyph interior away, so the font's overlapping contours (the A's bar, the P's bowl, the
+      // G's spur) leave no lines inside the letters
+      const e = newCanvas(c.width, c.height), ec = e.getContext('2d');
+      ec.font = g.font; ec.letterSpacing = g.letterSpacing; ec.textBaseline = 'alphabetic'; ec.lineJoin = 'round';
+      ec.strokeStyle = logo ? 'rgba(255,248,220,0.7)' : 'rgba(255,255,255,0.55)'; ec.lineWidth = 2 * Math.max(1, px * 0.012);
+      ec.strokeText(str, ox, oy);
+      ec.globalCompositeOperation = 'destination-out'; ec.fillText(str, ox, oy);
+      h.drawImage(e, 0, 0);
       g.drawImage(f, 0, 0);
       // a flat white silhouette of the face (for flare sheens / flashes)
       const wsil = newCanvas(c.width, c.height), wg = wsil.getContext('2d');
@@ -251,17 +260,14 @@
 
   // ================================================================ 1. NIGREDO insert (black)
   function drawNigredo(ctx, t) {
-    if (t < N0 || t >= N1) return false;
-    let invert = false;
-    if (!MO.reduced) {               // exit flicker over the last three frames
-      const dt = N1 - t, fr = 1 / 30 + 1e-4;
-      if (dt <= fr) return false;
-      if (dt <= 2 * fr) invert = true;
-      else if (dt <= 3 * fr) return false;
-    }
-    const u = (t - N0) / (N1 - N0);
-    const bg = invert ? '#f3eee5' : '#000', fg = invert ? '#000' : '#f3eee5';
-    const ember = invert ? '#7a1c10' : '#c4452c';
+    // exit: on the beat-6 kick the card flickers to a negative for one frame (1/30 s, so two
+    // frames live at 60 fps) on a mid-tone paper, a flicker rather than a white-out, then the
+    // scene. Reduced mode cuts straight to the scene.
+    const invert = !MO.reduced && t >= N1 && t < N1 + FRAME;
+    if (t < N0 || (t >= N1 && !invert)) return false;
+    const u = clamp((t - N0) / (N1 - N0));
+    const bg = invert ? '#8d877c' : '#000', fg = invert ? '#0d0a08' : '#f3eee5';
+    const ember = invert ? '#5a140b' : '#c4452c';
     ctx.fillStyle = bg; ctx.fillRect(0, 0, VW, 1080);
     if (t >= N0 + BEAT) return nigredoB(ctx, t, fg, ember), true;   // cut on the next kick
     const z = 1 + 0.03 * easeOut(u) + (MO.reduced ? 0 : 0.008 * MO.env('kick', t, 0.07));
@@ -355,7 +361,7 @@
     const m = MARKS.find((k) => t >= k.a && t < k.b);
     if (!m) return false;
     const st = STYLE[m.id], sec = SEC[m.id];
-    const kIn = easeOut(remap(t, m.a, m.a + 0.4)), kOut = remap(t, m.b - 0.1, m.b);
+    const kIn = easeOut(remap(t, m.a, m.a + 0.4)), kOut = MO.smooth(remap(t, m.b - (m.out || 0.1), m.b));
     const a = kIn * (1 - kOut);
     if (a <= 0) return false;
     ctx.save();
@@ -536,20 +542,27 @@
   }
 
   // ================================================================ 4. rap subtitles (fansub)
-  const RAP = S.vocals.rap.map((line, li) => ({
-    li, jp: line.jp, t0: MO.barTime(line.bar),
-    toks: line.text.split(' ').map((w, i) => ({ text: w, t: MO.barTime(line.bar, 0, line.words[i][1]) })),
-  }));
+  // A subtitle must never arrive after its word is heard. Every word leads its score step by
+  // two frames, and words that open on a long consonant lead by that consonant's length plus
+  // one frame, so even the first frame drawn at or after the lead time lands before the sound.
+  // PRE_ROLL: seconds of audible consonant before the step, measured on the rap stem by the
+  // audio build (rap_timing pre_roll_ms); words not listed start on their step.
+  const PRE_ROLL = { Shadow: 0.059, Holy: 0.059, to: 0.045, Self: 0.087, left: 0.030, light: 0.024 };
+  const lead = (word) => Math.max(2 * FRAME, (PRE_ROLL[word] || 0) + FRAME);
+  const RAP = S.vocals.rap.map((line, li) => {
+    const toks = line.text.split(' ').map((w, i) => ({ text: w, t: MO.barTime(line.bar, 0, line.words[i][1]) - lead(line.words[i][0]) }));
+    return { li, jp: line.jp, toks, t0: Math.min(...toks.map((w) => w.t)) };
+  });
   RAP.forEach((l, i) => { l.t1 = i + 1 < RAP.length ? RAP[i + 1].t0 : P1; });
   function drawRap(ctx, t) {
-    if (t < P0 || t >= P1) return false;
+    if (t < RAP[0].t0 || t >= P1) return false;
     const line = RAP.find((l) => t >= l.t0 && t < l.t1);
     if (!line) return false;
     ctx.save();
     ctx.lineJoin = 'round'; ctx.miterLimit = 2;
-    // Japanese line above, whole line at once
-    const ja = remap(t, line.t0, line.t0 + 0.08);
-    ctx.globalAlpha = ja;
+    // Japanese line above, whole line at once, together with the first word (no fade: a fade
+    // would make the first frame faint)
+    ctx.globalAlpha = 1;
     ctx.font = font(F.round, 800, 38);
     ctx.strokeStyle = 'rgba(4,6,20,0.92)'; ctx.lineWidth = 7; ctx.fillStyle = '#d9ecff';
     spaced(ctx, line.jp, 960, 928, 4, 'center', 'both');
@@ -563,10 +576,10 @@
     line.toks.forEach((w, i) => {
       const age = t - w.t;
       if (age >= 0) {
+        // entrance = scale pop only; the word is fully opaque on its first frame
         const k = easeOut(age / 0.1), sc = mix(1.32, 1, k);
         const cx = x + widths[i] / 2;
         ctx.save();
-        ctx.globalAlpha = clamp(age / 0.035);
         ctx.translate(cx, y - 22); ctx.scale(sc, sc); ctx.translate(-cx, -(y - 22));
         // soft drop shadow + thick black outline + fill
         ctx.strokeStyle = 'rgba(0,0,0,0.45)'; ctx.lineWidth = 12;
@@ -591,17 +604,22 @@
     ctx.fillStyle = g; ctx.fillRect(-1600, y0, 3200, h);
     ctx.fillStyle = '#0b0602'; rule(ctx, -1600, y0, 1600, 3); rule(ctx, -1600, y0 + h, 1600, 3);
   }
+  // the band's exit; the chakra gauge fades in as it leaves
+  const CIT_OUT = [C0 + 1.5 * BEAT, C0 + 1.8 * BEAT];
   function drawCitrinitas(ctx, t) {
-    if (t < C0 || t >= C1) return false;
-    const ub = (t - C0) / BEAT;                              // 0..2
+    if (t < C0 || t >= CIT_OUT[1]) return false;
+    const ub = (t - C0) / BEAT;                              // 0..1.8
     const inB = easeOutBack(remap(ub, 0, 0.3), 1.3), inG = easeOutBack(remap(ub, 0.05, 0.36), 1.3), inT = easeOut(remap(ub, 0.08, 0.6));
-    const out = easeIn(remap(ub, 1.68, 2));
+    const out = easeIn(remap(t, CIT_OUT[0], CIT_OUT[1]));
     const L = 3000;
     const bx = (1 - inB) * L - out * L, gx = -(1 - inG) * L + out * L;
     const drift = -36 * ub;
     ctx.save();
-    ctx.translate(960, 322); ctx.rotate(-0.13);
-    // gold stripes (counter-motion, from the left)
+    // lower third, across the bottom terraces under the figure's feet: the summit, the sun and
+    // the body (where the root chakra ignites on this beat) stay clear for the section's first look
+    ctx.translate(960, 944); ctx.rotate(-0.08); ctx.scale(0.8, 0.8);
+    // gold stripes (counter-motion, from the left). The lower stripe's left half is below the
+    // frame edge, so its lettering sits on the right.
     ctx.save(); ctx.translate(gx, 0);
     goldStripe(ctx, -178, 62); goldStripe(ctx, 118, 50);
     ctx.fillStyle = '#140800';
@@ -610,13 +628,16 @@
     ctx.font = font(F.cinzel, 700, 21);
     spaced(ctx, 'OPERATIO TERTIA · 第三章', -880 + drift * 0.6, -139, 8);
     ctx.font = font(F.cinzel, 700, 27);
-    const w1 = spaced(ctx, 'XIX · THE SUN ·', -880 - drift * 0.6, 153, 12);
+    const w1 = measure(ctx, 'XIX · THE SUN ·', 12);
     ctx.font = font(F.min, 800, 29);
-    spaced(ctx, '太陽', -880 - drift * 0.6 + w1 + 22, 154, 4);
+    const x1 = 880 - drift * 0.6 - w1 - 22 - measure(ctx, '太陽', 4);
+    spaced(ctx, '太陽', x1 + w1 + 22, 154, 4);
+    ctx.font = font(F.cinzel, 700, 27);
+    spaced(ctx, 'XIX · THE SUN ·', x1, 153, 12);
     ctx.font = font(F.cinzel, 700, 21);
-    spaced(ctx, 'THE YELLOWING ·', 880 - drift * 0.6 - 76, 151, 8, 'right');
+    spaced(ctx, 'THE YELLOWING ·', x1 - 120 - 76, 151, 8, 'right');
     ctx.font = font(F.min, 800, 25);
-    spaced(ctx, KANJI.citrinitas, 880 - drift * 0.6, 152, 4, 'right');
+    spaced(ctx, KANJI.citrinitas, x1 - 120, 152, 4, 'right');
     ctx.restore();
     // the black band with gold chrome lettering (from the right)
     ctx.save(); ctx.translate(bx, 0);
@@ -648,10 +669,17 @@
 
   // ---- the kundalini gauge: seven chakras light up the right edge on their beats (henshin HUD)
   const CHAK = S.chakras.map((c) => ({ ...c, t: bt(c.beat), css: `rgb(${c.color.map((v) => Math.round(clamp(v) * 255)).join(',')})` }));
+  // C3a: the manga triptych slams in over beats 40.5-42; its right panel sits under the gauge
+  const C3A = [bt(40.5), bt(42)];
   function drawChakraGauge(ctx, t) {
-    const a0 = C1 - 0.3, a1 = R0;
+    // in as the CITRINITAS band leaves (full by the sacral ignition on beat 34); out over
+    // R0-0.245 .. R0-0.095, so the last frames before the gap are the crown alone and the
+    // RUBEDO card arrives on a clean frame
+    const a0 = CIT_OUT[0] + 0.03, a1 = R0 - 0.095;
     if (t < a0 || t >= a1) return false;
-    const a = easeOut(remap(t, a0, a0 + 0.35)) * (1 - remap(t, a1 - 0.08, a1));
+    // dim to 55% while the C3a panels slam in; back to full for the ajna ignition on beat 42
+    const dim = 1 - 0.45 * remap(t, C3A[0], C3A[0] + 0.1) * (1 - remap(t, C3A[1] - 0.12, C3A[1]));
+    const a = easeOut(remap(t, a0, a0 + 0.2)) * (1 - MO.smooth(remap(t, a1 - 0.15, a1))) * dim;
     const x = 1836, y0 = 900, dy = 78;
     ctx.save();
     ctx.globalAlpha = a;
@@ -716,7 +744,8 @@
 
   // ================================================================ 6. RUBEDO insert (white)
   function focusLines(ctx, t, rin, alpha) {
-    const seed = MO.reduced ? 5.0 : Math.floor(t * 12) * 17.0;   // the lines 'boil' at 12 fps
+    // the lines 'boil' once per 16th, locked to the grid (frozen in reduced mode)
+    const seed = MO.reduced ? 5.0 : Math.floor(t / MO.STEP + 1e-3) * 17.0;
     ctx.fillStyle = `rgba(14,6,6,${alpha})`;
     ctx.beginPath();
     const N = 160;
@@ -732,15 +761,24 @@
     }
     ctx.fill();
   }
+  // the announcer's shout: syllable onsets in beats after the gap starts (score.js vocals)
+  const SHOUT = (() => {
+    const v = S.vocals.announcer.find((a) => a.syllables && Math.abs(bt(a.beat) - R0) < BEAT * 2) || { beat: R0 / BEAT, syllables: [0, 0.64, 1.17] };
+    return v.syllables.map((b) => v.beat + b - R0 / BEAT);  // in beats after R0
+  })();
   function drawRubedo(ctx, t) {
     if (t < R0 || t >= R1) return false;
     const ub = (t - R0) / BEAT;                              // 0..2
     const red = '#d6191b', ink = '#140607';
+    const sLast = SHOUT[SHOUT.length - 1], uL = sLast + 0.18;  // Latin line lands after the last syllable
     ctx.fillStyle = '#fbf8f1'; ctx.fillRect(0, 0, VW, 1080);
     focusLines(ctx, t, mix(900, 640, easeIn(ub / 2)), 0.9 * remap(ub, 0.2, 0.7));
     const z = 1 + 0.07 * easeIn(ub / 2);
+    // held-breath tremble, anime style 'on twos' (a new random offset every 1/15 s), so it looks
+    // the same at 30 and 60 fps and never aliases into a frame-by-frame flip
     const amp = MO.reduced ? 0 : 7 * easeIn(ub / 2) + 3;
-    const shx = amp * (Math.sin(t * 97.3) + Math.sin(t * 61.1 + 1.7)) * 0.5, shy = amp * (Math.sin(t * 83.9 + 0.4) + Math.sin(t * 47.3)) * 0.5;
+    const k2 = Math.floor(t * 15 + 2e-3);
+    const shx = amp * (hash(k2 * 1.31 + 0.7) * 2 - 1), shy = 0.7 * amp * (hash(k2 * 2.17 + 5.3) * 2 - 1);
     ctx.translate(960 + shx, 540 + shy); ctx.scale(z, z); ctx.translate(-960, -540);
     // enormous red katakana, stamped glyph by glyph with the shout
     ctx.font = font(F.min, 800, 460);
@@ -749,18 +787,20 @@
     const gap = -14, totalW = cwid.reduce((p, q) => p + q, 0) + gap * 2;
     let x = 960 - totalW / 2;
     const base = 584;
-    const mis = easeIn(remap(ub, 1.0, 2.0)) * (MO.reduced ? 0.3 : 1);
+    const mis = easeIn(remap(ub, sLast, 2.0)) * (MO.reduced ? 0.3 : 1);
     ctx.fillStyle = red; ctx.strokeStyle = red; ctx.lineWidth = 8; ctx.lineJoin = 'round';
     chars.forEach((c, i) => {
-      const age = ub - i * 0.2;
+      // each glyph is stamped on its shouted syllable: full ink on its first frame, the scale
+      // settling from 1.45 is the entrance
+      const age = ub - SHOUT[i];
       if (age >= 0) {
         const k = easeOut(age / 0.18), sc = mix(1.45, 1, k);
         const cx = x + cwid[i] / 2, cy = base - 170;
-        ctx.save(); ctx.globalAlpha = clamp(age / 0.06);
+        ctx.save();
         ctx.translate(cx, cy); ctx.scale(sc, sc); ctx.translate(-cx, -cy);
         if (mis > 0.01) {     // print misregistration: an ink ghost slipping out from under the red
           ctx.fillStyle = `rgba(20,4,8,${0.28 * mis})`;
-          ctx.fillText(c, x + mis * 9 * Math.sin(t * 53 + i * 2), base + mis * 6 * Math.cos(t * 41 + i));
+          ctx.fillText(c, x + mis * 9 * Math.sin(t * 37 + i * 2), base + mis * 6 * Math.cos(t * 29 + i));
           ctx.fillStyle = red;
         }
         ctx.strokeText(c, x, base); ctx.fillText(c, x, base);
@@ -769,9 +809,9 @@
       x += cwid[i] + gap;
     });
     // RUBEDO justified to the katakana's width
-    if (ub >= 0.62) {
-      const k = easeOut((ub - 0.62) / 0.15);
-      ctx.save(); ctx.globalAlpha = clamp((ub - 0.62) / 0.05);
+    if (ub >= uL) {
+      const k = easeOut((ub - uL) / 0.15);
+      ctx.save();
       const cx = 960, cy = 736; ctx.translate(cx, cy); ctx.scale(mix(1.25, 1, k), mix(1.25, 1, k)); ctx.translate(-cx, -cy);
       ctx.font = font(F.cinzel, 900, 150);
       const nat = measure(ctx, 'RUBEDO', 0);
@@ -780,12 +820,12 @@
       ctx.restore();
     }
     // rules and small lines
-    const kr = easeOut(remap(ub, 0.8, 1.15));
+    const kr = easeOut(remap(ub, uL, uL + 0.35));
     ctx.fillStyle = red;
     rule(ctx, 960 - totalW / 2 * kr, 836, 960 + totalW / 2 * kr, 3);
     rule(ctx, 960 - totalW / 2 * kr, 846, 960 + totalW / 2 * kr, 1);
-    if (ub >= 0.95) {
-      ctx.globalAlpha = clamp((ub - 0.95) / 0.1);
+    if (ub >= uL + 0.15) {
+      ctx.globalAlpha = clamp((ub - uL - 0.15) / 0.1);
       ctx.font = font(F.cinzel, 700, 32);
       const wl = measure(ctx, 'XXI · THE WORLD ·', 14);
       ctx.font = font(F.min, 800, 34);
@@ -795,7 +835,7 @@
       ctx.font = font(F.min, 800, 34); spaced(ctx, '世界', x0 + wl + 20, 901, 6);
       ctx.globalAlpha = 1;
     }
-    if (ub >= 0.3) {
+    if (ub >= SHOUT[1]) {    // the header lands with the second syllable
       ctx.fillStyle = ink; ctx.font = font(F.cinzel, 600, 22);
       spaced(ctx, 'OPERATIO QUARTA · THE REDDENING', 150, 140, 9);
       ctx.font = font(F.min, 800, 26); ctx.fillStyle = red;
@@ -829,7 +869,9 @@
     // kick pump; on the closing clap fill of the last bar every clap punches the line
     const kp = 1 + 0.03 * MO.env('kick', t, 0.1) + (line.li === 3 ? 0.05 * MO.env('clap', t, 0.08) * remap(t, line.t1 - BEAT * 1.05, line.t1 - BEAT) : 0);
     let shx = 0;
-    if (line.li === 3 && !MO.reduced) shx = 9 * MO.env('clap', t, 0.06) * Math.sin(t * 90);
+    // each clap of the closing fill knocks the line sideways, alternating left / right (locked
+    // to the claps, not an oscillator, so it cannot alias at 30 fps)
+    if (line.li === 3 && !MO.reduced) shx = 9 * MO.env('clap', t, 0.06) * (MO.count('clap', t) % 2 ? 1 : -1);
     ctx.save();
     ctx.translate(960 + shx, lay.base - lay.px * 0.3); ctx.scale(kp, kp); ctx.translate(-960, -(lay.base - lay.px * 0.3));
     // the two big bars: a rainbow laser sunburst behind each word as it lands
@@ -837,7 +879,7 @@
       for (const w of lay.words) {
         const age = t - w.t;
         if (age < 0 || age > 0.7) continue;
-        const k = Math.exp(-age / 0.2) * (MO.reduced ? 0.5 : 1);
+        const k = Math.exp(-age / 0.2) * (MO.reduced ? 0.15 : 1);   // reduced: a faint glow, no strobe
         const cx = w.x + w.w / 2, cy = lay.base - lay.px * 0.35;
         ctx.save();
         ctx.translate(cx, cy); ctx.rotate(age * 0.5 + w.t);
