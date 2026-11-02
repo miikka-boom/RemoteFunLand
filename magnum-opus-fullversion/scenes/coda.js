@@ -334,10 +334,13 @@ uniform float uBgA;    // the crimson ground (sinks to black as the eye is revea
 uniform float uBlaze;  // the Rubedo blaze around the iris at the cut (the shockwave sweeps it out)
 uniform float uLow;    // dims the lower frame for the logo
 uniform float uTing;   // a last sparkle as the lids meet
-uniform float uPal;    // palette knob: 1 rubedo .. 0 nigredo (params.gold)
+uniform float uColdK;  // palette knob (1 - params.gold): 0 rubedo .. 1 the nigredo grade
+// the palette knob's grade: a colour matrix fitted (for hue, scaled up for brightness) so the rubedo
+// palette lands on the nigredo one: crimson -> violet, amber -> teal, gold -> pale verdigris. Column-major.
+const mat3 EY_COLD = mat3(0.430, 0.264, 0.613,  -0.381, 1.032, 0.296,  1.826, -0.419, -0.120);
 
 void main() {
-  if (uPal >= 1.0) ey_palette(1.0); else ey_palette(uPal);
+  ey_palette(1.0);
   vec2 p = uvCentered(gl_FragCoord.xy);
   vec2 e = (p - uPC) / uZ + EY_IC;
   float pe = px() / uZ;
@@ -367,6 +370,9 @@ void main() {
   }
   col *= mix(1.0, 0.18 + 0.82 * smoothstep(-0.8, -0.05, p.y), uLow);
   if (uTing > 0.0) col += eyHot * 2.2 * sparkle(e, vec2(0.0, 0.0), 0.32 * uTing) * uTing;
+  // the palette knob: a uniform branch, free when off (the palette itself stays a constant: a
+  // uniform there costs ~10-20% on SwiftShader, which can no longer fold it into every line)
+  if (uColdK > 0.0) col = mix(col, max(EY_COLD * col, 0.0), uColdK);
   fragColor = vec4(col * uFade, 1.0);
 }`;
 
@@ -382,7 +388,8 @@ void main() {
   //   the iris settles (and keeps turning with spin), the flames flicker, the contour lines slowly
   //   fade and the camera keeps drifting back.
   // Params (range (default): what it looks like):
-  //   gold       0..1 (1)      palette: 1 rubedo (gold, crimson), 0 nigredo (bone, violet, verdigris)
+  //   gold       0..1 (1)      palette: 1 rubedo (gold, crimson), 0 the nigredo grade (violet, teal,
+  //                            pale verdigris; a colour matrix) without the iris's gold fill
   //   ignite     0..1 (1)      the pupil's fire after the hit: 1 the white-hot sun, 0 it stays the black sun
   //   blaze      0..1 (1)      the crimson blaze and ground at the start (rubedo's dive); 0 starts on black
   //   close      0/1 (1)       the eye closes and the picture fades to black at the end; 0 holds it open
@@ -436,7 +443,7 @@ void main() {
       const settle = 1 + 0.03 * Math.exp(-a * 3) * Math.sin(a * 18);
       const u = {
         uOpen: (1 - close) * settle, uIgnite: 1, uLines: MO.mix(1, 0.35, MO.easeIn(MO.remap(t, R_REVEAL + 0.2, L1))),
-        uGlint: MO.remap(h, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: gold, uPal: gold, uSun: sun * ignite,
+        uGlint: MO.remap(h, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: gold, uColdK: 1 - gold, uSun: sun * ignite,
         uSpin: 0.9 * (1 - Math.exp(-a * 1.5)) + spin * (mt - T0), uPupil: MO.mix(0.73, 1.0, sun),
         // the cornea highlights arrive with the eye, not on rubedo's iris at the cut
         uLook: [0, 0], uAura: 1.0, uHi: (1 - close) * MO.smooth(MO.remap(h, T0 + 0.25, T0 + 0.7)),

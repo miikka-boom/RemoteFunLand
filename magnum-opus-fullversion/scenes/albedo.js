@@ -393,7 +393,7 @@ uniform float uFlowV;     // lattice flow speed in cells per 1/30 s (blurs the m
 uniform float uLatR;      // A1: the lattice is lit out to this depth (the reveal wave racing away)
 uniform float uClimb;     // A3b: how many steps the figure's feet have passed (0..7)
 uniform float uInhale;    // A4: 0..1 the light pulls back into the third eye before beat 32
-uniform float uTurn;      // knob: whole-frame roll (radians; 0 = off)
+uniform vec2  uTurn;      // knob: whole-frame roll as (cos, sin) of the angle (sin 0 = off)
 uniform float uPalOn;     // knob: 1 = apply the palette matrix uPalM (0 = the moon palette as is)
 uniform mat3  uPalM;      // knob: palette colour matrix
 uniform float uSeedL;     // knob: reshuffles which lattice cells hold an eye
@@ -627,7 +627,7 @@ vec4 albPillar(vec2 w, float pxw) {
 
 void main() {
   vec2 p = uvCentered(gl_FragCoord.xy) / uPush;
-  if (uTurn != 0.0) p = rot(uTurn) * p;      // roll knob: a uniform branch, free when off
+  if (uTurn.y != 0.0) p = mat2(uTurn.x, -uTurn.y, uTurn.y, uTurn.x) * p;   // roll knob = rot(angle) * p; a uniform branch, free when off
   float PX = px() / uPush;
 #ifdef ALB_RIPPLE
   // the clap ripples the mirror: a water-like wave leaving the central axis
@@ -1026,7 +1026,7 @@ void main() {
     u.uRipple = id === 'a2' ? MO.env('clap', t, 0.35) : 0;
     u.uRippleAge = clapAge;
     // knobs
-    u.uTurn = X.roll; u.uPalOn = X.palOn; u.uPalM = X.palM; u.uSeedL = X.seedL;
+    u.uTurn = [Math.cos(X.roll), Math.sin(X.roll)]; u.uPalOn = X.palOn; u.uPalM = X.palM; u.uSeedL = X.seedL;
     if (!K.still) u.uTime = mt;
     return u;
   }
@@ -1059,7 +1059,8 @@ void main() {
   //   speed      0..16 (1)      ambient motion rate: flames, hair, moon rays, yods, stars, breathing
   //   seed       any (0)        phase of that motion, and which lattice cells hold an eye
   //   offsetBeats 0.. (0)       start partway into the shot's choreography
-  // Cost: as in the 30 s piece; the knobs are uniform branches or exact no-ops at their defaults.
+  // Cost: as in the 30 s piece (about 80-110 ms per 640x360 frame on SwiftShader, a2 and a3b the
+  // heaviest); the knobs are uniform branches or exact no-ops at their defaults.
 
   // ALBEDO.A1 "Shadow on the left,": the luminous body (Sacred Mirrors) in the Universal Mind Lattice
   // with its mandorla and the moon halo; ink floods its left half, the Shadow's eye opens.

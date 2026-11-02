@@ -324,16 +324,22 @@ vec3 ey_eye(vec3 bg, vec2 e, float pe, float t) {
 `;
   // ==== EYE GLSL END ====
 
+  // the palette knob's grade: a colour matrix fitted (for hue, scaled up for brightness) so the
+  // nigredo palette lands on the rubedo one: violet -> crimson, verdigris -> amber, bone -> gold,
+  // ember -> coral, the cold whites -> warm gold. Column-major.
+  const GOLD = `const mat3 EY_GOLD = mat3(0.376, -0.083, 0.158,  0.726, 0.977, 0.206,  0.489, -0.075, -0.039);
+`;
+
   // ------------------------------------------------------------------ N1: the eye opens
   const N1 = EYE + `
 uniform float uZ;      // screen units per eye unit (the push-in)
 uniform vec2  uPC;     // screen position of the iris centre
 uniform float uTri;    // Providence triangle + glory
 uniform float uDive;   // 0..1 the dive into the pupil
-uniform float uPal;    // palette knob: 0 nigredo .. 1 rubedo (params.gold)
-
+uniform float uGoldK;  // palette knob (params.gold): 0 nigredo .. 1 the rubedo grade
+${GOLD}
 void main() {
-  ey_palette(uPal);
+  ey_palette(0.0);
   vec2 p = uvCentered(gl_FragCoord.xy);
   vec2 e = (p - uPC) / uZ + EY_IC;
   float pe = px() / uZ;
@@ -364,6 +370,9 @@ void main() {
     col *= 1.0 - 0.85 * sl * uDive * smoothstep(0.2, 0.6 + h, r);
     col += vec3(0.5, 0.35, 0.9) * 0.4 * sl * uDive * smoothstep(0.5, 1.6, r);
   }
+  // the palette knob: a uniform branch, free when off (the palette itself stays a constant: a
+  // uniform there costs ~10-20% on SwiftShader, which can no longer fold it into every line)
+  if (uGoldK > 0.0) col = mix(col, max(EY_GOLD * col, 0.0), uGoldK);
   fragColor = vec4(col, 1.0);
 }`;
 
@@ -389,8 +398,8 @@ uniform float uFace;     // face push-in amount
 uniform float uSnap;     // the eyes' snap burst (decays)
 uniform float uSnapR;    // its shockwave radius
 uniform vec2  uEyeS;     // screen position between the Shadow's eyes
-uniform float uPal;      // palette knob: 0 nigredo .. 1 rubedo (params.gold)
-
+uniform float uGoldK;    // palette knob (params.gold): 0 nigredo .. 1 the rubedo grade
+${GOLD}
 const vec2  NG_SUN = vec2(0.0, 0.16);
 const float NG_HZ = -0.32;
 
@@ -569,7 +578,7 @@ vec3 ng_sky(vec2 w, float pe, float t) {
 }
 
 void main() {
-  ey_palette(uPal);
+  ey_palette(0.0);
   vec2 p = uvCentered(gl_FragCoord.xy);
   float t = uTime;
   vec2 w = ng_rot(p, uTilt) / uZc + uCc;
@@ -617,6 +626,7 @@ void main() {
     float ring2 = abs(rr - uSnapR * 0.72) - 0.002;
     col += vec3(1.0, 0.6, 0.8) * 0.8 * exp(-max(ring2, 0.0) / 0.004) * uSnap;
   }
+  if (uGoldK > 0.0) col = mix(col, max(EY_GOLD * col, 0.0), uGoldK);   // palette knob (uniform branch)
   fragColor = vec4(col * uFade, 1.0);
 }`;
 
@@ -630,7 +640,8 @@ void main() {
   //   aura flickers (and throbs on the kicks with pulse). offsetBeats 2 starts with the eye half open.
   // Params (range (default): what it looks like):
   //   dive       0/1 (1)       the last beat dives into the pupil; 0 holds the open eye to the cut
-  //   gold       0..1 (0)      palette: 0 nigredo (bone, violet, verdigris), 1 rubedo (gold, crimson)
+  //   gold       0..1 (0)      palette: 0 nigredo (bone, violet, verdigris), 1 the rubedo grade (gold,
+  //                            crimson, amber; a colour matrix) and the iris's gold fill
   //   sun        0..1 (0)      the pupil: 0 the black sun, 1 a white-hot sun around a black core
   //   triangle   0..2 (1)      the Providence triangle and its glory of rays (0 = the eye alone)
   //   pulse      0..2 (0)      the pupil and the flame aura throb on every kick
@@ -669,7 +680,7 @@ void main() {
       const kp = pulse * MO.env('kick', t, 0.15);
       const u = {
         uOpen: openAt(h), uIgnite: ig, uLines: MO.easeOut(MO.remap(h, 0.0, 1.5)),
-        uGlint: MO.remap(h, 1.28, 1.62), uGold: gold, uPal: gold, uSun: sun, uSpin: 0.04 * (mt - T0),
+        uGlint: MO.remap(h, 1.28, 1.62), uGold: gold, uGoldK: gold, uSun: sun, uSpin: 0.04 * (mt - T0),
         uPupil: 1.3 - 0.35 * ig + 0.5 * MO.easeIn(dv) + 0.10 * kp,
         uLook: [0.012 * trem * Math.sin(mt * 61.0), 0.008 * trem * Math.sin(mt * 47.0 + 1.0)],
         uAura: 0.6 + 0.4 * MO.env('hits', t, 0.7) + 0.6 * kp, uHi: MO.remap(h, 0.95, 1.2) * ig,
@@ -699,7 +710,8 @@ void main() {
   //   rise       0..64 (3)     beats after the shot start when the Shadow starts to rise
   //   snap       0/1 (1)       the Shadow's eyes snap open a beat before the cut (red shockwave, glow);
   //                            0 keeps them closed (the push-in still lands on the face)
-  //   gold       0..1 (0)      palette: corona, sky contours, rims and raven sheen turn rubedo red-gold
+  //   gold       0..1 (0)      palette: the rubedo grade (a colour matrix): the violet sky turns
+  //                            crimson, the corona and the contours gold and amber
   //   ravens     0..1 (1)      raven visibility
   //   zoom       0.3..3 (1)    camera zoom
   //   x, y       -1..1 (0)     camera offset in world units (the push-in still centres the face)
@@ -781,7 +793,7 @@ void main() {
       const claps = MO.env('clap', t, 0.12);
       const tilt = -0.20 * MO.easeInOut(pk) + 0.035 * Math.sin(mt * 0.8 + 1.0) * (1 - pk) + roll;
       const u = {
-        uOpen: 0, uIgnite: 0, uLines: 0, uGlint: -1, uGold: 0, uSpin: 0, uPupil: 1, uLook: [0, 0], uAura: 0, uHi: 0, uPal: gold,
+        uOpen: 0, uIgnite: 0, uLines: 0, uGlint: -1, uGold: 0, uSpin: 0, uPupil: 1, uLook: [0, 0], uAura: 0, uHi: 0, uGoldK: gold,
         uZc: Z, uCc: C, uTilt: tilt,
         uRise: rise, uSS: S_SCALE, uShA: shadow ? MO.remap(t, T_RISE - 0.2, T_RISE + 0.3) : 0,
         uEyes: eyes, uEyeGlow: snap ? (t > T_EYES ? 0.6 * claps : 0) + 1.6 * MO.easeIn(MO.remap(t, T_EYES + 0.15, T_END)) : 0,
