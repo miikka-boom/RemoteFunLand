@@ -106,7 +106,7 @@ window.SCORE = {
   "vocals": {
     "announcer": [
       { "text": "Nigredo", "beat": 4,  "style": "deep, slow, huge reverb" },
-      { "text": "Rubedo!", "beat": 46, "style": "shouted into the silent gap, long reverb tail into the drop" }
+      { "text": "Rubedo!", "beat": 46, "style": "shouted into the silent gap, long reverb tail into the drop", "syllables": [0, 0.64, 1.17] }
     ],
     "rap": [
       { "bar": 4, "text": "Shadow on the left,",     "jp": "左に、影。",       "words": [["Shadow", 0], ["on", 4], ["the", 6], ["left", 8]] },
@@ -123,15 +123,14 @@ window.SCORE = {
   },
 
   "fx": [
-    { "type": "flash",  "beat": 16,    "color": [1.0, 1.0, 1.0],  "amount": 0.85, "decay": 0.45 },
+    { "type": "flash",  "beat": 16,    "color": [1.0, 1.0, 1.0],  "amount": 0.85, "decay": 0.18 },
     { "type": "shake",  "beat": 16,    "amount": 0.010, "decay": 0.35 },
-    { "type": "flash",  "beat": 32,    "color": [1.0, 0.80, 0.25], "amount": 0.55, "decay": 0.40 },
-    { "type": "impact", "beat": 48,    "duration": 0.10 },
-    { "type": "flash",  "beat": 48.25, "color": [1.0, 0.25, 0.15], "amount": 0.45, "decay": 0.35 },
-    { "type": "shake",  "beat": 48,    "amount": 0.030, "decay": 0.55 },
+    { "type": "flash",  "beat": 32,    "color": [1.0, 0.80, 0.25], "amount": 0.65, "decay": 0.30 },
+    { "type": "impact", "beat": 48,    "duration": 0.06, "polarity": -1 },
+    { "type": "shake",  "beat": 48,    "amount": 0.020, "decay": 0.55 },
     { "type": "impact", "beat": 56,    "duration": 0.07 },
     { "type": "shake",  "beat": 56,    "amount": 0.018, "decay": 0.40 },
-    { "type": "flash",  "beat": 64,    "color": [1.0, 0.95, 0.85], "amount": 0.70, "decay": 0.30 },
+    { "type": "flash",  "beat": 64,    "color": [1.0, 0.95, 0.85], "amount": 0.45, "decay": 0.12 },
     { "type": "shake",  "beat": 64,    "amount": 0.022, "decay": 0.60 }
   ],
 

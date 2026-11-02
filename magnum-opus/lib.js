@@ -182,7 +182,8 @@ float sdOcta(vec3 p, float s) { p = abs(p); return (p.x + p.y + p.z - s) * 0.577
 float speedLines(vec2 p, vec2 c, float density, float t, float inner) {
   vec2 d = p - c; float a = atan(d.y, d.x); float r = length(d);
   float id = floor(a / TAU * density);
-  float h = hash11(id + floor(t * 12.0) * 7.31);
+  // re-rolled once per 16th note (136 BPM), frozen in reduced-flashing mode
+  float h = hash11(id + floor(t * 9.0666667 * (1.0 - uReduced)) * 7.31);
   float w = fract(a / TAU * density);
   float line = smoothstep(0.5 - 0.08 * h, 0.5, w) * (1.0 - smoothstep(0.5, 0.5 + 0.08 * h, w));
   return line * step(0.55, h) * smoothstep(inner * (0.6 + 0.6 * h), inner * (0.9 + 0.6 * h) + 0.3, r);

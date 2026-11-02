@@ -94,18 +94,19 @@
 
   // post effects from SCORE.fx, plus a gentle kick pump in the high-energy sections
   function fxAt(t) {
-    let flash = 0, flashColor = [1, 1, 1], impact = 0, shake = 0;
+    let flash = 0, flashColor = [1, 1, 1], impact = 0, impactPol = 1, shake = 0;
     for (const f of S.fx) {
       const t0 = f.beat * BEAT; if (t < t0) continue;
       const dt = t - t0;
       if (f.type === 'flash') { const a = f.amount * Math.exp(-dt / f.decay); if (a > flash) { flash = a; flashColor = f.color; } }
-      else if (f.type === 'impact') { if (dt < f.duration) impact = 1; }
+      else if (f.type === 'impact') { if (dt < f.duration) { impact = 1; impactPol = f.polarity || 1; } }
       else if (f.type === 'shake') shake += f.amount * Math.exp(-dt / f.decay);
     }
     const e = MO.energy(t);
     const pump = e > 0.6 ? MO.env('kick', t, 0.1) * (e - 0.6) * 0.03 : 0;
     if (MO.reduced) { flash *= 0.25; impact = 0; shake *= 0.3; }
-    return { flash, flashColor, impact, shake, zoom: MO.reduced ? pump * 0.3 : pump, ca: 0.5 + 6 * shake * 30 };
+    // chromatic aberration follows the shake but is capped so a hit never smears the frame
+    return { flash, flashColor, impact, impactPol, shake, zoom: MO.reduced ? pump * 0.3 : pump, ca: 0.5 + Math.min(2.0, 6 * shake * 30) };
   }
   MO.fxAt = fxAt;
 
@@ -150,7 +151,7 @@ void main() {
 precision highp float; in vec2 vUv; out vec4 o;
 uniform sampler2D uScene, uBloom, uOverlay;
 uniform vec2 uRes, uShakeOff; uniform vec3 uFlashColor;
-uniform float uTime, uBloomStrength, uExposure, uFlash, uImpact, uCA, uGrain, uVignette, uHasOverlay, uZoom;
+uniform float uTime, uBloomStrength, uExposure, uFlash, uImpact, uImpactPol, uCA, uGrain, uVignette, uHasOverlay, uZoom;
 float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 void main() {
@@ -161,12 +162,16 @@ void main() {
   col += texture(uBloom, uv).rgb * uBloomStrength;
   col = aces(col * uExposure);
   col = pow(col, vec3(1.0 / 2.2));
+  // the flash washes the picture but not the typography, so subtitles stay readable through it
+  col = mix(col, uFlashColor, clamp(uFlash, 0.0, 1.0));
   vec4 ov = texture(uOverlay, vUv) * uHasOverlay;
   col = col * (1.0 - ov.a) + ov.rgb;
-  col = mix(col, uFlashColor, clamp(uFlash, 0.0, 1.0));
   if (uImpact > 0.0) {
+    // anime impact frame: two-tone luminance key; polarity -1 keeps light lines on black
     float l = dot(col, vec3(0.299, 0.587, 0.114));
-    vec3 imp = mix(vec3(1.0, 0.96, 0.90), vec3(0.05, 0.0, 0.02), smoothstep(0.32, 0.42, l));
+    float k = smoothstep(0.32, 0.42, l);
+    if (uImpactPol < 0.0) k = 1.0 - k;
+    vec3 imp = mix(vec3(1.0, 0.96, 0.90), vec3(0.05, 0.0, 0.02), k);
     col = mix(col, imp, uImpact);
   }
   col *= 1.0 - uVignette * dot(dc, dc) * 1.5;
@@ -391,7 +396,8 @@ void main() {
     const fx = fxAt(t);
     const pp = (v, d) => (typeof v === 'function' ? v(t, local, MO) : (v ?? d));
     const sh = fx.shake;
-    const shakeOff = [sh * (Math.sin(t * 91.7) + Math.sin(t * 57.3 + 1.3)) * 0.5, sh * (Math.sin(t * 73.1 + 2.1) + Math.sin(t * 43.9)) * 0.5 * (16 / 9)];
+    // 5-8 Hz components: well below the 15 Hz Nyquist limit of a 30 fps video, so the shake reads the same in the MP4 and live
+    const shakeOff = [sh * (Math.sin(t * 38.3) + Math.sin(t * 52.9 + 1.3)) * 0.5, sh * (Math.sin(t * 45.6 + 2.1) + Math.sin(t * 31.4)) * 0.5 * (16 / 9)];
     gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, W, H);
     gl.useProgram(progs.post.p);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
@@ -399,7 +405,7 @@ void main() {
     setUniforms(progs.post, {
       uScene: 0, uBloom: 1, uOverlay: 2, uRes: [W, H], uTime: t,
       uBloomStrength: pp(sc.bloom, 0.6), uExposure: pp(sc.exposure, 1.0),
-      uFlash: fx.flash, uFlashColor: fx.flashColor, uImpact: fx.impact, uCA: fx.ca + pp(sc.ca, 0),
+      uFlash: fx.flash, uFlashColor: fx.flashColor, uImpact: fx.impact, uImpactPol: fx.impactPol, uCA: fx.ca + pp(sc.ca, 0),
       uGrain: MO.grain ?? 0.025, uVignette: pp(sc.vignette, 0.35), uHasOverlay: drew ? 1 : 0,
       uShakeOff: shakeOff, uZoom: fx.zoom,
     });
