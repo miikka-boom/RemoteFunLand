@@ -131,7 +131,7 @@ window.SCORE = {
     { "type": "shake",  "beat": 48,    "amount": 0.030, "decay": 0.55 },
     { "type": "impact", "beat": 56,    "duration": 0.07 },
     { "type": "shake",  "beat": 56,    "amount": 0.018, "decay": 0.40 },
-    { "type": "flash",  "beat": 64,    "color": [1.0, 0.95, 0.85], "amount": 0.90, "decay": 0.55 },
+    { "type": "flash",  "beat": 64,    "color": [1.0, 0.95, 0.85], "amount": 0.70, "decay": 0.30 },
     { "type": "shake",  "beat": 64,    "amount": 0.022, "decay": 0.60 }
   ],
 

@@ -411,7 +411,12 @@ void main() {
   if (MO.capture) {
     window.__capture = {
       ready: null,
-      frame(t) { const t0 = performance.now(); const id = MO.render(t); gl.finish(); return { id, ms: performance.now() - t0 }; },
+      frame(t) {
+        // gl.finish() does not block on ANGLE/SwiftShader; a 1-pixel readback forces the frame to complete.
+        const t0 = performance.now(); const id = MO.render(t);
+        gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
+        return { id, ms: performance.now() - t0 };
+      },
       rgba() {
         const px = new Uint8Array(W * H * 4);
         gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
