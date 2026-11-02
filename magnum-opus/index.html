@@ -206,7 +206,7 @@ button.chip:hover { border-color: var(--gold) }
           <p class="stages"><b style="color:#c9bcdb">Nigredo</b> · <b style="color:#dfeeff">Albedo</b> · <b style="color:#f3c867">Citrinitas</b> · <b style="color:#ff7a5e">Rubedo</b></p>
           <p class="sub">A 30-second Jungian eurodance in four alchemical operations. Rendered live in your browser, or watch the same thing as a video.</p>
           <div class="warn" id="warn">
-            <p class="wt" style="margin:0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 15.6 14.6H.4zm-.9 5v4.6h1.8V5.8zm0 5.9v1.8h1.8v-1.8z" fill-rule="evenodd"/></svg><b>Photosensitivity warning:</b> flashing lights and fast strobing, strongest from 0:21 to 0:29.</p>
+            <p class="wt" style="margin:0"><svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 .8 15.6 14.6H.4zm-.9 5v4.6h1.8V5.8zm0 5.9v1.8h1.8v-1.8z" fill-rule="evenodd"/></svg><b>Photosensitivity warning:</b> bright flashes and fast strobing throughout, strongest from 0:21 to 0:29.</p>
             <label class="check"><input type="checkbox" id="reduce"> Reduce flashing</label>
           </div>
           <div class="btns">
@@ -258,7 +258,7 @@ button.chip:hover { border-color: var(--gold) }
       <li><b>Rubedo · XXI The World.</b> The drop: the mandala of the Self, the chemical wedding, and a chorus that turns lead to gold.</li>
     </ol>
     <p>After Carl Jung, the paintings of Alex Grey, the Tarot, Alejandro Jodorowsky’s <cite>The Holy Mountain</cite>, anime title cards and 1990s eurodance. Every frame is drawn by fragment shaders from the time code; the music, the vocoder and the voices were synthesized from code too.</p>
-    <p class="warnline"><b>Photosensitivity warning:</b> the piece has rapid flashing and strobing light, strongest from 0:21 to 0:29. “Reduce flashing” tones it down in the live render; the MP4 and the download always have full flashing.</p>
+    <p class="warnline"><b>Photosensitivity warning:</b> the piece has bright full-screen flashes from 0:02 and rapid flashing and strobing light from 0:14, strongest from 0:21 to 0:29. “Reduce flashing” tones it down in the live render; the MP4 and the download always have full flashing.</p>
     <p class="dl"><a href="magnum-opus.mp4" download>Download the MP4</a><a href="magnum-opus.mp3" download>Download the track</a></p>
   </section>
 </main>
@@ -329,6 +329,7 @@ button.chip:hover { border-color: var(--gold) }
     console.error(e);
     const d = document.createElement('div'); d.className = 'err'; d.textContent = String(e && e.message || e); stage.appendChild(d);
   }
+  function clearErrors() { stage.querySelectorAll('.err').forEach((n) => n.remove()); }   // a new start drops the last one's error box
   let noteTimer = 0;
   function say(msg, ms = 0) {     // a message where the viewer is looking: the gate if it is up, else a chip on the stage
     clearTimeout(noteTimer);
@@ -550,6 +551,7 @@ button.chip:hover { border-color: var(--gold) }
   async function startLive(from = 0, autoplay = true) {
     const my = ++session;
     if (!hasGL2) { say('No WebGL2 here, so the live version is off. The MP4 works.', 6000); return; }
+    clearErrors();
     stopVideo();
     stopLive();
     mode = 'live'; canvas.hidden = false; updateModeline();
@@ -567,6 +569,7 @@ button.chip:hover { border-color: var(--gold) }
         initTarget = null;
         audio.pause(); audio.muted = false;
         playLiveBtn.disabled = false;
+        setIcon(false);                  // a switch from a playing MP4 left the transport showing Pause
         if (e && e.contextLost) {
           // stay in live mode: the restore handler rebuilds and the gate resumes from here
           pausedAt = shownT = gateFrom = from;
@@ -584,6 +587,8 @@ button.chip:hover { border-color: var(--gold) }
     gate.hidden = true; status.textContent = ''; say('');
     sizeCanvas();
     from = clamp(from, 0, DUR - 0.05);
+    // the tab went to the background while the shaders compiled: open paused, as a hide during playback does
+    if (autoplay && document.hidden) { autoplay = false; sleepAudioCtx(); }
     if (!autoplay) {
       audio.pause(); audio.muted = false;
       pausedAt = shownT = from; setIcon(false); drawPaused();
@@ -646,6 +651,8 @@ button.chip:hover { border-color: var(--gold) }
     videoFrom = clamp(from, 0, DUR - 0.05);
     stopLive();
     mode = 'video';
+    playLiveBtn.disabled = !hasGL2;   // a live start still compiling is now stale and returns without re-enabling it
+    clearErrors();
     gate.hidden = true; status.textContent = ''; note.hidden = true; slowChip.hidden = true;
     canvas.hidden = true; vid.hidden = false;
     if (videoFailed || vid.networkState === 3 /* NETWORK_NO_SOURCE */) { videoFailed = false; pendingSeek = null; vid.load(); }
