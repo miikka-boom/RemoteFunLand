@@ -1,21 +1,25 @@
-// ALBEDO — XVIII The Moon — 7.059–14.118 s (bars 4–7, beats 16–32). Owner: albedo agent.
+// ALBEDO — XVIII The Moon. Owner: albedo agent. Five shot factories (30 s piece: beats 16–32,
+// bars 4–7); the comment block above each shot() call documents its length, stretch and params.
 //
-// A1 "Shadow on the left,"      the luminous body (Sacred Mirrors) in the Universal Mind
-//                               Lattice, moon halo; ink floods its left half, the Shadow's eye opens.
-// A2 "Anima on the right,"      the mirror: the Shadow steps out to the left, the Anima to the
-//                               right, framed by the High Priestess pillars B and J, moon between.
-// A3 "climb the Holy Mountain"  they step back into the mirror and become one (the Rebis), the
-//                               corridor falls away, the floor stacks into a stepped mountain,
-//                               the figure is carried up to the summit under the moon.
-// A4 "to the Self, the light!"  cut in close, push into the third eye, all lines converge,
-//                               white-gold light; on the last clap it inhales into the eye.
+// albedo.a1  "Shadow on the left,"      the luminous body (Sacred Mirrors) in the Universal Mind
+//                                       Lattice, moon halo; ink floods its left half, the Shadow's eye opens.
+// albedo.a2  "Anima on the right,"      the mirror: the Shadow steps out to the left, the Anima to the
+//                                       right, framed by the High Priestess pillars B and J, moon between.
+// albedo.a3  "climb ..."                they step back into the mirror (1 beat, into the merge) ...
+// albedo.a3b "... the Holy Mountain"    ... and become one (the Rebis), the corridor falls away, the
+//                                       floor stacks into a stepped mountain, the figure is carried
+//                                       up to the summit under the moon.
+// albedo.a4  "to the Self, the light!"  cut in close, push into the third eye, all lines converge,
+//                                       white-gold light; on the last clap it inhales into the eye.
+// Without a cue list in the score the file places the five shots at their 30 s windows (end of file).
 //
 // The luminous body is a self-contained GLSL block (BODY below, exported as
 // window.ALBEDO_BODY_GLSL) so the citrinitas scene can reuse it: build an AlbBody with
 // albBodyDefault(), set its fields and call albedoBody(). See the comments in the block.
 //
 // Performance: on SwiftShader (the MP4 renderer) every instruction of a shader runs for every
-// pixel whatever its branches do, so the frame cost is pixels x total code size. Hence one
+// pixel whatever its per-pixel branches do, so the frame cost is pixels x total code size (uniform
+// branches are skipped, hence the knobs are uniforms). Hence one
 // shader per shot (each with only the features it needs, chosen with #defines) and a single
 // albedoBody() evaluation per pixel even when two figures are on screen (the mirror selects
 // the parameters per pixel).
@@ -389,6 +393,10 @@ uniform float uFlowV;     // lattice flow speed in cells per 1/30 s (blurs the m
 uniform float uLatR;      // A1: the lattice is lit out to this depth (the reveal wave racing away)
 uniform float uClimb;     // A3b: how many steps the figure's feet have passed (0..7)
 uniform float uInhale;    // A4: 0..1 the light pulls back into the third eye before beat 32
+uniform float uTurn;      // knob: whole-frame roll (radians; 0 = off)
+uniform float uPalOn;     // knob: 1 = apply the palette matrix uPalM (0 = the moon palette as is)
+uniform mat3  uPalM;      // knob: palette colour matrix
+uniform float uSeedL;     // knob: reshuffles which lattice cells hold an eye
 
 const float FOC = 1.75;
 const float MZ = 8.0;       // mountain centre depth
@@ -469,7 +477,7 @@ vec3 albLattice(vec2 p, float walls) {
   // an eye in every cell (walls, floor, mountain risers), inside a ring
   vec2 f = fract(c) - 0.5;
   vec2 cid = floor(c);
-  float hasEye = max(step(hash21(cid + vec2(face * 17.0, 3.0)), 0.38), isMount);
+  float hasEye = max(step(hash21(cid + vec2(face * 17.0, 3.0 + uSeedL)), 0.38), isMount);
   float eyeFade = smoothstep(0.07, 0.035, pxc) * smoothstep(0.009, 0.016, pxc) * fog * (1.0 - step(2.5, face)) * hasEye * (1.0 - 0.7 * mb);
   vec2 e = face == 0.0 ? vec2(f.y, f.x) : f;                   // (along, across) in the plane
   float blink = mod(cid.x + cid.y + uHatN, 2.0) < 0.5 ? smoothstep(0.0, 0.45, uOpenHat) : 0.0;
@@ -619,6 +627,7 @@ vec4 albPillar(vec2 w, float pxw) {
 
 void main() {
   vec2 p = uvCentered(gl_FragCoord.xy) / uPush;
+  if (uTurn != 0.0) p = rot(uTurn) * p;      // roll knob: a uniform branch, free when off
   float PX = px() / uPush;
 #ifdef ALB_RIPPLE
   // the clap ripples the mirror: a water-like wave leaving the central axis
@@ -744,6 +753,7 @@ void main() {
 #ifdef ALB_RIPPLE
   col += vec3(0.6, 0.75, 1.0) * rippleCrest * 0.22;
 #endif
+  if (uPalOn > 0.5) col = max(uPalM * col, 0.0);   // palette knob: a uniform branch, free when off
   fragColor = vec4(col, 1.0);
 }
 `;
@@ -751,12 +761,51 @@ void main() {
   window.ALBEDO_BODY_GLSL = BODY;
 
   const BEAT = MO.BEAT;
+
+  // ==== CUE CLOCK BEGIN (identical in nigredo.js, albedo.js and coda.js) ====
+  // Places a shot's choreography in any cue. The choreography is written on the shot's natural
+  // timeline: the times it has in the 30 s piece, beats nb0..nb1. For a cue anywhere, of any length:
+  //   K.S(n)  real time of the natural time n anchored to the cue's start (reveals, entrances).
+  //           The head plays at natural speed; K.sq > 1 speeds it up when the cue is too short for
+  //           its first headBeats plus its last tailBeats. K.H(t) is the inverse: natural head time.
+  //   K.E(n)  real time of n anchored to the cue's end: dives, snaps and closes keep their distance
+  //           to the cut. A move from an S anchor to an E anchor stretches with the cue.
+  //   K.M(t)  ambient-motion clock (spins, flames, drifts): t, sped up around the cue start by
+  //           params.speed and shifted by params.seed (seconds of motion = seed * 9.73).
+  //   K.nb(b) natural time of the shot's own beat b; K.d(x) snaps float noise in a shift to 0.
+  //   K.p(name, default, min, max) and K.on(name, default) read a numeric / on-off param.
+  // params.offsetBeats starts the cue that many beats into the natural choreography. In the shot's
+  // own 30 s window without offset (K.ident) S, E and H return their argument, and M does while
+  // speed is 1 and seed 0 (K.still): the 30 s edit renders exactly as before.
+  const cueClock = (cue, nb0, nb1, headBeats, tailBeats) => {
+    const BT = MO.BEAT, P = cue.params || {};
+    const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+    const p = (k, d, lo = -Infinity, hi = Infinity) => MO.clamp(num(P[k], d), lo, hi);
+    const on = (k, d) => { const v = P[k]; return v === undefined || v === null ? d : !!v && v !== 'off' && v !== '0'; };
+    const off = p('offsetBeats', 0, 0, 256) * BT, speed = p('speed', 1, 0, 16), seed = p('seed', 0);
+    const n0 = nb0 * BT, n1 = nb1 * BT;
+    const ident = off === 0 && cue.beat0 === nb0 && cue.beat1 === nb1;
+    const head = Math.max(0, headBeats * BT - off), room = cue.to - cue.from - tailBeats * BT;
+    const sq = ident ? 1 : Math.max(1, head / Math.max(room, 0.25 * head, 1e-3));
+    const still = speed === 1 && seed === 0;
+    return {
+      P, p, on, ident, still, sq, off, n0, n1, speed, seed,
+      nb: (b) => (nb0 + b) * BT,
+      S: (n) => (ident ? n : cue.from + (n - n0 - off) / sq),
+      H: (t) => (ident ? t : n0 + off + (t - cue.from) * sq),
+      E: (n) => (ident ? n : cue.to - (n1 - n)),
+      M: (t) => (still ? t : cue.from + (t - cue.from) * speed + seed * 9.73),
+      d: (x) => (Math.abs(x) < 1e-9 ? 0 : x),
+    };
+  };
+  // keyframe times made non-decreasing (a squeezed or re-anchored cue may reorder them)
+  const mono = (k) => { for (let i = 1; i < k.length; i++) if (k[i][0] <= k[i - 1][0]) k[i] = [k[i - 1][0] + 1e-4, k[i][1]]; return k; };
+  // ==== CUE CLOCK END ====
+
   const bt = (b) => b * BEAT;
-  const T0 = bt(16), T1 = bt(20), T2 = bt(24), T3 = bt(28), T4 = bt(32);
-  const TM = bt(25);                   // the merge (A3), on the clap
   const E = MO.easeInOut, EO = MO.easeOut, EI = MO.easeIn, SM = MO.smooth, C = MO.clamp, mix = MO.mix;
   const MZ = 8.0, FLOOR = -1.15;
-  // A3 end camera: high, looking slightly down at the summit; the lens shift puts the summit at y = -0.2
+  // A3b end camera: high, looking slightly down at the summit; the lens shift puts the summit at y = -0.2
   const RO_END = [0, 2.5, -2.5], TA_END = [0, 1.7, 8.0];
   let VP_END = 0;
 
@@ -773,32 +822,66 @@ void main() {
   const mixv = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
   VP_END = -0.2 - project([0, FLOOR + 7 * 0.55, MZ - 0.5], RO_END, TA_END, [0, 0])[1];
 
-  // lattice flow (depth offset): half a cell per beat, surging forward on each kick. A1 adds a
-  // steady drift (zero at the A2 cut, so the two shots join), A3b holds it (the mountain stands on
-  // the floor) and A4 races down the corridor.
-  function flowAt(t, seg) {
+  // lattice flow (depth offset): half a cell per beat (times params.flow), surging forward on each
+  // kick of the beat grid. a1 adds a steady drift that is zero at its cut, so the lattice runs on
+  // unbroken into the next shot; a3b holds it at its value on the merge (the mountain stands on the
+  // floor); a4 races down the corridor.
+  function flowAt(t, X) {
     const beat = t / BEAT;
-    const f = (Math.floor(beat) + EO(C((beat % 1) * 2.2))) * 0.5;
-    if (seg === 'a1') return f + 0.35 * (beat - 20);
-    if (seg === 'a3b') return Math.round(TM / BEAT) * 0.5;           // = A3's flow at the merge
-    if (seg === 'a4') return f + 16 * EI(C((t - T3) / (T4 - T3)));
+    const f = (Math.floor(beat) + EO(C((beat % 1) * 2.2))) * 0.5 * X.flowK;
+    if (X.id === 'a1') return f + 0.35 * (beat - X.b1);
+    if (X.id === 'a3b') return X.flow0;
+    if (X.id === 'a4') return f + 16 * EI(C((t - X.T3) / (X.T4 - X.T3)));
     return f;
   }
+  // A4's inhale: 0..1 from the accented last clap to the cut
+  const inhaleAt = (t, X) => (X.inhaleOn ? C((t - X.tInhale) / (X.T4 - X.tInhale)) : 0);
 
-  // A4's inhale: 0..1 from the accented last clap (bar 7, step 15) to beat 32
-  const T_INHALE = MO.barTime(7, 0, 15);
-  const inhaleAt = (t) => C((t - T_INHALE) / (T4 - T_INHALE));
+  // score lookups. The vocal lines of every part (with bar + words), absolute times, in time order:
+  let LINES = null;
+  const vocalLines = () => LINES || (LINES = Object.values(MO.S.vocals || {}).filter(Array.isArray).flat()
+    .filter((l) => l && typeof l.bar === 'number' && Array.isArray(l.words) && l.words.length)
+    .map((l) => ({ t: MO.barTime(l.bar), words: l.words.map(([w, s]) => ({ text: w, t: MO.barTime(l.bar, 0, s) })) }))
+    .sort((a, b) => a.t - b.t));
+  const firstLine = (a, b) => vocalLines().find((l) => l.t >= a - 1e-6 && l.t < b - 1e-6) || null;
+  const clapsIn = (a, b) => (MO.events.clap || []).filter((e) => e.t >= a - 1e-6 && e.t < b - 1e-6);
 
-  function uniforms(t) {
+  // palette knob: a colour matrix (rows) over the whole shot; 'moon' is the 30 s look (no matrix).
+  // Each keeps whites near white (they draw on the red channel) and turns the blue lattice, the
+  // moon's rays and the Shadow's violet: sun = amber and warm white, blood = crimson and salmon,
+  // verdigris = sea green and mint, violet = violet and lilac, silver = monochrome.
+  const PALETTES = {
+    moon: null,
+    sun: [0.20, 0.10, 0.85, 0.50, 0.40, 0.15, 0.60, 0.10, 0.00],
+    blood: [0.15, 0.10, 0.95, 0.30, 0.25, 0.00, 0.35, 0.05, 0.10],
+    verdigris: [0.50, 0.10, 0.00, 0.30, 0.20, 0.75, 0.30, 0.30, 0.45],
+    violet: [0.30, 0.10, 0.55, 0.60, 0.30, 0.00, 0.10, 0.10, 0.90],
+    silver: [0.30, 0.45, 0.25, 0.30, 0.45, 0.25, 0.32, 0.47, 0.30],
+  };
+  // the knobs every albedo shot has
+  function knobs(K) {
+    const pal = K.P.palette;
+    const M = Array.isArray(pal) && pal.length === 9 && pal.every(Number.isFinite) ? pal : (typeof pal === 'string' && PALETTES[pal]) || null;
+    return {
+      zoom: K.p('zoom', 1, 0.3, 3), roll: K.p('roll', 0, -Math.PI, Math.PI), flowK: K.p('flow', 1, 0, 8),
+      palOn: M ? 1 : 0, palM: M ? [M[0], M[3], M[6], M[1], M[4], M[7], M[2], M[5], M[8]] : [1, 0, 0, 0, 1, 0, 0, 0, 1],
+      seedL: K.seed * 13.17, moonK: K.p('moon', 1, 0, 2),
+      spread: K.p('spread', 1, 0.3, 1.5), pillarsK: K.p('pillars', 1, 0, 1), pillarX: K.p('pillarX', 1.42, 0.9, 2.6),
+    };
+  }
+
+  // the uniforms of one albedo shot at time t; X holds its cue's anchors (real times) and knobs
+  function uniforms(t, X) {
+    const K = X.K, id = X.id;
     const kick = MO.last('kick', t), kickAge = kick ? t - kick.e.t : 9;
     const clap = MO.last('clap', t), clapAge = clap ? t - clap.e.t : 9;
     const u = {};
     u.uKickAge = kickAge;
     u.uHatN = MO.count('openHat', t);
-    const seg = t < T1 ? 'a1' : t < TM ? 'a2' : t < T3 ? 'a3b' : 'a4';
-    const flow = flowAt(t, seg);
+    const flow = flowAt(t, X);
     // its speed in cells per 1/30 s: fast rungs are blurred in the shader instead of strobing
-    u.uFlowV = Math.abs(flow - flowAt(t - 1 / 30, seg)) / 0.5;
+    u.uFlowV = Math.abs(flow - flowAt(t - 1 / 30, X)) / 0.5;
+    const mt = K.M(t);                       // ambient-motion time
     let push = 1, kickPush = 0.006, latR = 1e4, climbN = 0, inhale = 0;
 
     let cam = [0, 0, 1, 0];
@@ -812,90 +895,93 @@ void main() {
     let burst = 0, converge = 0, focus = [0, 0], shock = -1, flashS = 0;
     const rings = [-1, -1, -1];
 
-    if (t < T1) {
-      // A1: the luminous body; ink floods its left half by "left" (beat 18)
-      const k = (t - T0) / (T1 - T0);
+    if (id === 'a1') {
+      // A1: the luminous body; ink floods its left half by "left", the Shadow opens its eye on it
+      const T0 = X.T0, k = (t - T0) / (X.T1 - T0);
       cam = [0, 0.02 + 0.03 * k, 0.94 + 0.04 * k + 0.07 * k * k, 0.0];   // accelerating into the cut
       kickPush = 0.015;
-      latR = 1.2 + (t - T0) * 13;     // the lattice lights up behind beat 16's kick ring (same speed)
+      latR = 1.2 + (t - T0) * 13;     // the lattice lights up behind the first kick's ring (same speed)
       A3[3] = 0.15 + 0.85 * EO((t - T0) / 0.38);                  // draw-on behind the flash
       A3[0] = 0.4 + 0.6 * EO((t - T0) / 0.5);
-      const ink = E((t - bt(17) + 0.12) / (bt(18) - bt(17) + 0.12));
+      const ink = E((t - X.tInk + 0.12) / (X.tEye - X.tInk + 0.12)) * X.inkK;
       A2 = [0, 1, mix(-0.75, 0.0, ink), 0];
-      A3[1] = EO((t - bt(18)) / 0.12);                            // the Shadow opens its eye on "left"
+      A3[1] = EO((t - X.tEye) / 0.12);                            // the Shadow opens its eye on "left"
       split = ink;
       mirror = 0.3 * ink;
-      u.uMandorla = EO((t - T0) / 0.3);
-    } else if (t < T2) {
+      u.uMandorla = EO((t - T0) / 0.3) * X.mandorla;
+    } else if (id === 'a2') {
       // A2: the syzygy. Out of the mirror: the Shadow to the left, the Anima to the right.
-      const k = (t - T1) / (T2 - T1);
+      const T1 = X.T1, k = (t - T1) / (X.T2 - T1);
       const s = EO((t - T1) / 0.42);
       cam = [0, 0.03 * SM(k), 1.0 + 0.09 * SM(k), 0.012 * Math.sin(k * Math.PI) * (MO.reduced ? 0.3 : 1)];
-      const x = 0.66 * s, sc = mix(0.86, 0.72, s), y = mix(0.02, -0.12, s);
-      const breathe = 0.012 * Math.sin((t - T1) * 2.4) * s;
-      A = [-x, y + breathe, sc, 0.04 * s * (0.5 + 0.5 * Math.sin((t - T1) * 2.4))];
+      const x = 0.66 * s * X.spread, sc = mix(0.86, 0.72, s), y = mix(0.02, -0.12, s);
+      const bph = (mt - T1) * 2.4;                                // breathing, on the ambient clock
+      const breathe = 0.012 * Math.sin(bph) * s;
+      A = [-x, y + breathe, sc, 0.04 * s * (0.5 + 0.5 * Math.sin(bph))];
       A2 = [0, 1, 9, 0];
       A3 = [1 + 0.35 * MO.env('kick', t, 0.15), 1, 0, 1];
-      Bb = [x, y - breathe, sc, 0.04 * s * (0.5 - 0.5 * Math.sin((t - T1) * 2.4))];
+      Bb = [x, y - breathe, sc, 0.04 * s * (0.5 - 0.5 * Math.sin(bph))];
       B2 = [C(s * 1.4), C(s * 1.5), 0, 0.6];
-      moon = [0, mix(0.72, 0.40, s), mix(0.30, 0.28, s), mix(0.65, 1, s)];
+      moon = [0, mix(0.72, 0.40, s), mix(0.30, 0.28, s), mix(0.65, 1, s) * X.moonK];
       phase = mix(0.2, 0.4, s);
-      pillars = C((t - T1) / 0.55);
+      pillars = C((t - T1) / 0.55) * X.pillarsK; pillarX = X.pillarX;
       split = 1;
       mirror = 0.7 - 0.45 * s + 0.8 * MO.env('clap', t, 0.15);
-    } else if (t < T3) {
-      // A3: back into the mirror, the Rebis; washed white, carried up the rising mountain
-      if (t < TM) {
-        const s = 1 - EI((t - T2) / (TM - T2));
-        const x = 0.66 * s;
-        A = [-x, -0.12, 0.72, 0];
-        A2 = [0, 1, 9, 0];
-        A3 = [1, 1, 0, 1];
-        Bb = [x, -0.12, 0.72, 0];
-        B2 = [1, 1, 0, 0.6];
-        moon = [0, 0.40, 0.28, 1]; phase = 0.4;
-        pillars = 1; split = 1; mirror = 0.6 + 0.6 * EI((t - T2) / (TM - T2));
-      } else {
-        const after = t - TM;
-        const wash = SM(after / 0.8);
-        const camK = E(C(after / 1.2));
-        walls = after < 0.55 ? 1 : 0;             // swept away by the shock ring (per pixel in the shader)
-        flashS = C(1 - after / 0.07) * (MO.reduced ? 0.3 : 1);                // two frames
-        for (let i = 0; i < 7; i++) steps[i] = EO(C((t - bt(25 + i * 0.42)) / 0.2));
-        // after the dolly settles the picture keeps creeping in, so the shot cuts on motion
-        push = 1 + 0.1 * Math.max(0, after - 0.4);
-        ro = mixv([0, 0, 0], RO_END, camK);
-        ta = mixv([0, 0, 1], TA_END, camK);
-        vp = [0, mix(0.62, VP_END, camK)];
-        let top = FLOOR; for (let i = 0; i < 7; i++) top += 0.55 * steps[i];
-        const sp = project([0, top, MZ - 0.5], ro, ta, vp);
-        const climb = E(C((after - 0.05) / 1.05));
-        const sc = mix(0.72, 0.36, climb);
-        const feet = mix(-0.84, sp[1], climb);
-        // which step the feet have reached: compare them with each step's projected top front edge
-        let base = FLOOR, yPrev = project([0, FLOOR, MZ - 3.2], ro, ta, vp)[1];
-        for (let i = 0; i < 7; i++) {
-          base += 0.55 * steps[i];
-          const y = project([0, base, MZ - (3.2 - i * 0.42)], ro, ta, vp)[1];
-          if (feet >= y) climbN = i + 1;
-          else { if (feet > yPrev && y > yPrev) climbN = i + (feet - yPrev) / (y - yPrev); break; }
-          yPrev = y;
-        }
-        A = [0, feet + sc, sc, 0.7 * SM(after / 1.0)];
-        A2 = [0.5 * wash, 1 - wash, 9, 0];
-        A3 = [1 + 0.4 * wash, 1 - wash, 0, 1];
-        if (after < 0.8) { Bb = [0, A[1], sc, A[3]]; B2 = [1 - 0.5 * wash, 1 - wash, 0, 0]; }
-        moon = [0, mix(0.40, feet + sc * 1.45, climb), mix(0.28, 0.52, climb), 1]; phase = mix(0.4, 0.3, climb);
-        pillars = 1; pillarX = mix(1.42, 2.6, E(C(after / 0.6)));
-        split = 1 - wash;
-        mirror = Math.max(0, 0.6 - after * 3);
-        shock = after;
+    } else if (id === 'a3') {
+      // A3: back into the mirror, accelerating into the merge on the cut
+      const T2 = X.T2, TM = X.TM;
+      const s = 1 - EI((t - T2) / (TM - T2));
+      const x = 0.66 * s * X.spread;
+      A = [-x, -0.12, 0.72, 0];
+      A2 = [0, 1, 9, 0];
+      A3 = [1, 1, 0, 1];
+      Bb = [x, -0.12, 0.72, 0];
+      B2 = [1, 1, 0, 0.6];
+      moon = [0, 0.40, 0.28, 1 * X.moonK]; phase = 0.4;
+      pillars = 1 * X.pillarsK; pillarX = X.pillarX; split = 1; mirror = 0.6 + 0.6 * EI((t - T2) / (TM - T2));
+    } else if (id === 'a3b') {
+      // A3b: the Rebis; washed white, carried up the rising mountain
+      const after = (t - X.TM) * X.sq;
+      const wash = SM(after / 0.8);
+      const camK = E(C(after / 1.2));
+      walls = after < 0.55 ? 1 : 0;             // swept away by the shock ring (per pixel in the shader)
+      flashS = C(1 - after / 0.07) * (MO.reduced ? 0.3 : 1);                // two frames
+      for (let i = 0; i < 7; i++) steps[i] = EO(C((t - X.stepT[i]) / 0.2));
+      // after the dolly settles the picture keeps creeping in, so the shot cuts on motion; on a long
+      // cue the creep eases out to a 1.25x hold (identical to the linear creep for the first second)
+      const cx = Math.max(0, after - 0.4);
+      push = 1 + 0.1 * (cx <= 1 ? cx : 1 + 1.5 * (1 - Math.exp(-(cx - 1) / 1.5)));
+      ro = mixv([0, 0, 0], RO_END, camK);
+      ta = mixv([0, 0, 1], TA_END, camK);
+      vp = [0, mix(0.62, VP_END, camK)];
+      let top = FLOOR; for (let i = 0; i < 7; i++) top += 0.55 * steps[i];
+      const sp = project([0, top, MZ - 0.5], ro, ta, vp);
+      const climb = E(C((after - 0.05) / 1.05));
+      const sc = mix(0.72, 0.36, climb);
+      const feet = mix(-0.84, sp[1], climb);
+      // which step the feet have reached: compare them with each step's projected top front edge
+      let base = FLOOR, yPrev = project([0, FLOOR, MZ - 3.2], ro, ta, vp)[1];
+      for (let i = 0; i < 7; i++) {
+        base += 0.55 * steps[i];
+        const y = project([0, base, MZ - (3.2 - i * 0.42)], ro, ta, vp)[1];
+        if (feet >= y) climbN = i + 1;
+        else { if (feet > yPrev && y > yPrev) climbN = i + (feet - yPrev) / (y - yPrev); break; }
+        yPrev = y;
       }
+      A = [0, feet + sc, sc, 0.7 * SM(after / 1.0)];
+      A2 = [0.5 * wash, 1 - wash, 9, 0];
+      A3 = [1 + 0.4 * wash, 1 - wash, 0, 1];
+      if (after < 0.8) { Bb = [0, A[1], sc, A[3]]; B2 = [1 - 0.5 * wash, 1 - wash, 0, 0]; }
+      moon = [0, mix(0.40, feet + sc * 1.45, climb), mix(0.28, 0.52, climb), 1 * X.moonK]; phase = mix(0.4, 0.3, climb);
+      pillars = 1; pillarX = mix(X.pillarX, 2.6, E(C(after / 0.6)));
+      split = 1 - wash;
+      mirror = Math.max(0, 0.6 - after * 3);
+      shock = after;
     } else {
       // A4: cut in close; push into the third eye; all lines converge; the light of the Self
       const body = [0, -0.62, 1.0];
       const eye = [0, body[1] + 0.873 * body[2]];
-      const tSelf = bt(29), tLight = bt(30.5);
+      const T3 = X.T3, tSelf = X.tSelf, tLight = X.tLight;
       let center, zoom;
       if (t < tSelf) {
         const k = (t - T3) / (tSelf - T3);
@@ -904,32 +990,31 @@ void main() {
         const k = E(C((t - tSelf) / 0.22));
         center = mixv([0, -0.02], eye, k);
         // exponential push; it keeps creeping in after the light, then recoils in the inhale (the
-        // whole picture contracts into the eye, faster and faster into beat 32)
-        const x = inhaleAt(t);
-        zoom = Math.exp(MO.keys([[tSelf, Math.log(1.28)], [tSelf + 0.22, Math.log(2.6)], [tLight, Math.log(8)], [bt(31.6), Math.log(140)], [T_INHALE, Math.log(158)]], t, (v) => v)
-          + Math.log(105 / 158) * x * x);
+        // whole picture contracts into the eye, faster and faster into the cut)
+        const x = inhaleAt(t, X);
+        zoom = Math.exp(MO.keys(X.zk, t, (v) => v) + Math.log(105 / 158) * x * x);
       }
-      cam = [center[0], center[1], zoom, 0.035 * Math.sin(t * 3.0) * (1 - C((t - tSelf) / 0.4))];
+      cam = [center[0], center[1], zoom, 0.035 * Math.sin(mt * 3.0) * (1 - C((t - tSelf) / 0.4))];
       focus = [(eye[0] - center[0]) * zoom, (eye[1] - center[1]) * zoom];
       vp = focus;
       A = [body[0], body[1], body[2], 0.7];
       A2 = [0.5, 0, 9, 0];
       A3 = [1.4, 0, EO((t - tSelf) / 0.3), 1];
-      moon = [0, body[1] + 0.86, 0.40, 0.55 * C(1 - (zoom - 1.3) / 0.6)]; phase = 0.22;
-      // The light builds to 0.72 by the step-14 clap and holds there (no white-out), so the rings of
-      // the fill claps (steps 12 and 14) read against it. On the accented last clap (step 15) the
-      // inhale begins: the light pulls back into the third eye, an imploding ring lands on it on
-      // beat 32, and the cut, the crash and the gold flash then all expand outward.
-      inhale = inhaleAt(t);
-      converge = Math.max(SM((t - tSelf) / 0.4) * (1 - SM((t - bt(31.2)) / 0.3)), 0.8 * SM(inhale * 2.5));
-      burst = 0.72 * SM((t - tLight) / (MO.barTime(7, 0, 14) - tLight)) * (1 - 0.45 * SM(inhale));
-      [12, 14].forEach((s, i) => { const ts = MO.barTime(7, 0, s); rings[i] = t >= ts ? t - ts : -1; });
+      moon = [0, body[1] + 0.86, 0.40, 0.55 * C(1 - (zoom - 1.3) / 0.6) * X.moonK]; phase = 0.22;
+      // The light builds to 0.72 by the last ring clap and holds there (no white-out), so the rings of
+      // the fill claps read against it. On the accented last clap the inhale begins: the light pulls
+      // back into the third eye, an imploding ring lands on it on the cut, and the cut, the crash and
+      // the next shot's flash then all expand outward.
+      inhale = inhaleAt(t, X);
+      converge = Math.max(SM((t - tSelf) / 0.4) * (1 - SM((t - X.t312) / 0.3)), 0.8 * SM(inhale * 2.5)) * X.raysK;
+      burst = 0.72 * SM((t - tLight) / (X.tBurst - tLight)) * (1 - 0.45 * SM(inhale)) * X.lightK;
+      X.ringT.forEach((ts, i) => { rings[i] = t >= ts ? t - ts : -1; });
       latI = (1 - 0.5 * burst) * (1 - 0.5 * inhale);
     }
 
     // kick zoom pulse on the 2D camera only: on the fine lattice lines it would flicker
     cam[2] *= 1 + kickPush * MO.env('kick', t, 0.1) * (MO.reduced ? 0.3 : 1);
-    u.uPush = push;
+    u.uPush = push * X.zoom;
     u.uLatR = latR; u.uClimb = climbN; u.uInhale = inhale;
     u.uFlow = flow; u.uWalls = walls; u.uLatI = latI;
     u.uCam = cam; u.uRo = ro; u.uTa = ta; u.uVP = vp;
@@ -938,23 +1023,142 @@ void main() {
     u.uSteps = steps;
     u.uBurst = burst; u.uConverge = converge; u.uFocus = focus; u.uShock = shock; u.uFlashS = flashS; u.uRings = rings;
     // the clap ripples the mirror (A2)
-    u.uRipple = t >= T1 && t < T2 ? MO.env('clap', t, 0.35) : 0;
+    u.uRipple = id === 'a2' ? MO.env('clap', t, 0.35) : 0;
     u.uRippleAge = clapAge;
+    // knobs
+    u.uTurn = X.roll; u.uPalOn = X.palOn; u.uPalM = X.palM; u.uSeedL = X.seedL;
+    if (!K.still) u.uTime = mt;
     return u;
   }
 
-  // one shader per shot, each with only the features it needs
-  const shot = (id, from, to, defs, bloom = 0.45) => MO.scene({
-    id, section: 'albedo', from, to,
-    fs: defs.map((d) => `#define ${d}\n`).join('') + BODY + SCENE,
-    uniforms: (t) => uniforms(t),
-    bloom,
-    vignette: 0.4,
+  // One shader per shot, each with only the features it needs (all its cues share the program).
+  // shot(name, 30 s id, natural window in beats, head and tail beats for the cue clock, #defines,
+  // setup(X, cue, K) that fills the cue's anchors and shot knobs, bloom)
+  const shot = (name, legacy, nb0, nb1, headBeats, tailBeats, defs, setup, bloom = 0.45) => {
+    const fs = defs.map((d) => `#define ${d}\n`).join('') + BODY + SCENE;
+    MO.shot('albedo.' + name, (cue) => {
+      const K = cueClock(cue, nb0, nb1, headBeats, tailBeats);
+      const X = Object.assign({ id: name, K, b0: cue.beat0, b1: cue.beat1 }, knobs(K));
+      setup(X, cue, K);
+      MO.scene({
+        id: K.ident ? legacy : `albedo.${name}#${cue.index}`, fs,
+        uniforms: (t) => uniforms(t, X),
+        bloom: typeof bloom === 'function' ? (t) => bloom(t, X) : bloom,
+        vignette: 0.4,
+      });
+    });
+  };
+
+  // Params of every albedo shot (range (default): what it looks like):
+  //   palette    moon | sun | blood | verdigris | violet | silver | 9 numbers (moon): a colour matrix
+  //              over the shot (rows); see PALETTES
+  //   zoom       0.3..3 (1)     whole-picture zoom about the centre
+  //   roll       -3.14..3.14 (0) whole-picture roll (radians)
+  //   flow       0..8 (1)       lattice flow rate (a1, a2, a3, a4; a3b holds the lattice still)
+  //   moon       0..2 (1)       the moon's brightness (0 = no moon)
+  //   speed      0..16 (1)      ambient motion rate: flames, hair, moon rays, yods, stars, breathing
+  //   seed       any (0)        phase of that motion, and which lattice cells hold an eye
+  //   offsetBeats 0.. (0)       start partway into the shot's choreography
+  // Cost: as in the 30 s piece; the knobs are uniform branches or exact no-ops at their defaults.
+
+  // ALBEDO.A1 "Shadow on the left,": the luminous body (Sacred Mirrors) in the Universal Mind Lattice
+  // with its mandorla and the moon halo; ink floods its left half, the Shadow's eye opens.
+  // Natural length: 4 beats (beats 16-20). Stretch: the draw-on, the lattice's light wave and the
+  //   mandorla (the first 0.5 s, behind the downbeat's flash) are anchored to the cue start; the ink
+  //   floods in over the beat before the Shadow's eye opens, which lands on the last word of the first
+  //   vocal line in the cue ("left"), else 2 beats in; the accelerating camera push stretches over
+  //   the cue; the lattice keeps flowing with the beat, the nerves pulse on the kicks.
+  // Params: ink 0..1 (1) how far the ink floods (0 = the body stays luminous, no Shadow);
+  //   eyeBeats 0.. (from the vocals) beats after the cue start when the Shadow opens its eye;
+  //   mandorla 0..1 (1) the vesica of darkness behind the figure.
+  // Coupling: the lattice drift is zero on the cut, so the lattice runs on into albedo.a2 unbroken.
+  shot('a1', 'albedo-a1', 16, 20, 2.3, 0, ['ALB_SHADOW', 'ALB_MIRROR', 'ALB_MANDORLA'], (X, cue, K) => {
+    X.T0 = K.S(bt(16)); X.T1 = K.E(bt(20));
+    let tEye = K.S(bt(18));
+    if (typeof K.P.eyeBeats === 'number') tEye = cue.from + K.P.eyeBeats * BEAT;
+    else {
+      const l = firstLine(cue.from, cue.to), w = l && l.words[l.words.length - 1].t;
+      if (w && w > X.T0 + 0.25 && w < X.T1 - 0.1) tEye = w;
+    }
+    const dL = K.d(tEye - bt(18));
+    X.tInk = bt(17) + dL; X.tEye = bt(18) + dL;
+    X.inkK = K.p('ink', 1, 0, 1); X.mandorla = K.p('mandorla', 1, 0, 1);
   });
-  shot('albedo-a1', T0, T1, ['ALB_SHADOW', 'ALB_MIRROR', 'ALB_MANDORLA']);
-  shot('albedo-a2', T1, T2, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_PILLARS', 'ALB_RIPPLE']);
-  shot('albedo-a3', T2, TM, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_PILLARS']);
-  shot('albedo-a3b', TM, T3, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_MOUNTAIN', 'ALB_SHOCK']);
-  // (the bloom halo shrinks with the inhale, or it would grey the dark that closes in)
-  shot('albedo-a4', T3, T4, ['ALB_EYE3', 'ALB_BURST'], (t) => 0.45 * (1 - 0.75 * inhaleAt(t)));
+
+  // ALBEDO.A2 "Anima on the right,": the mirror; the Shadow steps out to the left, the Anima to the
+  // right, framed by the High Priestess pillars B and J, the moon between them.
+  // Natural length: 4 beats (beats 20-24). Stretch: the step out of the mirror (0.42 s), the pillars
+  //   rising (0.55 s) and the moon's descent are anchored to the cue start; the slow camera rise and
+  //   sway stretch over the cue; the figures breathe, the claps flash and ripple the mirror, the kicks
+  //   swell the aura throughout.
+  // Params: spread 0.3..1.5 (1) how far apart the two figures stand; pillars 0..1 (1);
+  //   pillarX 0.9..2.6 (1.42) the pillars' distance from the centre.
+  shot('a2', 'albedo-a2', 20, 24, 1.3, 0, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_PILLARS', 'ALB_RIPPLE'], (X, cue, K) => {
+    X.T1 = K.S(bt(20)); X.T2 = K.E(bt(24));
+  });
+
+  // ALBEDO.A3 "climb": they step back into the mirror, accelerating into the merge on the cut.
+  // Natural length: 1 beat (beats 24-25). Stretch: the walk spans the whole cue (ease-in, so the
+  //   figures meet exactly on the cut); on a long cue it starts slowly from albedo.a2's pose.
+  // Params: spread, pillars, pillarX as albedo.a2 (start from the same values to match its pose).
+  // Coupling: ends on the merge that albedo.a3b starts with; place them adjacent.
+  shot('a3', 'albedo-a3', 24, 25, 0, 1, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_PILLARS'], (X, cue, K) => {
+    X.T2 = K.S(bt(24)); X.TM = K.E(bt(25));
+  });
+
+  // ALBEDO.A3B "the Holy Mountain": the merge (the Rebis) on the cut; a shockwave blows the corridor
+  // away, the floor stacks into a stepped mountain and the figure is carried up to the summit under
+  // the moon.
+  // Natural length: 3 beats (beats 25-28). Stretch: the whole move (merge, shock, wash, the seven
+  //   steps rising every 0.42 beats, the dolly up, the climb: about 2.5 beats) is anchored to the cue
+  //   start; afterwards the figure stands on the summit, the picture's slow creep eases out to a
+  //   1.25x hold, the stars twinkle and the aura flickers. A cue shorter than 2.7 beats plays it faster.
+  // Params: moon, pillarX (the pillars slide out from it) as above; the lattice holds still (flow
+  //   only sets the value it freezes at: give a3 and a3b the same flow).
+  // Coupling: starts on albedo.a3's merge (the lattice frozen at the value it had on the cut).
+  shot('a3b', 'albedo-a3b', 25, 28, 2.7, 0, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_MOUNTAIN', 'ALB_SHOCK'], (X, cue, K) => {
+    X.TM = K.S(bt(25)); X.sq = K.sq;
+    X.stepT = [0, 1, 2, 3, 4, 5, 6].map((i) => K.S(bt(25 + i * 0.42)));
+    X.flow0 = Math.round(cue.beat0) * 0.5 * X.flowK;
+  });
+
+  // ALBEDO.A4 "to the Self, the light!": cut in close, push into the third eye, all lines converge,
+  // white-gold light, light rings on the fill claps; on the last accented clap it inhales into the eye.
+  // Natural length: 4 beats (beats 28-32). Stretch: the push into the third eye starts on the first
+  //   word on or after beat 1 of the first vocal line in the cue ("Self"), the light arrives on its
+  //   last word ("light"); without a line 1 and 2.5 beats in. The long exponential push stretches from
+  //   the light to the end; the speed lines fade 0.8 beats before the cut; light rings flash on the
+  //   last two claps between the light and the inhale; the inhale runs from the last accented clap in
+  //   the final beat (else a 16th before the cut) to the cut.
+  // Params: light 0..1.5 (1) the light of the Self; rays 0..1.5 (1) the converging speed lines;
+  //   inhale 0/1 (1) 0 = no inhale, the light and the push hold to the cut.
+  // Coupling: the inhale lands on the cut into citrinitas.c1's gold flash (score fx on the downbeat).
+  shot('a4', 'albedo-a4', 28, 32, 2.5, 0.8, ['ALB_EYE3', 'ALB_BURST'], (X, cue, K) => {
+    const T3 = X.T3 = K.S(bt(28)), T4 = X.T4 = K.E(bt(32));
+    let tSelf = K.S(bt(29)), tLight = K.S(bt(30.5));
+    const l = firstLine(cue.from, cue.to);
+    if (l) {
+      const wS = l.words.find((w) => w.t >= l.t + BEAT - 1e-6), wL = l.words[l.words.length - 1];
+      if (wS && wL.t > wS.t) { tSelf = wS.t; tLight = wL.t; }
+    }
+    X.tSelf = tSelf = Math.min(Math.max(tSelf, T3 + 0.05), K.E(bt(29)));
+    X.tLight = tLight = Math.min(Math.max(tLight, tSelf + 0.3), K.E(bt(30.5)));
+    X.t312 = K.E(bt(31.2));
+    X.inhaleOn = K.on('inhale', true);
+    let tIn = K.E(MO.barTime(7, 0, 15));
+    const acc = clapsIn(T4 - BEAT, T4).filter((e) => e.v >= 1);
+    if (acc.length) tIn = acc[acc.length - 1].t;
+    X.tInhale = X.inhaleOn ? tIn : T4;
+    const rc = clapsIn(tLight, X.tInhale).slice(-2).map((e) => e.t);
+    X.ringT = [rc[0] ?? Infinity, rc[1] ?? Infinity];
+    X.tBurst = rc.length ? rc[rc.length - 1] : K.E(MO.barTime(7, 0, 14));
+    if (!(X.tBurst > tLight + 0.1)) X.tBurst = tLight + 0.5;
+    X.zk = mono([[tSelf, Math.log(1.28)], [tSelf + 0.22, Math.log(2.6)], [tLight, Math.log(8)], [K.E(bt(31.6)), Math.log(140)], [X.tInhale, Math.log(158)]]);
+    X.lightK = K.p('light', 1, 0, 1.5); X.raysK = K.p('rays', 1, 0, 1.5);
+  }, (t, X) => 0.45 * (1 - 0.75 * inhaleAt(t, X)));   // the bloom halo shrinks with the inhale, or it would grey the dark that closes in
+
+  // without a cue list in the score (the 30 s piece) the shots take their 30 s windows themselves
+  if (!Array.isArray(MO.S.cues)) {
+    [['a1', 16, 20], ['a2', 20, 24], ['a3', 24, 25], ['a3b', 25, 28], ['a4', 28, 32]].forEach(([n, a, b]) => MO.runShot(MO.makeCue('albedo.' + n, a, b)));
+  }
 })();

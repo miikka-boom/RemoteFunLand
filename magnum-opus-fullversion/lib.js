@@ -7,7 +7,7 @@ precision highp float;
 precision highp int;
 out vec4 fragColor;
 uniform vec2  uRes;      // render-target size in pixels (16:9)
-uniform float uTime;     // global seconds, 0..30
+uniform float uTime;     // global seconds, 0..SCORE.duration
 uniform float uLocal;    // seconds since this scene started
 uniform float uDur;      // this scene's length in seconds
 uniform float uBeat;     // global beat position (float), 136 BPM

@@ -391,7 +391,7 @@
     plate(ctx, rx + 50 - 470 * kIn, y - 26, 470 * kIn, 124, st.plate, 'r', 0.7);
     const bar = Math.floor(t / BAR + 1e-6), step = Math.floor((t - bar * BAR) / MO.STEP + 1e-6);
     ctx.fillStyle = st.ink; ctx.font = font(F.hud, 400, 21);
-    const bstr = String(bar + 1).padStart(2, '0');
+    const bstr = String(bar + 1).padStart(Math.max(2, String(S.bars).length), '0');
     ctx.globalAlpha = a * 0.92;
     spaced(ctx, bstr, rx - 64, ry + 22, 2, 'right');
     ctx.font = font(F.hud, 400, 12); ctx.globalAlpha = a * 0.6;
@@ -407,10 +407,11 @@
       const hh = k ? 10 : 5;
       ctx.fillRect(sx + i * 13, sy + (10 - hh), 9, hh);
     }
-    // timecode (seconds:frames)
+    // timecode (hours:minutes:seconds:frames)
     ctx.globalAlpha = a * 0.6; ctx.fillStyle = st.ink; ctx.font = font(F.hud, 400, 11);
     const sec2 = Math.floor(t), fr = Math.floor((t - sec2) * 30 + 1e-6);
-    spaced(ctx, `TC 00:00:${String(sec2).padStart(2, '0')}:${String(fr).padStart(2, '0')}`, rx, sy + 30, 2, 'right');
+    const tc = (v) => String(v).padStart(2, '0');
+    spaced(ctx, `TC ${tc(Math.floor(sec2 / 3600))}:${tc(Math.floor(sec2 / 60) % 60)}:${tc(sec2 % 60)}:${tc(fr)}`, rx, sy + 30, 2, 'right');
     // sign, pulsing with the kick
     ctx.globalAlpha = a;
     ctx.strokeStyle = st.acc;

@@ -1,13 +1,55 @@
-// NIGREDO — XIII Death — 0.000–7.059 s (bars 0–4). Owner: eye.
-//   N1  beats 0–5   the great eye (Alex Grey line art) opens inside a Providence triangle;
-//                   the push-in dives into the pupil under the overlay's NIGREDO insert
-//   N2  beats 5–8   the sol niger over a still black mercury sea, ravens spiralling
-//   N3  beats 8–14  the colossal Shadow rises behind the black sun (it lurches up on each kick)
-//   N4  beats 14–16 fast push-in on the Shadow's face, dutch tilt; its eyes snap open on beat 15
-// Two shaders (one per shot) so only one runs per frame. Everything is a pure function of time.
+// NIGREDO — XIII Death. Owner: eye. Two shot factories (see the block above each MO.shot):
+//   nigredo.eye  (30 s piece: beats 0–5)   the great eye (Alex Grey line art) opens inside a
+//                Providence triangle; the push-in dives into the pupil under the NIGREDO insert
+//   nigredo.sun  (30 s piece: beats 5–16)  the sol niger over a still black mercury sea, ravens
+//                spiralling; the colossal Shadow rises behind it, lurching up on every beat; a fast
+//                push-in on its face, dutch tilt, its eyes snap open a beat before the cut
+// One shader per shot, so only one runs per frame; every knob is a uniform, so one program serves
+// every cue of a shot. Everything is a pure function of time. Without a cue list in the score the
+// file places both shots at their 30 s windows itself (end of file).
 // The eye GLSL between the EYE markers is identical in coda.js (the circle closes there).
 (() => {
   const BEAT = MO.BEAT;
+
+  // ==== CUE CLOCK BEGIN (identical in nigredo.js, albedo.js and coda.js) ====
+  // Places a shot's choreography in any cue. The choreography is written on the shot's natural
+  // timeline: the times it has in the 30 s piece, beats nb0..nb1. For a cue anywhere, of any length:
+  //   K.S(n)  real time of the natural time n anchored to the cue's start (reveals, entrances).
+  //           The head plays at natural speed; K.sq > 1 speeds it up when the cue is too short for
+  //           its first headBeats plus its last tailBeats. K.H(t) is the inverse: natural head time.
+  //   K.E(n)  real time of n anchored to the cue's end: dives, snaps and closes keep their distance
+  //           to the cut. A move from an S anchor to an E anchor stretches with the cue.
+  //   K.M(t)  ambient-motion clock (spins, flames, drifts): t, sped up around the cue start by
+  //           params.speed and shifted by params.seed (seconds of motion = seed * 9.73).
+  //   K.nb(b) natural time of the shot's own beat b; K.d(x) snaps float noise in a shift to 0.
+  //   K.p(name, default, min, max) and K.on(name, default) read a numeric / on-off param.
+  // params.offsetBeats starts the cue that many beats into the natural choreography. In the shot's
+  // own 30 s window without offset (K.ident) S, E and H return their argument, and M does while
+  // speed is 1 and seed 0 (K.still): the 30 s edit renders exactly as before.
+  const cueClock = (cue, nb0, nb1, headBeats, tailBeats) => {
+    const BT = MO.BEAT, P = cue.params || {};
+    const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+    const p = (k, d, lo = -Infinity, hi = Infinity) => MO.clamp(num(P[k], d), lo, hi);
+    const on = (k, d) => { const v = P[k]; return v === undefined || v === null ? d : !!v && v !== 'off' && v !== '0'; };
+    const off = p('offsetBeats', 0, 0, 256) * BT, speed = p('speed', 1, 0, 16), seed = p('seed', 0);
+    const n0 = nb0 * BT, n1 = nb1 * BT;
+    const ident = off === 0 && cue.beat0 === nb0 && cue.beat1 === nb1;
+    const head = Math.max(0, headBeats * BT - off), room = cue.to - cue.from - tailBeats * BT;
+    const sq = ident ? 1 : Math.max(1, head / Math.max(room, 0.25 * head, 1e-3));
+    const still = speed === 1 && seed === 0;
+    return {
+      P, p, on, ident, still, sq, off, n0, n1, speed, seed,
+      nb: (b) => (nb0 + b) * BT,
+      S: (n) => (ident ? n : cue.from + (n - n0 - off) / sq),
+      H: (t) => (ident ? t : n0 + off + (t - cue.from) * sq),
+      E: (n) => (ident ? n : cue.to - (n1 - n)),
+      M: (t) => (still ? t : cue.from + (t - cue.from) * speed + seed * 9.73),
+      d: (x) => (Math.abs(x) < 1e-9 ? 0 : x),
+    };
+  };
+  // keyframe times made non-decreasing (a squeezed or re-anchored cue may reorder them)
+  const mono = (k) => { for (let i = 1; i < k.length; i++) if (k[i][0] <= k[i - 1][0]) k[i] = [k[i - 1][0] + 1e-4, k[i][1]]; return k; };
+  // ==== CUE CLOCK END ====
 
   // ==== EYE GLSL BEGIN (identical in nigredo.js and coda.js) ====
   const EYE = `
@@ -288,9 +330,10 @@ uniform float uZ;      // screen units per eye unit (the push-in)
 uniform vec2  uPC;     // screen position of the iris centre
 uniform float uTri;    // Providence triangle + glory
 uniform float uDive;   // 0..1 the dive into the pupil
+uniform float uPal;    // palette knob: 0 nigredo .. 1 rubedo (params.gold)
 
 void main() {
-  ey_palette(0.0);
+  ey_palette(uPal);
   vec2 p = uvCentered(gl_FragCoord.xy);
   vec2 e = (p - uPC) / uZ + EY_IC;
   float pe = px() / uZ;
@@ -346,6 +389,7 @@ uniform float uFace;     // face push-in amount
 uniform float uSnap;     // the eyes' snap burst (decays)
 uniform float uSnapR;    // its shockwave radius
 uniform vec2  uEyeS;     // screen position between the Shadow's eyes
+uniform float uPal;      // palette knob: 0 nigredo .. 1 rubedo (params.gold)
 
 const vec2  NG_SUN = vec2(0.0, 0.16);
 const float NG_HZ = -0.32;
@@ -525,7 +569,7 @@ vec3 ng_sky(vec2 w, float pe, float t) {
 }
 
 void main() {
-  ey_palette(0.0);
+  ey_palette(uPal);
   vec2 p = uvCentered(gl_FragCoord.xy);
   float t = uTime;
   vec2 w = ng_rot(p, uTilt) / uZc + uCc;
@@ -576,14 +620,28 @@ void main() {
   fragColor = vec4(col * uFade, 1.0);
 }`;
 
-  // ------------------------------------------------------------------ timing
-  const T_CUT = 5 * BEAT;            // 2.206: the cut under the NIGREDO insert
-  const T_ENTER = 4 * BEAT;          // 1.765: the dive starts (kick, orch hit, "Nigredo")
-  const T_RISE = 8 * BEAT;           // 3.529: the Shadow starts to rise
-  const T_PUSH = 14 * BEAT;          // 6.176: push-in on the face
-  const T_EYES = 15 * BEAT;          // 6.618: the Shadow's eyes snap open
-  const T_END = 16 * BEAT;           // 7.059
-
+  // ------------------------------------------------------------------ shot nigredo.eye
+  // NIGREDO.EYE: the great eye opens inside a Providence triangle; the push-in dives into the pupil.
+  // Natural length: 5 beats (beats 0-5 of the 30 s piece; the cut lands under the NIGREDO insert).
+  // Stretch: the opening (lid twitch and opening, iris ignition, contour lines, glint, triangle:
+  //   1.75 s, about 4 beats) is anchored to the cue start at natural speed, sped up when the cue is
+  //   too short for it plus the dive. The dive into the pupil is the cue's last beat. The slow push-in
+  //   stretches between the two; on a long cue the open eye holds while the iris spins and the flame
+  //   aura flickers (and throbs on the kicks with pulse). offsetBeats 2 starts with the eye half open.
+  // Params (range (default): what it looks like):
+  //   dive       0/1 (1)       the last beat dives into the pupil; 0 holds the open eye to the cut
+  //   gold       0..1 (0)      palette: 0 nigredo (bone, violet, verdigris), 1 rubedo (gold, crimson)
+  //   sun        0..1 (0)      the pupil: 0 the black sun, 1 a white-hot sun around a black core
+  //   triangle   0..2 (1)      the Providence triangle and its glory of rays (0 = the eye alone)
+  //   pulse      0..2 (0)      the pupil and the flame aura throb on every kick
+  //   zoom       0.3..3 (1)    camera zoom (multiplies the push-in)
+  //   x, y       -1..1 (0)     iris screen position (1 = half the frame height)
+  //   speed      0..16 (1)     ambient motion rate: iris spin, tremble, flame flicker
+  //   seed       any (0)       phase of that motion
+  //   offsetBeats 0..5 (0)     start partway into the choreography
+  // Coupling: its last frame (the black pupil filling the frame, dark speed lines) cuts into
+  //   nigredo.sun's fade from black; both are anchored to that cut, so they match at any lengths.
+  // Cost: as in the 30 s piece (one shader; about 60 ms per 640x360 frame on SwiftShader).
   const openAt = (t) => {
     if (t < 0.80) {
       const s = MO.smooth(MO.remap(t, 0.12, 0.80));
@@ -592,85 +650,156 @@ void main() {
     const u = t - 0.80;
     return 1.0 - 0.90 * Math.exp(-6.5 * u) * Math.cos(10.0 * u);
   };
-  const N1u = (t) => {
-    const ig = MO.easeOut(MO.remap(t, 0.88, 1.75));
-    const trem = MO.remap(t, 0.85, 0.95) * (1 - MO.remap(t, 1.2, 1.5));
-    let Z = MO.mix(0.52, 1.12, MO.smooth(MO.remap(t, 0.0, T_ENTER)));
-    const dv = MO.remap(t, T_ENTER, T_CUT);
-    Z *= Math.exp(3.4 * Math.pow(dv, 1.7));
-    return {
-      uOpen: openAt(t), uIgnite: ig, uLines: MO.easeOut(MO.remap(t, 0.0, 1.5)),
-      uGlint: MO.remap(t, 1.28, 1.62), uGold: 0, uSpin: 0.04 * t, uPupil: 1.3 - 0.35 * ig + 0.5 * MO.easeIn(dv),
-      uLook: [0.012 * trem * Math.sin(t * 61.0), 0.008 * trem * Math.sin(t * 47.0 + 1.0)],
-      uAura: 0.6 + 0.4 * MO.env('hits', t, 0.7), uHi: MO.remap(t, 0.95, 1.2) * ig,
-      uZ: Z, uPC: [0, MO.mix(-0.03, 0.0, MO.smooth(MO.remap(t, 0.5, T_ENTER)))],
-      uTri: MO.remap(t, 0.05, 0.7) * (1 - MO.remap(t, 1.2, 1.75)), uDive: MO.easeIn(dv),
+  MO.shot('nigredo.eye', (cue) => {
+    const K = cueClock(cue, 0, 5, 4, 1);
+    const dive = K.on('dive', true);
+    const gold = K.p('gold', 0, 0, 1), sun = K.p('sun', 0, 0, 1), tri = K.p('triangle', 1, 0, 2), pulse = K.p('pulse', 0, 0, 2);
+    const zoom = K.p('zoom', 1, 0.3, 3), ex = K.p('x', 0, -1, 1), ey = K.p('y', 0, -1, 1);
+    const T0 = K.S(0);                                        // the shot starts (the gong)
+    const T_ENTER = dive ? K.E(4 * BEAT) : cue.to;           // 1.765: the dive starts (kick, orch hit, "Nigredo")
+    const T_CUT = dive ? K.E(5 * BEAT) : cue.to + 1;         // 2.206: the cut under the NIGREDO insert
+    const T_PC = K.S(0.5);
+    const uniforms = (t) => {
+      const h = K.H(t), mt = K.M(t);                         // natural head time; ambient-motion time
+      const ig = MO.easeOut(MO.remap(h, 0.88, 1.75));
+      const trem = MO.remap(h, 0.85, 0.95) * (1 - MO.remap(h, 1.2, 1.5));
+      let Z = MO.mix(0.52, 1.12, MO.smooth(MO.remap(t, T0, T_ENTER)));
+      const dv = MO.remap(t, T_ENTER, T_CUT);
+      Z *= Math.exp(3.4 * Math.pow(dv, 1.7));
+      const kp = pulse * MO.env('kick', t, 0.15);
+      const u = {
+        uOpen: openAt(h), uIgnite: ig, uLines: MO.easeOut(MO.remap(h, 0.0, 1.5)),
+        uGlint: MO.remap(h, 1.28, 1.62), uGold: gold, uPal: gold, uSun: sun, uSpin: 0.04 * (mt - T0),
+        uPupil: 1.3 - 0.35 * ig + 0.5 * MO.easeIn(dv) + 0.10 * kp,
+        uLook: [0.012 * trem * Math.sin(mt * 61.0), 0.008 * trem * Math.sin(mt * 47.0 + 1.0)],
+        uAura: 0.6 + 0.4 * MO.env('hits', t, 0.7) + 0.6 * kp, uHi: MO.remap(h, 0.95, 1.2) * ig,
+        uZ: Z * zoom, uPC: [ex, MO.mix(-0.03, 0.0, MO.smooth(MO.remap(t, T_PC, T_ENTER))) + ey],
+        uTri: MO.remap(h, 0.05, 0.7) * (1 - MO.remap(h, 1.2, 1.75)) * tri, uDive: MO.easeIn(dv),
+      };
+      if (!K.still) u.uTime = mt;
+      return u;
     };
-  };
-  MO.scene({ id: 'nigredo', section: 'nigredo', from: 0, to: T_CUT, fs: N1, uniforms: N1u, bloom: 0.45, bloomThreshold: 0.9, vignette: 0.45 });
+    MO.scene({ id: K.ident ? 'nigredo' : 'nigredo.eye#' + cue.index, fs: N1, uniforms, bloom: 0.45, bloomThreshold: 0.9, vignette: 0.45 });
+  });
 
-  // the Shadow rises in lurches, one per kick, on top of a slow steady climb
+  // ------------------------------------------------------------------ shot nigredo.sun
+  // NIGREDO.SUN: the sol niger over the still black mercury sea, ravens circling; the colossal
+  // Shadow rises behind it; a fast push-in on its face, dutch tilt; its eyes snap open.
+  // Natural length: 11 beats (beats 5-16 of the 30 s piece).
+  // Stretch: the approach out of the dark (fade-in, camera, ravens: about 1.6 beats) and the start of
+  //   the rise (the shot's beat 3, or params.rise) are anchored to the cue start; the push-in on the
+  //   face (the last 2 beats) and the eyes' snap (the last beat) to the cue end. Between them the
+  //   Shadow rises with one lurch on every beat (6 in the 30 s piece, more on a longer cue) over a
+  //   slow steady climb, and the camera keeps its steady push and sway; the ravens circle, the kicks
+  //   ripple the sky contours and pulse the corona, the hats drive the speed lines throughout. A short
+  //   cue speeds the approach up and keeps at least one lurch, still on the beat.
+  // Params (range (default): what it looks like):
+  //   shadow     0/1 (1)       0: no Shadow and no face push-in; the sun, the sea and the ravens
+  //                            with the steady push to the cut
+  //   rise       0..64 (3)     beats after the shot start when the Shadow starts to rise
+  //   snap       0/1 (1)       the Shadow's eyes snap open a beat before the cut (red shockwave, glow);
+  //                            0 keeps them closed (the push-in still lands on the face)
+  //   gold       0..1 (0)      palette: corona, sky contours, rims and raven sheen turn rubedo red-gold
+  //   ravens     0..1 (1)      raven visibility
+  //   zoom       0.3..3 (1)    camera zoom
+  //   x, y       -1..1 (0)     camera offset in world units (the push-in still centres the face)
+  //   roll       -1..1 (0)     added to the dutch tilt (radians)
+  //   speed      0..16 (1)     ambient motion rate: ravens circling, ash, sea ripples, camera sway
+  //   seed       any (0)       phase of that motion
+  //   offsetBeats 0..11 (0)    start partway (3 = the rise starts on the cut)
+  // Coupling: fades in from black (nigredo.eye's dive); ends on the Shadow's face at zoom 6.2 with
+  //   its eyes glowing, into albedo.a1's white flash (an fx flash on the next downbeat in the score).
+  // Cost: as in the 30 s piece (one shader; about 115-130 ms per 640x360 frame on SwiftShader).
   const S_SCALE = 1.45;
   const R_FINAL = 0.16 - 0.44 * S_SCALE;      // its heart behind the black sun
-  const R_START = -0.32 - 0.99 * S_SCALE;     // the crown (body y 0.975) a hair under the horizon: the beat-8 kick lifts it through
-  const riseAt = (t) => {
-    const k = MO.clamp((t - T_RISE) / (T_PUSH - 0.25 - T_RISE));
-    // one lurch on each kick of beats 8-13, over the first ~0.17 s of the beat
-    const steps = 6, kb = (t - T_RISE) / BEAT, n = Math.min(steps, Math.max(0, Math.floor(kb))), f = kb - n;
-    const stepped = t < T_RISE ? 0 : n >= steps ? 1 : (n + MO.easeOut(MO.clamp(f * 2.6))) / steps;
-    return MO.mix(R_START, R_FINAL, 0.35 * MO.smooth(k) + 0.65 * stepped);
-  };
-  const birds = (t) => {
-    const out = [];
-    const tt = t - T_CUT;
-    for (let i = 0; i < 7; i++) {
-      const w0 = 0.9 + 0.12 * (i % 3);
-      const th = i * 2.399 + w0 * tt;
-      const rad = 0.24 * (1.5 + 0.30 * i) * (1 - 0.05 * tt) * (1 + 0.08 * Math.sin(0.6 * tt + i));
-      const pos = (th2) => [0.0 + rad * Math.cos(th2), 0.16 + rad * 0.42 * Math.sin(th2) + 0.08 * Math.sin(th2 * 2 + i)];
-      const p0 = pos(th), p1 = pos(th + 0.01);
-      const vx = p1[0] - p0[0], vy = p1[1] - p0[1];
-      const behind = Math.sin(th) > 0.15;
-      const scale = 0.12 * (1 - 0.30 * Math.sin(th)) * (0.85 + 0.12 * (i % 2));
-      const hd = Math.atan2(vy, vx);
-      out.push(p0[0], p0[1], scale, hd + (behind ? 10 : 0));
-    }
-    return out;
-  };
-  // camera zoom before the face push-in: the approach out of the dark, then a steady push (1.5x by
-  // beat 14) that never stalls; N4's push-in is normalised so it still lands on zoom 6.2 at the cut
-  const Z_FACE = 6.2;
-  const zBase = (t) => MO.mix(0.32, 0.84, MO.easeOut(MO.remap(t, T_CUT, 2.75))) * Math.exp(Math.log(1.25 / 0.84) * Math.max(0, t - 2.6) / (T_PUSH - 2.6));
-  const Z_END = zBase(T_END);
-  const N2u = (t) => {
-    const lastK = MO.last('kick', t);
-    const kt = lastK ? t - lastK.e.t : 10;
-    const hats = MO.count('closedHat', t);
-    // camera: approach out of the dark, steady push with a lurch on every kick, then the fast push-in on the face
-    let Z = zBase(t) * (1 + (MO.reduced ? 0.005 : 0.03) * MO.env('kick', t, 0.1));
-    let C = [MO.keys([[T_CUT, 0.0], [2.75, 0.09], [T_RISE + 0.6, -0.05], [T_PUSH - 0.3, 0.0]], t) + 0.015 * Math.sin(t * 0.7), MO.keys([[T_CUT, 0.16], [2.75, 0.08], [T_RISE, 0.05], [T_PUSH - 0.3, 0.24]], t)];
-    const rise = riseAt(t);
-    const faceY = rise + 0.862 * S_SCALE;
-    const pk = MO.remap(t, T_PUSH, T_END);
-    const tSnap = (T_EYES - T_PUSH) / (T_END - T_PUSH);
-    const push = pk < tSnap ? 0.62 * MO.easeInOut(pk / tSnap) : 0.62 + 0.38 * MO.easeIn((pk - tSnap) / (1 - tSnap)) * 0.6 + 0.38 * 0.4 * MO.easeOut((pk - tSnap) / (1 - tSnap));
-    Z = Z * Math.exp(Math.log(Z_FACE / Z_END) * push);
-    C = [MO.mix(C[0], 0.0, push), MO.mix(C[1], faceY, MO.smooth(MO.clamp(pk * 1.4)))];
-    const eu = t - T_EYES;
-    const eyes = eu < 0 ? 0 : MO.clamp(1.0 - Math.exp(-40 * eu) * Math.cos(30 * eu) + 0.15 * Math.exp(-8 * eu) * Math.sin(30 * eu), 0, 1.2);
-    const claps = MO.env('clap', t, 0.12);
-    const tilt = -0.20 * MO.easeInOut(pk) + 0.035 * Math.sin(t * 0.8 + 1.0) * (1 - pk);
-    return {
-      uOpen: 0, uIgnite: 0, uLines: 0, uGlint: -1, uGold: 0, uSpin: 0, uPupil: 1, uLook: [0, 0], uAura: 0, uHi: 0,
-      uZc: Z, uCc: C, uTilt: tilt,
-      uRise: rise, uSS: S_SCALE, uShA: MO.remap(t, T_RISE - 0.2, T_RISE + 0.3),
-      uEyes: eyes, uEyeGlow: (t > T_EYES ? 0.6 * claps : 0) + 1.6 * MO.easeIn(MO.remap(t, T_EYES + 0.15, T_END)),
-      uKT: kt, uKA: t >= T_ENTER ? 1 : 0, uSunR: 0.24 * (1 + (MO.reduced ? 0.012 : 0.03) * Math.exp(-kt / 0.12)),
-      uBird: birds(t), uBirdA: MO.remap(t, T_CUT + 0.2, 2.9),
-      uSpeed: (MO.reduced ? 0.4 : 1) * (MO.remap(t, T_RISE - 0.05, T_RISE + 0.2) * (0.35 + 0.65 * MO.env('closedHat', t, 0.09)) + 0.6 * MO.env('openHat', t, 0.12)),
-      uSnap: t > T_EYES ? Math.exp(-(t - T_EYES) / 0.22) * (MO.reduced ? 0.4 : 1) : 0, uSnapR: 0.32 + Math.max(0, t - T_EYES) * 5.0, uEyeS: (() => { const dx = (0 - C[0]) * Z, dy = (faceY - C[1]) * Z, a = -tilt; return [Math.cos(a) * dx - Math.sin(a) * dy, Math.sin(a) * dx + Math.cos(a) * dy]; })(),
-      uHN: hats, uFade: MO.easeOut(MO.remap(t, T_CUT, 2.65)), uFace: MO.smooth(MO.remap(t, T_PUSH - 0.2, T_PUSH + 0.4)),
+  const R_START = -0.32 - 0.99 * S_SCALE;     // the crown (body y 0.975) a hair under the horizon: the first lurch lifts it through
+  const Z_FACE = 6.2;                         // the push-in lands on this zoom at the cut
+  MO.shot('nigredo.sun', (cue) => {
+    const K = cueClock(cue, 5, 16, 4.4, 2.7);
+    const shadow = K.on('shadow', true), snap = shadow && K.on('snap', true);
+    const gold = K.p('gold', 0, 0, 1), ravens = K.p('ravens', 1, 0, 1), zoom = K.p('zoom', 1, 0.3, 3);
+    const cx = K.p('x', 0, -1, 1), cy = K.p('y', 0, -1, 1), roll = K.p('roll', 0, -1, 1);
+    const T_CUT = K.S(5 * BEAT);                              // 2.206: the shot starts (out of the dive's black)
+    let T_RISE = K.S(K.nb(K.p('rise', 3, 0, 256)));          // 3.529: the Shadow starts to rise
+    if (K.sq > 1) T_RISE = cue.from + Math.round((T_RISE - cue.from) / BEAT) * BEAT;   // squeezed: keep the lurches on the beat
+    const T_END = K.E(16 * BEAT);                             // 7.059: the cut
+    const T_PUSH = shadow ? K.E(14 * BEAT) : T_END + 10;     // 6.176: push-in on the face
+    const T_EYES = K.E(15 * BEAT);                            // 6.618: the Shadow's eyes snap open
+    const T_STEADY = shadow ? T_PUSH : T_END;                 // the steady push reaches 1.25x here
+    const A_26 = K.S(2.6), A_265 = K.S(2.65), A_275 = K.S(2.75), A_29 = K.S(2.9), A_BIRD = K.S(5 * BEAT + 0.2);
+    // the Shadow rises in lurches, one per beat of the rise, on top of a slow steady climb
+    const steps = Math.max(1, Math.round((T_PUSH - T_RISE) / BEAT));
+    const riseAt = (t) => {
+      const k = MO.clamp((t - T_RISE) / Math.max(0.05, T_PUSH - 0.25 - T_RISE));
+      // one lurch per beat, over the first ~0.17 s of the beat
+      const kb = (t - T_RISE) / BEAT, n = Math.min(steps, Math.max(0, Math.floor(kb))), f = kb - n;
+      const stepped = t < T_RISE ? 0 : n >= steps ? 1 : (n + MO.easeOut(MO.clamp(f * 2.6))) / steps;
+      return MO.mix(R_START, R_FINAL, 0.35 * MO.smooth(k) + 0.65 * stepped);
     };
-  };
-  MO.scene({ id: 'nigredo-sun', section: 'nigredo', from: T_CUT, to: T_END, fs: N2, uniforms: N2u, bloom: 0.7, bloomThreshold: 0.75, vignette: 0.5 });
+    // the ravens on the ambient-motion clock (mt); the spiral tightens over the first 4.86 s, then holds
+    const birds = (mt) => {
+      const out = [];
+      const tt = mt - T_CUT;
+      for (let i = 0; i < 7; i++) {
+        const w0 = 0.9 + 0.12 * (i % 3);
+        const th = i * 2.399 + w0 * tt;
+        const rad = 0.24 * (1.5 + 0.30 * i) * (1 - 0.05 * Math.min(tt, 4.86)) * (1 + 0.08 * Math.sin(0.6 * tt + i));
+        const pos = (th2) => [0.0 + rad * Math.cos(th2), 0.16 + rad * 0.42 * Math.sin(th2) + 0.08 * Math.sin(th2 * 2 + i)];
+        const p0 = pos(th), p1 = pos(th + 0.01);
+        const vx = p1[0] - p0[0], vy = p1[1] - p0[1];
+        const behind = Math.sin(th) > 0.15;
+        const scale = 0.12 * (1 - 0.30 * Math.sin(th)) * (0.85 + 0.12 * (i % 2));
+        const hd = Math.atan2(vy, vx);
+        out.push(p0[0], p0[1], scale, hd + (behind ? 10 : 0));
+      }
+      return out;
+    };
+    // camera zoom before the face push-in: the approach out of the dark, then a steady push (1.25x by
+    // the push-in) that never stalls; the push-in is normalised so it still lands on zoom 6.2 at the cut
+    const zBase = (t) => MO.mix(0.32, 0.84, MO.easeOut(MO.remap(t, T_CUT, A_275))) * Math.exp(Math.log(1.25 / 0.84) * Math.max(0, t - A_26) / (T_STEADY - A_26));
+    const Z_END = zBase(T_END);
+    const T_P3 = (shadow ? T_PUSH : T_END) - 0.3;
+    const KX = mono([[T_CUT, 0.0], [A_275, 0.09], [T_RISE + 0.6, -0.05], [T_P3, 0.0]]);
+    const KY = mono([[T_CUT, 0.16], [A_275, 0.08], [T_RISE, 0.05], [T_P3, 0.24]]);
+    const uniforms = (t) => {
+      const mt = K.M(t);
+      const lastK = MO.last('kick', t);
+      const kt = lastK ? t - lastK.e.t : 10;
+      const hats = MO.count('closedHat', t);
+      // camera: approach out of the dark, steady push with a lurch on every kick, then the fast push-in on the face
+      let Z = zBase(t) * (1 + (MO.reduced ? 0.005 : 0.03) * MO.env('kick', t, 0.1));
+      let C = [MO.keys(KX, t) + 0.015 * Math.sin(mt * 0.7) + cx, MO.keys(KY, t) + cy];
+      const rise = riseAt(t);
+      const faceY = rise + 0.862 * S_SCALE;
+      const pk = shadow ? MO.remap(t, T_PUSH, T_END) : 0;
+      const tSnap = (T_EYES - T_PUSH) / (T_END - T_PUSH);
+      const push = pk < tSnap ? 0.62 * MO.easeInOut(pk / tSnap) : 0.62 + 0.38 * MO.easeIn((pk - tSnap) / (1 - tSnap)) * 0.6 + 0.38 * 0.4 * MO.easeOut((pk - tSnap) / (1 - tSnap));
+      Z = Z * Math.exp(Math.log(Z_FACE / Z_END) * push) * zoom;
+      C = [MO.mix(C[0], 0.0, push), MO.mix(C[1], faceY, MO.smooth(MO.clamp(pk * 1.4)))];
+      const eu = t - T_EYES;
+      const eyes = !snap || eu < 0 ? 0 : MO.clamp(1.0 - Math.exp(-40 * eu) * Math.cos(30 * eu) + 0.15 * Math.exp(-8 * eu) * Math.sin(30 * eu), 0, 1.2);
+      const claps = MO.env('clap', t, 0.12);
+      const tilt = -0.20 * MO.easeInOut(pk) + 0.035 * Math.sin(mt * 0.8 + 1.0) * (1 - pk) + roll;
+      const u = {
+        uOpen: 0, uIgnite: 0, uLines: 0, uGlint: -1, uGold: 0, uSpin: 0, uPupil: 1, uLook: [0, 0], uAura: 0, uHi: 0, uPal: gold,
+        uZc: Z, uCc: C, uTilt: tilt,
+        uRise: rise, uSS: S_SCALE, uShA: shadow ? MO.remap(t, T_RISE - 0.2, T_RISE + 0.3) : 0,
+        uEyes: eyes, uEyeGlow: snap ? (t > T_EYES ? 0.6 * claps : 0) + 1.6 * MO.easeIn(MO.remap(t, T_EYES + 0.15, T_END)) : 0,
+        uKT: kt, uKA: 1, uSunR: 0.24 * (1 + (MO.reduced ? 0.012 : 0.03) * Math.exp(-kt / 0.12)),
+        uBird: birds(mt), uBirdA: MO.remap(t, A_BIRD, A_29) * ravens,
+        uSpeed: (MO.reduced ? 0.4 : 1) * (MO.remap(t, T_RISE - 0.05, T_RISE + 0.2) * (0.35 + 0.65 * MO.env('closedHat', t, 0.09)) + 0.6 * MO.env('openHat', t, 0.12)),
+        uSnap: snap && t > T_EYES ? Math.exp(-(t - T_EYES) / 0.22) * (MO.reduced ? 0.4 : 1) : 0, uSnapR: 0.32 + Math.max(0, t - T_EYES) * 5.0, uEyeS: (() => { const dx = (0 - C[0]) * Z, dy = (faceY - C[1]) * Z, a = -tilt; return [Math.cos(a) * dx - Math.sin(a) * dy, Math.sin(a) * dx + Math.cos(a) * dy]; })(),
+        uHN: hats, uFade: MO.easeOut(MO.remap(t, T_CUT, A_265)), uFace: MO.smooth(MO.remap(t, T_PUSH - 0.2, T_PUSH + 0.4)),
+      };
+      if (!K.still) u.uTime = mt;
+      return u;
+    };
+    MO.scene({ id: K.ident ? 'nigredo-sun' : 'nigredo.sun#' + cue.index, fs: N2, uniforms, bloom: 0.7, bloomThreshold: 0.75, vignette: 0.5 });
+  });
+
+  // without a cue list in the score (the 30 s piece) the shots take their 30 s windows themselves
+  if (!Array.isArray(MO.S.cues)) {
+    MO.runShot(MO.makeCue('nigredo.eye', 0, 5));
+    MO.runShot(MO.makeCue('nigredo.sun', 5, 16));
+  }
 })();

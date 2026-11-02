@@ -1,9 +1,10 @@
 // MAGNUM OPUS engine: timeline, scene shaders, bloom + post, 2D overlay, live playback
 // and a deterministic capture API for rendering the MP4.
 //
-// Everything on screen is a pure function of the time t (seconds, 0..30). Scenes are
-// fragment shaders registered with MO.scene(); the typography layer is a 2D canvas
-// drawn by functions registered with MO.overlay(). See scenes/*.js and overlay.js.
+// Everything on screen is a pure function of the time t (seconds, 0..MO.DUR, from
+// SCORE.duration). Scenes are fragment shaders registered with MO.scene() (directly, or by
+// a shot factory that a cue in SCORE.cues runs); the typography layer is a 2D canvas drawn
+// by functions registered with MO.overlay(). See scenes/*.js and overlay.js.
 (() => {
   'use strict';
   const S = window.SCORE;
@@ -17,6 +18,8 @@
     quality: 1,          // scene render scale (live mode adapts it)
     t: 0,
     capture: params.has('capture'),
+    lookahead: params.has('lookahead') ? Math.max(0, +params.get('lookahead') || 0) : 10,   // seconds compiled before live playback starts
+    compileJobs: Math.max(1, +params.get('bgjobs') || 2),   // background compiles in flight at once
   };
 
   // ---------------------------------------------------------------- timeline helpers
@@ -47,8 +50,9 @@
   MO.shots = {};
   MO.shot = (id, factory) => { MO.shots[id] = factory; };
   MO.cues = [];
+  const cueMode = Array.isArray(S.cues);
   function expandCues(errorFs) {
-    if (MO._cuesExpanded || !Array.isArray(S.cues)) return;
+    if (MO._cuesExpanded || !cueMode) return;
     MO._cuesExpanded = true;
     S.cues.forEach((c, index) => {
       const bpb = S.beatsPerBar;
@@ -68,14 +72,18 @@
     MO.cues.push(cue);
     return cue;
   };
-  // run a shot factory for a cue; scenes it registers default to the cue's window
+  // run a shot factory for a cue; scenes it registers default to the cue's window and take the
+  // cue's generic post knobs (params.grade, params.frame) unless the factory set their own
   MO.runShot = (cue) => {
     const n = MO.scenes.length;
     MO.shots[cue.shot](cue);
+    const p = cue.params || {};
     for (let i = n; i < MO.scenes.length; i++) {
       const sc = MO.scenes[i];
       sc.from = sc.from ?? cue.from; sc.to = sc.to ?? cue.to; sc.cue = cue;
       if (!sc.section) { const sec = MO.section(cue.from + 1e-4); sc.section = sec && sec.id; }
+      if (sc.grade === undefined && p.grade != null) sc.grade = p.grade;
+      if (sc.frame === undefined && p.frame != null) sc.frame = p.frame;
     }
   };
   MO.overlay = (fn) => { MO.overlays.push(fn); };
@@ -147,6 +155,81 @@
   }
   MO.fxAt = fxAt;
 
+  // ---------------------------------------------------------------- generic per-scene post knobs
+  // grade: { hue (degrees), saturation, contrast, gain [r,g,b], lift [r,g,b] }, applied to the
+  // tone-mapped picture (display-referred, 0..1) before flashes and typography:
+  //   c = H(hue) c; c = Sat(saturation) c; c = (c - 0.5) * contrast + 0.5; c *= gain; c = c + lift * (1 - c)
+  // frame: { mirrorX, zoom (>= 1), offset [x, y] (fractions of the frame), roll (degrees) }: the
+  // camera on the scene layer (scene + bloom, not the typography). Zoom grows by itself so a roll
+  // never shows an edge, and the offset is clamped to what the zoom leaves room for.
+  // Each value may be a constant or keyframes [[u, v], ...] with u = 0..1 over the cue (the scene's
+  // own window without a cue); a whole knob may also be a function (t, local, MO) => object.
+  const kv = (v, u) => (Array.isArray(v) && Array.isArray(v[0]) ? MO.keys(v, u) : v);
+  const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'boolean' ? +v : d);
+  const vec = (v, n, d) => {
+    if (typeof v === 'number' && Number.isFinite(v)) return new Array(n).fill(v);
+    if (Array.isArray(v) && v.length >= n) return v.slice(0, n).map((x) => num(x, d));
+    return new Array(n).fill(d);
+  };
+  function knobU(sc, t) {
+    const a = sc.cue ? sc.cue.from : sc.from, b = sc.cue ? sc.cue.to : sc.to;
+    return b > a ? MO.clamp((t - a) / (b - a)) : 0;
+  }
+  const knobDef = (def, sc, t) => (typeof def === 'function' ? def(t, t - sc.from, MO) : def);
+  // CSS filter matrices (Rec. 709 luma weights), row-major
+  function hueMat(deg) {
+    const a = deg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+    return [
+      0.213 + c * 0.787 - s * 0.213, 0.715 - c * 0.715 - s * 0.715, 0.072 - c * 0.072 + s * 0.928,
+      0.213 - c * 0.213 + s * 0.143, 0.715 + c * 0.285 + s * 0.140, 0.072 - c * 0.072 - s * 0.283,
+      0.213 - c * 0.213 - s * 0.787, 0.715 - c * 0.715 + s * 0.715, 0.072 + c * 0.928 + s * 0.072,
+    ];
+  }
+  function satMat(k) {
+    return [
+      0.213 + 0.787 * k, 0.715 - 0.715 * k, 0.072 - 0.072 * k,
+      0.213 - 0.213 * k, 0.715 + 0.285 * k, 0.072 - 0.072 * k,
+      0.213 - 0.213 * k, 0.715 - 0.715 * k, 0.072 + 0.928 * k,
+    ];
+  }
+  // returns { m: mat3 (column-major), o: vec3 } or null for the identity
+  MO.gradeAt = function gradeAt(sc, t) {
+    const g = knobDef(sc.grade, sc, t);
+    if (!g || typeof g !== 'object') return null;
+    const u = knobU(sc, t);
+    const hue = num(kv(g.hue, u), 0), sat = num(kv(g.saturation, u), 1), con = num(kv(g.contrast, u), 1);
+    const gain = vec(kv(g.gain, u), 3, 1), lift = vec(kv(g.lift, u), 3, 0);
+    if (hue === 0 && sat === 1 && con === 1 && gain.every((x) => x === 1) && lift.every((x) => x === 0)) return null;
+    const H = hueMat(hue), Sm = satMat(sat), P = new Array(9);
+    for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) P[i * 3 + j] = Sm[i * 3] * H[j] + Sm[i * 3 + 1] * H[3 + j] + Sm[i * 3 + 2] * H[6 + j];
+    const m = new Float32Array(9), o = new Float32Array(3);
+    for (let i = 0; i < 3; i++) {
+      const s1 = (1 - lift[i]) * gain[i];
+      for (let j = 0; j < 3; j++) m[j * 3 + i] = s1 * con * P[i * 3 + j];
+      o[i] = s1 * 0.5 * (1 - con) + lift[i];
+    }
+    return { m, o };
+  };
+  // returns { l: mat2 (column-major), c: vec2, zoom } or null for the identity; aspect = width / height
+  MO.frameAt = function frameAt(sc, t, aspect = 16 / 9) {
+    const f = knobDef(sc.frame, sc, t);
+    if (!f || typeof f !== 'object') return null;
+    const u = knobU(sc, t);
+    const mx = num(kv(f.mirrorX, u), 0) > 0.5 ? -1 : 1;
+    const roll = MO.clamp(num(kv(f.roll, u), 0), -30, 30) * Math.PI / 180;
+    const off = vec(kv(f.offset, u), 2, 0);
+    let zoom = Math.max(1, num(kv(f.zoom, u), 1));
+    if (mx === 1 && roll === 0 && zoom === 1 && off[0] === 0 && off[1] === 0) return null;
+    const c = Math.cos(roll), s = Math.sin(roll), A = aspect;
+    // screen offset from the centre -> source offset: mirror * aspect^-1 * R(-roll) * aspect / zoom
+    const l1 = [mx * c, mx * s / A, -s * A, c];   // row-major at zoom 1
+    const ex1 = 0.5 * (Math.abs(l1[0]) + Math.abs(l1[1])), ey1 = 0.5 * (Math.abs(l1[2]) + Math.abs(l1[3]));
+    zoom = Math.max(zoom, 2 * ex1, 2 * ey1);
+    const ex = ex1 / zoom, ey = ey1 / zoom;
+    const ox = MO.clamp(off[0], -(0.5 - ex), 0.5 - ex), oy = MO.clamp(off[1], -(0.5 - ey), 0.5 - ey);
+    return { l: new Float32Array([l1[0] / zoom, l1[2] / zoom, l1[1] / zoom, l1[3] / zoom]), c: new Float32Array([0.5 + ox, 0.5 + oy]), zoom };
+  };
+
   // ---------------------------------------------------------------- WebGL plumbing
   let gl, canvas, hdr = false, quad, W = 1280, H = 720;
   let sceneT = null, bloomLv = [], overlayCanvas, overlayCtx, overlayTex;
@@ -155,9 +238,12 @@
   let warming = false;     // init's pre-warm may render before the engine is ready for the page
   let stale = false;       // GL objects belong to a context that was lost (drop them, don't delete them)
   let initGen = 0;         // a newer MO.init call supersedes an older one still in flight
+  let parallel = null;     // KHR_parallel_shader_compile
   const progs = {};
-  MO.ready = false;
+  MO.ready = false;        // live playback can start (the programs near the start point are ready)
+  MO.allReady = false;     // every program is compiled and warm
   MO.contextLost = false;
+  MO.lastFrame = null;     // { t, id, held, fallback } of the last MO.render
   const overlayErrors = new Set();
   MO.noOverlay = params.has('nooverlay');
   const VS = `#version 300 es
@@ -191,21 +277,27 @@ void main() {
          + texture(uSrc, vUv + vec2(h.x, -h.y)).rgb + texture(uSrc, vUv + vec2(-h.x, -h.y)).rgb);
   o = vec4(c / 12.0, 1.0);
 }`;
+  // uFrameOn / uGradeOn are uniform branches: with both off the result is bit-identical to the
+  // pass without the knobs
   const FS_POST = `#version 300 es
 precision highp float; in vec2 vUv; out vec4 o;
 uniform sampler2D uScene, uBloom, uOverlay;
 uniform vec2 uRes, uShakeOff; uniform vec3 uFlashColor;
 uniform float uTime, uBloomStrength, uExposure, uFlash, uImpact, uImpactPol, uCA, uGrain, uVignette, uHasOverlay, uZoom;
+uniform float uFrameOn, uGradeOn; uniform mat2 uFrameL; uniform vec2 uFrameC; uniform mat3 uGradeM; uniform vec3 uGradeO;
 float h21(vec2 p) { vec3 p3 = fract(vec3(p.xyx) * 0.1031); p3 += dot(p3, p3.yzx + 33.33); return fract((p3.x + p3.y) * p3.z); }
 vec3 aces(vec3 x) { return clamp((x * (2.51 * x + 0.03)) / (x * (2.43 * x + 0.59) + 0.14), 0.0, 1.0); }
 void main() {
   vec2 uv = (vUv - 0.5) * (1.0 - uZoom) + 0.5 + uShakeOff;
   vec2 dc = uv - 0.5;
   vec2 off = dc * uCA * 0.012 * dot(dc, dc);
-  vec3 col = vec3(texture(uScene, uv + off).r, texture(uScene, uv).g, texture(uScene, uv - off).b);
-  col += texture(uBloom, uv).rgb * uBloomStrength;
+  vec2 su = uv;
+  if (uFrameOn > 0.5) { su = uFrameC + uFrameL * dc; off = uFrameL * off; }
+  vec3 col = vec3(texture(uScene, su + off).r, texture(uScene, su).g, texture(uScene, su - off).b);
+  col += texture(uBloom, su).rgb * uBloomStrength;
   col = aces(col * uExposure);
   col = pow(col, vec3(1.0 / 2.2));
+  if (uGradeOn > 0.5) col = clamp(uGradeM * col + uGradeO, 0.0, 1.0);
   // the flash washes the picture but not the typography, so subtitles stay readable through it
   col = mix(col, uFlashColor, clamp(uFlash, 0.0, 1.0));
   vec4 ov = texture(uOverlay, vUv) * uHasOverlay;
@@ -222,6 +314,16 @@ void main() {
   col += (h21(gl_FragCoord.xy + fract(uTime * 7.13) * 413.0) - 0.5) * uGrain;
   o = vec4(col, 1.0);
 }`;
+  // drawn while a scene's program is still compiling and there is no good frame to hold: a dim
+  // glow that keeps the kick, so the picture never goes dead while the music plays
+  const FS_FALLBACK = `#version 300 es
+precision highp float; out vec4 fragColor;
+uniform vec2 uRes; uniform float uKick, uEnergy;
+void main() {
+  vec2 p = (2.0 * gl_FragCoord.xy - uRes) / uRes.y;
+  float g = exp(-dot(p, p) * 1.4) * (0.08 + 0.22 * uEnergy) * (0.6 + 0.4 * uKick);
+  fragColor = vec4(vec3(1.0, 0.70, 0.36) * g, 1.0);
+}`;
 
   const ERROR_FS = `
 void main() {
@@ -230,7 +332,7 @@ void main() {
   fragColor = vec4(mix(vec3(0.6, 0.0, 0.5), vec3(0.1, 0.0, 0.1), c), 1.0);
 }`;
   // Programs are built in two phases. startProgram() only issues compile + link, without asking
-  // for any status, so the driver can work on every program at once (in parallel where
+  // for any status, so the driver can work on several programs at once (in parallel where
   // KHR_parallel_shader_compile exists) while the page keeps painting. finishProgram() then
   // reads the result, which blocks only if that program is not done yet.
   const lostError = () => Object.assign(new Error('The WebGL context was lost'), { contextLost: true });
@@ -247,6 +349,7 @@ void main() {
     gl.linkProgram(p);
     return { p, fs, name, lineOffset };
   }
+  const jobDone = (job) => !parallel || gl.getProgramParameter(job.p, parallel.COMPLETION_STATUS_KHR);
   function finishProgram(job) {
     const { p, fs, name, lineOffset } = job;
     if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
@@ -288,6 +391,28 @@ void main() {
       }
     }
   }
+  // a program shared by several scenes starts each scene from the GL defaults (all zero), as its own
+  // program would: a uniform one scene sets never leaks into the next
+  function resetUniforms(pr) {
+    for (const k in pr.u) {
+      const u = pr.u[k], n = u.size;
+      switch (u.type) {
+        case gl.FLOAT: gl.uniform1fv(u.loc, new Float32Array(n)); break;
+        case gl.FLOAT_VEC2: gl.uniform2fv(u.loc, new Float32Array(2 * n)); break;
+        case gl.FLOAT_VEC3: gl.uniform3fv(u.loc, new Float32Array(3 * n)); break;
+        case gl.FLOAT_VEC4: gl.uniform4fv(u.loc, new Float32Array(4 * n)); break;
+        case gl.INT: case gl.BOOL: case gl.SAMPLER_2D: gl.uniform1iv(u.loc, new Int32Array(n)); break;
+        case gl.INT_VEC2: case gl.BOOL_VEC2: gl.uniform2iv(u.loc, new Int32Array(2 * n)); break;
+        case gl.INT_VEC3: case gl.BOOL_VEC3: gl.uniform3iv(u.loc, new Int32Array(3 * n)); break;
+        case gl.INT_VEC4: case gl.BOOL_VEC4: gl.uniform4iv(u.loc, new Int32Array(4 * n)); break;
+        case gl.FLOAT_MAT2: gl.uniformMatrix2fv(u.loc, false, new Float32Array(4 * n)); break;
+        case gl.FLOAT_MAT3: gl.uniformMatrix3fv(u.loc, false, new Float32Array(9 * n)); break;
+        case gl.FLOAT_MAT4: gl.uniformMatrix4fv(u.loc, false, new Float32Array(16 * n)); break;
+        default: break;
+      }
+    }
+  }
+  let sceneValid = false;  // sceneT holds a frame drawn by a real scene program (a held frame can reuse it)
   function target(w, h) {
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
@@ -311,12 +436,179 @@ void main() {
     const sw = Math.max(64, Math.round(W * MO.quality)), sh = Math.max(36, Math.round(H * MO.quality));
     if (sceneT && sceneT.w === sw && sceneT.h === sh) return;
     freeTarget(sceneT); bloomLv.forEach(freeTarget); bloomLv = [];
-    sceneT = target(sw, sh);
+    sceneT = target(sw, sh); sceneValid = false;
     let w = sw, h = sh;
     for (let i = 0; i < 6; i++) { w = Math.max(2, w >> 1); h = Math.max(2, h >> 1); bloomLv.push(target(w, h)); }
   }
 
   function draw() { gl.drawArrays(gl.TRIANGLES, 0, 3); }
+
+  // ---------------------------------------------------------------- programs: dedupe + progressive compile
+  // A unit is one compiled program, shared by every scene whose fragment source is byte-identical
+  // (the same shot in three choruses compiles once). States: QUEUED -> COMPILING -> LINKED ->
+  // READY (warm, drawable). A unit that fails to compile becomes FAILED and draws the warning
+  // pattern. Live mode compiles the units near the start point before MO.init resolves and the
+  // rest in the background, nearest to the playhead first; capture mode compiles everything.
+  const QUEUED = 0, COMPILING = 1, LINKED = 2, READY = 3, FAILED = 4;
+  let units = [];
+  let warmOn = true;           // live mode draws each program once before first use
+  let focusT = 0;              // where compiling should look ahead from (playhead or seek target)
+  let bgFence = null;
+  let bgPaused = false, bgKick = null;
+  let prefix = '';
+  const usable = (u) => u.state === READY || u.state === FAILED;
+  const stats = { initStart: 0, startupMs: 0, allMs: 0, programs: 0, scenes: 0, startupUnits: 0 };
+  function buildUnits() {
+    const bySrc = new Map();
+    units = [];
+    for (const sc of MO.scenes) {
+      const src = String(sc.fs);
+      let u = bySrc.get(src);
+      if (!u) {
+        u = { i: units.length, src, scenes: [], spans: [], state: QUEUED, job: null, prog: null, lastScene: null, error: null };
+        bySrc.set(src, u); units.push(u);
+      }
+      u.scenes.push(sc); u.spans.push([sc.from, sc.to]); sc.unit = u; sc.prog = null;
+    }
+    for (const u of units) u.shared = u.scenes.length > 1;
+  }
+  // the next time a unit is on screen at or after time t; units only behind t come last, in order
+  function nextUse(u, t) {
+    let best = Infinity;
+    for (const [a, b] of u.spans) if (b > t) best = Math.min(best, Math.max(a, t));
+    return best === Infinity ? DUR + u.spans[0][0] : best;
+  }
+  // units on screen in [t, end of the cue at t + MO.lookahead)
+  function neededUnits(t) {
+    const sc = MO.sceneAt(t);
+    const end = Math.min(DUR, Math.max(t, sc.cue ? sc.cue.to : sc.to) + MO.lookahead);
+    const set = new Set([sc.unit]);
+    for (const s of MO.scenes) if (s.to > t && s.from < end) set.add(s.unit);
+    return [...set].sort((a, b) => nextUse(a, t) - nextUse(b, t));
+  }
+  function issue(u) {
+    const sc = u.scenes[0];
+    u.job = startProgram(prefix + u.src, 'scene ' + sc.id + (u.shared ? ` (shared by ${u.scenes.length} scenes)` : ''), 0);
+    u.state = COMPILING;
+  }
+  function errorProgram() {
+    if (!progs.error) progs.error = program(window.MO_HEADER + '\n#line 1\n' + ERROR_FS, 'error');
+    return progs.error;
+  }
+  function settle(u) {
+    for (const sc of u.scenes) sc.prog = u.prog;
+    try { MO.onCompile && MO.onCompile(MO.compileStatus()); } catch (e) { /* page UI only */ }
+  }
+  function finishUnit(u) {
+    try {
+      u.prog = finishProgram(u.job);
+      u.state = warmOn ? LINKED : READY;
+    } catch (e) {
+      if (e.contextLost) throw e;
+      // one broken scene must not take the whole piece down: log it and draw a warning pattern
+      const msg = String(e.message || e);
+      console.error(msg);
+      u.error = msg;
+      for (const sc of u.scenes) { sc.error = msg; sc.uniforms = null; }
+      u.prog = errorProgram(); u.state = FAILED;
+    }
+    u.job = null;
+    if (usable(u)) settle(u);
+  }
+  // Pre-warm: draw a unit once into the smallest bloom target (same format and blend state as the
+  // scene pass). Drivers that finish compiling on first use (ANGLE on Metal/D3D, SwiftShader) then
+  // do it here instead of at a shot cut.
+  function warmDraw(u) {
+    buildTargets();
+    const sc = u.scenes[0], pr = u.prog;
+    const tiny = bloomLv[bloomLv.length - 1];
+    gl.bindFramebuffer(gl.FRAMEBUFFER, tiny.fb); gl.viewport(0, 0, tiny.w, tiny.h);
+    gl.disable(gl.BLEND);
+    gl.useProgram(pr.p);
+    if (u.shared && u.lastScene !== sc) resetUniforms(pr);
+    u.lastScene = sc;
+    const t = Math.min(DUR - 1e-3, sc.from + 0.05);
+    const uu = MO.globals(t);
+    uu.uRes = [tiny.w, tiny.h]; uu.uLocal = t - sc.from; uu.uDur = sc.to - sc.from;
+    setUniforms(pr, uu);
+    if (sc.uniforms) { try { setUniforms(pr, sc.uniforms(t, t - sc.from, MO) || {}); } catch (e) { /* reported on first real render */ } }
+    draw();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  }
+  function allDone() {
+    if (MO.allReady) return;
+    MO.allReady = true;
+    stats.allMs = performance.now() - stats.initStart;
+    try { MO.onCompile && MO.onCompile(MO.compileStatus()); } catch (e) { /* page UI only */ }
+  }
+  MO.compileStatus = () => ({
+    programs: units.length, ready: units.filter(usable).length, compiling: units.filter((u) => u.state === COMPILING).length,
+    scenes: MO.scenes.length, allReady: MO.allReady, startupPrograms: stats.startupUnits,
+    startupMs: Math.round(stats.startupMs), allMs: Math.round(stats.allMs), parallel: !!parallel,
+  });
+  // the page calls this when it seeks: compiling looks ahead from t at once (MO.render does it too)
+  MO.prefetch = (t) => { focusT = MO.clamp(+t || 0, 0, DUR); };
+  MO.isReadyAt = (t) => { const sc = MO.sceneAt(t); return !!(sc && sc.unit && usable(sc.unit)); };
+  // pause the background compile (the page does while the MP4 plays); it picks up where it was
+  MO.setBackgroundCompile = (on) => {
+    bgPaused = !on;
+    if (on && bgKick) { const k = bgKick; bgKick = null; k(); }
+  };
+  // after the next frame has been handed to the compositor (or 50 ms in a background tab)
+  const afterFrame = (fn) => {
+    let done = false; const go = () => { if (!done) { done = true; fn(); } };
+    requestAnimationFrame(() => setTimeout(go, 0)); setTimeout(go, 50);
+  };
+  function startBackground(gen) {
+    const inflight = [];
+    let fenceUnit = null;
+    const live = () => gen === initGen && !stale && gl && !gl.isContextLost();
+    const tick = () => {
+      if (!live()) return;                         // superseded or lost: the next MO.init starts over
+      if (bgPaused) { bgKick = () => afterFrame(tick); return; }
+      const t0 = performance.now();
+      try {
+        // 1. collect finished compiles (without the extension the read blocks: one per tick, the tick after issuing)
+        for (let i = 0; i < inflight.length; i++) {
+          const u = inflight[i];
+          if (parallel && !jobDone(u.job)) continue;
+          inflight.splice(i--, 1);
+          finishUnit(u);
+          if (!parallel) break;
+        }
+        // 2. warm one linked unit at a time; a fence says when the GPU has done it
+        if (bgFence && gl.getSyncParameter(bgFence, gl.SYNC_STATUS) === gl.SIGNALED) {
+          gl.deleteSync(bgFence); bgFence = null;
+          fenceUnit.state = READY; settle(fenceUnit); fenceUnit = null;
+        }
+        if (!bgFence) {
+          let best = null, bt = Infinity;
+          for (const u of units) if (u.state === LINKED) { const n = nextUse(u, focusT); if (n < bt) { bt = n; best = u; } }
+          if (best) {
+            warmDraw(best);
+            bgFence = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0); gl.flush();
+            fenceUnit = best;
+            if (!bgFence) { best.state = READY; settle(best); fenceUnit = null; }
+          }
+        }
+        // 3. start new compiles nearest to the playhead first; the unit under the playhead jumps the queue
+        const q = units.filter((u) => u.state === QUEUED);
+        if (q.length) {
+          q.sort((a, b) => nextUse(a, focusT) - nextUse(b, focusT));
+          const here = MO.sceneAt(focusT).unit;
+          if (here && here.state === QUEUED) { issue(here); inflight.push(here); q.splice(q.indexOf(here), 1); }
+          const max = parallel ? MO.compileJobs : 1;
+          while (inflight.length < max && q.length && performance.now() - t0 < 8) { const u = q.shift(); issue(u); inflight.push(u); }
+        }
+      } catch (e) {
+        if (e && e.contextLost) return;
+        console.error('[background compile] ' + String(e && e.stack || e));
+      }
+      if (units.every(usable)) { allDone(); return; }
+      afterFrame(tick);
+    };
+    afterFrame(tick);
+  }
 
   // ---------------------------------------------------------------- init
   // Yield to the browser so it can paint (status text, progress) between steps. The timeout
@@ -331,28 +623,54 @@ void main() {
     const del = gl && !stale && !gl.isContextLost();
     if (del) {
       for (const k in progs) if (progs[k]) gl.deleteProgram(progs[k].p);
-      for (const sc of MO.scenes) if (sc.prog) gl.deleteProgram(sc.prog.p);
+      for (const u of units) {
+        if (u.prog && u.prog !== progs.error) gl.deleteProgram(u.prog.p);
+        if (u.job) { gl.deleteProgram(u.job.p); gl.deleteShader(u.job.fs); }
+      }
+      if (bgFence) gl.deleteSync(bgFence);
       freeTarget(sceneT); bloomLv.forEach(freeTarget);
       if (overlayTex) gl.deleteTexture(overlayTex);
       if (quad) gl.deleteBuffer(quad);
       if (vsShader) gl.deleteShader(vsShader);
     }
     for (const k in progs) delete progs[k];
+    for (const u of units) { u.prog = null; u.job = null; u.state = QUEUED; }
     for (const sc of MO.scenes) sc.prog = null;
-    sceneT = null; bloomLv = []; overlayTex = null; quad = null; vsShader = null;
+    units = []; bgFence = null; bgKick = null;
+    sceneT = null; bloomLv = []; overlayTex = null; quad = null; vsShader = null; sceneValid = false;
     stale = false;
+  }
+
+  // with a cue list the cues define the picture: any stretch of [0, DUR) that no scene covers gets
+  // the warning pattern, and a console error names it
+  function fillGaps() {
+    if (MO._gapsFilled) return;
+    MO._gapsFilled = true;
+    const iv = MO.scenes.map((s) => [s.from, s.to]).sort((a, b) => a[0] - b[0]);
+    let cur = 0;
+    const gaps = [];
+    for (const [a, b] of iv) { if (a > cur + 1e-6) gaps.push([cur, a]); cur = Math.max(cur, b); }
+    if (cur < DUR - 1e-6) gaps.push([cur, DUR]);
+    for (const [a, b] of gaps) {
+      console.error(`MAGNUM OPUS: no scene covers ${a.toFixed(3)}-${b.toFixed(3)} s (bars ${(a / BAR).toFixed(2)}-${(b / BAR).toFixed(2)})`);
+      MO.scenes.push({ id: `gap-${(a / BAR).toFixed(2)}`, fs: ERROR_FS, from: a, to: b });
+    }
   }
 
   // MO.init is re-entrant: calling it again (for example after the WebGL context was lost and
   // restored) rebuilds every program and target on the canvas's current context.
-  // opts: { canvas, width, height, preserve, onProgress(done, total), warmAt (seconds), warm (false skips the pre-warm) }
+  // opts: { canvas, width, height, preserve, onProgress(done, total), warmAt (seconds: where playback
+  //   will start), warm (false skips the pre-warm), progressive (false compiles everything first) }
+  // Resolves when the programs for [warmAt, end of its cue + MO.lookahead) are ready (all of them in
+  // capture mode); the rest compile in the background (MO.compileStatus(), MO.onCompile, MO.allReady).
   MO.init = async function init(opts) {
     const gen = ++initGen;
     const check = () => {
       if (gen !== initGen) throw new Error('MO.init was superseded by a newer call');
       if (gl.isContextLost()) throw lostError();
     };
-    ready = false; MO.ready = false;
+    stats.initStart = performance.now(); stats.startupMs = 0; stats.allMs = 0;
+    ready = false; MO.ready = false; MO.allReady = false;
     if (canvas && canvas !== opts.canvas) stale = true;   // a different canvas: never touch the old objects
     canvas = opts.canvas;
     W = opts.width; H = opts.height;
@@ -371,7 +689,7 @@ void main() {
     releaseGL();
     hdr = !!gl.getExtension('EXT_color_buffer_float');
     gl.getExtension('OES_texture_float_linear');
-    const parallel = gl.getExtension('KHR_parallel_shader_compile');
+    parallel = gl.getExtension('KHR_parallel_shader_compile');
     quad = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, quad);
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
@@ -390,107 +708,100 @@ void main() {
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array(4));
 
     expandCues(ERROR_FS);
-    // a section without a registered scene gets a visible placeholder
-    for (const sec of S.sections) {
-      if (!MO.scenes.some((sc) => (sc.section || sc.id) === sec.id)) MO.scenes.push({ id: sec.id + '-missing', section: sec.id, fs: ERROR_FS });
+    // without a cue list, a section without a registered scene gets a visible placeholder
+    if (!cueMode) {
+      for (const sec of S.sections) {
+        if (!MO.scenes.some((sc) => (sc.section || sc.id) === sec.id)) MO.scenes.push({ id: sec.id + '-missing', section: sec.id, fs: ERROR_FS });
+      }
     }
     for (const sc of MO.scenes) {
       const sec = S.sections.find((s) => s.id === sc.section || s.id === sc.id);
       sc.from = sc.from ?? (sec ? sec.bars[0] * BAR : 0);
       sc.to = sc.to ?? (sec ? sec.bars[1] * BAR : DUR);
     }
+    if (cueMode) fillGaps();
     MO.scenes.sort((a, b) => a.from - b.from);
+    buildUnits();
+    stats.programs = units.length; stats.scenes = MO.scenes.length;
 
-    // phase 1: issue every compile and link without querying anything
-    const prefix = window.MO_HEADER + window.MO_LIB + '\n#line 1\n';
-    const prefixLines = 0; // #line 1 resets numbering to the scene's own source
+    // phase 1: issue the compiles and links we wait for, without querying anything
+    prefix = window.MO_HEADER + window.MO_LIB + '\n#line 1\n';   // #line 1: errors count from the scene's own source
     vsShader = gl.createShader(gl.VERTEX_SHADER);
     gl.shaderSource(vsShader, VS); gl.compileShader(vsShader);
-    const jobs = [
+    // capture renders offline (no hitch to avoid, and a few stills would pay for every scene): no warm-up
+    warmOn = !MO.capture && opts.warm !== false;
+    const progressive = !MO.capture && opts.progressive !== false && !params.has('fullcompile');
+    const at = MO.clamp(+opts.warmAt || 0, 0, DUR - 1e-3);
+    focusT = at;
+    const engineJobs = [
       { key: 'down', job: startProgram(FS_DOWN, 'bloom-down') },
       { key: 'up', job: startProgram(FS_UP, 'bloom-up') },
       { key: 'post', job: startProgram(FS_POST, 'post') },
-      ...MO.scenes.map((sc) => ({ sc, job: startProgram(prefix + sc.fs, 'scene ' + sc.id, prefixLines) })),
+      { key: 'fallback', job: startProgram(FS_FALLBACK, 'fallback') },
     ];
-    // capture renders offline (no hitch to avoid, and a few stills would pay for every scene): no warm-up
-    const warm = !MO.capture && opts.warm !== false;
-    const total = jobs.length + (warm ? MO.scenes.length + 1 : 0);
-    const report = (n) => { try { opts.onProgress && opts.onProgress(n, total); } catch (e) { /* UI only */ } };
-    report(0);
-    await nextFrame(); check();
-
-    // phase 2: wait for completion without blocking where the driver can tell us, then read results
-    if (parallel) {
-      for (;;) {
-        const done = jobs.filter((j) => gl.getProgramParameter(j.job.p, parallel.COMPLETION_STATUS_KHR)).length;
-        report(done);
-        if (done === jobs.length) break;
-        await nextFrame(); check();
-      }
-    }
-    let slice = performance.now();
-    for (let i = 0; i < jobs.length; i++) {
-      const j = jobs[i];
-      if (j.key) progs[j.key] = finishProgram(j.job);   // engine programs must work
-      else {
-        const sc = j.sc;
-        try { sc.prog = finishProgram(j.job); }
-        catch (e) {
-          if (e.contextLost) throw e;
-          // one broken scene must not take the whole piece down: log it and draw a warning pattern
-          console.error(String(e.message || e));
-          sc.error = String(e.message || e);
-          sc.prog = program(prefix + ERROR_FS, 'scene ' + sc.id + ' (error)', prefixLines);
-          sc.uniforms = null;
-        }
-      }
-      report(i + 1);
-      // without the extension each status read can block; give the page a frame every ~40 ms
-      if (performance.now() - slice > 40) { await nextFrame(); check(); slice = performance.now(); }
-    }
-
-    buildTargets();
-    if (warm) {
-      // Pre-warm: draw every scene once into the smallest bloom target (same format and blend
-      // state as the scene pass), then one real frame for the bloom and post passes, and wait for
-      // the GPU each time. Drivers that finish compiling on first use (ANGLE on Metal/D3D,
-      // SwiftShader) then do it here, under "Compiling shaders…", instead of at a shot cut.
-      const waitGPU = async () => {
-        const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
-        gl.flush();
-        if (!sync) return;
-        try {
-          // a sync object's status only updates between tasks: poll without blocking the page
-          while (gl.getSyncParameter(sync, gl.SYNC_STATUS) !== gl.SIGNALED) { await new Promise((r) => setTimeout(r, 8)); check(); }
-        } finally { gl.deleteSync(sync); }
-      };
-      let n = jobs.length;
-      warming = true;
+    let total = 0, done = 0;
+    const report = () => { try { opts.onProgress && opts.onProgress(done, total); } catch (e) { /* UI only */ } };
+    const waitGPU = async () => {
+      const sync = gl.fenceSync(gl.SYNC_GPU_COMMANDS_COMPLETE, 0);
+      gl.flush();
+      if (!sync) return;
       try {
-        for (const sc of MO.scenes) {
-          buildTargets();   // picks up a resize that arrived meanwhile
-          const tiny = bloomLv[bloomLv.length - 1];
-          gl.bindFramebuffer(gl.FRAMEBUFFER, tiny.fb); gl.viewport(0, 0, tiny.w, tiny.h);
-          gl.disable(gl.BLEND);
-          gl.useProgram(sc.prog.p);
-          const t = Math.min(DUR - 1e-3, sc.from + 0.05);
-          const u = MO.globals(t);
-          u.uRes = [tiny.w, tiny.h]; u.uLocal = t - sc.from; u.uDur = sc.to - sc.from;
-          setUniforms(sc.prog, u);
-          if (sc.uniforms) { try { setUniforms(sc.prog, sc.uniforms(t, t - sc.from, MO) || {}); } catch (e) { /* reported on first real render */ } }
-          draw();
-          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-          await waitGPU(); check(); report(++n);
+        // a sync object's status only updates between tasks: poll without blocking the page
+        while (gl.getSyncParameter(sync, gl.SYNC_STATUS) !== gl.SIGNALED) { await new Promise((r) => setTimeout(r, 8)); check(); }
+      } finally { gl.deleteSync(sync); }
+    };
+    // compile, link (and in live mode warm) a set of units while the page shows progress
+    const compileNow = async (list, extraJobs = [], warmFrame = false) => {
+      list = list.filter((u) => u.state === QUEUED);
+      list.forEach(issue);
+      const base = done;
+      total += extraJobs.length + list.length + (warmOn ? list.length + (warmFrame ? 1 : 0) : 0);
+      report();
+      await nextFrame(); check();
+      // phase 2: wait for completion without blocking where the driver can tell us, then read results
+      if (parallel) {
+        for (;;) {
+          const n = extraJobs.filter((j) => jobDone(j.job)).length + list.filter((u) => jobDone(u.job)).length;
+          done = base + n; report();
+          if (n === extraJobs.length + list.length) break;
+          await nextFrame(); check();
         }
-        MO.render(MO.clamp(+opts.warmAt || 0, 0, DUR - 1e-3));   // the frame the page is about to show
-        await waitGPU(); check(); report(++n);
-      } finally { warming = false; }
+      }
+      let fin = 0, slice = performance.now();
+      const step = async () => {
+        done = Math.max(done, base + ++fin); report();   // never runs backwards
+        // without the extension each status read can block; give the page a frame every ~40 ms
+        if (performance.now() - slice > 40) { await nextFrame(); check(); slice = performance.now(); }
+      };
+      for (const j of extraJobs) { progs[j.key] = finishProgram(j.job); await step(); }   // engine programs must work
+      for (const u of list) { finishUnit(u); await step(); }
+      buildTargets();
+      if (warmOn) {
+        warming = true;
+        try {
+          for (const u of list) {
+            if (u.state === LINKED) { warmDraw(u); await waitGPU(); check(); u.state = READY; settle(u); }
+            done++; report();
+          }
+          if (warmFrame) { MO.render(at); await waitGPU(); check(); done++; report(); }   // the frame the page is about to show
+        } finally { warming = false; }
+      }
+    };
+    await compileNow(progressive ? neededUnits(at) : units.slice(), engineJobs, true);
+    // a seek while this ran (MO.prefetch) moved the start point: have that stretch ready too
+    for (let i = 0; progressive && i < 4; i++) {
+      const more = neededUnits(focusT).filter((u) => !usable(u));
+      if (!more.length) break;
+      await compileNow(more);
     }
+    stats.startupUnits = units.filter(usable).length;
 
     await Promise.all(MO.pending);
     check();
     MO.hdr = hdr;
     ready = true; MO.ready = true;
+    stats.startupMs = performance.now() - stats.initStart;
+    if (units.every(usable)) allDone(); else startBackground(gen);
     return MO;
   };
 
@@ -514,26 +825,51 @@ void main() {
   };
 
   // ---------------------------------------------------------------- render one frame
+  // If the scene at t is still compiling, the frame keeps the last good scene picture while
+  // playback runs on (the typography and post effects stay live), or after a jump shows a dim
+  // fallback; MO.lastFrame says which. Neither waits for the compile.
+  let lastGoodT = -1e9, lastGoodSc = null, prevT = -1e9;
   MO.render = function render(t) {
     MO.t = t;
     if (!(ready || warming) || gl.isContextLost()) return null;   // nothing to draw with until (re)init
     buildTargets();
     const sc = MO.sceneAt(t);
-    const local = t - sc.from;
+    focusT = MO.clamp(t, 0, DUR);
+    const unit = sc.unit;
+    let held = false, fallback = false, ps = sc, pt = t;
     gl.disable(gl.BLEND);
 
     // 1. scene
     gl.bindFramebuffer(gl.FRAMEBUFFER, sceneT.fb);
     gl.viewport(0, 0, sceneT.w, sceneT.h);
-    gl.useProgram(sc.prog.p);
-    const u = MO.globals(t);
-    u.uRes = [sceneT.w, sceneT.h]; u.uLocal = local; u.uDur = sc.to - sc.from;
-    setUniforms(sc.prog, u);
-    if (sc.uniforms) {
-      try { setUniforms(sc.prog, sc.uniforms(t, local, MO) || {}); }
-      catch (e) { const m = String(e && e.stack || e); if (!overlayErrors.has(m)) { overlayErrors.add(m); console.error(`[scene ${sc.id} uniforms] ` + m); } }
+    if (unit && usable(unit)) {
+      const pr = unit.prog;
+      const local = t - sc.from;
+      gl.useProgram(pr.p);
+      if (unit.shared && unit.lastScene !== sc && unit.state === READY) resetUniforms(pr);
+      unit.lastScene = sc;
+      const u = MO.globals(t);
+      u.uRes = [sceneT.w, sceneT.h]; u.uLocal = local; u.uDur = sc.to - sc.from;
+      setUniforms(pr, u);
+      if (sc.uniforms) {
+        try { setUniforms(pr, sc.uniforms(t, local, MO) || {}); }
+        catch (e) { const m = String(e && e.stack || e); if (!overlayErrors.has(m)) { overlayErrors.add(m); console.error(`[scene ${sc.id} uniforms] ` + m); } }
+      }
+      draw();
+      sceneValid = true; lastGoodT = t; lastGoodSc = sc;
+    } else if (sceneValid && lastGoodSc && Math.abs(t - prevT) < 0.5) {
+      held = true; ps = lastGoodSc; pt = lastGoodT;           // playback ran into it: hold the picture
+    } else {
+      fallback = true; ps = null;
+      gl.useProgram(progs.fallback.p);
+      const u = MO.globals(t); u.uRes = [sceneT.w, sceneT.h];
+      setUniforms(progs.fallback, u);
+      draw();
+      sceneValid = false;
     }
-    draw();
+    prevT = t;
+    const local = ps ? pt - ps.from : 0;
+    const pp = (v, d) => (!ps ? d : typeof v === 'function' ? v(pt, local, MO) : (v ?? d));
 
     // 2. bloom: prefilter + dual-filter down, then up with additive blend
     let src = sceneT;
@@ -542,7 +878,7 @@ void main() {
       const dst = bloomLv[i];
       gl.bindFramebuffer(gl.FRAMEBUFFER, dst.fb); gl.viewport(0, 0, dst.w, dst.h);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.tex);
-      setUniforms(progs.down, { uSrc: 0, uHalf: [0.5 / src.w, 0.5 / src.h], uPrefilter: i === 0 ? 1 : 0, uThreshold: typeof sc.bloomThreshold === 'function' ? sc.bloomThreshold(t, local, MO) : (sc.bloomThreshold ?? 0.85), uKnee: 0.5 });
+      setUniforms(progs.down, { uSrc: 0, uHalf: [0.5 / src.w, 0.5 / src.h], uPrefilter: i === 0 ? 1 : 0, uThreshold: ps ? pp(ps.bloomThreshold, 0.85) : 0.85, uKnee: 0.5 });
       draw(); src = dst;
     }
     gl.useProgram(progs.up.p);
@@ -577,7 +913,6 @@ void main() {
 
     // 4. post to screen
     const fx = fxAt(t);
-    const pp = (v, d) => (typeof v === 'function' ? v(t, local, MO) : (v ?? d));
     const sh = fx.shake;
     // 5-8 Hz components: well below the 15 Hz Nyquist limit of a 30 fps video, so the shake reads the same in the MP4 and live
     const shakeOff = [sh * (Math.sin(t * 38.3) + Math.sin(t * 52.9 + 1.3)) * 0.5, sh * (Math.sin(t * 45.6 + 2.1) + Math.sin(t * 31.4)) * 0.5 * (16 / 9)];
@@ -585,19 +920,30 @@ void main() {
     gl.useProgram(progs.post.p);
     gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, sceneT.tex);
     gl.activeTexture(gl.TEXTURE1); gl.bindTexture(gl.TEXTURE_2D, bloomLv[0].tex);
-    setUniforms(progs.post, {
+    const post = {
       uScene: 0, uBloom: 1, uOverlay: 2, uRes: [W, H], uTime: t,
-      uBloomStrength: pp(sc.bloom, 0.6), uExposure: pp(sc.exposure, 1.0),
-      uFlash: fx.flash, uFlashColor: fx.flashColor, uImpact: fx.impact, uImpactPol: fx.impactPol, uCA: fx.ca + pp(sc.ca, 0),
-      uGrain: MO.grain ?? 0.025, uVignette: pp(sc.vignette, 0.35), uHasOverlay: drew ? 1 : 0,
-      uShakeOff: shakeOff, uZoom: fx.zoom,
-    });
+      uBloomStrength: pp(ps && ps.bloom, 0.6), uExposure: pp(ps && ps.exposure, 1.0),
+      uFlash: fx.flash, uFlashColor: fx.flashColor, uImpact: fx.impact, uImpactPol: fx.impactPol, uCA: fx.ca + pp(ps && ps.ca, 0),
+      uGrain: MO.grain ?? 0.025, uVignette: pp(ps && ps.vignette, 0.35), uHasOverlay: drew ? 1 : 0,
+      uShakeOff: shakeOff, uZoom: fx.zoom, uGradeOn: 0, uFrameOn: 0,
+    };
+    if (ps && (ps.grade || ps.frame)) {
+      try {
+        const g = ps.grade ? MO.gradeAt(ps, pt) : null;
+        if (g) { post.uGradeOn = 1; post.uGradeM = g.m; post.uGradeO = g.o; }
+        const f = ps.frame ? MO.frameAt(ps, pt, W / H) : null;
+        if (f) { post.uFrameOn = 1; post.uFrameL = f.l; post.uFrameC = f.c; }
+      } catch (e) { const m = String(e && e.stack || e); if (!overlayErrors.has(m)) { overlayErrors.add(m); console.error(`[scene ${ps.id} grade/frame] ` + m); } }
+    }
+    setUniforms(progs.post, post);
     draw();
+    MO.lastFrame = { t, id: sc.id, held, fallback };
     return sc.id;
   };
 
   // ---------------------------------------------------------------- capture API (tools/render-video.cjs)
   if (MO.capture) {
+    let px = null;   // one readback buffer for the whole render: a long video must not allocate per frame
     window.__capture = {
       ready: null,
       frame(t) {
@@ -607,7 +953,7 @@ void main() {
         return { id, ms: performance.now() - t0 };
       },
       rgba() {
-        const px = new Uint8Array(W * H * 4);
+        if (!px || px.length !== W * H * 4) px = new Uint8Array(W * H * 4);
         gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, px);
         let s = ''; const CH = 0x8000;
         for (let i = 0; i < px.length; i += CH) s += String.fromCharCode.apply(null, px.subarray(i, i + CH));
@@ -615,7 +961,8 @@ void main() {
       },
       png() { return canvas.toDataURL('image/png'); },
       jpeg(q = 0.92) { return canvas.toDataURL('image/jpeg', q); },
-      size() { return { W, H, hdr, scenes: MO.scenes.map((s) => [s.id, +s.from.toFixed(3), +s.to.toFixed(3)]) }; },
+      size() { return { W, H, hdr, dur: DUR, scenes: MO.scenes.map((s) => [s.id, +s.from.toFixed(3), +s.to.toFixed(3)]), programs: units.length }; },
+      compile() { return MO.compileStatus(); },
     };
   }
 })();

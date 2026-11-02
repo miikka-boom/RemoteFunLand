@@ -1,14 +1,55 @@
-// CODA — 0 The Fool — 28.235–30.000 s (bar 16). Owner: eye.
-// Beat 64: the final hit. ZOOM BACK, CAMERA: we start inside a blazing red-gold mandala that the
-// pull-back reveals as the iris of the same great eye that opened the piece. The first frame
-// matches R4's dive (a red-gold iris with a black pupil in a crimson blaze); the hit's shockwave
-// sweeps the blaze away and the pupil ignites on screen into a white-hot sun around a black
-// eclipse core (lead turned to gold). The eye rises into the upper part of the frame (the
-// overlay's MAGNUM OPUS logo takes the lower part from beat 65), a last glint crosses the cornea,
-// then the eye slowly closes; black by 29.8 s.
+// CODA — 0 The Fool. Owner: eye. One shot factory, coda.eye (30 s piece: beats 64–68, the final
+// bar): ZOOM BACK, CAMERA. We start inside a blazing red-gold mandala that the pull-back reveals as
+// the iris of the same great eye that opened the piece. The first frame matches rubedo's dive (a
+// red-gold iris with a black pupil in a crimson blaze); the hit's shockwave sweeps the blaze away and
+// the pupil ignites on screen into a white-hot sun around a black eclipse core (lead turned to gold).
+// The eye rises into the upper part of the frame (the overlay's MAGNUM OPUS logo takes the lower
+// part from the second beat), a last glint crosses the cornea, then the eye slowly closes and the
+// picture fades to black just before the end. Every knob is a uniform, so one program serves every
+// cue. Without a cue list in the score the file places the shot at its 30 s window (end of file).
 // The eye GLSL between the EYE markers is identical in nigredo.js.
 (() => {
   const BEAT = MO.BEAT;
+
+  // ==== CUE CLOCK BEGIN (identical in nigredo.js, albedo.js and coda.js) ====
+  // Places a shot's choreography in any cue. The choreography is written on the shot's natural
+  // timeline: the times it has in the 30 s piece, beats nb0..nb1. For a cue anywhere, of any length:
+  //   K.S(n)  real time of the natural time n anchored to the cue's start (reveals, entrances).
+  //           The head plays at natural speed; K.sq > 1 speeds it up when the cue is too short for
+  //           its first headBeats plus its last tailBeats. K.H(t) is the inverse: natural head time.
+  //   K.E(n)  real time of n anchored to the cue's end: dives, snaps and closes keep their distance
+  //           to the cut. A move from an S anchor to an E anchor stretches with the cue.
+  //   K.M(t)  ambient-motion clock (spins, flames, drifts): t, sped up around the cue start by
+  //           params.speed and shifted by params.seed (seconds of motion = seed * 9.73).
+  //   K.nb(b) natural time of the shot's own beat b; K.d(x) snaps float noise in a shift to 0.
+  //   K.p(name, default, min, max) and K.on(name, default) read a numeric / on-off param.
+  // params.offsetBeats starts the cue that many beats into the natural choreography. In the shot's
+  // own 30 s window without offset (K.ident) S, E and H return their argument, and M does while
+  // speed is 1 and seed 0 (K.still): the 30 s edit renders exactly as before.
+  const cueClock = (cue, nb0, nb1, headBeats, tailBeats) => {
+    const BT = MO.BEAT, P = cue.params || {};
+    const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+    const p = (k, d, lo = -Infinity, hi = Infinity) => MO.clamp(num(P[k], d), lo, hi);
+    const on = (k, d) => { const v = P[k]; return v === undefined || v === null ? d : !!v && v !== 'off' && v !== '0'; };
+    const off = p('offsetBeats', 0, 0, 256) * BT, speed = p('speed', 1, 0, 16), seed = p('seed', 0);
+    const n0 = nb0 * BT, n1 = nb1 * BT;
+    const ident = off === 0 && cue.beat0 === nb0 && cue.beat1 === nb1;
+    const head = Math.max(0, headBeats * BT - off), room = cue.to - cue.from - tailBeats * BT;
+    const sq = ident ? 1 : Math.max(1, head / Math.max(room, 0.25 * head, 1e-3));
+    const still = speed === 1 && seed === 0;
+    return {
+      P, p, on, ident, still, sq, off, n0, n1, speed, seed,
+      nb: (b) => (nb0 + b) * BT,
+      S: (n) => (ident ? n : cue.from + (n - n0 - off) / sq),
+      H: (t) => (ident ? t : n0 + off + (t - cue.from) * sq),
+      E: (n) => (ident ? n : cue.to - (n1 - n)),
+      M: (t) => (still ? t : cue.from + (t - cue.from) * speed + seed * 9.73),
+      d: (x) => (Math.abs(x) < 1e-9 ? 0 : x),
+    };
+  };
+  // keyframe times made non-decreasing (a squeezed or re-anchored cue may reorder them)
+  const mono = (k) => { for (let i = 1; i < k.length; i++) if (k[i][0] <= k[i - 1][0]) k[i] = [k[i - 1][0] + 1e-4, k[i][1]]; return k; };
+  // ==== CUE CLOCK END ====
 
   // ==== EYE GLSL BEGIN (identical in nigredo.js and coda.js) ====
   const EYE = `
@@ -293,9 +334,10 @@ uniform float uBgA;    // the crimson ground (sinks to black as the eye is revea
 uniform float uBlaze;  // the Rubedo blaze around the iris at the cut (the shockwave sweeps it out)
 uniform float uLow;    // dims the lower frame for the logo
 uniform float uTing;   // a last sparkle as the lids meet
+uniform float uPal;    // palette knob: 1 rubedo .. 0 nigredo (params.gold)
 
 void main() {
-  ey_palette(1.0);
+  if (uPal >= 1.0) ey_palette(1.0); else ey_palette(uPal);
   vec2 p = uvCentered(gl_FragCoord.xy);
   vec2 e = (p - uPC) / uZ + EY_IC;
   float pe = px() / uZ;
@@ -328,34 +370,92 @@ void main() {
   fragColor = vec4(col * uFade, 1.0);
 }`;
 
-  const T0 = MO.barTime(16);           // 28.235
-  const T_REVEAL = T0 + 2 * BEAT;      // 29.118: the whole eye is in view
-  const T_CLOSED = 29.70;              // the lids meet, so the closed eye and the logo hold while the fade (29.45-29.80) ends
-  const uniforms = (t) => {
-    const k = MO.clamp((t - T0) / (T_REVEAL - T0));
-    const pull = MO.easeInOut(MO.remap(t, T0 + 0.08, T_REVEAL));
-    const Z = Math.exp(MO.mix(Math.log(3.4), Math.log(0.80), pull)) * (1 - 0.06 * MO.remap(t, T_REVEAL, 30));
-    // lead to gold: at the cut the pupil is R4's black disc (0.24 of the iris radius); during the
-    // pull-back it ignites from the rim inward and swells into the white-hot sun
-    const sun = MO.smooth(MO.remap(t, T0 + 0.12, T0 + 0.72));
-    // the slow close: smoothstep on the lid opening, so the visible travel (uOpen 0.9 -> 0.1, below
-    // which the slit already reads as shut) spans about 29.25-29.6 instead of 5 frames
-    const close = MO.smooth(MO.remap(t, T_REVEAL + 0.05, T_CLOSED));
-    const settle = 1 + 0.03 * Math.exp(-(t - T0) * 3) * Math.sin((t - T0) * 18);
-    return {
-      uOpen: (1 - close) * settle, uIgnite: 1, uLines: MO.mix(1, 0.35, MO.easeIn(MO.remap(t, T_REVEAL + 0.2, 29.85))),
-      uGlint: MO.remap(t, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: 1, uSun: sun,
-      uSpin: 0.9 * (1 - Math.exp(-(t - T0) * 1.5)), uPupil: MO.mix(0.73, 1.0, sun),
-      // the cornea highlights arrive with the eye, not on R4's iris at the cut
-      uLook: [0, 0], uAura: 1.0, uHi: (1 - close) * MO.smooth(MO.remap(t, T0 + 0.25, T0 + 0.7)),
-      uZ: Z, uPC: [0, MO.mix(0.0, 0.30, MO.smooth(k))],
-      uFade: 1 - MO.smooth(MO.remap(t, 29.45, 29.80)),
-      uRing: 0.15 + (t - T0) * 3.0, uRingA: Math.exp(-(t - T0) / 0.35) * (MO.reduced ? 0.4 : 1),
-      uBlaze: 1 - MO.smooth(MO.remap(t, T0 + 0.5, T0 + 0.9)),
-      uTing: Math.sin(Math.PI * MO.remap(t, T_CLOSED - 0.14, T_CLOSED + 0.06)), uBgA: 1 - MO.smooth(MO.remap(t, T0 + 0.2, T_REVEAL)), uLow: MO.smooth(MO.remap(t, T0 + BEAT * 0.8, T0 + BEAT * 1.6)),
-    };
+  // ------------------------------------------------------------------ shot coda.eye
+  // CODA.EYE: zoom back out of the blazing iris into the whole great eye; the pupil ignites into a
+  // white-hot sun; a last glint; the eye closes; fade to black.
+  // Natural length: 4 beats (beats 64-68 of the 30 s piece, the final bar; it ends the piece).
+  // Stretch: the pull-back, the shockwave, the blaze sweep and the ignition (2 beats) are anchored
+  //   to the final hit: the first hit or fx flash / impact of the score in the cue (from a 16th
+  //   before its start to 3.9 beats before its end), else the cue start; until a later hit the first
+  //   frame holds (the blaze burning, its rays turning). The close (about 0.53 s), the last sparkle
+  //   and the fade to black are anchored to the cue end. Between the two the revealed eye holds open:
+  //   the iris settles (and keeps turning with spin), the flames flicker, the contour lines slowly
+  //   fade and the camera keeps drifting back.
+  // Params (range (default): what it looks like):
+  //   gold       0..1 (1)      palette: 1 rubedo (gold, crimson), 0 nigredo (bone, violet, verdigris)
+  //   ignite     0..1 (1)      the pupil's fire after the hit: 1 the white-hot sun, 0 it stays the black sun
+  //   blaze      0..1 (1)      the crimson blaze and ground at the start (rubedo's dive); 0 starts on black
+  //   close      0/1 (1)       the eye closes and the picture fades to black at the end; 0 holds it open
+  //   low        0..1 (1)      dims the lower frame (for the overlay's logo or titles)
+  //   spin       -2..2 (0)     keeps the iris rings turning (radians per second)
+  //   zoom       0.3..3 (1)    camera zoom
+  //   x, y       -1..1 (0)     eye screen position (added to its rise into the upper frame)
+  //   speed      0..16 (1)     ambient motion rate (flame flicker, line wobble, the ground's rays)
+  //   seed       any (0)       phase of that motion
+  //   offsetBeats 0..4 (0)     start partway (2 = the eye already revealed)
+  // Coupling: its first frame matches rubedo's last (the dive into a red-gold iris with a black pupil
+  //   in a crimson blaze: zoom 3.4, pupil 0.73); the overlay's logo sits in the dimmed lower frame from
+  //   the second beat; with close it ends on black.
+  // Cost: as in the 30 s piece (one shader; about 60 ms per 640x360 frame on SwiftShader).
+  const N_T0 = MO.barTime(16);                // 28.235: the final hit in the 30 s piece
+  const N_REVEAL = N_T0 + 2 * BEAT;           // 29.118: the whole eye is in view
+  // the first hit or fx flash / impact of the score in [a, b], or null
+  const firstHit = (a, b) => {
+    let best = null;
+    for (const h of MO.events.hits || []) if (h.t >= a && h.t <= b && (best === null || h.t < best)) best = h.t;
+    for (const f of MO.S.fx || []) {
+      const ft = f.beat * BEAT;
+      if ((f.type === 'flash' || f.type === 'impact') && ft >= a && ft <= b && (best === null || ft < best)) best = ft;
+    }
+    return best;
   };
-  // bloom eases in with the pupil's fire so the first frames keep R4's contrast
-  const bloom = (t) => 0.28 + 0.12 * MO.smooth(MO.remap(t, T0 + 0.2, T0 + 0.7));
-  MO.scene({ id: 'coda', section: 'coda', from: T0, to: 30.0, fs: FS, uniforms, bloom, bloomThreshold: 0.9, vignette: 0.5 });
+  MO.shot('coda.eye', (cue) => {
+    const K = cueClock(cue, 64, 68, 2.1, 1.9);
+    const gold = K.p('gold', 1, 0, 1), ignite = K.p('ignite', 1, 0, 1), blaze = K.p('blaze', 1, 0, 1), low = K.p('low', 1, 0, 1);
+    const closeOn = K.on('close', true), spin = K.p('spin', 0, -2, 2), zoom = K.p('zoom', 1, 0.3, 3), ex = K.p('x', 0, -1, 1), ey = K.p('y', 0, -1, 1);
+    // the final hit: in the score inside the cue, else the cue start
+    let T0 = K.S(N_T0);
+    if (!K.off) { const hit = firstHit(cue.from - MO.STEP, cue.to - 3.9 * BEAT); if (hit !== null && K.d(hit - T0) !== 0) T0 = hit; }
+    const sq = K.sq, th = sq === 1 ? (t) => t : (t) => T0 + (t - T0) * sq;   // head time (sped up on a squeezed cue)
+    const T_REVEAL = T0 + 2 * BEAT;           // head time: the whole eye is in view
+    const R_REVEAL = T0 + 2 * BEAT / sq;      // and its real time
+    const T_CLOSED = K.E(29.70);              // the lids meet, so the closed eye and the logo hold while the fade (29.45-29.80) ends
+    // the slow close: smoothstep on the lid opening, so the visible travel (uOpen 0.9 -> 0.1, below
+    // which the slit already reads as shut) spans about 0.35 s instead of 5 frames
+    const C_FROM = Math.min(Math.max(R_REVEAL + 0.05, K.E(N_REVEAL + 0.05)), T_CLOSED - 0.25);
+    const F0 = K.E(29.45), F1 = K.E(29.80), L1 = K.E(29.85), Z1 = K.E(30);
+    const uniforms = (t) => {
+      const h = th(t), mt = K.M(t), a = Math.max(0, h - T0);
+      const k = MO.clamp((h - T0) / (T_REVEAL - T0));
+      const pull = MO.easeInOut(MO.remap(h, T0 + 0.08, T_REVEAL));
+      const Z = Math.exp(MO.mix(Math.log(3.4), Math.log(0.80), pull)) * (1 - 0.06 * MO.remap(t, R_REVEAL, Z1)) * zoom;
+      // lead to gold: at the cut the pupil is rubedo's black disc (0.24 of the iris radius); during
+      // the pull-back it ignites from the rim inward and swells into the white-hot sun
+      const sun = MO.smooth(MO.remap(h, T0 + 0.12, T0 + 0.72));
+      const close = closeOn ? MO.smooth(MO.remap(t, C_FROM, T_CLOSED)) : 0;
+      const settle = 1 + 0.03 * Math.exp(-a * 3) * Math.sin(a * 18);
+      const u = {
+        uOpen: (1 - close) * settle, uIgnite: 1, uLines: MO.mix(1, 0.35, MO.easeIn(MO.remap(t, R_REVEAL + 0.2, L1))),
+        uGlint: MO.remap(h, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: gold, uPal: gold, uSun: sun * ignite,
+        uSpin: 0.9 * (1 - Math.exp(-a * 1.5)) + spin * (mt - T0), uPupil: MO.mix(0.73, 1.0, sun),
+        // the cornea highlights arrive with the eye, not on rubedo's iris at the cut
+        uLook: [0, 0], uAura: 1.0, uHi: (1 - close) * MO.smooth(MO.remap(h, T0 + 0.25, T0 + 0.7)),
+        uZ: Z, uPC: [ex, MO.mix(0.0, 0.30, MO.smooth(k)) + ey],
+        uFade: closeOn ? 1 - MO.smooth(MO.remap(t, F0, F1)) : 1,
+        uRing: 0.15 + (h - T0) * 3.0, uRingA: h < T0 ? 0 : Math.exp(-(h - T0) / 0.35) * (MO.reduced ? 0.4 : 1),
+        uBlaze: (1 - MO.smooth(MO.remap(h, T0 + 0.5, T0 + 0.9))) * blaze,
+        uTing: closeOn ? Math.sin(Math.PI * MO.remap(t, T_CLOSED - 0.14, T_CLOSED + 0.06)) : 0,
+        uBgA: (1 - MO.smooth(MO.remap(h, T0 + 0.2, T_REVEAL))) * blaze,
+        uLow: MO.smooth(MO.remap(h, T0 + BEAT * 0.8, T0 + BEAT * 1.6)) * low,
+      };
+      if (!K.still) u.uTime = mt;
+      return u;
+    };
+    // bloom eases in with the pupil's fire so the first frames keep rubedo's contrast
+    const bloom = (t) => 0.28 + 0.12 * MO.smooth(MO.remap(th(t), T0 + 0.2, T0 + 0.7));
+    MO.scene({ id: K.ident ? 'coda' : 'coda.eye#' + cue.index, fs: FS, uniforms, bloom, bloomThreshold: 0.9, vignette: 0.5 });
+  });
+
+  // without a cue list in the score (the 30 s piece) the shot takes its 30 s window itself
+  if (!Array.isArray(MO.S.cues)) MO.runShot(MO.makeCue('coda.eye', 64, 68));
 })();
