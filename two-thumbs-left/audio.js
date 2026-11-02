@@ -37,7 +37,9 @@ window.Sfx = (function () {
     try { const b = ac.createBuffer(1, 1, ac.sampleRate); const s = ac.createBufferSource(); s.buffer = b; s.connect(ac.destination); s.start(0); } catch (e) { /* ignore */ }
     // iOS 16 and older: a looping silent <audio> moves the page to the "playback" session,
     // so the ring/silent switch doesn't mute the game.
-    if (!navigator.audioSession && /iP(hone|ad|od)/.test(navigator.userAgent)) {
+    // iPadOS 13+ reports itself as a Mac, so check for a touch screen too.
+    const iOSLike = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!navigator.audioSession && iOSLike) {
       try { const el = new Audio(silentWav()); el.loop = true; el.setAttribute('playsinline', ''); el.play().catch(() => {}); } catch (e) { /* ignore */ }
     }
   }
@@ -308,7 +310,8 @@ window.Sfx = (function () {
       sirenNodes = null;
     }
   }
-  function motor(on) {
+  // quiet: stop without the gate-stopped clunk (death, pause, a new run)
+  function motor(on, quiet) {
     if (!ac) return;
     if (on && !motorNodes) {
       const o = ac.createOscillator(); o.type = 'sawtooth'; o.frequency.value = 55;
@@ -319,10 +322,14 @@ window.Sfx = (function () {
     } else if (!on && motorNodes) {
       const t = ac.currentTime; motorNodes.g.gain.setTargetAtTime(0.0001, t, 0.2); motorNodes.o.stop(t + 1);
       motorNodes = null;
-      thump(t, { f0: 80, f1: 40, dur: 0.4, peak: 0.8, wet: 0.6 });
-      burst(t, { type: 'bandpass', f: 900, q: 2, dur: 0.3, peak: 0.4, wet: 0.6 });
+      if (!quiet) {
+        thump(t, { f0: 80, f1: 40, dur: 0.4, peak: 0.8, wet: 0.6 });
+        burst(t, { type: 'bandpass', f: 900, q: 2, dur: 0.3, peak: 0.4, wet: 0.6 });
+      }
     }
   }
+  // every looping sound off, quietly
+  function stopAll() { setDrums(false); siren(false); motor(false, true); }
   function clunk() { if (!ac) return; const t = ac.currentTime; thump(t, { f0: 120, f1: 40, dur: 0.25, peak: 0.7, wet: 0.4 }); burst(t, { type: 'bandpass', f: 1300, q: 3, dur: 0.12, peak: 0.35, wet: 0.4 }); }
   function beep(urgent) { if (!ac) return; tone(ac.currentTime, { f: urgent ? 2200 : 1800, dur: 0.05, peak: 0.12, type: 'square', lp: 4000 }); }
   function boom(vol) {
@@ -347,6 +354,6 @@ window.Sfx = (function () {
     get ready() { return !!ac; },
     get muted() { return muted; },
     shot, pump, dry, reload, swap, hit, shove, shoveImpact, hurt, heartbeat, pickup, heal, rip,
-    groan, swing, hordeCue, setDrums, siren, motor, clunk, beep, boom, throwWhoosh, door, sting, setWind,
+    groan, swing, hordeCue, setDrums, siren, motor, stopAll, clunk, beep, boom, throwWhoosh, door, sting, setWind,
   };
 })();

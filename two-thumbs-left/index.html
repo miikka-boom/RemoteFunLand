@@ -145,6 +145,11 @@ body.lefty .weapon { order: -1 }
   width: min(44vw, 260px); height: 8px; border-radius: 4px; overflow: hidden; background: rgba(0,0,0,.6); box-shadow: inset 0 0 0 1px var(--rule);
 }
 .gatebar i { position: absolute; inset: 0; background: var(--sodium); transform-origin: 0 50%; transform: scaleX(0) }
+/* portrait: the top bar is tall and narrow, so the gate bar and banners go below it
+   and the objective may wrap to a second line instead of being cut off */
+.portrait .objective { white-space: normal; max-width: 40vw; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical }
+.portrait .gatebar { top: calc(max(8px, env(safe-area-inset-top, 0px)) + 72px); width: min(70vw, 260px) }
+.portrait .banner { top: calc(max(8px, env(safe-area-inset-top, 0px)) + 88px) }
 .fps { position: absolute; right: max(10px, env(safe-area-inset-right, 0px)); top: calc(max(8px, env(safe-area-inset-top, 0px)) + 62px); font: 500 11px/1 ui-monospace, Menlo, monospace; color: #9f9; text-shadow: 0 1px 2px #000 }
 
 /* ---------- overlays ---------- */
@@ -155,6 +160,8 @@ body.lefty .weapon { order: -1 }
   background: radial-gradient(ellipse 80% 70% at 50% 45%, rgba(7, 9, 13, .35), rgba(7, 9, 13, .86));
 }
 .overlay.dim { background: rgba(5, 7, 10, .78) }
+/* for a moment after it opens, a screen ignores the thumb that opened it (see show() in game.js) */
+.overlay.arming, .overlay.arming * { pointer-events: none !important }
 .back {
   align-self: flex-start; flex: none;
   text-decoration: none; font: 600 14px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase;
@@ -318,12 +325,12 @@ html.portrait .rotate { display: flex; gap: 8px; align-items: center; color: var
     </div>
     <div class="tcol">
       <ul class="howto">
-        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><span><b>Left thumb</b> anywhere on the left: move.</span></li>
-        <li><span class="ic r" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ff7a2f" stroke-width="2"><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="3" fill="#ff7a2f"/></svg></span><span><b>Right thumb</b>: aim the light. Push past the ring to <b>fire</b>.</span></li>
-        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 11V7a2 2 0 0 1 4 0v3m0-1a2 2 0 0 1 4 0v2m0-1a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.5 14"/></svg></span><span><b>Tap</b> the right side to <b>shove</b> when they get close.</span></li>
+        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg></span><span id="howMove"><b>Left thumb</b> anywhere on the left: move.</span></li>
+        <li><span class="ic r" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#ff7a2f" stroke-width="2"><circle cx="12" cy="12" r="8" stroke-dasharray="3 3"/><circle cx="12" cy="12" r="3" fill="#ff7a2f"/></svg></span><span id="howAim"><b>Right thumb</b>: aim the light. Push past the ring to <b>fire</b>.</span></li>
+        <li><span class="ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M7 11V7a2 2 0 0 1 4 0v3m0-1a2 2 0 0 1 4 0v2m0-1a2 2 0 0 1 4 0v4a6 6 0 0 1-6 6h-1a6 6 0 0 1-5-2.7L4.5 14"/></svg></span><span id="howShove"><b>Tap</b> the right side to <b>shove</b> when they get close.</span></li>
       </ul>
       <div class="actions">
-        <button id="muteBtn" class="btn small" type="button" aria-pressed="false"><span>Sound on</span></button>
+        <button id="muteBtn" class="btn small" type="button" aria-pressed="false" data-mute><span>Sound on</span></button>
         <button id="fullBtn" class="btn small" type="button">Full screen</button>
       </div>
       <p class="fine rotate">↻ Turn your phone sideways for the widest view.</p>
@@ -340,6 +347,9 @@ html.portrait .rotate { display: flex; gap: 8px; align-items: center; color: var
       <button id="resumeBtn" class="btn primary" type="button">Resume</button>
       <button id="labBtnPause" class="btn" type="button">Feel lab</button>
       <button id="restartBtn" class="btn" type="button">New run</button>
+    </div>
+    <div class="actions">
+      <button id="muteBtnPause" class="btn small" type="button" aria-pressed="false" data-mute><span>Sound on</span></button>
     </div>
     <p class="fine" id="seedLine"></p>
   </div>

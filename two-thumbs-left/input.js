@@ -4,15 +4,22 @@
  * TOUCH (the thing prototype 0 is about)
  * - Thumbs are tracked with Touch Events, bound by Touch.identifier. Every touch event carries
  *   the full list of fingers still down (e.touches), so a stick whose finger vanished (system
- *   gesture, alert, app switch) is released on the next event instead of getting stuck.
+ *   gesture, alert, app switch) is released on the next event instead of getting stuck, and a
+ *   finger that lands afterwards gets the freed stick straight away.
  * - Zones: landscape = left / right halves under the HUD strip; portrait = the bottom 60 %,
  *   split in two. Swapped for left-handed play.
  * - Floating sticks: the base appears under the thumb and drags along when the thumb overshoots.
+ *   The landing point is always zero deflection; near a screen edge only the drawn base is
+ *   nudged inward, so a thumb resting at the edge never walks or fires by itself.
+ * - Fixed sticks: a touch on or near the drawn base uses it; a touch far from it floats a base
+ *   under the thumb for that touch, so a stray landing never starts at full deflection.
  * - Move stick: radial dead zone, outer saturation, response curve, and a minimum speed so a
  *   push never crawls.
  * - Aim stick: inside the fire ring you aim the flashlight; past it you fire (with hysteresis).
  *   Alternative modes: fire on any aim, or auto-fire at the aim-assist target.
  * - A quick tap on the aim side (or, optionally, a flick) is a shove.
+ * - Once the aim stick has had a direction, resting the thumb back near the centre keeps that
+ *   direction (no fire) until the thumb lifts.
  *
  * Fallbacks: Pointer Events for mouse/pen (aim at cursor, left button fires, right button
  * shoves), keyboard, and a standard-mapping gamepad.
@@ -44,9 +51,9 @@ window.TwinStick = (function () {
   function makeStick(role) {
     return {
       role, id: null, active: false,
-      ox: 0, oy: 0, px: 0, py: 0, sx: 0, sy: 0, t0: 0, travel: 0, fired: false,
+      ox: 0, oy: 0, px: 0, py: 0, sx: 0, sy: 0, t0: 0, travel: 0, fired: false, floating: false,
       homeX: 0, homeY: 0, drawX: 0, drawY: 0, relT: 0,
-      mag: 0, ang: 0, x: 0, y: 0, hasDir: false, firing: false, prevAng: 0, angVel: 0,
+      mag: 0, ang: 0, x: 0, y: 0, hasDir: false, hadDir: false, firing: false, prevAng: 0, angVel: 0,
     };
   }
   const sticks = { move: makeStick('move'), aim: makeStick('aim') };
@@ -68,8 +75,9 @@ window.TwinStick = (function () {
   let enabled = true;
   let lastBuzz = 0;
   let lastFrame = now();
+  let mouseButtons = 0;
 
-  function press(action) { pressed[action] = true; }
+  function press(action) { if (enabled) pressed[action] = true; }
   function consume(action) { const v = !!pressed[action]; pressed[action] = false; return v; }
   function takeShove() { return shoves.length ? shoves.shift() : null; }
 
@@ -99,15 +107,19 @@ window.TwinStick = (function () {
     sticks.aim.homeX = am.x; sticks.aim.homeY = am.y;
     for (const k in sticks) {
       const s = sticks[k];
-      if (!s.active || cfg.mode === 'fixed') { s.ox = s.homeX; s.oy = s.homeY; s.drawX = s.homeX; s.drawY = s.homeY; }
-      else clampBase(s);
+      if (!s.active) { s.ox = s.homeX; s.oy = s.homeY; s.drawX = s.homeX; s.drawY = s.homeY; }
+      // a held stick keeps its origin until the thumb lifts: moving it would deflect the stick under a still thumb
     }
   }
 
-  function clampBase(s) {
+  // Where the base is drawn: the logical origin, nudged so the whole ring stays on screen.
+  // The offset applies to the knob too, so the picture still matches the deflection.
+  function basePos(s) {
     const pad = 12;
-    s.ox = clamp(s.ox, insets.l + R + pad, W - insets.r - R - pad);
-    s.oy = clamp(s.oy, insets.t + R + pad, H - insets.b - R - pad);
+    return {
+      x: clamp(s.ox, insets.l + R + pad, Math.max(insets.l + R + pad, W - insets.r - R - pad)),
+      y: clamp(s.oy, insets.t + R + pad, Math.max(insets.t + R + pad, H - insets.b - R - pad)),
+    };
   }
 
   function zoneAt(x, y) {
@@ -118,36 +130,40 @@ window.TwinStick = (function () {
   function bind(s, id, x, y) {
     s.active = true; s.id = id; s.t0 = now(); s.travel = 0; s.fired = false;
     s.sx = x; s.sy = y;
-    if (cfg.mode === 'fixed') { s.ox = s.homeX; s.oy = s.homeY; }
-    else { s.ox = x; s.oy = y; clampBase(s); }
-    s.px = x; s.py = y; s.hasDir = false; s.firing = false;
+    // fixed: only a touch on or near the drawn base grabs it; anything farther floats a base for this touch
+    s.floating = cfg.mode !== 'fixed' || Math.hypot(x - s.homeX, y - s.homeY) > R * 1.25;
+    if (s.floating) { s.ox = x; s.oy = y; } else { s.ox = s.homeX; s.oy = s.homeY; }
+    s.px = x; s.py = y; s.hasDir = false; s.hadDir = false; s.firing = false; s.angVel = 0;
     follow(s);
   }
 
   function release(s, allowTap) {
     if (!s.active) return;
-    if (s.role === 'aim' && allowTap && !s.fired) {
+    if (s.role === 'aim' && allowTap) {
       const dt = now() - s.t0;
       if (dt <= cfg.tapMs) {
-        if (cfg.tapShove && s.travel <= cfg.tapPx) shoves.push({ dir: null, kind: 'tap' });
+        // a flick is fast enough to cross the fire ring on its way out, so it may have fired
+        if (cfg.tapShove && !s.fired && s.travel <= cfg.tapPx) shoves.push({ dir: null, kind: 'tap' });
         else if (cfg.flickShove && s.travel > cfg.tapPx && s.travel / Math.max(1, dt) >= 1.0) shoves.push({ dir: Math.atan2(s.py - s.sy, s.px - s.sx), kind: 'flick' });
       }
     }
-    s.drawX = s.ox; s.drawY = s.oy; s.relT = 0.15;
-    s.active = false; s.id = null; s.fired = false; s.firing = false; s.hasDir = false; s.mag = 0;
+    const b = basePos(s);
+    s.drawX = b.x; s.drawY = b.y; s.relT = s.floating ? 0.15 : 0;
+    s.active = false; s.id = null; s.fired = false; s.firing = false; s.hasDir = false; s.hadDir = false; s.mag = 0; s.floating = false;
     s.ox = s.homeX; s.oy = s.homeY; s.px = s.ox; s.py = s.oy;
   }
 
   function releaseAll() {
     release(sticks.move, false); release(sticks.aim, false);
-    mouse.fire = false; padFire = false;
+    mouse.fire = false; padFire = false; mouseButtons = 0;
     for (const k in keys) keys[k] = false;
+    for (const k in pressed) pressed[k] = false;
     debugTouches.clear();
     shoves.length = 0;
   }
 
   function follow(s) {
-    if (cfg.mode === 'fixed' || !cfg.follow) return;
+    if (!s.floating || !cfg.follow) return;
     const dx = s.px - s.ox, dy = s.py - s.oy, d = Math.hypot(dx, dy);
     if (d > R) { const k = (d - R) / d; s.ox += dx * k; s.oy += dy * k; }
   }
@@ -163,6 +179,7 @@ window.TwinStick = (function () {
     e.preventDefault();
     if (!enabled) return;
     source = 'touch';
+    reconcile(e.touches); // free any stick whose finger vanished before binding the new ones
     for (const t of e.changedTouches) {
       const role = zoneAt(t.clientX, t.clientY);
       debugTouches.set(t.identifier, { x: t.clientX, y: t.clientY, role: role || 'none' });
@@ -171,10 +188,10 @@ window.TwinStick = (function () {
       if (s.active) continue; // that thumb is already down
       bind(s, t.identifier, t.clientX, t.clientY);
     }
-    reconcile(e.touches);
   }
   function onTouchMove(e) {
     e.preventDefault();
+    reconcile(e.touches);
     for (const t of e.changedTouches) {
       const d = debugTouches.get(t.identifier);
       if (d) { d.x = t.clientX; d.y = t.clientY; }
@@ -198,12 +215,18 @@ window.TwinStick = (function () {
   }
 
   // ---- mouse / pen
+  // Chorded buttons only send pointermove, so the state comes from e.buttons, not e.button.
+  function syncButtons(e) {
+    const b = e.buttons | 0;
+    mouse.fire = enabled && (b & 1) !== 0;
+    if (enabled && (b & 2) && !(mouseButtons & 2)) shoves.push({ dir: null, kind: 'mouse' });
+    mouseButtons = b;
+  }
   function onPointerDown(e) {
     if (e.pointerType === 'touch' || !enabled) return;
     source = 'mouse';
     mouse.x = e.clientX; mouse.y = e.clientY; mouse.inside = true;
-    if (e.button === 0) mouse.fire = true;
-    if (e.button === 2) shoves.push({ dir: null, kind: 'mouse' });
+    syncButtons(e);
     try { el.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
     e.preventDefault();
   }
@@ -211,10 +234,12 @@ window.TwinStick = (function () {
     if (e.pointerType === 'touch') return;
     if (Math.abs(e.clientX - mouse.x) + Math.abs(e.clientY - mouse.y) > 1) source = 'mouse';
     mouse.x = e.clientX; mouse.y = e.clientY; mouse.inside = true;
+    if ((e.buttons | 0) !== mouseButtons) syncButtons(e);
   }
   function onPointerUp(e) {
     if (e.pointerType === 'touch') return;
-    if (e.button === 0 || e.type === 'pointercancel') mouse.fire = false;
+    if (e.type === 'pointercancel') { mouse.fire = false; mouseButtons = 0; return; }
+    syncButtons(e);
   }
 
   function onKey(e, down) {
@@ -252,11 +277,11 @@ window.TwinStick = (function () {
     window.addEventListener('blur', releaseAll);
     window.addEventListener('pagehide', releaseAll);
     document.addEventListener('visibilitychange', () => { if (document.hidden) releaseAll(); });
-    window.addEventListener('mouseup', (e) => { if (e.button === 0) mouse.fire = false; });
+    window.addEventListener('mouseup', (e) => { if (e.button === 0) { mouse.fire = false; mouseButtons &= ~1; } });
   }
 
   function computeStick(s, dt) {
-    if (!s.active) { s.mag = 0; s.x = 0; s.y = 0; s.hasDir = false; s.firing = false; s.angVel = 0; return; }
+    if (!s.active) { s.mag = 0; s.x = 0; s.y = 0; s.hasDir = false; s.hadDir = false; s.firing = false; s.angVel = 0; return; }
     const dx = s.px - s.ox, dy = s.py - s.oy;
     const d = Math.hypot(dx, dy);
     s.mag = Math.min(d / R, 1);
@@ -273,11 +298,15 @@ window.TwinStick = (function () {
       if (s.hasDir) {
         const a = Math.atan2(dy, dx);
         if (was) {
-          let da = a - s.prevAng; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
-          s.angVel = s.angVel * 0.6 + (Math.abs(da) / Math.max(dt, 1e-3)) * 0.4;
-        } else s.angVel = 0;
-        s.ang = a; s.prevAng = a;
-      }
+          // skip near-zero intervals: they read as 'no motion' and would drag the estimate down
+          if (dt > 0.004) {
+            let da = a - s.prevAng; while (da > Math.PI) da -= Math.PI * 2; while (da < -Math.PI) da += Math.PI * 2;
+            s.angVel = s.angVel * 0.6 + (Math.abs(da) / dt) * 0.4;
+            s.prevAng = a;
+          }
+        } else { s.angVel = 0; s.prevAng = a; }
+        s.ang = a; s.hadDir = true;
+      } else s.angVel = 0;
       if (cfg.fireMode === 'any') s.firing = s.hasDir;
       else if (cfg.fireMode === 'auto') s.firing = false; // the game decides (needs a target)
       else s.firing = s.hasDir && (s.mag >= cfg.fireAt || (s.firing && s.mag >= cfg.fireAt - cfg.fireHys));
@@ -334,6 +363,9 @@ window.TwinStick = (function () {
       if (sticks.aim.hasDir) {
         aim.active = true; aim.ang = sticks.aim.ang; aim.mag = sticks.aim.mag; aim.firing = sticks.aim.firing; aim.angVel = sticks.aim.angVel;
         aim.wantsFire = cfg.fireMode === 'auto';
+      } else if (sticks.aim.hadDir) {
+        // thumb resting back near the centre: hold the last direction, don't fire
+        aim.active = true; aim.ang = sticks.aim.ang; aim.mag = 0.5;
       }
     } else if (pad && source === 'pad' && (Math.hypot(pad.rx, pad.ry) > 0.25 || pad.rt > 0.3)) {
       aim.source = 'pad';
@@ -357,9 +389,14 @@ window.TwinStick = (function () {
       const isAim = s.role === 'aim';
       const ring = isAim && cfg.fireMode === 'ring';
       if (!s.active) {
-        if (!opts.showGhost) continue;
         let bx = s.homeX, by = s.homeY;
-        if (s.relT > 0 && cfg.mode !== 'fixed') { const u = 1 - s.relT / 0.15; bx = s.drawX + (s.homeX - s.drawX) * u; by = s.drawY + (s.homeY - s.drawY) * u; }
+        if (s.relT > 0) { const u = 1 - s.relT / 0.15; bx = s.drawX + (s.homeX - s.drawX) * u; by = s.drawY + (s.homeY - s.drawY) * u; }
+        if (isAim && opts.shoveBlocked > 0) {
+          // a tap-shove on cooldown: flash where the thumb just was
+          const fx = opts.showGhost ? bx : s.drawX, fy = opts.showGhost ? by : s.drawY;
+          ctx.save(); ctx.globalAlpha = Math.min(1, opts.shoveBlocked * 4); ringP(ctx, fx, fy, R + 4, '#ff4b2f', 3); ctx.restore();
+        }
+        if (!opts.showGhost) continue;
         ctx.save();
         ctx.globalAlpha = cfg.mode === 'fixed' ? 0.34 : 0.22;
         ringP(ctx, bx, by, R, '#ece8df', 2);
@@ -376,20 +413,21 @@ window.TwinStick = (function () {
         ctx.restore();
         continue;
       }
-      const kx = s.ox + Math.cos(s.ang) * Math.min(s.mag, 1) * R;
-      const ky = s.oy + Math.sin(s.ang) * Math.min(s.mag, 1) * R;
+      const b = basePos(s), ox = b.x, oy = b.y;
+      const kx = ox + Math.cos(s.ang) * Math.min(s.mag, 1) * R;
+      const ky = oy + Math.sin(s.ang) * Math.min(s.mag, 1) * R;
       ctx.save();
       ctx.globalAlpha = 0.45;
-      disc(ctx, s.ox, s.oy, R, 'rgba(10,12,18,.6)');
-      ringP(ctx, s.ox, s.oy, R, '#ece8df', 2);
+      disc(ctx, ox, oy, R, 'rgba(10,12,18,.6)');
+      ringP(ctx, ox, oy, R, '#ece8df', 2);
       ctx.globalAlpha = 1;
       if (ring) {
         ctx.globalAlpha = s.firing ? 0.95 : 0.65;
-        dashed(ctx, s.ox, s.oy, R * cfg.fireAt, s.firing ? '#ff4b2f' : '#ff7a2f');
+        dashed(ctx, ox, oy, R * cfg.fireAt, s.firing ? '#ff4b2f' : '#ff7a2f');
         ctx.globalAlpha = 1;
       }
-      if (!isAim && cfg.moveDead > 0) { ctx.globalAlpha = 0.22; ringP(ctx, s.ox, s.oy, R * cfg.moveDead, '#ece8df', 1); ctx.globalAlpha = 1; }
-      if (isAim && !s.hasDir) { ctx.globalAlpha = 0.25; ringP(ctx, s.ox, s.oy, R * cfg.aimDead, '#ece8df', 1); ctx.globalAlpha = 1; }
+      if (!isAim && cfg.moveDead > 0) { ctx.globalAlpha = 0.22; ringP(ctx, ox, oy, R * cfg.moveDead, '#ece8df', 1); ctx.globalAlpha = 1; }
+      if (isAim && !s.hasDir) { ctx.globalAlpha = 0.25; ringP(ctx, ox, oy, R * cfg.aimDead, '#ece8df', 1); ctx.globalAlpha = 1; }
       const col = isAim ? (s.firing || opts.autoFiring ? '#ff4b2f' : s.hasDir ? '#ffb26b' : '#ece8df') : '#ece8df';
       ctx.globalAlpha = 0.72;
       disc(ctx, kx, ky, R * 0.45, col);
@@ -399,7 +437,7 @@ window.TwinStick = (function () {
         ctx.globalAlpha = 0.3 + 0.25 * (0.5 + 0.5 * Math.sin(t * 40));
         ringP(ctx, kx, ky, R * 0.45 + 5, '#ff4b2f', 3);
       }
-      if (isAim && opts.shoveBlocked > 0) { ctx.globalAlpha = Math.min(1, opts.shoveBlocked * 4); ringP(ctx, s.ox, s.oy, R + 4, '#ff4b2f', 3); }
+      if (isAim && opts.shoveBlocked > 0) { ctx.globalAlpha = Math.min(1, opts.shoveBlocked * 4); ringP(ctx, ox, oy, R + 4, '#ff4b2f', 3); }
       ctx.restore();
     }
     if (opts.debug) {

@@ -52,7 +52,7 @@
     }
   }
   function saveCfg() { try { localStorage.setItem(STORE, JSON.stringify(cfg)); } catch (e) { /* storage blocked */ } }
-  function applyCfg() { for (const k of CONTROL_KEYS) IN.cfg[k] = cfg[k]; document.body.classList.toggle('lefty', cfg.lefty); resize(); }
+  function applyCfg() { for (const k of CONTROL_KEYS) IN.cfg[k] = cfg[k]; document.body.classList.toggle('lefty', cfg.lefty); syncHowto(); resize(); }
   function shareLink() {
     const diff = {};
     for (const k in DEFAULTS) if (cfg[k] !== DEFAULTS[k]) diff[k] = cfg[k];
@@ -420,8 +420,10 @@
   let heap = null;
   const DX8 = [1, -1, 0, 0, 1, 1, -1, -1], DY8 = [0, 0, 1, -1, 1, -1, 1, -1];
   // Path distance (tiles) to a target over ground zombies can cross; fences cost extra (climbing).
-  function flowField(field, tx, ty) {
+  // block: tiles the walker can't enter. Zombies (the default) climb fences at a cost; the bot can't.
+  function flowField(field, tx, ty, block = BLOCK_Z) {
     const W = M.W, H = M.H, F = M.flags;
+    const climbs = !(block & BLOCK_P), corner = climbs ? (BLOCK_Z | FENCE) : block;
     field.fill(1e9);
     if (!heap || heap.k.length < W * H * 8) heap = new Heap(W * H * 8);
     heap.n = 0;
@@ -434,14 +436,14 @@
         const dx = DX8[k], dy = DY8[k], nx = x + dx, ny = y + dy;
         if (nx < 0 || ny < 0 || nx >= W || ny >= H) continue;
         const j = ny * W + nx;
-        if (F[j] & BLOCK_Z) continue;
-        if (dx && dy && ((F[y * W + nx] & (BLOCK_Z | FENCE)) || (F[ny * W + x] & (BLOCK_Z | FENCE)))) continue;
-        const c = (dx && dy ? 1.414 : 1) * (F[j] & FENCE ? 5 : 1);
+        if (F[j] & block) continue;
+        if (dx && dy && ((F[y * W + nx] & corner) || (F[ny * W + x] & corner))) continue;
+        const c = (dx && dy ? 1.414 : 1) * (climbs && (F[j] & FENCE) ? 5 : 1);
         if (d + c < field[j]) { field[j] = d + c; heap.push(j, d + c); }
       }
     }
   }
-  function flowDir(field, x, y, out) {
+  function flowDir(field, x, y, out, corner = BLOCK_Z | FENCE) {
     const W = M.W, F = M.flags;
     const tx = Math.floor(x / T), ty = Math.floor(y / T);
     if (tx < 0 || ty < 0 || tx >= M.W || ty >= M.H) { out.x = 0; out.y = 0; return false; }
@@ -449,7 +451,7 @@
     for (let k = 0; k < 8; k++) {
       const dx = DX8[k], dy = DY8[k], nx = tx + dx, ny = ty + dy;
       if (nx < 0 || ny < 0 || nx >= M.W || ny >= M.H) continue;
-      if (dx && dy && ((F[ty * W + nx] & (BLOCK_Z | FENCE)) || (F[ny * W + tx] & (BLOCK_Z | FENCE)))) continue;
+      if (dx && dy && ((F[ty * W + nx] & corner) || (F[ny * W + tx] & corner))) continue;
       const v = field[ny * W + nx];
       if (v < best) { best = v; bx = nx; by = ny; }
     }
@@ -484,6 +486,8 @@
   const dmgInd = [];
   const tips = { shown: {} };
   let playerLit = false, shoveBlocked = 0, useHeld = false, useHoldT = 0;
+  let runId = 0; // bumps on every newRun so stale timers can tell they belong to an old run
+  let dirty = true; // redraw once even while the scene is frozen (paused, settled end screen)
 
   function newRun(seed, asMode) {
     mode = asMode;
@@ -500,13 +504,17 @@
       aim: 0, aimHold: 0, lastMoveAng: 0, moveAng: 0,
       primary: null, pistol: { kind: 'pistol', mag: WEAP.pistol.mag, res: Infinity }, cur: 'pistol',
       fireCd: 0, reloadT: 0, reloadTotal: 0, swapT: 0, bloom: 0, dryT: 0, pumpT: 0, idleFire: 0,
-      shoveCd: 0, shoveT: 0, shoveDir: 0, chain: 0, lastShove: -9, slowT: 0, hurtT: 0, healT: 0, med: 0, bombs: 0, pills: 0,
+      shoveCd: 0, shoveT: 0, shoveDir: 0, chain: 0, wasFiring: false, lastShove: -9, slowT: 0, hurtT: 0, healT: 0, med: 0, bombs: 0, pills: 0,
       firingT: 0, walkPhase: 0, assist: null, assistT: 0, dead: false, safe: false, secondWind: true, wounded: false, invT: 0, hbT: 0, sneaking: false,
     };
     if (mode === 'attract') { P.primary = { kind: 'smg', mag: 50, res: 400 }; P.cur = 'primary'; P.x = (blockX(1) - 2.5) * T; P.y = (blockY(M.js) + 5.5) * T; }
+    botS.chkT = 6; botS.cx = P.x; botS.cy = P.y;
     D = { phase: 'start', intensity: 0, lastHurt: -9, mobT: 0, relaxT: 0, relaxX: 0, peakT: 0, upkeepT: 2, cresc: false, waveT: 0, waveN: 0, waveDir: -1, mobs: 0, drumsOff: 0, warn: null, pending: null };
     stats = { kills: 0, shots: 0, hits: 0, dmg: 0, shoves: 0, mobs: 0, time: 0, healed: 0 };
     gameTime = 0; runTime = 0; endT = 0; hitStop = 0;
+    // these gates compare against gameTime, which just went back to 0
+    noiseGate = 0; noiseMax = 0; noiseX = 0; noiseY = 0; groanGate = 0;
+    runId++;
     cam.x = P.x; cam.y = P.y; cam.trauma = 0; cam.kx = cam.ky = 0; cam.lx = cam.ly = 0;
     useHeld = false; useHoldT = 0;
     populate();
@@ -692,16 +700,17 @@
   function chasers() { let n = 0; for (const z of Z) if (z.state !== Z_IDLE) n++; return n; }
   const maxZ = () => cfg.cap;
 
-  function hiddenSpawnTiles(minD, maxD, want, behind) {
+  // side(x, y) in tiles: which side of the survivor to prefer; strict = only that side
+  function hiddenSpawnTiles(minD, maxD, want, side, strict) {
     const out = [];
-    const W = M.W, F = M.flags, px = P.x / T;
+    const W = M.W, F = M.flags;
     for (let tries = 0; tries < 1200 && out.length < want; tries++) {
       const x = 1 + Math.floor(Math.random() * (W - 2)), y = 1 + Math.floor(Math.random() * (M.H - 2));
       const i = y * W + x;
       if (F[i] & (BLOCK_Z | NOSPAWN | FENCE)) continue;
       const fd = fieldP[i];
       if (fd < minD || fd > maxD) continue;
-      if (behind != null && Math.random() < 0.75 && ((x < px) !== behind)) continue;
+      if (side && !side(x, y) && (strict || Math.random() < 0.75)) continue;
       const wx = (x + 0.5) * T, wy = (y + 0.5) * T;
       const sd = Math.hypot(wx - P.x, wy - P.y);
       if (sd < 500) continue;
@@ -714,14 +723,27 @@
     }
     return out;
   }
-  function planMob(n, minD, maxD, behindBias) {
-    const behind = Math.random() < behindBias;
-    const anchors = hiddenSpawnTiles(minD, maxD, Math.random() < 0.5 ? 1 : 2, behind);
+  function planMob(n, minD, maxD, behindBias, side) {
+    const want = Math.random() < 0.5 ? 1 : 2;
+    let anchors;
+    if (side) {
+      anchors = hiddenSpawnTiles(minD, maxD, want, side, true);
+      if (!anchors.length) anchors = hiddenSpawnTiles(minD, maxD, want, null);
+    } else {
+      const behind = Math.random() < behindBias, px = P.x / T;
+      anchors = hiddenSpawnTiles(minD, maxD, want, (x) => (x < px) === behind);
+    }
     if (!anchors.length) return null;
     return { n, anchors };
   }
+  // still out of sight? (checked again when a planned mob is released)
+  function anchorHidden(a) {
+    const d = Math.hypot(a.x - P.x, a.y - P.y);
+    if (d < 400 || onScreen(a.x, a.y, 60)) return false;
+    return !(d < 900 && los(P.x, P.y, a.x, a.y, OPAQUE));
+  }
   function releaseMob(plan, t0) {
-    if (!plan) return;
+    if (!plan || !plan.anchors.length) return;
     for (let k = 0; k < plan.n; k++) {
       const a = plan.anchors[k % plan.anchors.length];
       spawnQ.push({ at: t0 + k * 0.08, x: a.x + rand(-30, 30), y: a.y + rand(-30, 30), ax: a.x, ay: a.y, st: Z_CHASE });
@@ -736,6 +758,7 @@
   }
 
   function director(dt) {
+    if (mode === 'run' && state !== 'play') return; // nothing new behind the end screen
     const near400 = Z.some((z) => z.state !== Z_IDLE && Math.abs(z.x - P.x) < 400 && Math.abs(z.y - P.y) < 400);
     if (!near400 && gameTime - D.lastHurt > 3) D.intensity = Math.max(0, D.intensity - 0.035 * dt);
     const ch = chasers();
@@ -756,10 +779,16 @@
           const room = Math.max(0, Math.min(maxZ(), Math.round(26 * cfg.horde)) - ch);
           D.waveT = 10; D.waveN++;
           if (room > 0) {
-            // rotate the direction so waves never come from the same side twice
-            let behind = D.waveDir === 0 ? 1 : 0; D.waveDir = behind;
-            const plan = planMob(Math.min(n, room), 12, 26, behind);
-            if (first) { const p2 = planMob(Math.ceil(Math.min(n, room) / 2), 12, 26, 1 - behind); if (plan && p2) plan.anchors.push(...p2.anchors); }
+            // the survivor stands against the wall, so alternate along it: north, then south, then north…
+            const north = D.waveDir !== 1; D.waveDir = north ? 1 : 0;
+            const py = P.y / T, total = Math.min(n, room);
+            const sideN = (x, y) => y < py, sideS = (x, y) => y >= py;
+            let plan;
+            if (first) {
+              // the opening wave comes from both ends at once
+              const a = planMob(total, 12, 26, 0, sideN), b = planMob(total, 12, 26, 0, sideS);
+              plan = a && b ? { n: total, anchors: a.anchors.concat(b.anchors) } : a || b;
+            } else plan = planMob(total, 12, 26, 0, north ? sideN : sideS);
             releaseMob(plan, gameTime + 0.3);
             warnFrom(plan, 2);
           }
@@ -783,9 +812,14 @@
           else { warnFrom(D.pending, 3); if (mode === 'run') { SFX.hordeCue(); banner('HORDE!', 'danger', 2.4); } }
         }
         if (D.mobT <= 0 && D.pending) {
-          releaseMob(D.pending, gameTime);
-          D.pending = null; D.mobs++; stats.mobs++;
-          D.mobT = rand(75, 120);
+          // the survivor may have walked into view of a planned spot in the last 3 s
+          D.pending.anchors = D.pending.anchors.filter(anchorHidden);
+          if (!D.pending.anchors.length) { const p = planMob(D.pending.n, 16, 28, 0.6); if (p) { D.pending.anchors = p.anchors; warnFrom(p, 1); } }
+          if (D.pending.anchors.length) {
+            releaseMob(D.pending, gameTime);
+            D.pending = null; D.mobs++; stats.mobs++;
+            D.mobT = rand(75, 120);
+          } else D.mobT = 0.5;
         }
         break;
       }
@@ -810,7 +844,8 @@
       let ahead = 0;
       for (const z of Z) if (z.state === Z_IDLE && z.x > P.x + 200 && z.x < P.x + 1600) ahead++;
       if (ahead < 16 && Z.length < maxZ() - 4) {
-        for (const t of hiddenSpawnTiles(18, 40, 2, false)) {
+        const px = P.x / T;
+        for (const t of hiddenSpawnTiles(18, 40, 2, (x) => x >= px)) {
           if (t.x < P.x + 700 || t.x > WALLX * T) continue;
           const n = 1 + ((Math.random() * 4) | 0);
           for (let k = 0; k < n; k++) addZombie(t.x + rand(-24, 24), t.y + rand(-24, 24), Z_IDLE);
@@ -954,7 +989,8 @@
     P.shoveCd = P.chain >= 6 ? 1.6 : P.chain >= 4 ? 1.0 : 0.35;
     P.shoveT = 0.22;
     stats.shoves++;
-    let dir = req && req.dir != null ? req.dir : (IN.aim.active ? P.aim : (Math.hypot(P.vx, P.vy) > 40 ? Math.atan2(P.vy, P.vx) : P.aim));
+    // while the light is held (or was a moment ago) shove where it points, even when backing off
+    let dir = req && req.dir != null ? req.dir : ((IN.aim.active || P.aimHold > 0) ? P.aim : (Math.hypot(P.vx, P.vy) > 40 ? Math.atan2(P.vy, P.vx) : P.aim));
     if (req && req.kind === 'mouse' && IN.mouse.inside) { const w = screenToWorld(IN.mouse.x, IN.mouse.y); dir = Math.atan2(w.y - P.y, w.x - P.x); }
     const near = [];
     for (const z of Z) {
@@ -1022,8 +1058,9 @@
     if (P.dead) return;
     P.dead = true;
     if (mode === 'attract') { newRun((Math.random() * 1e9) >>> 0, 'attract'); return; }
-    state = 'dead'; endT = 0;
-    SFX.setDrums(false); SFX.siren(false); SFX.motor(false); SFX.sting(false);
+    state = 'dead'; endT = 0; D.cresc = false;
+    IN.enabled = false; // nothing pressed during the slow-mo carries into the next run
+    SFX.stopAll(); SFX.sting(false);
     bloodDecal(P.x, P.y, 2, 0.9);
   }
 
@@ -1052,7 +1089,7 @@
     const dx = (tx - P.x) / L, dy = (ty - P.y) / L;
     let d = Math.min(L, 350);
     const wall = castRay(P.x, P.y, dx, dy, d, OPAQUE);
-    d = Math.max(20, Math.min(d, wall - 14));
+    d = Math.max(0, Math.min(d, wall - 14)); // blocked point-blank: it drops at your feet, not inside the wall
     bombs.push({ x0: P.x, y0: P.y, x: P.x, y: P.y, x1: P.x + dx * d, y1: P.y + dy * d, t: 0, fly: 0.6, life: 6, beepT: 0, landed: false, h: 0, blink: 0 });
     if (mode === 'run') SFX.throwWhoosh();
   }
@@ -1104,7 +1141,11 @@
     M.gate.state = 'opening'; M.gate.t = 0;
     D.cresc = true; D.waveT = 2.5; D.waveN = 0; D.phase = 'peak'; D.pending = null;
     makeNoise(P.x, P.y, 2000);
-    if (mode === 'run') { SFX.clunk(); SFX.siren(true); SFX.motor(true); SFX.setDrums(true); setTimeout(() => { if (M && M.gate.state === 'opening') SFX.siren(false); }, 4500); }
+    if (mode === 'run') {
+      SFX.clunk(); SFX.siren(true); SFX.motor(true); SFX.setDrums(true);
+      const run = runId;
+      setTimeout(() => { if (run === runId) SFX.siren(false); }, 4500);
+    }
     banner('ALARM! Hold out while the gate opens', 'danger', 3);
     bump(0.5);
   }
@@ -1136,7 +1177,7 @@
     if (mode === 'attract') {
       const b = bot(dt); mvx = b.mx; mvy = b.my; aimActive = b.aim; aimAng = b.ang; firing = b.fire; if (b.shove) shove(null);
     } else if (alive) {
-      IN.update();
+      // IN.update() runs once per frame in frame(), so substeps share one reading
       mvx = IN.move.x; mvy = IN.move.y;
       if (IN.aim.active) {
         aimActive = true;
@@ -1153,19 +1194,25 @@
       if (IN.consume('pills')) usePills();
       if (IN.consume('bomb')) throwBomb();
       if (IN.consume('pause')) { pause(); return; }
-      if (useHeld && useTarget) {
-        if (useTarget.t === 'switch') { useHoldT += dt; if (useHoldT >= 0.6) { doUse(); useHeld = false; useHoldT = 0; } }
-        else { doUse(); useHeld = false; }
+      if (useHeld && useTarget && useTarget.t === 'switch') {
+        useHoldT += dt; if (useHoldT >= 0.6) { doUse(); useHeld = false; useHoldT = 0; }
       } else useHoldT = 0;
     }
-    P.firingNow = firing;
+    // penalties (slowdown, bloom, the firing look) only while the gun can actually go off
+    const wNow = curW();
+    const canShoot = P.swapT <= 0 && wNow.mag > 0 && (P.reloadT <= 0 || !!WEAP[wNow.kind].perShell);
+    const shooting = firing && canShoot;
+    P.firingNow = shooting;
+    const trigger = firing && !P.wasFiring; P.wasFiring = firing;
 
     // --- facing: capped turn rate toward the aim; after a hold, turn toward where you walk
     const moving = Math.hypot(mvx, mvy) > 0.05;
     if (moving) P.moveAng = Math.atan2(mvy, mvx);
     const turnCap = (cfg.aimTurn >= 3600 ? 1e4 : cfg.aimTurn) * DEG;
     if (aimActive) {
-      P.aim += clamp(angDiff(aimAng, P.aim), -turnCap * dt, turnCap * dt);
+      // the first shot of a trigger pull goes where the thumb points; sweeps keep the turn cap
+      if (trigger) P.aim = aimAng;
+      else P.aim += clamp(angDiff(aimAng, P.aim), -turnCap * dt, turnCap * dt);
       P.aimHold = cfg.lookHold / 1000;
     } else if (P.aimHold > 0) P.aimHold -= dt;
     else if (moving) P.aim += clamp(angDiff(P.moveAng, P.aim), -540 * DEG * dt, 540 * DEG * dt);
@@ -1179,7 +1226,7 @@
       if (P.wounded) sp *= 0.6;
       if (P.slowT > 0) sp *= 0.7;
       if (P.healT > 0) sp *= 0.3;
-      if (firing) sp *= 0.85;
+      if (shooting) sp *= 0.85;
       if (moving && (aimActive || P.aimHold > 0) && Math.abs(angDiff(P.moveAng, P.aim)) > 120 * DEG) sp *= 0.8;
       const tvx = mvx * sp, tvy = mvy * sp;
       const cur = Math.hypot(P.vx, P.vy), tgt = Math.hypot(tvx, tvy);
@@ -1199,7 +1246,7 @@
     if (gameTime - P.lastShove > 2) P.chain = 0;
     if (P.temp > 0) P.temp = Math.max(0, P.temp - 0.27 * dt);
     if (P.wounded && P.hp > 40) P.wounded = false;
-    if (!firing) { P.bloom = Math.max(0, P.bloom - dt * 0.25); P.idleFire += dt; }
+    if (!shooting) { P.bloom = Math.max(0, P.bloom - dt * 0.25); P.idleFire += dt; }
     if (P.autoReloadT > 0) { P.autoReloadT -= dt; if (P.autoReloadT <= 0) startReload(); }
     if (P.reloadT > 0) { P.reloadT -= dt; if (P.reloadT <= 0) { P.reloadT = 0; finishReloadStep(); } }
     if (cfg.topUp && P.idleFire > 2 && P.reloadT <= 0 && P.healT <= 0) {
@@ -1239,6 +1286,14 @@
       if (gameTime < s.at) continue;
       spawnQ.splice(i, 1);
       if (Z.length >= maxZ() && !evictSleeper()) continue;
+      if (s.st === Z_CHASE && onScreen(s.x, s.y, 40) && los(P.x, P.y, s.x, s.y, OPAQUE)) {
+        // the spot came into view: move this anchor's whole group somewhere hidden
+        const alt = hiddenSpawnTiles(10, 30, 1, null)[0];
+        if (!alt) continue;
+        const ax = s.ax, ay = s.ay;
+        for (const q of spawnQ) if (q.ax === ax && q.ay === ay) { q.x += alt.x - ax; q.y += alt.y - ay; q.ax = alt.x; q.ay = alt.y; }
+        s.x += alt.x - ax; s.y += alt.y - ay; s.ax = alt.x; s.ay = alt.y;
+      }
       let x = s.x, y = s.y;
       if (fAt(Math.floor(x / T), Math.floor(y / T)) & (BLOCK_Z | FENCE)) { x = s.ax; y = s.ay; }
       const z = addZombie(x, y, s.st);
@@ -1329,17 +1384,20 @@
 
   function reachSafety() {
     P.safe = true;
-    state = 'won'; endT = 0;
+    state = 'won'; endT = 0; D.cresc = false;
+    IN.enabled = false;
     const d = M.endDoor, i = d.y * M.W + d.x;
     M.flags[i] |= BLOCK_P | BLOCK_Z | OPAQUE; M.kind[i] = K.DOOR;
     fieldPTile = -1;
-    if (mode === 'run') { SFX.door(); SFX.setDrums(false); SFX.siren(false); SFX.motor(false); setTimeout(() => SFX.sting(true), 500); }
+    if (mode === 'run') { SFX.door(); SFX.stopAll(); const run = runId; setTimeout(() => { if (run === runId) SFX.sting(true); }, 500); }
     banner('Safe.', 'go', 2.5);
   }
 
   // Aim assist: lit, visible targets inside a narrow cone; the pull is capped and sticky.
   function assistAim(raw, angVel, dt) {
-    if (cfg.assist <= 0 || angVel > 400 * DEG) { P.assist = null; return raw; }
+    const pull = cfg.assist > 0;
+    // with the pull off, Auto fire still needs a target, so the search runs but the aim stays raw
+    if (angVel > 400 * DEG || (!pull && cfg.fireMode !== 'auto')) { P.assist = null; return raw; }
     const cone = cfg.assistCone * DEG, range = WEAP[curW().kind].range;
     const cur = P.assist;
     if (cur) {
@@ -1364,7 +1422,7 @@
       if (best !== P.assist) P.assistT = 0;
       P.assist = best;
     }
-    if (!P.assist) return raw;
+    if (!P.assist || !pull) return raw;
     const ta = Math.atan2(P.assist.y - P.y, P.assist.x - P.x);
     const max = cfg.assistMax * DEG;
     return raw + clamp(angDiff(ta, raw) * cfg.assist, -max, max);
@@ -1543,7 +1601,7 @@
   }
 
   // ---- attract-mode bot: a survivor that fights its way east behind the title screen
-  const botS = { goalT: 0 };
+  const botS = { goalT: 0, chkT: 6, cx: 0, cy: 0 };
   function bot(dt) {
     const out = { mx: 0, my: 0, aim: false, ang: P.aim, fire: false, shove: false };
     let near = null, nd = 1e9, crowd = 0, cx = 0, cy = 0;
@@ -1556,11 +1614,17 @@
     botS.goalT -= dt;
     if (!fieldB.goal || botS.goalT <= 0) {
       botS.goalT = 1.5;
-      flowField(fieldB, Math.min(WALLX - 2, Math.floor(P.x / T) + 14), streetY(M.jg) + 2);
+      flowField(fieldB, Math.min(WALLX - 2, Math.floor(P.x / T) + 14), streetY(M.jg) + 2, BLOCK_P | BLOCK_Z);
       fieldB.goal = true;
     }
+    // stuck somewhere for a while: start a fresh demo run
+    botS.chkT -= dt;
+    if (botS.chkT <= 0) {
+      if (Math.hypot(P.x - botS.cx, P.y - botS.cy) < T * 1.5) { newRun((Math.random() * 1e9) >>> 0, 'attract'); return out; }
+      botS.chkT = 6; botS.cx = P.x; botS.cy = P.y;
+    }
     let mx = 0, my = 0;
-    if (flowDir(fieldB, P.x, P.y, flowTmp)) { mx = flowTmp.x; my = flowTmp.y; }
+    if (flowDir(fieldB, P.x, P.y, flowTmp, BLOCK_P | BLOCK_Z)) { mx = flowTmp.x; my = flowTmp.y; }
     if (crowd) { const ax = P.x - cx / crowd, ay = P.y - cy / crowd, al = Math.hypot(ax, ay) || 1; mx = mx * 0.5 + (ax / al) * 0.9; my = my * 0.5 + (ay / al) * 0.9; }
     const ml = Math.hypot(mx, my) || 1;
     out.mx = (mx / ml) * 0.9; out.my = (my / ml) * 0.9;
@@ -1586,7 +1650,8 @@
     const kl = 1 - Math.exp(-3.5 * dt);
     cam.lx += (ox - cam.lx) * kl; cam.ly += (oy - cam.ly) * kl;
     // thumbs cover the bottom of the screen: sit the survivor a little above centre
-    const lift = viewH * (portrait ? 0.1 : 0.05);
+    // (portrait only a touch, so the button row above the stick zones stays clear of it)
+    const lift = viewH * (portrait ? 0.02 : 0.05);
     const tx = P.x + cam.lx, ty = P.y + cam.ly + lift;
     const k = 1 - Math.exp(-9 * dt);
     cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
@@ -1621,7 +1686,7 @@
   let cw = 0, ch = 0, dpr = 1, lscale = 0.5;
   const insets = { t: 0, r: 0, b: 0, l: 0 };
   let autoDpr = 2;
-  const perf = { acc: 0, n: 0 };
+  const perf = { iv: [], work: [], bad: 0, good: 0, ups: 0 };
   const qualityLevel = () => (cfg.quality === 'auto' ? (autoDpr >= 1.75 ? 'high' : 'low') : cfg.quality);
 
   function readInsets() {
@@ -1645,19 +1710,28 @@
     IN.layout(cw, ch, insets);
     document.documentElement.classList.toggle('portrait', ch > cw);
     layoutButtons();
+    dirty = true;
   }
 
   // Thumb buttons: an arc above the aim stick's home (landscape) or a row above the stick zones (portrait).
+  function placeEl(el, x, y, w, h) {
+    if (!el) return;
+    x = clamp(x, insets.l + w / 2 + 6, Math.max(insets.l + w / 2 + 6, cw - insets.r - w / 2 - 6));
+    y = clamp(y, insets.t + 64 + h / 2, Math.max(insets.t + 64 + h / 2, ch - insets.b - h / 2 - 6));
+    el.style.transform = `translate(${Math.round(x - w / 2)}px, ${Math.round(y - h / 2)}px)`;
+  }
+  // The Use pill sits just under the survivor, between the thumbs, where a landing thumb won't hit it.
+  function placeUse() {
+    const el = hud.use;
+    if (!el || el.hidden) return;
+    const w = el.offsetWidth || 120, h = el.offsetHeight || 54;
+    const sy = ch / 2 - ch * (ch > cw ? 0.02 : 0.05); // where the camera holds the survivor
+    placeEl(el, cw / 2, sy + 40 + h / 2, w, h);
+  }
   function layoutButtons() {
     const R = IN.R, portrait = ch > cw;
     const am = IN.sticks.aim, mv = IN.sticks.move;
-    const place = (el, x, y, size) => {
-      if (!el) return;
-      const half = size / 2;
-      x = clamp(x, insets.l + half + 6, cw - insets.r - half - 6);
-      y = clamp(y, insets.t + 64 + half, ch - insets.b - half - 6);
-      el.style.transform = `translate(${Math.round(x - half)}px, ${Math.round(y - half)}px)`;
-    };
+    const place = (el, x, y, size) => placeEl(el, x, y, size, size);
     const flip = cfg.lefty ? -1 : 1;
     if (!portrait) {
       const rad = clamp(am.homeY - (insets.t + 64) - 38, 96, R + 100);
@@ -1665,7 +1739,6 @@
       let p = at(122, rad); place(hud.shove, p.x, p.y, 66);
       p = at(96, rad * 1.02); place(hud.reload, p.x, p.y, 56);
       p = at(150, rad * 1.02); place(hud.bomb, p.x, p.y, 56);
-      p = at(176, rad * 1.1); place(hud.use, p.x - 30 * flip, p.y, 54);
       const ml = clamp(mv.homeY - (insets.t + 64) - 38, 96, R + 100);
       const atL = (deg, r) => ({ x: mv.homeX - Math.cos(deg * DEG) * r * flip, y: mv.homeY - Math.sin(deg * DEG) * r });
       p = atL(90, ml); place(hud.med, p.x, p.y, 56);
@@ -1678,8 +1751,8 @@
       place(hud.bomb, rx(0.64), y - 64, 56);
       place(hud.med, rx(0.12), y, 56);
       place(hud.pills, rx(0.3), y + 4, 56);
-      place(hud.use, cw / 2, y - 70, 54);
     }
+    placeUse();
   }
 
   // ---- sprites (built once)
@@ -1709,7 +1782,8 @@
     SPR.cool = radial(64, [[0, 'rgba(175,205,255,1)'], [1, 'rgba(175,205,255,0)']]);
     SPR.red = radial(64, [[0, 'rgba(255,40,30,1)'], [1, 'rgba(255,40,30,0)']]);
     SPR.flash = radial(64, [[0, 'rgba(255,230,170,1)'], [0.4, 'rgba(255,140,50,.6)'], [1, 'rgba(255,120,40,0)']]);
-    // flashlight cone pointing +x from the left-middle: a 55° core that softens out to 90°
+    // flashlight cone pointing +x from the left-middle. Built square and drawn 1:2, so the
+    // 26°-45° steps here open up to a ~44° core that softens out to ~63° on screen.
     const cone = (col) => {
       const c = document.createElement('canvas'); c.width = 512; c.height = 512;
       const g = c.getContext('2d');
@@ -1921,7 +1995,8 @@
   function litAt(x, y, dx, dy) {
     const d = Math.hypot(dx, dy);
     if (d < 130) return true;
-    if (!P.dead && d < FLASH_R && Math.abs(angDiff(Math.atan2(dy, dx), P.aim)) < 0.5) return true;
+    // the sprite is drawn twice as tall as it is wide, so the bright core reads about ±44°
+    if (!P.dead && d < FLASH_R && Math.abs(angDiff(Math.atan2(dy, dx), P.aim)) < 0.77) return true;
     for (const f of flashes) if (!f.shove && Math.hypot(f.x - x, f.y - y) < (f.boom ? 300 : 210)) return true;
     for (const L of M.lights) { if (L.inside || L.insideEnd) continue; if (lightLevel(L) > 0.5 && Math.hypot(L.x - x, L.y - y) < L.r * 0.7) return true; }
     return false;
@@ -1968,7 +2043,8 @@
     lctx.globalAlpha = 1;
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.imageSmoothingEnabled = true;
-    ctx.drawImage(lc, 0, 0, lc.width, lc.height, 0, 0, canvas.width, canvas.height);
+    // exact scale (not stretched to the canvas size), so the holes line up with the sharp layers
+    ctx.drawImage(lc, 0, 0, (lc.width / lscale) * dpr, (lc.height / lscale) * dpr);
   }
 
   function drawDecor(d) {
@@ -2298,7 +2374,7 @@
     setOnce('pips', pips, (v) => hud.pips.forEach((p, i) => p.classList.toggle('on', i < v)));
     let label = '';
     if (useTarget) label = useTarget.t === 'weapon' ? 'Take ' + WEAP[useTarget.w].name.toLowerCase() : 'Hold: LOUD switch';
-    setOnce('use', label, (v) => { hud.use.hidden = !v; hud.useLabel.textContent = v; });
+    setOnce('use', label, (v) => { hud.use.hidden = !v; hud.useLabel.textContent = v; placeUse(); });
     hud.useFill.style.transform = `scaleX(${clamp(useHoldT / 0.6, 0, 1)})`;
     let obj;
     if (M.gate.state === 'closed') obj = !P.primary && inRoomRect(P, M.startRoom) ? 'Grab a gun from the table' : 'Find the gate in the east wall →';
@@ -2313,9 +2389,20 @@
     if (mode !== 'run' || state !== 'play') return;
     const say = (k, text, sec) => { if (tips.shown[k]) return; tips.shown[k] = true; banner(text, 'tip', sec || 3.2); };
     const touchy = IN.source === 'touch' || (IN.source === 'none' && touchCapable);
-    if (runTime > 0.8) say('move', touchy ? 'Left thumb moves · right thumb aims the light' : 'WASD moves · the mouse aims · click fires', 3.4);
-    if (P.primary && runTime > 2) say('ring', touchy ? (cfg.fireMode === 'ring' ? 'Push past the dashed ring to fire' : 'Push the right stick to fire') : 'Space or right-click shoves', 3);
-    for (const z of Z) if ((z.state === Z_CHASE || z.state === Z_ATTACK) && Math.hypot(z.x - P.x, z.y - P.y) < 80) { say('shove', touchy ? 'Too close? TAP the right side to shove' : 'Too close? Space or right-click to shove', 3); break; }
+    const mv = cfg.lefty ? 'right' : 'left', am = cfg.lefty ? 'left' : 'right';
+    if (runTime > 0.8) say('move', touchy ? `${mv[0].toUpperCase() + mv.slice(1)} thumb moves · ${am} thumb aims the light` : 'WASD moves · the mouse aims · click fires', 3.4);
+    const fireTip = cfg.fireMode === 'ring' ? 'Push past the dashed ring to fire' : cfg.fireMode === 'auto' ? `Point the ${am} stick at a lit zombie: it fires by itself` : `Push the ${am} stick to fire`;
+    if (P.primary && runTime > 2) say('ring', touchy ? fireTip : 'Space or right-click shoves', 3);
+    const shoveTip = cfg.tapShove ? `Too close? TAP the ${am} side to shove` : cfg.shoveBtn ? 'Too close? Hit SHOVE' : cfg.flickShove ? `Too close? FLICK the ${am} stick to shove` : 'Too close? Back off and shoot';
+    for (const z of Z) if ((z.state === Z_CHASE || z.state === Z_ATTACK) && Math.hypot(z.x - P.x, z.y - P.y) < 80) { say('shove', touchy ? shoveTip : 'Too close? Space or right-click to shove', 3); break; }
+  }
+  // the title's how-to follows handedness and the firing mode
+  function syncHowto() {
+    const mv = cfg.lefty ? 'Right' : 'Left', am = cfg.lefty ? 'Left' : 'Right';
+    const set = (sel, html) => { const el = $(sel); if (el) el.innerHTML = html; };
+    set('#howMove', `<b>${mv} thumb</b> anywhere on the ${mv.toLowerCase()}: move.`);
+    set('#howAim', `<b>${am} thumb</b>: aim the light. ` + (cfg.fireMode === 'ring' ? 'Push past the ring to <b>fire</b>.' : cfg.fireMode === 'auto' ? 'It <b>fires</b> by itself at lit zombies.' : 'Push it to <b>fire</b>.'));
+    set('#howShove', cfg.tapShove ? `<b>Tap</b> the ${am.toLowerCase()} side to <b>shove</b> when they get close.` : '<b>Shove</b> button when they get close.');
   }
 
   // ================================================================ screens
@@ -2326,9 +2413,18 @@
     hud.root.hidden = name !== null;
     document.body.classList.toggle('playing', name === null);
     IN.enabled = name === null;
+    dirty = true;
+    // A screen that opens under a busy thumb ignores touches for a moment, so a double tap on
+    // Pause can't hit the back link and a frantic tap can't start a new run.
+    if (name === 'pause' || name === 'end') {
+      const el = screens[name];
+      el.classList.add('arming');
+      clearTimeout(show.h); show.h = setTimeout(() => el.classList.remove('arming'), name === 'end' ? 650 : 400);
+    }
   }
   function startRun() {
     SFX.init();
+    SFX.stopAll(); // a siren, motor or drums left over from the last run
     // Android: go full screen inside the tap that starts the run
     if (touchCapable && /Android/i.test(navigator.userAgent) && !document.fullscreenElement) goFullscreen();
     newRun((Math.random() * 1e9) >>> 0, 'run');
@@ -2349,7 +2445,8 @@
     if (state !== 'play') return;
     state = 'paused';
     IN.releaseAll();
-    SFX.setDrums(false);
+    SFX.stopAll();
+    releaseWake();
     $('#seedLine').textContent = `Map seed ${M.seed} · ${Math.floor(runTime / 60)}:${String(Math.floor(runTime % 60)).padStart(2, '0')} in`;
     show('pause');
   }
@@ -2357,9 +2454,12 @@
     if (state !== 'paused') return;
     state = 'play';
     SFX.resume();
+    if (mode === 'run' && M.gate.state === 'opening') SFX.motor(true);
     show(null);
     IN.releaseAll();
     armBack();
+    requestWake();
+    perf.iv.length = 0; perf.work.length = 0; perf.bad = 0; perf.good = 0;
     last = performance.now();
   }
   function endScreen() {
@@ -2370,6 +2470,7 @@
     const t = Math.round(stats.time);
     const rows = [['Time', `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`], ['Kills', stats.kills], ['Accuracy', acc + '%'], ['Shoves', stats.shoves], ['Damage taken', stats.dmg], ['Hordes', stats.mobs + (M.gate.state !== 'closed' ? 1 : 0)]];
     $('#endStats').innerHTML = rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('');
+    releaseWake();
     show('end');
   }
 
@@ -2440,8 +2541,19 @@
     tapBtn(hud.pills, () => IN.press('pills'));
     tapBtn(hud.bomb, () => IN.press('bomb'));
     tapBtn(hud.shove, shoveFromButton);
-    hud.use.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); useHeld = true; useHoldT = 0; });
-    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) hud.use.addEventListener(ev, () => { useHeld = false; });
+    // Use pill: the switch needs a 0.6 s hold; a weapon is taken on release inside the pill.
+    // Sliding off cancels either, so a thumb that only lands here does nothing.
+    let usePtr = null;
+    const inUse = (e) => { const r = hud.use.getBoundingClientRect(); return e.clientX >= r.left - 10 && e.clientX <= r.right + 10 && e.clientY >= r.top - 10 && e.clientY <= r.bottom + 10; };
+    hud.use.addEventListener('pointerdown', (e) => { e.preventDefault(); e.stopPropagation(); if (e.pointerType === 'touch') IN.source = 'touch'; useHeld = true; useHoldT = 0; usePtr = e.pointerId; });
+    hud.use.addEventListener('pointermove', (e) => { if (e.pointerId === usePtr && useHeld && !inUse(e)) useHeld = false; });
+    hud.use.addEventListener('pointerup', (e) => {
+      if (e.pointerId !== usePtr) return;
+      const tap = useHeld && inUse(e);
+      useHeld = false; usePtr = null;
+      if (tap && useTarget && useTarget.t === 'weapon') IN.press('use');
+    });
+    for (const ev of ['pointercancel', 'pointerleave']) hud.use.addEventListener(ev, () => { useHeld = false; usePtr = null; });
     hud.use.addEventListener('touchstart', (e) => e.preventDefault(), { passive: false });
     hud.use.addEventListener('click', (e) => { if (e.detail === 0) IN.press('use'); });
     window.addEventListener('keydown', (e) => { if (e.code === 'KeyE' && !e.repeat && state === 'play') { if (useTarget && useTarget.t === 'switch') { useHeld = true; } else IN.press('use'); } });
@@ -2464,7 +2576,10 @@
     $('#labHorde').addEventListener('click', () => {
       if (mode !== 'run' || state === 'won' || state === 'dead') { toast('Start a run first'); return; }
       if (D.cresc) { toast('Already a crescendo'); return; }
-      D.phase = 'build'; D.mobT = 3.2; D.pending = null; closeLab(); toast('Horde in 3 seconds…');
+      const p = planMob(Math.round((rand(10, 16.99) + D.mobs) * cfg.horde), 16, 28, 0.6);
+      if (!p) { toast('No hidden spot for a horde here'); return; }
+      warnFrom(p, 3); releaseMob(p, gameTime + 3); D.mobs++; stats.mobs++;
+      closeLab(); toast('Horde in 3 seconds…');
     });
     $('#labCresc').addEventListener('click', () => {
       if (mode !== 'run' || state === 'won' || state === 'dead') { toast('Start a run first'); return; }
@@ -2476,22 +2591,38 @@
       D.phase = 'relax'; D.relaxT = 1e9;
       closeLab(); toast('At the gate. Hold the switch to start.');
     });
-    const muteBtn = $('#muteBtn');
-    const syncMute = () => { muteBtn.setAttribute('aria-pressed', String(SFX.muted)); muteBtn.querySelector('span').textContent = SFX.muted ? 'Sound off' : 'Sound on'; };
-    muteBtn.addEventListener('click', () => { SFX.setMuted(!SFX.muted); syncMute(); });
+    // Sound toggle on the title and pause cards. Kept under its own key, not in the feel
+    // settings, so a shared feel link never mutes someone else.
+    const MUTE_KEY = 'remotefunland:two-thumbs-left:muted';
+    const muteBtns = document.querySelectorAll('[data-mute]');
+    const syncMute = () => muteBtns.forEach((b) => { b.setAttribute('aria-pressed', String(SFX.muted)); b.querySelector('span').textContent = SFX.muted ? 'Sound off' : 'Sound on'; });
+    try { if (localStorage.getItem(MUTE_KEY) === '1') SFX.setMuted(true); } catch (e) { /* storage blocked */ }
+    muteBtns.forEach((b) => b.addEventListener('click', () => {
+      SFX.setMuted(!SFX.muted);
+      try { localStorage.setItem(MUTE_KEY, SFX.muted ? '1' : '0'); } catch (e) { /* storage blocked */ }
+      syncMute();
+    }));
     syncMute();
     const fullBtn = $('#fullBtn');
     if (!document.documentElement.requestFullscreen && !document.documentElement.webkitRequestFullscreen) fullBtn.hidden = true;
     fullBtn.addEventListener('click', goFullscreen);
 
     let pendingResize = 0;
-    const relayout = () => { IN.releaseAll(); cancelAnimationFrame(pendingResize); pendingResize = requestAnimationFrame(resize); };
+    const relayout = () => {
+      cancelAnimationFrame(pendingResize);
+      pendingResize = requestAnimationFrame(() => {
+        const w = document.documentElement.clientWidth || window.innerWidth, h = document.documentElement.clientHeight || window.innerHeight;
+        // a turn moves the zones out from under the thumbs; a toolbar sliding away does not
+        if ((h > w) !== (ch > cw)) IN.releaseAll();
+        resize();
+      });
+    };
     window.addEventListener('resize', relayout);
     window.addEventListener('orientationchange', relayout);
     if (window.visualViewport) window.visualViewport.addEventListener('resize', relayout);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) { if (state === 'play') pause(); SFX.suspend(); }
-      else { if (SFX.ready) SFX.resume(); if (state === 'play' || state === 'paused') requestWake(); }
+      else { if (SFX.ready) SFX.resume(); if (state === 'play') requestWake(); }
     });
     window.addEventListener('pageshow', (e) => { if (e.persisted) { IN.releaseAll(); resize(); if (state === 'play') pause(); } });
     window.addEventListener('popstate', () => {
@@ -2523,6 +2654,7 @@
   async function requestWake() {
     try { if (navigator.wakeLock && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (e) { /* not allowed */ }
   }
+  function releaseWake() { try { if (wake) wake.release(); } catch (e) { /* already gone */ } wake = null; }
 
   // ================================================================ main loop
   let last = performance.now(), fpsAcc = 0, fpsN = 0;
@@ -2535,23 +2667,21 @@
     dt = Math.min(dt, 0.05);
     if (cfg.slowmo && mode === 'run') dt *= 0.25;
     const t0 = performance.now();
-    if (state === 'play' || state === 'title' || state === 'won' || state === 'dead') {
+    // nothing moves behind the pause screen, a settled end screen or a reduced-motion title
+    const frozen = state === 'paused' || (state === 'title' && reducedMotion.matches && gameTime > 0.6) || ((state === 'won' || state === 'dead') && endT > 4.5);
+    if (!frozen) {
+      // read the sticks once per frame: substeps share it, and the aim speed estimate stays honest
+      if (mode === 'run' && state === 'play' && !P.dead && !P.safe) IN.update();
       let rem = dt * (state === 'dead' ? 0.35 : 1);
-      while (rem > 1e-4 && (state !== 'paused')) { const step = Math.min(rem, 1 / 60); update(step); rem -= step; }
+      while (rem > 1e-4 && state !== 'paused') { const step = Math.min(rem, 1 / 60); update(step); rem -= step; }
       if (state === 'won' || state === 'dead') { endT += dt; if (endT > 1.8 && screens.end.hidden && screens.lab.hidden) endScreen(); }
     }
     const t1 = performance.now();
-    render();
+    if (!frozen || dirty) { render(); dirty = false; }
     const t2 = performance.now();
     prof.update = prof.update * 0.9 + (t1 - t0) * 0.1; prof.render = prof.render * 0.9 + (t2 - t1) * 0.1;
     updateHud(dt);
-    if (cfg.quality === 'auto' && state === 'play') {
-      perf.acc += raw; perf.n++;
-      if (perf.acc > 2) {
-        if (perf.acc / perf.n > 0.024 && autoDpr > 1) { autoDpr = Math.max(1, autoDpr - 0.5); resize(); }
-        perf.acc = 0; perf.n = 0;
-      }
-    }
+    if (cfg.quality === 'auto' && state === 'play') autoQuality(raw * 1000, t2 - t0);
     if (cfg.fps) {
       fpsAcc += raw; fpsN++;
       if (fpsAcc > 0.5) { hud.fps.textContent = Math.round(fpsN / fpsAcc) + ' fps'; fpsAcc = 0; fpsN = 0; }
@@ -2559,10 +2689,30 @@
     } else hud.fps.hidden = true;
   }
 
+  // Auto quality: judge each ~2 s window by its median frame time, so one stall doesn't count.
+  // A steady ~33 ms with little script work is a 30 fps cap (low power mode), not a slow GPU.
+  function autoQuality(ivMs, workMs) {
+    perf.iv.push(ivMs); perf.work.push(workMs);
+    if (perf.iv.length < 120) return;
+    const med = (a) => a.slice().sort((x, y) => x - y)[a.length >> 1];
+    const mi = med(perf.iv), mw = med(perf.work);
+    let spread = 0; for (const v of perf.iv) spread += Math.abs(v - mi); spread /= perf.iv.length;
+    const capped = mi > 30 && mi < 36 && spread < 2.5 && mw < 10;
+    if (mi > 24 && !capped) {
+      perf.good = 0;
+      if (++perf.bad >= 2 && autoDpr > 1) { autoDpr = Math.max(1, autoDpr - 0.5); perf.bad = 0; resize(); }
+    } else if (mi < 18 && mw < 6 && autoDpr < 2 && perf.ups < 1) {
+      perf.bad = 0;
+      if (++perf.good >= 4) { autoDpr = Math.min(2, autoDpr + 0.5); perf.good = 0; perf.ups++; resize(); }
+    } else { perf.bad = 0; perf.good = 0; }
+    perf.iv.length = 0; perf.work.length = 0;
+  }
+
   // ================================================================ boot
   loadCfg();
   for (const k of CONTROL_KEYS) IN.cfg[k] = cfg[k];
   document.body.classList.toggle('lefty', cfg.lefty);
+  syncHowto();
   makePatterns();
   makeSprites();
   wire();
