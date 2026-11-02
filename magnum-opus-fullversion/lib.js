@@ -195,4 +195,9 @@ float sparkle(vec2 p, vec2 c, float s) {
   float core = exp(-dot(d, d) * 18.0);
   return sat(cross4) * 0.8 + core;
 }
+// ---------- photosensitivity ----------
+// Anti-strobe (full version, spec 7.3 rule 1): perFrame = how many features of a repeated
+// pattern cross this pixel per frame (e.g. |d(phase)/dt| / fps). Returns a contrast multiplier:
+// 1 when slow, fading to 0 (draw the pattern at its average coverage) as it approaches strobing.
+float moAntiStrobe(float perFrame) { return 1.0 - smoothstep(0.07, 0.25, perFrame); }
 `;
