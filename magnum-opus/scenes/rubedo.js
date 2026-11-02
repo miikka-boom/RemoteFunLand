@@ -180,7 +180,8 @@ float rb_flameD(vec2 q, float W, float L, float tt, float seed, float wav) {
 
 // ---- the Mandala of the Self -----------------------------------------------------
 // p: mandala space (radius 1 ~ half the frame height at zoom 1), e: one pixel in p units,
-// tt: time, lit: radius of the drop's reveal front, bloom: 0..1 extra intensity (R4)
+// tt: time, bloom: 0..1 extra intensity (R4). (The drop no longer reveals it behind a front: the
+// colour hits fully lit on the first frame after the impact.)
 vec3 rb_ground(vec2 p, float r, float e, float tt) {
   vec3 col = mix(vec3(0.030, 0.001, 0.008), vec3(0.003, 0.003, 0.022), smoothstep(0.3, 2.0, r));
   float a = atan(p.y, p.x);
@@ -279,7 +280,7 @@ vec3 rb_centre(vec2 p, float e, float tt, float heat, float db, vec2 bp) {
   return col;
 }
 
-vec3 rb_mandala(vec2 p, float e, float tt, float lit, float bloom) {
+vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   float r = length(p);
   vec3 col = rb_ground(p, r, e, tt);
   float sp = uSpinT;
@@ -446,10 +447,6 @@ vec3 rb_mandala(vec2 p, float e, float tt, float lit, float bloom) {
   // (kept below bloom-flooding brightness: at 4x the bloom turned the ring into a full-frame haze)
   col += kr * (vec3(2.4, 1.6, 1.0) * shock + RB_SCAR * 0.30 * exp(-abs(r - rk) / 0.07) * step(r, rk));
 
-  // ---- drop reveal: outside the shock front the mandala is still unlit
-  float litm = smoothstep(lit + 0.02, lit - 0.10, r);
-  col *= mix(0.04, 1.0, litm);
-  col += RB_HOT * 4.0 * rb_g((r - lit) / 0.014) * step(lit, 3.5);
   // central radiance
   col += RB_SCAR * 0.06 * exp(-r * 2.0);
   return col;
@@ -522,7 +519,7 @@ void main() {
   p *= 1.0 - 0.025 * exp(-uKT / 0.2) * rb_g((rr - rk) / 0.05);
   float e = vw.z;
   // fully lit from the first frame after the impact: the colour hits on the beat, no slow reveal
-  vec3 col = rb_mandala(p, e, uTime, 99.0, 0.0);
+  vec3 col = rb_mandala(p, e, uTime, 0.0);
   col = rb_pump(col, exp(-dot(uv - c, uv - c) / 0.30));
   // the colour lands over two frames after the impact (86 % -> 100 %): one rising change, rather
   // than a jump followed by a dip that reads as a second flash. Reduced has no impact: the cut from
@@ -568,7 +565,7 @@ vec3 rb_env(vec3 rd, float e) {
   float z = max(front ? fz : bz, 0.05);
   vec3 U = normalize(cross(vec3(0.0, 1.0, 0.0), ax)), V = cross(ax, U);
   vec2 p = vec2(dot(rd, U), dot(rd, V)) / z * sc;
-  vec3 m = rb_pump(rb_mandala(p, e * sc / (z * z), uTime, 99.0, 0.0), exp(-dot(p, p) / 1.2)) * (front ? 0.62 : 1.6);
+  vec3 m = rb_pump(rb_mandala(p, e * sc / (z * z), uTime, 0.0), exp(-dot(p, p) / 1.2)) * (front ? 0.62 : 1.6);
   float k = front ? smoothstep(2.25, 1.95, length(p)) * smoothstep(0.35, 0.55, fz)
                   : smoothstep(2.0, 1.6, length(p)) * smoothstep(0.25, 0.45, bz);
   return mix(col, m, k) + col * (front ? 0.15 * k : 0.0);
@@ -764,16 +761,18 @@ void main() {
   float cw = TAU / n;                               // cell width (tunnel radius 1)
   float ew = px() * z * z / F;                      // pixel footprint on the wall
   float u = a / cw;
+  float ringD = abs(fract(zz + 0.5) - 0.5);         // distance to the nearest ring frame (wall units)
+  float latt = abs(fract(u + 0.5) - 0.5) * cw;      // distance to the nearest lattice line
+  float slT = speedLines(uv, vp, 120.0, uTime, 0.75);
   if (uImpact > 0.0) {
-    // the beat-56 impact frames: a white-hot field with the tunnel's rings, lattice and speed lines
-    // drawn dark. The post keys bright to near-black and dark to cream, so the card reads as cream
-    // linework on black: one hit down from the bright fusion frame, not a cream flash and back.
-    // (the field stays under the bloom threshold so the dark lines survive). uImpact thins the lines
-    // on the second frame, so that frame only darkens further instead of flickering back up.
-    float ringD = abs(fract(zz + 0.5) - 0.5);
+    // the beat-56 impact frames: a bright field with the tunnel's rings, lattice and speed lines drawn
+    // dark. The post keys bright to near-black and dark to cream, so the card reads as cream linework
+    // on black: one change down from the bright fusion frame, not a cream flash and back down. The
+    // field stays under the bloom threshold so the lines survive; uImpact (line width) thins them on
+    // the second frame, so that frame only darkens further instead of flickering back up.
     float lw = uImpact;
-    float lines = max(rb_ln(ringD, (0.035 + 2.0 * ew) * lw, ew), rb_ln(abs(fract(u + 0.5) - 0.5) * cw, (0.012 + 1.5 * ew) * lw, ew) * step(0.22, r));
-    lines = max(lines, speedLines(uv, vp, 120.0, uTime, 0.5));
+    float lines = max(rb_ln(ringD, (0.035 + 2.0 * ew) * lw, ew), rb_ln(latt, (0.012 + 1.5 * ew) * lw, ew) * step(0.22, r));
+    lines = max(lines, slT);
     fragColor = vec4(vec3(1.0) * (1.0 - lines) * smoothstep(0.03, 0.08, r), 1.0);
     return;
   }
@@ -800,13 +799,11 @@ void main() {
     col = col * detail + (1.0 - detail) * vec3(0.16, 0.01, 0.03);
   }
   // gold ring frames between rows, fine lattice lines along the tunnel
-  float ringD = abs(fract(zz + 0.5) - 0.5);
   float near = smoothstep(0.30, 0.07, ew);
   col = mix(col, vec3(0.02, 0.0, 0.01), rb_ln(ringD, 0.045, ew) * near);
   col += RB_GOLD * 1.5 * (rb_ln(ringD - 0.03, 0.006 + 0.5 * ew, ew) + rb_ln(ringD, 0.010 + 0.5 * ew, ew)) * near;
   float bead = length(vec2((fract(u * 4.0 + 0.5) - 0.5) * cw / 4.0, ringD - 0.0)) - 0.016;
   col += RB_HOT * 2.0 * rb_fl(bead, ew) * detail;
-  float latt = abs(fract(u + 0.5) - 0.5) * cw;
   col += RB_SCAR * 0.6 * rb_ln(latt, 0.004 + 0.4 * ew, ew) * detail;
   col *= fog;
   // the nearest wall (the frame's edges) rushes past dimmed toward its average red: there one ring
@@ -837,7 +834,7 @@ void main() {
   }
   col += rb_sparkles(uv, 0.05);
   // speed lines
-  col += RB_HOT * 0.9 * speedLines(uv, vp, 120.0, uTime, 0.75) * (0.4 + 0.6 * exp(-uKT / 0.2)) * (1.0 - 0.7 * uReduced);
+  col += RB_HOT * 0.9 * slT * (0.4 + 0.6 * exp(-uKT / 0.2)) * (1.0 - 0.7 * uReduced);
   // after the impact card the tunnel lands over three frames (75 -> 90 -> 100 %): one rising change
   col *= 1.0 - 0.35 * uLand;
   fragColor = vec4(rb_grade(col), 1.0);
@@ -865,12 +862,15 @@ void main() {
   float rk = (0.30 + uKT * 3.4);
   float rr = length(p);
   p *= 1.0 - 0.02 * exp(-uKT / 0.2) * rb_g((rr - rk) / 0.05) * (1.0 - uDive);
-  vec3 col = rb_mandala(p, vw.z, uTime, 99.0, uBloomOpen);
+  vec3 col = rb_mandala(p, vw.z, uTime, uBloomOpen);
   col = rb_pump(col, exp(-dot(uv - c, uv - c) / 0.30) * (1.0 - uDive));
-  // god rays from the heart, pumped by the kick
-  float ga = atan(p.y, p.x) - uSpinT * 0.1;
-  float gr = pow(0.5 + 0.5 * cos(ga * 12.0), 6.0) + 0.5 * pow(0.5 + 0.5 * cos(ga * 24.0 + 1.0), 12.0);
-  col += vec3(1.0, 0.35, 0.08) * gr * exp(-rr * 1.1) * (0.12 + 0.20 * kenv) * smoothstep(0.35, 0.6, rr);
+  // god rays from the heart, pumped by the kick (from dive 0.45 on, the frame is all inside r < 0.35
+  // where they are zero: a uniform branch, so the deep-dive frames skip them)
+  if (uDive < 0.45) {
+    float ga = atan(p.y, p.x) - uSpinT * 0.1;
+    float gr = pow(0.5 + 0.5 * cos(ga * 12.0), 6.0) + 0.5 * pow(0.5 + 0.5 * cos(ga * 24.0 + 1.0), 12.0);
+    col += vec3(1.0, 0.35, 0.08) * gr * exp(-rr * 1.1) * (0.12 + 0.20 * kenv) * smoothstep(0.35, 0.6, rr);
+  }
   // the transmutation: a gold front runs out from the heart on the first beat (the heart iris
   // itself stays red-gold, it is the eye the coda opens on)
   float aur = smoothstep(uAurum, uAurum - 0.30, rr) * smoothstep(0.026, 0.05, rr);
@@ -880,18 +880,20 @@ void main() {
   // frame and strobe, so outside the heart the fine structure dissolves into a radial glow with
   // speed lines (a cheap stand-in for radial motion blur). The iris fibres are radial, so they hold
   // still under the zoom and stay sharp.
-  vec2 dc = uv - c;
-  float rs = length(dc);
-  float keep = max(0.32, 1.15 * 0.02 * zoom);        // the heart iris is 0.02 * zoom on screen
-  float blur = 0.88 * smoothstep(keep, keep + 0.55, rs) * smoothstep(0.0, 0.15, uDive);
-  // its colour is the mandala's own average at that radius (measured), turning crimson as the heart
-  // nears, to meet the coda's red ground
-  vec3 glow = mix(vec3(0.68, 0.37, 0.08), mix(vec3(0.30, 0.11, 0.025), vec3(0.34, 0.02, 0.02), smoothstep(0.5, 1.0, uDive)), smoothstep(0.4, 2.0, rs));
-  float sa = atan(dc.y, dc.x) + uSpin;                 // sunburst rays: radial, so they hold still under the zoom
-  glow *= 0.72 + 0.56 * pow(0.5 + 0.5 * cos(sa * 16.0), 3.0);
-  glow += RB_HOT * 1.2 * speedLines(uv, c, 110.0, uTime, 0.2) * smoothstep(keep, keep + 0.4, rs) * (1.0 - 0.7 * uReduced);
-  col = mix(col, glow, blur);
-  col += rb_sparkles(uv, 0.05) * (1.0 - uDive);
+  if (uDive > 0.0) {
+    vec2 dc = uv - c;
+    float rs = length(dc);
+    float keep = max(0.32, 1.15 * 0.02 * zoom);        // the heart iris is 0.02 * zoom on screen
+    float blur = 0.88 * smoothstep(keep, keep + 0.55, rs) * smoothstep(0.0, 0.15, uDive);
+    // its colour is the mandala's own average at that radius (measured), turning crimson as the
+    // heart nears, to meet the coda's red ground
+    vec3 glow = mix(vec3(0.68, 0.37, 0.08), mix(vec3(0.30, 0.11, 0.025), vec3(0.34, 0.02, 0.02), smoothstep(0.5, 1.0, uDive)), smoothstep(0.4, 2.0, rs));
+    float sa = atan(dc.y, dc.x) + uSpin;               // sunburst rays: radial, so they hold still under the zoom
+    glow *= 0.72 + 0.56 * pow(0.5 + 0.5 * cos(sa * 16.0), 3.0);
+    glow += RB_HOT * 1.2 * speedLines(uv, c, 110.0, uTime, 0.2) * smoothstep(keep, keep + 0.4, rs) * (1.0 - 0.7 * uReduced);
+    col = mix(col, glow, blur);
+  }
+  if (uDive < 0.3) col += rb_sparkles(uv, 0.05) * (1.0 - uDive / 0.3);
   col *= 1.0 - 0.15 * uLand;   // the cut from the tunnel lands over two frames (one rising change)
   fragColor = vec4(rb_grade(col), 1.0);
 }`;
@@ -990,7 +992,9 @@ void main() {
       uZoom: Math.exp(logZ(t)), uSpin: 0.28 * (t - T3), uTiltA: 1 - dive,
       // the disc precesses gently like a spinning coin (nearly frontal), flattening for the dive
       uTilt: [amp * Math.cos(ph), 0.8 * amp * Math.sin(ph)],
-      uSpinT: T3 + (MO.reduced ? 1.0 : 2.0) * (t - T3), uDive: dive, uBloomOpen: 1,
+      // the great petals (r > 1.08) leave the frame once the zoom passes ~2.2; 0 then lets the shader
+      // skip their whole block (a uniform branch) in the deep-dive frames
+      uSpinT: T3 + (MO.reduced ? 1.0 : 2.0) * (t - T3), uDive: dive, uBloomOpen: logZ(t) > Math.log(2.3) ? 0 : 1,
       uLand: MO.clamp(1 - (t - T3) / 0.07),
       uAurum: 0.15 + 5.0 * (t - T3),
     });

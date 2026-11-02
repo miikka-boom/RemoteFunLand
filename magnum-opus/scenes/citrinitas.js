@@ -804,7 +804,8 @@ vec4 citEyeCU(vec2 p, vec2 c, float sc, float ro, float o, vec3 irA, vec3 irB, f
 // petalled lotus. Five rings of almond petals (16 .. 48) with nested outlines, a second layer
 // peeking between them; the rings open one after another on the 32nd roll (uLotusO).
 uniform float uLotusO[5];
-uniform float uBlaze;     // the end of the push: the lotus burns in full colour up to the cut
+uniform vec2  uBlaze;     // the end of the push: x = colour (late), y = brightness (a steady rise to the cut)
+uniform vec3  uFlood;     // the crown's light floods the frame: screen centre xy, amount
 vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   vec2 d = w - c; float r = length(d) / RL; float a = citAtan(d.x, d.y);
   float pr = pxw / RL;
@@ -820,7 +821,7 @@ vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   vec2 pb = citPetalRing(r, a + spin, np, rc + 0.08 * h, max(h * 1.12, 1e-4), 0.95, 0.5);
   vec3 rc0 = m < 0.5 ? vec3(1.0, 0.90, 0.70) : m < 1.5 ? vec3(1.0, 0.70, 0.22) : m < 2.5 ? vec3(1.0, 0.32, 0.30) : m < 3.5 ? vec3(0.90, 0.18, 0.75) : vec3(0.42, 0.16, 1.0);
   // blazing: the same palette, saturated (cream -> gold, gold -> orange, coral -> red ...) and glowing
-  rc0 = mix(rc0, pow(rc0, vec3(m < 0.5 ? 6.0 : 3.0)) * 1.8, uBlaze);
+  rc0 = mix(rc0, pow(rc0, vec3(m < 0.5 ? 6.0 : 3.0)) * 1.8, uBlaze.x);
   float inA = fill(pa.x, pr) * step(0.001, g), inB = fill(pb.x, pr) * step(0.001, g);
   float dA = sat(-pa.x / pa.y), dB = sat(-pb.x / pb.y);
   vec3 col = vec3(0.0);
@@ -830,7 +831,7 @@ vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   // front petals: luminous along the midrib, nested outlines
   vec3 fa = rc0 * (0.05 + 0.55 * dA * dA) + rc0 * 0.9 * citIso(pa.x / (pa.y * 0.28), pr / (pa.y * 0.28), 1.0) * step(pa.x, 0.0) + rc0 * 0.6 * citLine(pa.x + pa.y * 0.0, pr, 1.0);
   col = mix(col, fa, inA);
-  col += mix(rc0, vec3(1.0, 0.9, 0.7), 0.4 - 0.3 * uBlaze) * 1.8 * citLine(pa.x, pr, 1.6) * step(0.001, g);
+  col += mix(rc0, vec3(1.0, 0.9, 0.7), 0.4 - 0.3 * uBlaze.x) * 1.8 * citLine(pa.x, pr, 1.6) * step(0.001, g);
   // the bindu and its rings. The bindu is a point: never more than ~0.05 screen units across,
   // however far the camera pushes in, so the dive ends in the burning lotus, not in a white disc
   float og = uLotusO[0];
@@ -839,9 +840,9 @@ vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   col += vec3(2.4, 2.1, 1.6) * (fill(r - rb, pr) + exp(-r / (rb * 0.9)) * 0.6) * og;
   // blazing: a violet halo with fine rings in the seven chakra colours (the column flows into the crown)
   float hr = r / R0 * 8.0 - 0.5;
-  col += (citHot(6.0) * (1.3 + 1.2 * uBlaze) * exp(-r / (R0 * 0.8)) + citHot(clamp(floor(hr + 0.5) - 1.0, 0.0, 6.0)) * 1.8 * citIso(hr, pr / R0 * 8.0, 1.4) * step(1.0, hr) * step(hr, 7.5)) * uBlaze * og;
+  col += (citHot(6.0) * (1.3 + 0.6 * uBlaze.x) * exp(-r / (R0 * 0.8)) + citHot(clamp(floor(hr + 0.5) - 1.0, 0.0, 6.0)) * 1.8 * citIso(hr, pr / R0 * 8.0, 1.4) * step(1.0, hr) * step(hr, 7.5)) * uBlaze.x * og;
   al = max(al, fill(r - R0, pr) * og);
-  return vec4(col * (1.0 + 0.6 * uBlaze), al * step(r, 1.02));
+  return vec4(col * (1.0 + 0.4 * uBlaze.y), al * step(r, 1.02));
 }
 #endif
 
@@ -939,6 +940,19 @@ void main() {
   col += vec3(1.0, 0.72, 0.3) * edge * 0.9;
 #endif
   col = citBurst(col, p, uIgn.zw, uIgn.y, int(uIgn.x), uIgnS);
+#ifdef CIT_LOTUS
+  // The last ~0.3 s of the push run at up to 1.5x zoom per frame, where the petal linework would
+  // change completely every frame (a strobe). The crown's light floods the frame instead, in the
+  // Sahasrara's colours (a white point in hot magenta, violet rim), so it blazes in colour up to
+  // the hard cut into the gap: no cream wash. (A gold core mixes with the violet halo to peach.)
+  {
+    float fr = length(p - uFlood.xy);
+    // energy in the dominant channels (magenta, violet); white only in a small point
+    vec3 rad = mix(vec3(2.3, 0.30, 1.10), vec3(1.4, 0.06, 0.80), smoothstep(0.15, 0.85, fr));
+    rad = mix(rad, vec3(0.50, 0.03, 1.30), smoothstep(0.8, 1.9, fr));
+    col = mix(col, rad + vec3(2.0, 1.8, 1.5) * exp(-fr / 0.045), uFlood.z);
+  }
+#endif
   fragColor = vec4(col, 1.0);
 }
 `;
@@ -1003,7 +1017,7 @@ void main() {
     let gold = 0, eye3 = 0, aura = 1.0;
     let sun = [0, 0.5, 0.3, 1], sun2 = [t * 0.12, 0, 1.6, 1];
     let mount = [0, -1.3, 0.85, 0];
-    let dawn = 0.5, speed = 0, speedC = [0, 0], ribbon = 0, ramp = 0, blaze = 0;
+    let dawn = 0.5, speed = 0, speedC = [0, 0], ribbon = 0, ramp = 0, blaze = [0, 0], flood = [0, 0, 0];
     // progress through a shot locked to the snare roll: an eased 50 ms step forward on each of the
     // n hits from t0 on, never back (a back-and-forth throb makes fine linework flicker at 9 Hz)
     const rl = MO.last('roll', t), rn = rl ? rl.i : 0;
@@ -1110,16 +1124,17 @@ void main() {
       const k = (t - T3) / (T4 - T3);
       body = [0, -0.40, 0.62, 1.0];
       const crown = [0, body[1] + 1.14 * body[2]];
-      // accelerating push, 24x in all; the end rate is held to ~1.25x per frame (a cubic ease-in
-      // reaches 1.5x, and the fine petal linework then changes completely every frame: a strobe)
-      const zq = C((k - 0.10) / 0.90), zk = 0.35 * zq + 0.65 * zq * zq;
+      const zk = EI(C((k - 0.10) / 0.90));
       const z = 0.80 * Math.exp(Math.log(24) * zk);
       cam = [0, mix(0.05, crown[1], C(zk * 1.7)), z, 0];
       sun = [0, crown[1], 0.92, 1]; sunDark = 1;
       sun2 = [t * 0.3, 0.55 + 0.45 * C(k * 2), 2.6, 0];
       lotus = [crown[0], crown[1], 1.0, 0];
       lotusO = [0, 1, 2, 3, 4].map((m) => backOut((t - T3 - 0.03 - m * 0.055) / 0.17));
-      blaze = EI(C((k - 0.4) / 0.6));
+      // colour saturates late (keeps the lotus as it is until ~20.0 s); the light rises steadily
+      // from 19.7 s, so the push trends brighter instead of flickering both ways
+      blaze = [EI(C((k - 0.4) / 0.6)), C((k - 0.3) / 0.7)];
+      flood = [...toScreen(crown, cam), 0.85 * SM(C((k - 0.68) / 0.32))];
       column = SM(k / 0.12) * (1 + 0.3 * rollE);
       chakS = 1.6; auraOcc = 0.75;
       dawn = 0.3; gold = SM(k / 0.4);
@@ -1135,7 +1150,7 @@ void main() {
     u.uIgn = [Math.max(last, 0), ignAge, ig[0], ig[1]];
     u.uIgnS = igS || body[2] * (igCam || cam)[2];
     u.uSun = sun; u.uSun2 = sun2; u.uMount = mount; u.uDawn = dawn;
-    u.uSpeed = speed; u.uSpeedC = speedC; u.uRibbon = ribbon; u.uFrontI = frontI; u.uRamp = ramp; u.uBlaze = blaze;
+    u.uSpeed = speed; u.uSpeedC = speedC; u.uRibbon = ribbon; u.uFrontI = frontI; u.uRamp = ramp; u.uBlaze = blaze; u.uFlood = flood;
     u.uGut = gutA; u.uGutW = gutW; u.uEyeP = eyeP; u.uEyeO = eyeO;
     u.uLotusP = lotus; u.uColumn = column; u.uSunDark = sunDark; u.uChakS = chakS; u.uLotusO = lotusO; u.uAuraOcc = auraOcc; u.uFaceP = faceP;
     return u;
