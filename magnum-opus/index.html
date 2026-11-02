@@ -1,0 +1,372 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Magnum Opus</title>
+<meta name="description" content="A 30-second Jungian eurodance in four alchemical operations: Nigredo, Albedo, Citrinitas, Rubedo. Real-time WebGL2, or watch the MP4.">
+<meta name="theme-color" content="#07060a">
+<style>
+@font-face { font-family: "Cinzel"; src: url(fonts/cinzel-latin.woff2) format("woff2"); font-weight: 400 900; font-display: swap; }
+:root {
+  --bg: #07060a;
+  --ink: #f1e9d8;
+  --ink-soft: #a89f8e;
+  --rule: #2a2530;
+  --gold: #e8b64a;
+  --red: #e2402e;
+  --f-display: "Cinzel", "Trajan Pro", Georgia, serif;
+  --f-body: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; background: var(--bg); color: var(--ink) }
+body { font: 400 15px/1.55 var(--f-body); -webkit-font-smoothing: antialiased; min-height: 100vh; min-height: 100dvh }
+a { color: inherit }
+a:focus-visible, button:focus-visible, label:focus-within { outline: 2px solid var(--gold); outline-offset: 3px; border-radius: 4px }
+
+.top {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: max(12px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left));
+  font: 600 12px/1.3 var(--f-display); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft);
+}
+.top a { text-decoration: none }
+.top a:hover { color: var(--gold) }
+
+.wrap { width: min(100%, 1280px, calc((100dvh - 150px) * 16 / 9)); min-width: min(100%, 320px); margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-left)) }
+@media (max-width: 720px) { .wrap { width: 100%; } }
+
+.stage { position: relative; width: 100%; aspect-ratio: 16 / 9; background: #000; overflow: hidden; border-radius: 6px; box-shadow: 0 0 0 1px var(--rule), 0 30px 80px -30px rgba(232, 182, 74, .25) }
+.stage canvas, .stage video { position: absolute; inset: 0; width: 100%; height: 100%; display: block; background: #000 }
+.stage video { object-fit: contain }
+.stage:fullscreen { border-radius: 0; box-shadow: none; width: 100vw; height: 100vh; aspect-ratio: auto }
+.stage:fullscreen canvas { object-fit: contain; height: 100%; width: auto; max-width: 100%; margin: auto; }
+
+.gate {
+  position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: clamp(8px, 2.2vw, 18px);
+  padding: 16px; text-align: center;
+  background: radial-gradient(ellipse at 50% 40%, rgba(7, 6, 10, .25), rgba(7, 6, 10, .82) 70%), var(--poster, none) center / cover no-repeat, #07060a;
+}
+.gate[hidden], .stage [hidden] { display: none !important }
+.gate h1 {
+  margin: 0; font: 900 clamp(30px, 7.4vw, 92px)/.95 var(--f-display); letter-spacing: .06em;
+  background: linear-gradient(180deg, #fff6dc 0%, #f3c867 42%, #a5631c 52%, #ffe3a1 64%, #fff 100%);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  filter: drop-shadow(0 2px 0 rgba(0, 0, 0, .6)) drop-shadow(0 0 24px rgba(255, 170, 60, .35));
+}
+.gate .sub { margin: 0; max-width: 46ch; font-size: clamp(12px, 1.6vw, 16px); color: var(--ink-soft) }
+.gate .stages { margin: 0; font: 600 clamp(9px, 1.15vw, 12px)/1 var(--f-display); letter-spacing: .22em; color: var(--ink-soft) }
+.gate .stages b { font-weight: 600 }
+.btns { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px }
+.btn {
+  appearance: none; border: 1px solid var(--gold); background: linear-gradient(180deg, rgba(232, 182, 74, .22), rgba(232, 182, 74, .06));
+  color: var(--ink); font: 700 clamp(12px, 1.4vw, 15px)/1 var(--f-display); letter-spacing: .12em; text-transform: uppercase;
+  padding: clamp(10px, 1.4vw, 14px) clamp(14px, 2vw, 22px); border-radius: 999px; cursor: pointer; touch-action: manipulation;
+}
+.btn:hover { background: rgba(232, 182, 74, .3) }
+.btn.alt { border-color: rgba(241, 233, 216, .45); background: rgba(255, 255, 255, .04) }
+.btn.alt:hover { background: rgba(255, 255, 255, .12) }
+.btn[disabled] { opacity: .5; cursor: progress }
+.fine { margin: 0; font-size: clamp(11px, 1.2vw, 13px); color: var(--ink-soft); display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; align-items: center }
+.fine label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer }
+.fine input { accent-color: var(--gold); width: 16px; height: 16px; margin: 0 }
+.status { min-height: 1.3em; margin: 0; font-size: 13px; color: var(--gold) }
+
+.bar { display: grid; grid-template-columns: auto minmax(0, 1fr) auto auto; align-items: center; gap: 12px; padding: 12px 0 0 }
+.icon { appearance: none; border: 1px solid var(--rule); background: transparent; color: var(--ink); width: 40px; height: 40px; border-radius: 999px; display: grid; place-items: center; cursor: pointer; touch-action: manipulation }
+.icon:hover { border-color: var(--gold) }
+.icon svg { width: 16px; height: 16px; fill: currentColor }
+.track { position: relative; display: grid; grid-template-columns: 4fr 4fr 4fr 4fr 1fr; gap: 3px; height: 40px; align-items: center; cursor: pointer; touch-action: none }
+.seg { height: 6px; border-radius: 3px; background: var(--c); opacity: .35; position: relative }
+.seg span { position: absolute; top: 12px; left: 0; font: 600 9.5px/1 var(--f-display); letter-spacing: .14em; color: var(--ink-soft); white-space: nowrap; text-transform: uppercase }
+.head { position: absolute; top: 50%; width: 2px; height: 22px; margin-top: -11px; background: var(--ink); left: 0; border-radius: 1px; pointer-events: none; box-shadow: 0 0 8px rgba(255, 255, 255, .6) }
+.time { font: 500 12px/1 ui-monospace, Menlo, Consolas, monospace; color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 9ch; text-align: right }
+@media (max-width: 560px) { .seg span { display: none } .bar { gap: 8px } .time { min-width: 0 } }
+
+.about { display: grid; gap: 14px; padding: 26px 0 48px; max-width: 70ch }
+.about h2 { margin: 0; font: 700 13px/1.3 var(--f-display); letter-spacing: .18em; text-transform: uppercase; color: var(--gold) }
+.about p { margin: 0; color: var(--ink-soft) }
+.about strong { color: var(--ink); font-weight: 600 }
+.about ol { margin: 0; padding-left: 1.2em; color: var(--ink-soft) }
+.about li { margin: 2px 0 }
+.about li b { color: var(--ink); font-weight: 600 }
+.dl { display: inline-flex; gap: 14px; flex-wrap: wrap }
+.dl a { color: var(--gold); text-underline-offset: 3px }
+
+.err { position: absolute; left: 0; right: 0; bottom: 0; padding: 10px 14px; background: rgba(120, 10, 10, .85); color: #fff; font: 12px/1.4 ui-monospace, monospace; white-space: pre-wrap; max-height: 50%; overflow: auto }
+.hud { position: absolute; right: 8px; top: 8px; padding: 4px 8px; background: rgba(0, 0, 0, .6); font: 11px/1.3 ui-monospace, monospace; color: #9f9; pointer-events: none; white-space: pre }
+
+@media (max-width: 600px) {
+  .gate { gap: 8px; padding: 10px }
+  .gate .sub, .gate .stages { display: none }
+  .gate h1 { font-size: clamp(24px, 8vw, 34px) }
+  .btn { font-size: 11px; padding: 9px 12px }
+  .fine { font-size: 11px; gap: 2px 10px }
+  .fine input { width: 14px; height: 14px }
+}
+@media (prefers-reduced-motion: reduce) { .btn, .icon { transition: none } }
+</style>
+</head>
+<body>
+<header class="top">
+  <a href="../">← RemoteFunLand</a>
+  <span>No. 011</span>
+</header>
+
+<main class="wrap">
+  <div class="stage" id="stage">
+    <canvas id="gl" aria-label="Magnum Opus, real-time render"></canvas>
+    <video id="vid" hidden playsinline controls preload="none" poster="poster.jpg">
+      <source src="magnum-opus.mp4" type="video/mp4">
+    </video>
+    <div class="gate" id="gate">
+      <h1>Magnum Opus</h1>
+      <p class="stages"><b style="color:#b7a9c9">Nigredo</b> · <b style="color:#dfeeff">Albedo</b> · <b style="color:#f3c867">Citrinitas</b> · <b style="color:#ff6a4d">Rubedo</b></p>
+      <p class="sub">A 30-second Jungian eurodance in four alchemical operations. Rendered live in your browser, or watch the same thing as a video.</p>
+      <div class="btns">
+        <button class="btn" id="playLive">▶ Play live</button>
+        <button class="btn alt" id="playVideo">▶ Watch the MP4</button>
+      </div>
+      <p class="fine">
+        <span>Sound on</span>
+        <span>Contains flashing light</span>
+        <label><input type="checkbox" id="reduce"> Reduce flashing</label>
+      </p>
+      <p class="status" id="status" role="status" aria-live="polite"></p>
+    </div>
+  </div>
+
+  <div class="bar">
+    <button class="icon" id="toggle" aria-label="Play">
+      <svg viewBox="0 0 16 16" id="iconPlay"><path d="M4 2.5v11l9-5.5z"/></svg>
+    </button>
+    <div class="track" id="track" role="slider" aria-label="Position" aria-valuemin="0" aria-valuemax="30" aria-valuenow="0" tabindex="0">
+      <div class="seg" style="--c:#6e5a86"><span>Nigredo</span></div>
+      <div class="seg" style="--c:#cfe3ff"><span>Albedo</span></div>
+      <div class="seg" style="--c:#f3c867"><span>Citrinitas</span></div>
+      <div class="seg" style="--c:#ff4b33"><span>Rubedo</span></div>
+      <div class="seg" style="--c:#fff1c9"></div>
+      <div class="head" id="head"></div>
+    </div>
+    <span class="time" id="time">0:00 / 0:30</span>
+    <button class="icon" id="fs" aria-label="Full screen">
+      <svg viewBox="0 0 16 16"><path d="M2 2h5v2H4v3H2zm7 0h5v5h-2V4H9zM2 9h2v3h3v2H2zm10 0h2v5H9v-2h3z"/></svg>
+    </button>
+  </div>
+
+  <section class="about">
+    <h2>The Great Work, in thirty seconds</h2>
+    <p>Alchemists called the transformation of lead into gold the <strong>magnum opus</strong>, and Carl Jung read its four colour stages as a map of individuation: meeting the Shadow, the Anima, the dawning Self. Here each stage is a Tarot trump and four bars of 136 BPM eurodance.</p>
+    <ol>
+      <li><b>Nigredo · XIII Death.</b> An eye opens on the black sun, and the Shadow looks back.</li>
+      <li><b>Albedo · XVIII The Moon.</b> The luminous body in the mirror; a rapper calls the Shadow and the Anima.</li>
+      <li><b>Citrinitas · XIX The Sun.</b> The climb up the Holy Mountain while seven chakras ignite, root to crown.</li>
+      <li><b>Rubedo · XXI The World.</b> The drop: the mandala of the Self, the chemical wedding, and a chorus that turns lead to gold.</li>
+    </ol>
+    <p>After Carl Jung, the paintings of Alex Grey, the Tarot, Alejandro Jodorowsky’s <cite>The Holy Mountain</cite>, anime title cards and 1990s eurodance. Every frame is drawn by fragment shaders from the time code; the music, the vocoder and the voices were synthesized from code too.</p>
+    <p class="dl"><a href="magnum-opus.mp4" download>Download the MP4</a><a href="magnum-opus.mp3" download>Download the track</a></p>
+  </section>
+</main>
+
+<script src="score.js"></script>
+<script src="lib.js"></script>
+<script src="engine.js"></script>
+<script src="scenes/nigredo.js"></script>
+<script src="scenes/albedo.js"></script>
+<script src="scenes/citrinitas.js"></script>
+<script src="scenes/rubedo.js"></script>
+<script src="scenes/coda.js"></script>
+<script src="overlay.js"></script>
+<script>
+(() => {
+  'use strict';
+  const $ = (id) => document.getElementById(id);
+  const P = MO.params;
+  const canvas = $('gl'), stage = $('stage'), gate = $('gate'), vid = $('vid'), status = $('status');
+  const DUR = MO.DUR;
+
+  // ---- capture mode: used by tools/render-video.cjs to render the MP4 frame by frame
+  if (MO.capture) {
+    document.body.style.background = '#000';
+    const w = +P.get('w') || 1920, h = +P.get('h') || 1080;
+    document.body.innerHTML = '';
+    document.body.appendChild(canvas);
+    canvas.style.cssText = `width:${w}px;height:${h}px;display:block`;
+    MO.grain = P.has('grain') ? +P.get('grain') : 0.02;
+    MO.reduced = P.has('reduced');
+    MO.init({ canvas, width: w, height: h, preserve: true })
+      .then(() => { window.__captureReady = true; })
+      .catch((e) => { window.__captureError = String(e && e.stack || e); console.error(e); });
+    return;
+  }
+
+  const reduce = $('reduce');
+  try { reduce.checked = localStorage.getItem('mo-reduce') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) { reduce.checked = matchMedia('(prefers-reduced-motion: reduce)').matches; }
+  reduce.addEventListener('change', () => { MO.reduced = reduce.checked; try { localStorage.setItem('mo-reduce', reduce.checked ? '1' : '0'); } catch (e) {} });
+  MO.reduced = reduce.checked;
+
+  const poster = new Image();
+  poster.onload = () => gate.style.setProperty('--poster', 'url(poster.jpg)');
+  poster.src = 'poster.jpg';
+
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = 'magnum-opus.mp3';
+  let audioOk = true;
+  audio.addEventListener('error', () => { audioOk = false; });
+
+  let mode = 'idle';           // idle | live | video
+  let inited = null, playing = false, anchor = 0, pausedAt = 0, raf = 0;
+  let ema = 16, lastTs = 0, lastQ = 0;
+  const debug = P.has('debug');
+  let hud = null;
+  if (debug) { hud = document.createElement('div'); hud.className = 'hud'; stage.appendChild(hud); }
+
+  function showError(e) {
+    console.error(e);
+    const d = document.createElement('div'); d.className = 'err'; d.textContent = String(e && e.message || e); stage.appendChild(d);
+  }
+
+  function sizeCanvas() {
+    const r = canvas.getBoundingClientRect();
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    let w = Math.round(Math.max(320, r.width) * dpr);
+    w = Math.min(w, 1920);
+    const h = Math.round(w * 9 / 16);
+    if (inited && MO.gl) MO.resize(w, h);
+    return { w, h };
+  }
+
+  async function ensureInit() {
+    if (!inited) {
+      const { w, h } = sizeCanvas();
+      const coarse = matchMedia('(pointer: coarse)').matches;
+      MO.quality = coarse ? 0.6 : 0.85;
+      inited = MO.init({ canvas, width: w, height: h });
+    }
+    return inited;
+  }
+
+  const clock = () => (performance.now() - anchor) / 1000;
+
+  function fmt(t) { t = Math.max(0, Math.min(DUR, t)); return `0:${String(Math.floor(t)).padStart(2, '0')}`; }
+  function progress(t) {
+    $('head').style.left = `calc(${(Math.min(t, DUR) / DUR) * 100}% - 1px)`;
+    $('time').textContent = `${fmt(t)} / 0:30`;
+    $('track').setAttribute('aria-valuenow', t.toFixed(1));
+  }
+  function setIcon(isPlaying) {
+    $('toggle').innerHTML = isPlaying
+      ? '<svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4zm5 0h3v11H9z"/></svg>'
+      : '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>';
+    $('toggle').setAttribute('aria-label', isPlaying ? 'Pause' : 'Play');
+  }
+
+  function loop(ts) {
+    if (!playing) return;
+    let t = clock();
+    if (audioOk && !audio.paused && audio.readyState >= 2) {
+      const drift = audio.currentTime - t;
+      if (Math.abs(drift) > 0.25) anchor = performance.now() - audio.currentTime * 1000;
+      else anchor -= drift * 1000 * 0.08;
+      t = clock();
+    }
+    if (t >= DUR) { finish(); return; }
+    MO.render(Math.max(0, t));
+    progress(t);
+    // adapt render scale to keep the frame rate up
+    if (lastTs) {
+      const dt = Math.min(100, ts - lastTs); ema = ema * 0.9 + dt * 0.1;
+      const now = performance.now();
+      if (ema > 24 && MO.quality > 0.35 && now - lastQ > 700) { MO.setQuality(MO.quality * 0.85); lastQ = now; }
+      else if (ema < 17.5 && MO.quality < 1 && now - lastQ > 2000) { MO.setQuality(MO.quality * 1.08); lastQ = now; }
+    }
+    lastTs = ts;
+    if (hud) { const sz = MO.size(); hud.textContent = `t ${t.toFixed(2)}  bar ${(t / MO.BAR).toFixed(2)}  ${MO.sceneAt(t).id}\n${Math.round(1000 / ema)} fps  q ${MO.quality.toFixed(2)}  ${sz.sw}×${sz.sh}${sz.hdr ? ' hdr' : ''}`; }
+    raf = requestAnimationFrame(loop);
+  }
+
+  async function startLive(from = 0) {
+    mode = 'live';
+    vid.pause(); vid.hidden = true; canvas.hidden = false;
+    $('playLive').disabled = true; status.textContent = 'Compiling shaders…';
+    try { await ensureInit(); } catch (e) { $('playLive').disabled = false; status.textContent = 'This browser can’t run the live version. Try the MP4.'; showError(e); return; }
+    status.textContent = ''; $('playLive').disabled = false;
+    gate.hidden = true;
+    sizeCanvas();
+    if (audioOk) {
+      try { audio.currentTime = from; await audio.play(); } catch (e) { audioOk = false; }
+    }
+    anchor = performance.now() - (audioOk ? audio.currentTime : from) * 1000;
+    playing = true; lastTs = 0; setIcon(true);
+    cancelAnimationFrame(raf); raf = requestAnimationFrame(loop);
+  }
+  function pauseLive() { if (!playing) return; playing = false; pausedAt = clock(); audio.pause(); setIcon(false); }
+  async function resumeLive() {
+    if (pausedAt >= DUR - 0.05) pausedAt = 0;
+    await startLive(pausedAt);
+  }
+  function finish() {
+    playing = false; audio.pause(); setIcon(false); pausedAt = 0;
+    MO.render(DUR - 1e-3); progress(DUR);
+    $('playLive').textContent = '↻ Play live again';
+    gate.hidden = false;
+  }
+  function startVideo() {
+    pauseLive();
+    mode = 'video';
+    gate.hidden = true; canvas.hidden = true; vid.hidden = false;
+    if (!vid.currentSrc) vid.load();
+    vid.play().catch(() => {});
+  }
+  vid.addEventListener('timeupdate', () => { if (mode === 'video') progress(vid.currentTime); });
+  vid.addEventListener('play', () => { if (mode === 'video') setIcon(true); });
+  vid.addEventListener('pause', () => { if (mode === 'video') setIcon(false); });
+
+  $('playLive').addEventListener('click', () => startLive(0));
+  $('playVideo').addEventListener('click', startVideo);
+  $('toggle').addEventListener('click', () => {
+    if (mode === 'video') { vid.paused ? vid.play() : vid.pause(); return; }
+    if (playing) pauseLive(); else if (mode === 'live') resumeLive(); else startLive(0);
+  });
+
+  function seekTo(t) {
+    t = Math.max(0, Math.min(DUR - 0.05, t));
+    if (mode === 'video') { vid.currentTime = t; return; }
+    if (mode !== 'live') { startLive(t); return; }
+    if (playing) { if (audioOk) audio.currentTime = t; anchor = performance.now() - t * 1000; }
+    else { pausedAt = t; MO.render(t); progress(t); }
+  }
+  const track = $('track');
+  let dragging = false;
+  const posT = (e) => { const r = track.getBoundingClientRect(); return ((e.clientX - r.left) / r.width) * DUR; };
+  track.addEventListener('pointerdown', (e) => { dragging = true; track.setPointerCapture(e.pointerId); seekTo(posT(e)); });
+  track.addEventListener('pointermove', (e) => { if (dragging) seekTo(posT(e)); });
+  track.addEventListener('pointerup', () => { dragging = false; });
+  track.addEventListener('keydown', (e) => {
+    const cur = mode === 'video' ? vid.currentTime : (playing ? clock() : pausedAt);
+    if (e.key === 'ArrowRight') { seekTo(cur + MO.BAR); e.preventDefault(); }
+    if (e.key === 'ArrowLeft') { seekTo(cur - MO.BAR); e.preventDefault(); }
+  });
+
+  $('fs').addEventListener('click', () => {
+    if (mode === 'video' && vid.webkitEnterFullscreen && !stage.requestFullscreen) { vid.webkitEnterFullscreen(); return; }
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (stage.requestFullscreen) stage.requestFullscreen().catch(() => {});
+    else if (vid.webkitEnterFullscreen) { startVideo(); vid.webkitEnterFullscreen(); }
+  });
+  addEventListener('resize', () => { if (inited) sizeCanvas(); });
+  document.addEventListener('fullscreenchange', () => { if (inited) setTimeout(sizeCanvas, 50); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) pauseLive(); });
+  addEventListener('keydown', (e) => { if (e.key === ' ' && e.target === document.body) { e.preventDefault(); $('toggle').click(); } });
+
+  if (!document.createElement('canvas').getContext('webgl2')) {
+    $('playLive').disabled = true;
+    status.textContent = 'No WebGL2 here, so the live version is off. The MP4 works.';
+  }
+  // ?t=12.5 jumps straight into the live render at that time (handy for testing)
+  if (P.has('t')) { const t0 = +P.get('t') || 0; ensureInit().then(() => { mode = 'live'; gate.hidden = true; pausedAt = t0; MO.render(t0); progress(t0); }).catch(showError); }
+})();
+</script>
+</body>
+</html>
