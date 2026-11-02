@@ -25,6 +25,8 @@
   const BODY = `
 // ===================================================================== THE LUMINOUS BODY
 // (from albedo.js, Sacred Mirrors) + the rising gold. Body space: feet y = -1, crown y = +1.
+uniform float uChakS;     // chakra mandala size (lit)
+uniform float uAuraOcc;   // how much the aura darkens what is behind it (figure-ground)
 struct CitBody {
   vec2  pos;        // scene position of the body origin (body y = 0, the pelvis)
   float scale;      // scene units per body unit
@@ -165,12 +167,21 @@ float citNerve(vec2 q, vec2 a, vec2 b, float seed, float aa, float s0, float fro
 // petal count of each chakra's lotus (crown: many)
 float citPetalN(int i) { return i == 0 ? 4.0 : i == 1 ? 6.0 : i == 2 ? 10.0 : i == 3 ? 12.0 : i == 4 ? 16.0 : i == 5 ? 2.0 : 32.0; }
 
+// a ring of np almond (vesica) petals centred on radius rc, half length h: x = signed distance
+// to the nearest petal, y = its half width (for nested contours)
+vec2 citPetalRing(float r, float a, float np, float rc, float h, float wfac, float off) {
+  float cell = TAU / np;
+  float x = (fract(a / cell + off) - 0.5) * cell * r;
+  float w = min(rc * cell * 0.5 * wfac, h * 0.62);
+  return vec2(sdVesica(vec2(x, r - rc), w, h), w);
+}
+
 // a chakra mandala: unlit (silver, small) .. lit (its colour, larger, pointed lotus petals with
 // nested contours, turning)
 vec3 citChakra(vec2 q, int i, float lit, float aa, float t) {
   vec2 c = chakraPos(i);
   float L = sat(lit);
-  float r = (i == 6 ? 0.034 : (i == 5 ? 0.02 : 0.025)) * (1.0 + 0.45 * L);
+  float r = (i == 6 ? 0.034 : (i == 5 ? 0.02 : 0.025)) * (1.0 + (uChakS - 1.0) * L);
   vec2 d = q - c; float l = length(d);
   float a = citAtan(d.x, d.y);
   float np = citPetalN(i);
@@ -184,22 +195,20 @@ vec3 citChakra(vec2 q, int i, float lit, float aa, float t) {
   m = max(m, fill(l - r * 0.1, aa));
   // lit: an outer ring of pointed lotus petals (three nested outlines each), turning
   float sp = (mod(float(i), 2.0) * 2.0 - 1.0) * t * 0.5;
-  float fa = abs(fract((a + sp) / TAU * np + 0.5) - 0.5) * 2.0;          // 0 petal axis .. 1 gap
-  float rr = (l - r * 1.1) / (r * 1.25);                                  // 0 base .. 1 tip
-  float wdt = pow(max(sin(PI * sat(rr)), 0.0), 0.7) * step(0.0, rr) * step(rr, 1.0);
-  float F = fa / max(wdt, 1e-3);
-  float pv = aa / max(l * TAU / np * 0.5 * max(wdt, 0.05), 1e-5);
-  float pet = (citIso(F * 3.0, pv * 3.0, 1.0) * step(F, 1.02)) * step(0.0, rr) * step(rr, 1.0);
+  vec2 pd = citPetalRing(l, a + sp, np, r * 1.72, r * 0.62, 0.92, 0.0);
+  float pet = citLine(pd.x, aa, 1.3) + citIso(pd.x / (pd.y * 0.34), aa / (pd.y * 0.34), 0.9) * step(pd.x, 0.0) * 0.6;
   vec3 cc = chakraColor(float(i));
   vec3 unlit = mix(vec3(0.55, 0.62, 0.85), cc, 0.22) * 0.75;
   vec3 res = m * step(l, r * 2.0) * mix(unlit, cc * 3.0 + 0.5, L);
-  res += pet * L * (cc * 2.2 + 0.3) + cc * 0.25 * L * step(F, 1.0) * wdt;
-  return res + lit * cc * 1.6 * exp(-l / r * 1.8);
+  res += pet * L * (cc * 2.0 + 0.3) + cc * 0.3 * L * fill(pd.x, aa) * sat(-pd.x / pd.y);
+  return res + min(lit, 1.6) * cc * 1.3 * exp(-l / r * 2.2);
 }
 
 vec4 citBody(vec2 w, CitBody B, float pxw, float ck[7]) {
   vec2 q = (w - B.pos) / B.scale;
   float aa = pxw / B.scale;
+  // nothing (not even the aura) reaches outside this box: skip the work there
+  if (abs(q.x) > 1.15 || q.y < -1.45 || q.y > 1.65) return vec4(0.0);
   float t = B.t;
   CitJoints j = citJoints(B.arms);
   float d = citBodySDF(q, j);
@@ -207,7 +216,7 @@ vec4 citBody(vec2 w, CitBody B, float pxw, float ck[7]) {
   // the gold rises from the feet: below the front everything is gold
   float fy = q.y - B.kh - 0.018 * cos(q.x * 11.0 - t * 4.0);
   float gm = max(B.gold, smoothstep(0.035, -0.035, fy));
-  float front = exp(-fy * fy / 0.0004) * step(-1.1, B.kh) * step(B.kh, 1.1) * (1.0 - B.gold);
+  float front = exp(-fy * fy / 0.00008) * step(-1.1, B.kh) * step(B.kh, 1.1) * (1.0 - B.gold);
   vec3 tint = mix(B.tint, B.gTint, gm), tint2 = mix(B.tint2, B.gTint2, gm);
   vec3 nerveCol = mix(B.nerveCol, B.gNerve, gm);
   vec3 col = vec3(0.0); float occ = 0.0;
@@ -224,6 +233,7 @@ vec4 citBody(vec2 w, CitBody B, float pxw, float ck[7]) {
     vec3 auc = mix(tint, tint2, smoothstep(0.1, 0.8, F));
     col += auc * (fl * env + env * 0.02 + 0.22 * exp(-dd / (aa * 5.0)) * step(0.0, d)) * B.aura;
     col += tint * citLine(d - 0.024, aa, 1.0) * 0.30 * B.aura;
+    occ = max(occ, uAuraOcc * step(0.0, d) * (1.0 - smoothstep(0.0, 0.10, d)) * 0.9);
   }
 
   float inside = fill(d, aa);
@@ -236,22 +246,28 @@ vec4 citBody(vec2 w, CitBody B, float pxw, float ck[7]) {
     float dep = -d;
     float topo = citIso(dep / 0.019, aa / 0.019, 1.0) * exp(-dep * 9.0) * step(0.006, dep);
     col += tint * 0.28 * topo * B.lines;
+#ifdef CIT_BONES
     float bone = citLine(citBones(q, j), aa, 1.0) * inside;
     col += mix(vec3(0.70, 0.76, 1.0), tint, 0.4) * 0.55 * bone * B.lines;
+#endif
+#ifdef CIT_BRAIN
     vec2 br = q - vec2(0.0, 0.89);
     float brm = (1.0 - smoothstep(-0.005, 0.0, sdEllipse(br, vec2(0.074, 0.07)))) * step(-0.035, br.y);
     float g = 0.8 * vnoise(vec2(a.x, q.y) * 30.0 + 3.0) + 0.1 * sin(a.x * 160.0 + q.y * 90.0);
     col += nerveCol * citIso(g * 8.0, aa * 30.0 * 8.0 * 0.6, 1.0) * brm * 0.45 * B.nerves * smoothstep(0.0003, 0.0008, aa);
+#endif
     float imp = 0.0;
     float cord = citLine(a.x - 0.0015 * sin(q.y * 50.0), aa, 1.8) * step(0.02, q.y) * step(q.y, 0.80);
     float dp = (abs(q.y - 0.4) - B.pulse * 0.5) * 14.0;
     imp = max(imp, exp(-dp * dp) * cord * step(0.0, B.pulse));
     float nm = cord;
+#ifdef CIT_NERVES
     nm = max(nm, citNerve(a, vec2(0.004, 0.64), j.sh + vec2(0.0, -0.02), 1.0, aa, 0.0, B.pulse, imp));
     nm = max(nm, citNerve(a, j.sh + vec2(0.0, -0.02), j.wr, 2.0, aa, 0.2, B.pulse, imp));
     nm = max(nm, citNerve(a, j.wr, j.hd + (j.hd - j.wr) * 0.1, 4.0, aa, 0.8, B.pulse, imp));
     nm = max(nm, citNerve(a, vec2(0.006, 0.06), j.kn, 5.0, aa, 0.0, B.pulse, imp));
     nm = max(nm, citNerve(a, j.kn, j.an, 7.0, aa, 0.55, B.pulse, imp));
+#endif
     col += (nerveCol * nm + mix(vec3(0.9, 0.95, 1.0), vec3(1.0, 0.9, 0.6), gm) * 2.5 * imp) * inside * B.nerves;
 
     // ---- kundalini: sushumna up the midline, ida (lunar) and pingala (solar) crossing at
@@ -277,7 +293,7 @@ vec4 citBody(vec2 w, CitBody B, float pxw, float ck[7]) {
       col += vec3(2.4, 1.9, 1.0) * su * inside;
     }
     // ---- the molten front
-    col += vec3(2.4, 1.5, 0.55) * front * inside + vec3(1.0, 0.6, 0.2) * front * 0.4 * step(0.0, d) * exp(-d / 0.05);
+    col += vec3(1.9, 1.15, 0.4) * front * inside + vec3(1.0, 0.6, 0.2) * front * 0.3 * step(0.0, d) * exp(-d / 0.04);
 
     // ---- the nearest chakra
     float cy = q.y;
@@ -332,6 +348,7 @@ uniform vec4  uGut;       // panel gutters: two lines x = a + b y (or y = a + b 
 uniform float uGutW;      // gutter half width
 uniform vec4  uEyeP;      // close-up eye: screen centre, scale, roll
 uniform float uEyeO;      // its openness
+uniform vec4  uFaceP;     // the face strip: centre xy, side-eye scale, side-eye distance
 uniform float uRollP;     // snare roll envelope
 uniform vec4  uLotusP;    // crown lotus: centre xy, radius, opening
 uniform float uColumn;    // rainbow column
@@ -342,6 +359,11 @@ const vec3 CIT_ULTRA = vec3(0.004, 0.018, 0.40);
 const vec3 CIT_GOLD  = vec3(1.0, 0.64, 0.18);
 
 // ---------------------------------------------------------------- sky: indigo night to amber dawn
+float citStars(vec2 p) {
+  vec2 sp = p * 70.0; vec2 sid = floor(sp); vec2 so = fract(sp) - 0.5 - (hash22(sid) - 0.5) * 0.6;
+  float sh = hash21(sid + 3.1);
+  return step(0.90, sh) * exp(-dot(so, so) * 60.0) * (0.6 + 0.4 * sin(uTime * 4.0 + sh * 40.0));
+}
 vec3 citSky(vec2 p, vec2 w) {
   vec3 top = mix(vec3(0.004, 0.003, 0.028), vec3(0.016, 0.006, 0.05), uDawn);
   vec3 mid = mix(vec3(0.028, 0.008, 0.06), vec3(0.13, 0.022, 0.065), uDawn);
@@ -351,6 +373,24 @@ vec3 citSky(vec2 p, vec2 w) {
   col = mix(col, top, smoothstep(0.1, 1.0, h));
   float r = length(w - uSun.xy) / uSun.z;
   col += vec3(1.0, 0.42, 0.06) * exp(-max(r - 1.0, 0.0) * 1.8) * 0.28 * uSun.w;
+#ifdef CIT_YODS
+  col += vec3(0.8, 0.85, 1.0) * citStars(p) * smoothstep(0.0, 0.9, p.y) * (1.0 - 0.7 * uDawn) * 0.9;
+  // the falling drops (yods) of Tarot XIX, one in each chakra colour, outlined in gold
+  {
+    const float CS = 0.26;
+    vec2 yp = p + vec2(0.0, uTime * 0.16);
+    vec2 cid = floor(yp / CS);
+    vec2 h = hash22(cid + 7.0);
+    vec2 cp = (cid + 0.2 + 0.6 * h) * CS;
+    float ys = 0.013 + 0.008 * h.y;
+    vec2 dq = (yp - cp) / ys;
+    float tear = min(length(dq) - 1.0, sdTaper(dq, vec2(0.0), vec2(0.0, 2.6), 1.0, 0.0));
+    float on = step(0.70, hash21(cid + 1.3)) * smoothstep(-0.2, 0.4, abs(p.x) - 0.25 * (1.0 - abs(p.y)));
+    float pxl = px() / ys;
+    vec3 yc = chakraColor(floor(hash21(cid + 4.1) * 7.0));
+    col += (yc * 0.5 * fill(tear, pxl) + vec3(1.0, 0.75, 0.35) * citLine(tear, pxl, 1.2) * 0.8 + yc * 0.10 * exp(-max(tear, 0.0) * 2.5)) * on;
+  }
+#endif
   return col;
 }
 
@@ -366,23 +406,23 @@ vec4 citSun(vec2 w, float pxw) {
   float core = exp(-r / R * 1.8);
   vec3 dc = mix(vec3(0.80, 0.36, 0.05), vec3(2.2, 1.9, 1.5), wh) * (0.45 + 1.1 * core);
   float rings = citIso(r / (R * 0.055), pxw / (R * 0.055), 1.0);
+#ifndef CIT_NIGHT
   dc = mix(dc, dc * vec3(0.35, 0.16, 0.05), rings * 0.85 * uSun2.w);
+#else
   // the night sun: ultramarine engraved in gold, a rosette of 32 petals
-  vec3 nc = mix(vec3(0.035, 0.012, 0.10), vec3(0.004, 0.006, 0.045), sat(r / R)) + gold * rings * 0.22 * smoothstep(0.30, 0.5, r / R);
+  vec3 nc = mix(vec3(0.035, 0.012, 0.10), vec3(0.004, 0.006, 0.045), sat(r / R)) + gold * rings * 0.22 * smoothstep(0.30, 0.5, r / R) * uSun2.w;
   {
-    float fa = abs(fract((a - uSun2.x * 0.5) / TAU * 32.0) - 0.5) * 2.0;
-    float rr = (r / R - 0.52) / 0.44;
-    float wdt = pow(max(sin(PI * sat(rr)), 0.0), 0.6) * step(0.0, rr) * step(rr, 1.0);
-    float F = fa / max(wdt, 1e-3);
-    float pv = pxw * 64.0 / (max(r, 1e-4) * TAU * max(wdt, 0.05));
-    nc += gold * (citIso(F * 2.0, pv * 2.0, 1.2) * step(F, 1.02) * 0.75 + step(F, 1.0) * wdt * 0.05) * step(0.0, rr) * step(rr, 1.0);
+    vec2 pd = citPetalRing(r, a - uSun2.x * 0.5, 32.0, R * 0.74, R * 0.21, 0.92, 0.5);
+    nc += gold * (citLine(pd.x, pxw, 1.3) * 0.75 + citIso(pd.x / (pd.y * 0.34), pxw / (pd.y * 0.34), 0.9) * step(pd.x, 0.0) * 0.3 + fill(pd.x, pxw) * 0.04) * uSun2.w;
     nc += gold * 0.8 * (citLine(r - R * 0.52, pxw, 1.4) + citLine(r - R * 0.49, pxw, 1.0) * 0.5);
   }
-  dc = mix(dc, nc, uSunDark);
+  dc = nc;
+#endif
   col += disc * dc;
   col += gold * 2.6 * citLine(r - R, pxw, 2.2) + gold * 1.0 * citLine(r - R * 1.055, pxw, 1.0);
   col += gold * 0.9 * citLine(r - R * 1.10, pxw, 1.0);
   // rays: 16 straight (outlined triangles) alternating with 16 wavy flames
+  if (r < R * (1.16 + uSun2.z)) {
   const float n = 32.0;
   float sector = (a + uSun2.x) / TAU * n;
   float id = floor(sector), fr = fract(sector) - 0.5;
@@ -396,18 +436,17 @@ vec4 citSun(vec2 w, float pxw) {
   // Marseille colouring: the straight rays alternate vermilion, chrome yellow and ultramarine
   float rk = mod(floor(id * 0.5), 3.0);
   vec3 rf = rk < 0.5 ? vec3(0.62, 0.07, 0.015) : rk < 1.5 ? vec3(0.75, 0.42, 0.05) : vec3(0.03, 0.06, 0.45);
-  rf = mix(rf, gold * 0.8, wh);
-  vec3 sray = rf * body * (0.14 + 0.30 * (1.0 - rr) * (1.0 - rr)) + gold * (citLine(ed, pxw, 1.3) * 0.95 + citLine(fr * arcU, pxw, 1.0) * body * 0.45);
+  rf = mix(rf, gold * 0.32, wh);
+  vec3 sray = rf * body * (0.04 + 0.42 * (1.0 - rr) * (1.0 - rr)) * (0.55 + 0.45 * (1.0 - 2.0 * abs(fr) / max(0.4 * (1.0 - rr), 1e-3))) + gold * (citLine(ed, pxw, 1.3) * 0.95 + citLine(fr * arcU, pxw, 1.0) * body * 0.45);
   sray += gold * citIso(fr * 7.0 * (1.0 - rr * 0.5), pxw / arcU * 7.0, 0.9) * body * 0.16;
   float wv = (0.13 + 0.06 * rr) * sin(rr * 15.0 - uTime * 6.0 + id);
-  float wl = citLine((fr - wv) * arcU, pxw, 1.8) + citLine((fr - wv * 0.7 - 0.12 * (1.0 - rr)) * arcU, pxw, 0.9) * 0.6 + citLine((fr - wv * 0.7 + 0.12 * (1.0 - rr)) * arcU, pxw, 0.9) * 0.6;
+  float wl = citLine((fr - wv) * arcU, pxw, 1.8) + citLine((abs(fr - wv * 0.7) - 0.12 * (1.0 - rr)) * arcU, pxw, 0.9) * 0.6;
   vec3 wray = mix(gold, vec3(1.0, 0.35, 0.06), 0.4) * wl * (1.1 - rr) * 0.6;
   col += mix(wray, sray, straight) * inR * (1.0 - smoothstep(0.75, 1.0, rr)) * (0.85 + 0.4 * exp(-uKickAge * 8.0));
+  }
   // hairlines and halo rings in the sky (fine Alex Grey linework)
   float hl = citIso((a + uSun2.x * 0.5) / TAU * 240.0, pxw / max(r, 1e-3) / TAU * 240.0, 0.8);
   col += gold * hl * 0.07 * exp(-max(r - R, 0.0) / R * 0.9) * step(R * 1.1, r);
-  float halo = citIso(log(max(r / R, 1.0)) * 7.0 + 0.18 * sin(a * 16.0 + uSun2.x * 16.0 + log(max(r / R, 1.0)) * 6.0), pxw / max(r, 1e-3) * 7.0, 0.9) * step(R * 1.2, r);
-  col += gold * halo * 0.08 * uSun2.w * exp(-max(r - R, 0.0) / R * 0.6);
   return vec4(col * uSun.w, disc * uSun.w);
 }
 
@@ -421,16 +460,15 @@ vec4 citMountain(vec2 w, float pxw) {
   vec2 m = (w - uMount.xy) / uMount.z;
   float pm = pxw / uMount.z;
   float ax = abs(m.x);
-  float yy = 0.0, k = 0.0, y0 = 0.0, hk = 0.32, Wk = 2.4;
-  for (int i = 0; i < 7; i++) {
-    float fi = float(i);
-    float h = 0.32 * pow(0.85, fi);
-    float W = 0.34 + 2.06 * pow((6.0 - fi) / 6.0, 1.4);
-    bool here = m.y >= yy && m.y < yy + h;
-    k = here ? fi : k; y0 = here ? yy : y0; hk = here ? h : hk; Wk = here ? W : Wk;
-    yy += h;
-  }
-  float top = yy;
+  if (m.y > 2.30 || ax > 2.7 || (m.y > 1.53 && ax > 0.2)) return vec4(0.0);
+  // terrace table (precomputed): which terrace, its foot y, height, half width (and the one below)
+  float s1 = step(0.32000, m.y), s2 = step(0.59200, m.y), s3 = step(0.82320, m.y), s4 = step(1.01972, m.y), s5 = step(1.18676, m.y), s6 = step(1.32875, m.y);
+  float k = s1 + s2 + s3 + s4 + s5 + s6;
+  float y0 = 0.00000 + s1 * 0.32000 + s2 * 0.27200 + s3 * 0.23120 + s4 * 0.19652 + s5 * 0.16704 + s6 * 0.14199;
+  float hk = 0.32000 + s1 * -0.04800 + s2 * -0.04080 + s3 * -0.03468 + s4 * -0.02948 + s5 * -0.02506 + s6 * -0.02130;
+  float Wk = 2.40000 + s1 * -0.46407 + s2 * -0.42821 + s3 * -0.38713 + s4 * -0.33811 + s5 * -0.27481 + s6 * -0.16767;
+  float Wp = 2.80000 + s1 * -0.40000 + s2 * -0.46407 + s3 * -0.42821 + s4 * -0.38713 + s5 * -0.33811 + s6 * -0.27481;
+  const float top = 1.44944;
   if (m.y < 0.0) { k = 0.0; y0 = -0.32; hk = 0.32; Wk = 2.6; }
   float v = (m.y - y0) / hk;
   float pv = pm / hk;
@@ -441,7 +479,7 @@ vec4 citMountain(vec2 w, float pxw) {
   vec3 col = vec3(0.0);
   // gold-leaf face, darker at the foot of each riser, fine engraved courses
   float tread = smoothstep(0.86 - pv, 0.86 + pv, v);
-  vec3 face = CIT_GOLD * (0.025 + 0.07 * v) * (0.75 + 0.25 * sat(m.y / top));
+  vec3 face = CIT_GOLD * (0.025 + 0.07 * v) * (0.75 + 0.25 * sat(m.y / top)) * (0.35 + 0.65 * smoothstep(0.0, 0.12, v));
   face += CIT_GOLD * 0.16 * citIso(v * 9.0, pv * 9.0, 1.0) * (1.0 - tread);
   // brickwork joints: staggered vertical lines between the courses
   float course = floor(v * 9.0);
@@ -486,6 +524,27 @@ vec4 citMountain(vec2 w, float pxw) {
   face += vec3(1.2, 0.85, 0.4) * bal * step(m.y, top);
   col = face * inM;
   float alpha = inM;
+#ifdef CIT_BRAZIERS
+  {
+    vec2 bq = vec2(ax - (Wk + 0.5 * (Wp - Wk)), m.y - y0);
+    float sz = hk * 0.9;
+    float bowl = max(sdEllipse(bq - vec2(0.0, 0.10 * sz), vec2(0.13, 0.05) * sz), -(bq.y - 0.10 * sz));
+    float legs = sdBox(bq - vec2(0.0, 0.05 * sz), vec2(0.03 * sz, 0.05 * sz));
+    float br = min(bowl, legs);
+    float inB = fill(br, pm) * step(Wk + 0.04, Wp) * step(0.5, k);
+    // the flame: a flickering teardrop with nested tongues
+    vec2 fq = (bq - vec2(0.0, 0.12 * sz)) / sz;
+    float fn = vnoise(vec2(fq.x * 7.0, fq.y * 4.0 - uTime * 5.0 + k * 3.0));
+    float fh = 0.42 + 0.12 * fn + 0.18 * exp(-uKickAge * 6.0);
+    float fd = length(vec2(fq.x * (1.0 + 2.2 * sat(fq.y / fh)) + 0.05 * sin(fq.y * 14.0 - uTime * 9.0), (fq.y - fh * 0.35) * 0.55)) - 0.13;
+    float inFl = fill(fd * sz, pm) * step(0.0, fq.y) * step(Wk + 0.04, Wp) * step(0.5, k);
+    vec3 flc = mix(vec3(2.6, 1.6, 0.5), vec3(1.6, 0.25, 0.04), smoothstep(0.0, 0.10, -fd + 0.0) * 0.0 + smoothstep(0.05, fh, fq.y));
+    col = mix(col, CIT_GOLD * 0.35 + vec3(1.0, 0.7, 0.3) * citLine(br, pm, 1.2), inB);
+    col = mix(col, flc, inFl * 0.9);
+    col += vec3(1.0, 0.45, 0.08) * exp(-max(fd, 0.0) * sz / (0.25 * sz)) * 0.18 * step(0.0, fq.y + 0.1) * step(Wk + 0.04, Wp) * step(0.5, k);
+    alpha = max(alpha, max(inB, inFl));
+  }
+#endif
   // ---- the athanor: a banded tower on the summit, fire in its arched window, a dome
   {
     vec2 tq = vec2(m.x, m.y - top);
@@ -496,13 +555,13 @@ vec4 citMountain(vec2 w, float pxw) {
     float band = floor(tv * 6.0);
     vec3 tcol = mix(CIT_VERM, CIT_ULTRA, mod(band, 2.0)) * (0.25 + 0.6 * nz);
     tcol += CIT_GOLD * 1.2 * citIso(tv * 6.0, pm / CIT_TH * 6.0, 1.3);
-    tcol += CIT_GOLD * 0.5 * citIso(asin(clamp(u, -1.0, 1.0)) / PI * 8.0, pm / tw / max(nz, 0.15) / PI * 8.0, 1.0) * nz;
+    tcol += CIT_GOLD * 0.5 * citIso(u * (1.0 + 0.18 * u * u) * 2.6, pm / tw / max(nz, 0.15) * 2.6, 1.0) * nz;
     tcol += CIT_GOLD * 1.4 * citLine(abs(tq.x) - tw, pm, 1.5);
     // arched window with the athanor's fire
     vec2 wq = tq - vec2(0.0, CIT_TH * 0.42);
     float win = min(sdBox(wq + vec2(0.0, 0.01), vec2(0.026, 0.035)), length(wq - vec2(0.0, 0.025)) - 0.026);
     float fire = fill(win, pm);
-    float fl = citNoise3(vec2(wq.x * 60.0, wq.y * 30.0 - uTime * 6.0));
+    float fl = vnoise(vec2(wq.x * 60.0, wq.y * 30.0 - uTime * 6.0));
     tcol = mix(tcol, vec3(2.4, 0.9, 0.18) * (0.6 + 0.8 * fl) * (1.0 + 0.6 * exp(-uKickAge * 6.0)), fire);
     tcol += CIT_GOLD * 1.6 * citLine(win, pm, 1.3);
     col = mix(col, tcol, inT);
@@ -519,6 +578,7 @@ vec4 citMountain(vec2 w, float pxw) {
     col = mix(col, ccap, inC);
     col += vec3(1.3, 0.95, 0.45) * citLine(cap, pm, 1.5);
     alpha = max(alpha, inC);
+#ifdef CIT_PROVIDENCE
     // the eye in the triangle (Providence), floating in the sun's heart
     vec2 eq = tq - vec2(0.0, CIT_TH + 0.24);
     float trd = sdTriangle(eq, 0.12);
@@ -526,7 +586,7 @@ vec4 citMountain(vec2 w, float pxw) {
     vec3 trc = vec3(0.02, 0.025, 0.14) * inTr;
     trc += vec3(1.4, 1.0, 0.5) * (citLine(trd, pm, 2.2) * 1.4 + citLine(trd + 0.014, pm, 1.0) * 0.8);
     vec2 ee = eq - vec2(0.0, -0.012);
-    float lid = sdVesica(vec2(ee.y, ee.x), 0.026 * (1.0 - 0.9 * smoothstep(0.0, 0.5, sin(uTime * 0.0))), 0.062);
+    float lid = sdVesica(vec2(ee.y, ee.x), max(0.026 * (1.0 - 0.9 * smoothstep(0.35, 0.9, uOpenHat) * (1.0 - uReduced)), 0.003), 0.062);
     float er = length(ee);
     float inE = fill(lid, pm);
     trc += inE * (vec3(1.6, 1.4, 1.1) * 0.6 * smoothstep(0.024, 0.026, er) + vec3(1.0, 0.55, 0.1) * (1.0 - smoothstep(0.0235, 0.025, er)) * (0.6 + 0.6 * citIso(citAtan(ee.y, ee.x) / TAU * 40.0, pm / max(er, 1e-3) / TAU * 40.0, 1.0)));
@@ -535,6 +595,7 @@ vec4 citMountain(vec2 w, float pxw) {
     trc += vec3(1.4, 1.0, 0.5) * citLine(lid, pm, 1.5) * 1.2;
     col = col * (1.0 - inTr) + trc;
     alpha = max(alpha, inTr);
+#endif
   }
   return vec4(col, alpha);
 }
@@ -574,22 +635,17 @@ vec3 citBurst(vec2 p, vec2 c, float age, int i, float S) {
   // 2. the lotus blooms out of the chakra (petal count of the chakra), then fades into it
   float np = citPetalN(i);
   float grow = 1.0 - pow(1.0 - sat(age / 0.22), 3.0);
-  float Rl = S * 0.42 * grow * (1.0 + 0.12 * sin(sat(age / 0.22) * PI));
+  float Rl = min(S * 0.42, 0.62) * grow * (1.0 + 0.12 * sin(sat(age / 0.22) * PI));
   float spin = age * 0.8 * (mod(float(i), 2.0) * 2.0 - 1.0);
   float L = exp(-max(age - 0.18, 0.0) * 3.5);
   float lot = 0.0, lfill = 0.0;
-  for (int layer = 0; layer < 2; layer++) {
-    float fl = float(layer);
-    float off = fl * 0.5;
-    float Rr = Rl * (1.0 - 0.28 * fl);
-    float fa = abs(fract((a + spin * (1.0 - 2.0 * fl)) / TAU * np + 0.5 + off) - 0.5) * 2.0;
-    float rr = (r - Rr * 0.22) / (Rr * 0.78);
-    float wdt = pow(max(sin(PI * sat(rr)), 0.0), 0.65) * step(0.0, rr) * step(rr, 1.0) * mix(1.0, 0.85, fl);
-    float F = fa / max(wdt, 1e-3);
-    float pv = PX / max(r * TAU / np * 0.5 * max(wdt, 0.05), 1e-5);
-    float inP = step(F, 1.0) * step(0.0, rr) * step(rr, 1.0);
-    lot = max(lot, citIso(F * 3.0, pv * 3.0, 1.2) * step(F, 1.03) * step(0.0, rr) * step(rr, 1.0) * mix(1.0, 0.6, fl));
-    lfill = max(lfill, inP * wdt * (1.0 - 0.5 * fl));
+  Rl *= i == 5 ? 1.5 : 1.0;
+  L *= 1.0 - smoothstep(0.45, 0.62, age);
+  if (age < 0.62) if (r < Rl * 1.1 && i != 6) for (int layer = 0; layer < 2; layer++) {
+    float fl = float(layer) * (i == 5 ? 0.0 : 1.0);
+    vec2 pd = citPetalRing(r, a + spin * (1.0 - 2.0 * fl), np, Rl * mix(0.60, 0.42, fl), Rl * mix(0.40, 0.24, fl), 0.95, 0.5 - fl * 0.5);
+    lot = max(lot, (citLine(pd.x, PX, 1.6) + citIso(pd.x / (pd.y * 0.3), PX / (pd.y * 0.3), 1.0) * step(pd.x, 0.0) * 0.6) * mix(1.0, 0.7, fl));
+    lfill = max(lfill, fill(pd.x, PX) * sat(-pd.x / pd.y) * (1.0 - 0.4 * fl));
   }
   float hub = citLine(r - Rl * 0.22, PX, 2.0) + citLine(r - Rl * 0.16, PX, 1.0) + citLine(r - Rl * 1.06, PX, 1.2) * 0.6;
   col += (cc * 2.4 + 0.6) * (lot + hub) * L * I + cc * lfill * 0.35 * L * I;
@@ -598,7 +654,7 @@ vec3 citBurst(vec2 p, vec2 c, float age, int i, float S) {
   col += cc * wash * (0.12 + 1.2 * exp(-r * 2.0));
   col += vec3(1.0, 0.9, 0.7) * 2.0 * exp(-r / min(S * 0.06, 0.04)) * exp(-age * 6.0);
   // 4. sparkles flying out (one per sector, constant cost)
-  {
+  if (age < 0.62) {
     float ns = 14.0;
     float sx = (a + 0.3) / TAU * ns; float sid = floor(sx);
     float h = hash11(sid * 3.1 + float(i) * 7.7);
@@ -606,10 +662,10 @@ vec3 citBurst(vec2 p, vec2 c, float age, int i, float S) {
     float sr = (0.15 + 1.2 * h) * S * 1.4 * (1.0 - exp(-age * 5.0)) + Rl * 0.3;
     vec2 sp = c + vec2(cos(sa), sin(sa)) * sr;
     float ssz = (0.035 + 0.05 * h) * exp(-age * 2.5) * (0.6 + 0.4 * S);
-    col += mix(vec3(1.0, 0.95, 0.85), cc + 0.3, 0.4) * 2.0 * sparkle(p, sp, ssz) * step(age, 0.9);
+    col += mix(vec3(1.0, 0.95, 0.85), cc + 0.3, 0.4) * 2.0 * sparkle(p, sp, ssz) * (1.0 - smoothstep(0.45, 0.62, age));
   }
   // 5. burst lines
-  col += mix(cc, vec3(1.0, 0.9, 0.7), 0.5) * citSpeed(p, c, 120.0, 0.35 + age * 1.5, floor(age * 20.0)) * exp(-age * 4.0) * 1.6 * I;
+  if (age < 0.6) col += mix(cc, vec3(1.0, 0.9, 0.7), 0.5) * citSpeed(p, c, 120.0, 0.35 + age * 1.5, floor(age * 20.0)) * exp(-age * 4.0) * 1.6 * I;
   return col;
 }
 
@@ -626,50 +682,54 @@ void citRibbons(vec2 q, float aa, out vec3 back, out vec3 front) {
     float z = cos(ph);
     float slope = R * 6.0 * z;
     float dist = abs(q.x - xc) / sqrt(1.0 + slope * slope);
-    float wid = 0.030 * (0.25 + 0.75 * abs(z)) + 0.004;
+    float wid = 0.024 * (0.25 + 0.75 * abs(z)) + 0.003;
     float band = 1.0 - smoothstep(wid - aa, wid + aa, dist);
     float lines = citIso(dist / wid * 2.0, aa / wid * 2.0, 1.0) * band;
     float core = citLine(dist, aa, 1.6);
     float vis = smoothstep(-1.15, -0.8, q.y) * (1.0 - smoothstep(1.0, 1.35, q.y));
-    vec3 c = j == 0 ? vec3(1.0, 0.78, 0.30) : j == 1 ? vec3(1.0, 0.95, 0.85) : vec3(1.0, 0.40, 0.10);
-    vec3 rc = c * (band * 0.25 + lines * 1.2 + core * 1.6) * vis * (0.6 + 0.4 * abs(z));
+    vec3 c = j == 0 ? vec3(1.0, 0.70, 0.22) : j == 1 ? vec3(1.0, 0.88, 0.60) : vec3(1.0, 0.34, 0.06);
+    vec3 rc = c * (band * 0.14 + lines * 1.0 + core * 1.8) * vis * (0.5 + 0.5 * abs(z));
     if (z > 0.0) front += rc; else back += rc * 0.6;
   }
 }
 #endif
 
-#ifdef CIT_EYECU
+#if defined(CIT_EYECU) || defined(CIT_FACE)
 // ---------------------------------------------------------------- the awakened eye (manga cut-in):
-// extreme close-up, the Sun and the Mountain reflected in a gold iris of radial fibres
-vec3 citEyeCU(vec2 p, float PX) {
-  vec2 e = (p - uEyeP.xy) / uEyeP.z;
-  e = vec2(e.x * cos(uEyeP.w) - e.y * sin(uEyeP.w), e.x * sin(uEyeP.w) + e.y * cos(uEyeP.w));
-  float pe = PX / uEyeP.z;
-  float o = uEyeO;
+// an anime eye drawn in the body's linework: lids, ink lash line and lashes, a gold (or violet)
+// iris of radial fibres with the Sun and the Mountain reflected in it, contour lines flowing out
+// from the lids across the skin. o = openness. Returns colour and coverage (skin = 1 when withSkin).
+vec4 citEyeCU(vec2 p, vec2 c, float sc, float ro, float o, vec3 irA, vec3 irB, float withSkin, float PX) {
+  vec2 e = (p - c) / sc;
+  e = vec2(e.x * cos(ro) - e.y * sin(ro), e.x * sin(ro) + e.y * cos(ro));
+  float pe = PX / sc;
   float xx = sat(1.0 - e.x * e.x);
-  float yu = 0.50 * pow(xx, 0.62) * o + 0.10 * e.x - 0.03;
-  float yl = -0.27 * pow(xx, 0.9) * mix(0.25, 1.0, o) + 0.05 * e.x - 0.04;
-  // luminous gold skin with topographic contours (as on the body)
-  float sk = length(e * vec2(0.60, 1.25));
-  vec3 col = vec3(0.13, 0.045, 0.008) * (1.3 - 0.6 * sat(sk));
-  col += vec3(1.0, 0.55, 0.15) * citIso(sk * 8.0 - uTime * 0.7, pe * 8.0 * 1.3, 1.0) * 0.25 * smoothstep(0.5, 0.85, sk);
+  float yu = 0.50 * pow(xx, 0.62) * o + 0.10 * e.x - 0.03 - 0.10 * xx * (1.0 - o);
+  float yl = -0.27 * pow(xx, 0.9) * mix(0.25, 1.0, o) + 0.05 * e.x - 0.04 - 0.10 * xx * (1.0 - o);
+  // skin: warm dark gold, contour lines flowing outward from the lids (Alex Grey)
+  float mid = 0.5 * (yu + yl);
+  float fld = max(e.y > mid ? e.y - yu : yl - e.y, 0.0) * 1.2 + 0.6 * max(abs(e.x) - 0.95, 0.0);
+  vec3 col = vec3(0.10, 0.035, 0.006) * (1.25 - 0.5 * sat(fld));
+  col += vec3(1.0, 0.55, 0.15) * citIso(fld / 0.075 - uTime * 1.5, pe / 0.075 * 1.2, 1.0) * 0.30 * smoothstep(0.03, 0.12, fld) * (1.0 - smoothstep(0.5, 1.1, fld));
+  float cover = withSkin;
   // the brow: fine parallel strokes
   for (int i = 0; i < 4; i++) {
     float fi = float(i);
     float by = 0.78 + 0.045 * fi - 0.30 * e.x * e.x + 0.10 * e.x;
-    col += vec3(1.0, 0.68, 0.28) * citLine(e.y - by, pe, 1.6 - 0.25 * fi) * step(abs(e.x + 0.05), 1.08 - 0.12 * fi) * (0.9 - 0.15 * fi);
+    col += vec3(1.0, 0.68, 0.28) * citLine(e.y - by, pe, 1.6 - 0.25 * fi) * step(abs(e.x + 0.05), 1.08 - 0.12 * fi) * (0.9 - 0.15 * fi) * withSkin;
   }
-  float inE = step(abs(e.x), 1.0) * smoothstep(-pe, pe, yu - e.y) * smoothstep(-pe, pe, e.y - yl);
-  vec3 ec = vec3(0.80, 0.74, 0.66) * (0.35 + 0.65 * smoothstep(yu, yu - 0.28, e.y));
+  float inE = step(abs(e.x), 1.0) * smoothstep(-pe, pe, yu - e.y) * smoothstep(-pe, pe, e.y - yl) * step(0.02, o);
+  // the third eye (no skin) has a deep violet sclera, the physical eyes a warm white
+  vec3 ec = mix(vec3(0.80, 0.74, 0.66), vec3(0.09, 0.03, 0.26) + irA * 0.15, 1.0 - withSkin) * (0.35 + 0.65 * smoothstep(yu, yu - 0.28, e.y));
   vec2 di = e - vec2(0.03, -0.03);
   float ir = length(di), ia = citAtan(di.y, di.x);
   const float IR = 0.42;
   float inI = fill(ir - IR, pe);
   float fib = 0.5 + 0.5 * cos(ia * 64.0 + 3.0 * sin(ir * 30.0));
   float fib2 = 0.5 + 0.5 * cos(ia * 150.0 + ir * 40.0);
-  vec3 irc = mix(vec3(0.45, 0.10, 0.005), vec3(1.5, 0.85, 0.22), smoothstep(IR, 0.14, ir)) * (0.45 + 0.55 * fib * (0.6 + 0.4 * fib2));
+  vec3 irc = mix(irA, irB, smoothstep(IR, 0.14, ir)) * (0.45 + 0.55 * fib * (0.6 + 0.4 * fib2));
   irc *= 0.35 + 0.65 * smoothstep(yu, yu - 0.32, e.y);
-  irc += vec3(1.6, 1.0, 0.35) * citLine(ir - 0.23, pe, 1.6) * 0.8 + vec3(1.0, 0.6, 0.2) * citLine(ir - 0.30, pe, 1.0) * 0.4;
+  irc += irB * citLine(ir - 0.23, pe, 1.6) * 0.6 + irB * citLine(ir - 0.30, pe, 1.0) * 0.3;
   irc = mix(irc, vec3(0.03, 0.006, 0.0), smoothstep(IR - 0.07, IR, ir));
   irc = mix(irc, vec3(0.0), fill(ir - 0.14 * (1.15 - 0.3 * uRollP), pe));
   // the Sun of XIX reflected (disc + rays) above a stepped mountain silhouette
@@ -681,57 +741,66 @@ vec3 citEyeCU(vec2 p, float PX) {
   float stepsH = floor((0.11 - abs(mr.x)) / 0.022) * 0.014;
   float mtn = step(0.0, mr.y) * step(mr.y, stepsH) * step(abs(mr.x), 0.11);
   irc = mix(irc, vec3(0.04, 0.01, 0.0), mtn * 0.85);
-  // anime highlights
   irc += vec3(2.2) * fill(length((di - vec2(0.18, 0.16)) * vec2(1.0, 1.35)) - 0.065, pe);
   irc += vec3(1.6) * fill(length(di - vec2(-0.17, -0.21)) - 0.028, pe);
   ec = mix(ec, irc, inI);
   col = mix(col, ec, inE);
-  // the upper lash line (thick ink, flicked at the outer corner), lashes, the lower lid
-  float lw = 0.012 + 0.03 * pow(xx, 0.5) * o + 0.02 * smoothstep(0.6, 1.0, e.x);
+  // the ink lash line (flicked at the outer corner), lashes, the lower lid
+  float lw = 0.014 + 0.03 * sqrt(xx) * max(o, 0.35) + 0.02 * smoothstep(0.6, 1.0, e.x);
   float lashD = abs(e.y - yu - lw * 0.6) - lw;
   float lashes = 0.0;
   {
-    float lx = e.x * 9.0; float li = floor(lx);
+    float lx = e.x * 9.0;
     float lt = fract(lx);
-    float h = 0.06 + 0.08 * smoothstep(-0.2, 1.0, e.x);
-    float ly = e.y - yu;
+    float h = (0.06 + 0.08 * smoothstep(-0.2, 1.0, e.x)) * mix(0.6, 1.0, o);
+    float ly = (e.y - yu) * mix(-1.0, 1.0, step(0.3, o));   // closed: lashes hang down
     float dl = abs(lt - 0.5 - (ly / h) * 0.35 * sign(e.x + 0.2)) * (1.0 / 9.0) - 0.006 * (1.0 - ly / h);
-    lashes = step(0.0, ly) * step(ly, h) * fill(dl, pe) * step(abs(e.x), 1.02) * step(0.001, o);
+    lashes = step(0.0, ly) * step(ly, h) * fill(dl, pe) * step(abs(e.x), 1.02) * smoothstep(-0.2, 0.6, e.x);
   }
   float ink = max(fill(lashD, pe) * step(abs(e.x), 1.04), lashes);
   col = mix(col, vec3(0.012, 0.004, 0.0), ink);
   col += vec3(1.2, 0.7, 0.25) * citLine(lashD - pe * 1.5, pe, 1.0) * 0.5 * step(abs(e.x), 1.04);
-  col += vec3(1.0, 0.6, 0.25) * citLine(e.y - yl, pe, 1.6) * step(abs(e.x), 1.0) * 0.8;
-  return col;
+  col += vec3(1.0, 0.6, 0.25) * citLine(e.y - yl, pe, 1.6) * step(abs(e.x), 1.0) * 0.8 * step(0.05, o);
+  cover = max(cover, max(inE, ink));
+  return vec4(col, cover);
 }
 #endif
 
 #ifdef CIT_LOTUS
 // ---------------------------------------------------------------- SAHASRARA: the thousand-
-// petalled lotus. Five rings of pointed petals (16 .. 104), opening from the centre outward.
-vec4 citLotus(vec2 w, vec2 c, float RL, float open, float pxw) {
+// petalled lotus. Five rings of almond petals (16 .. 48) with nested outlines, a second layer
+// peeking between them; the rings open one after another on the 32nd roll (uLotusO).
+uniform float uLotusO[5];
+vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   vec2 d = w - c; float r = length(d) / RL; float a = citAtan(d.x, d.y);
   float pr = pxw / RL;
-  const float R0 = 0.06;
-  float lr = log(max(r, 1e-4) / R0) / log(1.0 / R0) * 5.0;
-  float m = floor(lr), rr = fract(lr);
-  float n = m < 0.5 ? 16.0 : m < 1.5 ? 24.0 : m < 2.5 ? 40.0 : m < 3.5 ? 64.0 : 104.0;
-  float grow = sat(open * 5.5 - m);
-  float spin = (mod(m, 2.0) * 2.0 - 1.0) * uTime * 0.18;
-  float fa = abs(fract((a + spin) / TAU * n + 0.5 * mod(m, 2.0)) - 0.5) * 2.0;
-  float u = rr / max(grow, 1e-3);
-  float wdt = pow(max(sin(PI * sat(u)), 0.0), 0.55) * step(u, 1.0);
-  float F = fa / max(wdt, 1e-3);
-  float pv = pr * 2.0 * n / (max(r, 1e-4) * TAU * max(wdt, 0.05));
-  float inP = step(F, 1.0) * wdt * step(0.0, m) * step(m, 4.0);
-  float ln = citIso(F * 3.0, pv * 3.0, 1.2) * step(F, 1.03) * step(0.0, m) * step(m, 4.0) * step(u, 1.0);
-  vec3 rc = m < 0.5 ? vec3(1.0, 0.92, 0.75) : m < 1.5 ? vec3(1.0, 0.72, 0.22) : m < 2.5 ? vec3(1.0, 0.30, 0.55) : m < 3.5 ? vec3(0.80, 0.32, 1.0) : vec3(0.48, 0.25, 1.0);
-  float al = inP * grow * 0.9;
-  vec3 col = rc * (inP * (0.03 + 0.30 * (1.0 - u) * (1.0 - u)) + ln * 1.8) * grow;
-  // ring rims and the bindu
-  col += vec3(1.0, 0.85, 0.6) * citIso(lr, pr / max(r, 1e-4) / log(1.0 / R0) * 5.0, 1.2) * step(0.0, lr) * step(lr, 5.02) * sat(open * 5.5 - lr) * 0.8;
-  col += vec3(3.0, 2.6, 2.0) * (fill(r - R0 * 0.55, pr) + exp(-r / (R0 * 0.6)) * 0.8) * sat(open * 4.0);
-  return vec4(col, al);
+  const float R0 = 0.07, K = 1.70;                  // band edges R0 * K^m
+  float m = clamp(floor(log(max(r, 1e-4) / R0) / log(K)), 0.0, 4.0);
+  float e0 = R0 * pow(K, m), e1 = e0 * K;
+  int mi = int(m);
+  float g = uLotusO[mi];
+  float np = 16.0 + 8.0 * m;
+  float rc = 0.5 * (e0 + e1), h = 0.5 * (e1 - e0) * 1.04 * g;
+  float spin = (mod(m, 2.0) * 2.0 - 1.0) * uTime * 0.12;
+  vec2 pa = citPetalRing(r, a + spin, np, rc, max(h, 1e-4), 0.95, 0.0);
+  vec2 pb = citPetalRing(r, a + spin, np, rc + 0.08 * h, max(h * 1.12, 1e-4), 0.95, 0.5);
+  vec3 rc0 = m < 0.5 ? vec3(1.0, 0.90, 0.70) : m < 1.5 ? vec3(1.0, 0.70, 0.22) : m < 2.5 ? vec3(1.0, 0.32, 0.30) : m < 3.5 ? vec3(0.90, 0.18, 0.75) : vec3(0.42, 0.16, 1.0);
+  float inA = fill(pa.x, pr) * step(0.001, g), inB = fill(pb.x, pr) * step(0.001, g);
+  float dA = sat(-pa.x / pa.y), dB = sat(-pb.x / pb.y);
+  vec3 col = vec3(0.0);
+  // back layer (between the petals): darker
+  col += rc0 * (0.03 + 0.18 * dB * dB) * inB + rc0 * 0.8 * citLine(pb.x, pr, 1.2) * step(0.001, g);
+  float al = max(inA, inB * 0.9);
+  // front petals: luminous along the midrib, nested outlines
+  vec3 fa = rc0 * (0.05 + 0.55 * dA * dA) + rc0 * 0.9 * citIso(pa.x / (pa.y * 0.28), pr / (pa.y * 0.28), 1.0) * step(pa.x, 0.0) + rc0 * 0.6 * citLine(pa.x + pa.y * 0.0, pr, 1.0);
+  col = mix(col, fa, inA);
+  col += mix(rc0, vec3(1.0, 0.9, 0.7), 0.4) * 1.8 * citLine(pa.x, pr, 1.6) * step(0.001, g);
+  // the bindu and its rings
+  float og = uLotusO[0];
+  col += vec3(1.0, 0.85, 0.6) * citLine(r - R0, pr, 1.5) * og;
+  col += vec3(2.4, 2.1, 1.6) * (fill(r - R0 * 0.4, pr) + exp(-r / (R0 * 0.35)) * 0.6) * og;
+  al = max(al, fill(r - R0, pr) * og);
+  return vec4(col, al * step(r, 1.02));
 }
 #endif
 
@@ -773,7 +842,7 @@ void main() {
 #endif
 #ifdef CIT_LOTUS
   {
-    vec4 lo = citLotus(w, uLotusP.xy, uLotusP.z, uLotusP.w, pxw);
+    vec4 lo = citLotus(w, uLotusP.xy, uLotusP.z, pxw);
     col = col * (1.0 - lo.a) + lo.rgb;
   }
 #endif
@@ -788,15 +857,6 @@ void main() {
   B.t = uTime; B.pulse = uKickAge * 3.0;
   vec2 q = (w - B.pos) / B.scale;
   float aq = pxw / B.scale;
-#ifdef CIT_COLUMN
-  {
-    // the seven chakras in one vertical rainbow column, beyond the crown into the sky
-    float hx = abs(q.x);
-    vec3 rc = chakraColor(clamp((q.y + 0.02) / 1.02 * 6.0, 0.0, 6.0));
-    float span = smoothstep(-1.2, -0.95, q.y);
-    col += (rc * (exp(-hx / 0.025) * 1.2 + exp(-hx / 0.10) * 0.35) + vec3(1.5, 1.4, 1.2) * citLine(q.x, aq, 2.0)) * span * uColumn;
-  }
-#endif
 #ifdef CIT_RIBBONS
   vec3 rb, rf;
   citRibbons(q, aq, rb, rf);
@@ -807,8 +867,30 @@ void main() {
 #ifdef CIT_RIBBONS
   col += rf * uRibbon;
 #endif
+#ifdef CIT_COLUMN
+  {
+    // the seven chakras in one vertical rainbow column, on into the lotus
+    float hx = abs(q.x);
+    vec3 rc = chakraColor(clamp((q.y + 0.02) / 1.02 * 6.0, 0.0, 6.0));
+    float span = smoothstep(-1.15, -0.9, q.y) * (1.0 - smoothstep(1.1, 1.3, q.y));
+    float rungs = 0.0;
+    for (int i = 0; i < 7; i++) { vec2 cp = chakraPos(i); rungs += exp(-length((q - cp) * vec2(1.0, 2.5)) / 0.022); }
+    col = col * (1.0 - 0.5 * exp(-hx / 0.06) * span * sat(uColumn)) + (rc * (exp(-hx / 0.012) * 0.65 + exp(-hx / 0.05) * 0.16 + rungs * 0.45) + vec3(1.2, 1.1, 0.95) * citLine(q.x, aq, 1.2) * 0.45) * span * uColumn;
+  }
+#endif
 #ifdef CIT_EYECU
-  col = pid < 0.5 ? citEyeCU(p, PX) : col;
+  if (pid < 0.5) col = citEyeCU(p, uEyeP.xy, uEyeP.z, uEyeP.w, uEyeO, vec3(0.45, 0.10, 0.005), vec3(1.5, 0.85, 0.22), 1.0, PX).rgb;
+#endif
+#ifdef CIT_FACE
+  {
+    // the eye strip: two closed eyes (mirrored: one evaluation) and the third eye opening
+    vec2 fp = p - uFaceP.xy;
+    vec4 se = citEyeCU(vec2(abs(fp.x), fp.y), vec2(uFaceP.w, 0.0), uFaceP.z, 0.0, 0.0, vec3(0.4, 0.1, 0.0), vec3(1.4, 0.8, 0.2), 1.0, PX);
+    vec4 te = citEyeCU(fp, vec2(0.0, 0.02), uEyeP.z, 1.5708, uEyeO, vec3(0.16, 0.04, 0.55), vec3(0.95, 0.65, 1.6), 0.0, PX);
+    vec3 fc = mix(se.rgb, te.rgb, te.a);
+    fc += vec3(0.55, 0.30, 1.0) * exp(-length(fp * vec2(1.6, 0.8)) / 0.18) * 0.5 * uEyeO;
+    col = pid > 0.5 && pid < 1.5 ? fc : col;
+  }
 #endif
 #ifdef CIT_PANELS
   col = mix(col, vec3(0.0), gut);
@@ -870,14 +952,14 @@ void main() {
     }
     const ignAge = last >= 0 ? t - IGN[last] : -1;
 
-    let cam = [0, 0, 1, 0], cam2 = [0, 0, 1, 0], cam3 = [0, 0, 1, 0], igCam = null;
+    let cam = [0, 0, 1, 0], cam2 = [0, 0, 1, 0], cam3 = [0, 0, 1, 0], igCam = null, igS = 0;
     let body = [0, -0.4, 0.4, 0];
     let gold = 0, eye3 = 0, aura = 1.0;
     let sun = [0, 0.5, 0.3, 1], sun2 = [t * 0.12, 0, 1.6, 1];
     let mount = [0, -1.3, 0.85, 0];
     let dawn = 0.5, speed = 0, speedC = [0, 0], ribbon = 0, wash = 0;
     let gutA = [-9, 0, 9, 0], gutW = 0.03, eyeP = [-1.2, 0, 0.5, 0], eyeO = 0;
-    let lotus = [0, 1.12, 0.5, 0], column = 0, sunDark = 0;
+    let lotus = [0, 1.12, 0.5, 0], column = 0, sunDark = 0, chakS = 1.45, lotusO = [0, 0, 0, 0, 0], auraOcc = 0, faceP = [0, 0, 0.3, 1];
 
     if (t < T1) {
       // C1: wide on the Holy Mountain; the figure climbs the stair a step per kick
@@ -887,7 +969,7 @@ void main() {
       const beat = (t - T0) / BEAT;
       const climb = Math.floor(beat) + EO(C((beat % 1) * 3.0));
       body = [0, -0.62 + 0.10 * climb, 0.40, 0.08 * SM(k)];
-      const top = mount[1] + 1.531 * mount[2];
+      const top = mount[1] + 1.4494 * mount[2];
       const eyeY = top + (0.30 + 0.24) * mount[2];
       sun = [0, eyeY - 0.40 * (1 - EO(k)), 0.26, 1];
       sun2 = [t * 0.10, 0, 1.55 + 0.15 * kickE, 1];
@@ -895,28 +977,38 @@ void main() {
     } else if (t < T2) {
       // C2: henshin — closer on the torso, the camera rolls, ribbons spiral up the body
       const k = (t - T1) / (T2 - T1);
-      body = [0, -0.45, 1.25, 0.12 + 0.25 * SM(k)];
+      const TH = bt(38);
+      body = [0, -0.45, 1.25, t < TH ? 0.10 + 0.15 * SM(k * 2) : 0.08];
       const heart = [0, body[1] + 0.44 * body[2]];
-      cam = [0, heart[1] - 0.05 + 0.12 * SM(k), 1.0 + 0.14 * SM(k), (-0.16 + 0.32 * E(k)) * R()];
+      if (t < TH) {
+        // C2a: medium, rolling one way, the solar plexus ignites
+        const k2 = (t - T1) / (TH - T1);
+        cam = [0, heart[1] - 0.06 + 0.06 * SM(k2), 1.0 + 0.10 * SM(k2), (-0.18 + 0.22 * E(k2)) * R()];
+      } else {
+        // C2b: cut in on the heart ignition, dutch angle rolling back, slow push
+        const k2 = (t - TH) / (T2 - TH);
+        cam = [0, heart[1] + 0.02, 1.45 + 0.25 * EO(k2), (0.24 - 0.18 * E(k2)) * R()];
+      }
+      const rosette = t < TH ? 1 : 0.15;
       sun = [0, heart[1] + 0.15, 0.78, 1]; sunDark = 1;
-      sun2 = [-t * 0.22, 0, 1.25 + 0.12 * kickE, 1];
+      sun2 = [-t * 0.22, 0, 1.25 + 0.12 * kickE, rosette];
       dawn = 0.6;
-      speed = (0.12 + 0.35 * rollE + 0.4 * Math.exp(-ignAge / 0.3)) * R();
+      speed = (0.2 + 0.5 * rollE + 0.9 * Math.exp(-ignAge / 0.3) + (t >= TH ? 0.35 : 0)) * R();
       speedC = toScreen(heart, cam);
-      ribbon = SM((t - T1) / 0.4);
+      ribbon = SM((t - T1) / 0.3);
       aura = 1.15;
     } else if (t < T2b) {
       // C3a: manga triptych. World: the figure stands on the summit of the Mountain.
       //   left: the awakened eye (close-up), centre: the throat ignites, right: the Mountain
       const k = (t - T2) / (T2b - T2);
       body = [0, 0, 1, 0.3];
-      mount = [0, -1.0 - 1.531 * 3.0, 3.0, 0];
+      mount = [0, -1.0 - 1.4494 * 3.0, 3.0, 0];
       sun = [0, 0.95, 1.05, 1]; sunDark = 1;
       sun2 = [t * 0.2, 0.15, 1.3 + 0.12 * kickE, 1];
       dawn = 0.75;
       cam = [0, 0.62 + 0.04 * k, 1.75 + 0.12 * k, -0.04 * R()];
       cam3 = [-5.6, -2.2 + 0.3 * k, 0.24, 0];
-      const inL = backOut((t - bt(40.5)) / 0.16), inR = backOut((t - bt(41)) / 0.16);
+      const inL = backOut((t - bt(40.5)) / 0.16), inR = backOut((t - bt(40.875)) / 0.16);
       gutA = [mix(-3.2, -0.62, inL), 0.32, mix(3.4, 0.66, inR), 0.26];
       gutW = 0.034;
       eyeP = [mix(-3.0, -1.24, inL) + 0.03 * k, 0.02, 0.50, -0.10];
@@ -929,48 +1021,54 @@ void main() {
       //   above: the crown and the sun, below: the column of lit chakras
       const k = (t - T2b) / (T3 - T2b);
       body = [0, 0, 1, 0.4];
-      mount = [0, -1.0 - 1.531 * 3.0, 3.0, 0];
+      mount = [0, -1.0 - 1.4494 * 3.0, 3.0, 0];
       sun = [0, 1.05, 0.62, 1]; sunDark = 1;
       sun2 = [-t * 0.3, 0.3, 1.4 + 0.15 * kickE, 1];
       dawn = 0.85;
       const shake = MO.reduced ? 0 : 0.004 * rollE;
       cam = [shake, 0.86, 6.6 + 0.8 * k, 0.0];
-      cam2 = [0, 1.08, 1.6 + 0.2 * k, 0.03];
-      cam3 = [0, 0.18, 1.55 + 0.2 * k, -0.03];
+      cam2 = [0, 0.95, 1.25 + 0.15 * k, 0.03];
+      cam3 = [0, 0.30, 1.35 + 0.15 * k, -0.03];
       const sIn = backOut((t - T2b) / 0.14);
       gutA = [mix(1.6, 0.40, sIn), -0.07, mix(-1.6, -0.44, sIn), -0.07];
       gutW = 0.034;
       eye3 = EO((t - T2b) / 0.22);
+      const push = 1 + 0.16 * E(k) + 0.025 * rollE * R();
+      faceP = [0, 0.0, 0.36 * push, 0.98 * push]; igS = 1.5;
+      eyeP = [0, 0, 0.42 * push, 0];
+      eyeO = EO((t - T2b - 0.03) / 0.2);
       speed = (0.35 + 0.8 * rollE) * R();
       speedC = toScreen([0, 0.873], cam);
       aura = 1.25;
     } else if (t < T4) {
       // C4: SAHASRARA. Arms raised, rainbow column, the lotus opens, extreme push-in
       const k = (t - T3) / (T4 - T3);
-      body = [0, -0.1, 0.62, 1.0];
-      const crown = [0, body[1] + 1.16 * body[2]];
-      const zk = EI(C((k - 0.12) / 0.88));
-      const z = 0.85 * Math.exp(Math.log(16) * zk);
-      cam = [0, mix(0.0, crown[1], C(zk * 1.4)), z, 0];
-      sun = [0, crown[1], 0.75, 1]; sunDark = 1;
-      sun2 = [t * 0.4, C(k * 1.5), 2.2, 1];
-      lotus = [crown[0], crown[1], 0.62 * body[2] * 1.6, EO(k / 0.55)];
-      column = SM(k / 0.15) * (1 + 0.3 * rollE);
-      dawn = 1; gold = SM(k / 0.4);
+      body = [0, -0.40, 0.62, 1.0];
+      const crown = [0, body[1] + 1.14 * body[2]];
+      const zk = EI(C((k - 0.10) / 0.90));
+      const z = 0.80 * Math.exp(Math.log(24) * zk);
+      cam = [0, mix(0.05, crown[1], C(zk * 1.7)), z, 0];
+      sun = [0, crown[1], 0.92, 1]; sunDark = 1;
+      sun2 = [t * 0.3, 0.55 + 0.45 * C(k * 2), 2.6, 0];
+      lotus = [crown[0], crown[1], 1.0, 0];
+      lotusO = [0, 1, 2, 3, 4].map((m) => backOut((t - T3 - 0.03 - m * 0.055) / 0.17));
+      column = SM(k / 0.12) * (1 + 0.3 * rollE);
+      chakS = 1.6; auraOcc = 0.75;
+      dawn = 0.3; gold = SM(k / 0.4);
       eye3 = 1; aura = 1.4;
-      speed = (0.5 + 0.5 * rollE) * R(); speedC = toScreen(crown, cam);
-      wash = SM((k - 0.72) / 0.28) * 0.9;
+      speed = (0.4 + 0.5 * rollE) * R(); speedC = toScreen(crown, cam);
+      wash = SM((k - 0.80) / 0.20) * 0.92;
     }
 
     u.uCam = cam; u.uCam2 = cam2; u.uCam3 = cam3;
     u.uBodyP = body; u.uBodyQ = [kh, gold, eye3, aura];
     const ig = last >= 0 ? toScreen([body[0], body[1] + CHY[last] * body[2]], igCam || cam) : [0, 0];
     u.uIgn = [Math.max(last, 0), ignAge, ig[0], ig[1]];
-    u.uIgnS = body[2] * (igCam || cam)[2];
+    u.uIgnS = igS || body[2] * (igCam || cam)[2];
     u.uSun = sun; u.uSun2 = sun2; u.uMount = mount; u.uDawn = dawn;
     u.uSpeed = speed; u.uSpeedC = speedC; u.uRibbon = ribbon; u.uWash = wash;
     u.uGut = gutA; u.uGutW = gutW; u.uEyeP = eyeP; u.uEyeO = eyeO;
-    u.uLotusP = lotus; u.uColumn = column; u.uSunDark = sunDark;
+    u.uLotusP = lotus; u.uColumn = column; u.uSunDark = sunDark; u.uChakS = chakS; u.uLotusO = lotusO; u.uAuraOcc = auraOcc; u.uFaceP = faceP;
     return u;
   }
 
@@ -981,10 +1079,10 @@ void main() {
     bloom: 0.38,
     vignette: 0.42,
   }, extra));
-  shot('citrinitas-c1', T0, T1, ['CIT_MOUNTAIN']);
-  shot('citrinitas-c2', T1, T2, ['CIT_SPEED', 'CIT_RIBBONS']);
-  shot('citrinitas-c3a', T2, T2b, ['CIT_PANELS', 'CIT_MOUNTAIN', 'CIT_EYECU', 'CIT_SPEED']);
-  shot('citrinitas-c3b', T2b, T3, ['CIT_PANELS', 'CIT_STRIPS', 'CIT_EYE3', 'CIT_SPEED']);
-  shot('citrinitas-c4', T3, T4, ['CIT_LOTUS', 'CIT_COLUMN', 'CIT_EYE3', 'CIT_SPEED']);
+  shot('citrinitas-c1', T0, T1, ['CIT_MOUNTAIN', 'CIT_BRAZIERS', 'CIT_PROVIDENCE', 'CIT_NERVES', 'CIT_YODS']);
+  shot('citrinitas-c2', T1, T2, ['CIT_NIGHT', 'CIT_SPEED', 'CIT_RIBBONS', 'CIT_BONES', 'CIT_NERVES', 'CIT_YODS']);
+  shot('citrinitas-c3a', T2, T2b, ['CIT_NIGHT', 'CIT_PANELS', 'CIT_MOUNTAIN', 'CIT_EYECU', 'CIT_SPEED', 'CIT_BONES', 'CIT_NERVES']);
+  shot('citrinitas-c3b', T2b, T3, ['CIT_NIGHT', 'CIT_PANELS', 'CIT_STRIPS', 'CIT_FACE', 'CIT_EYE3', 'CIT_SPEED']);
+  shot('citrinitas-c4', T3, T4, ['CIT_NIGHT', 'CIT_LOTUS', 'CIT_COLUMN', 'CIT_EYE3', 'CIT_SPEED', 'CIT_YODS']);
   MO.scene({ id: 'citrinitas-c5', section: 'citrinitas', from: T4, to: T5, fs: WHITE, uniforms: (t) => uniforms(t), bloom: 0.5, vignette: 0.2 });
 })();
