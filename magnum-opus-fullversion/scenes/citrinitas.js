@@ -1,33 +1,38 @@
-// CITRINITAS — XIX The Sun — 14.118–21.176 s (bars 8–11, beats 32–48). Owner: citrinitas agent.
+// CITRINITAS — XIX The Sun. Owner: citrinitas agent. Shot factories (see the cue contract):
+//   citrinitas.c1 .. c5, placed by score.js "cues"; without a cue list this file places them at
+//   their 30 s windows (beats 32–48, bars 8–11), exactly as the 30 s piece had them.
 // The build-up: the luminous body of ALBEDO climbs the Holy Mountain and turns to gold as its
-// seven chakras ignite, one every two beats (score.js → chakras), each a sakuga event.
+// seven chakras ignite, one every two beats by default, each a sakuga event.
 //
-// C1  beats 32–36  THE HOLY MOUNTAIN: frontal stepped golden ziggurat (vermilion / ultramarine
-//                  friezes), the athanor tower and the eye in the triangle on the summit, the Tarot
-//                  XIX sun rising behind it. The figure climbs the central stair on the kicks.
-//                  Root (32) and sacral (34) ignite; each lights its terrace of the mountain.
-// C2  beats 36–40  HENSHIN: closer on the torso, camera rolling; sunburst from the heart, speed
-//                  lines, light ribbons spiralling up the body. Solar plexus (36), heart (38).
-// C3  beats 40–44  MANGA PANELS: diagonal cut-ins with thick black gutters (the eye with the sun
-//                  in it, the throat, the mountain), then the eye strip: the third eye opens.
-//                  Throat (40), third eye (42). Speed lines tick with the 16th / 32nd roll.
-// C4  beats 44–46  SAHASRARA: arms raised, the seven chakras blaze in a rainbow column, the
-//                  thousand-petalled lotus opens above the head, the sun goes white-gold,
-//                  extreme push-in into the lotus, whose light floods the frame in magenta and
-//                  violet up to the hard cut into the gap.
-// C5  beats 46–48  white-gold under the overlay's full-screen RUBEDO insert.
+// C1  4 beats  THE HOLY MOUNTAIN: frontal stepped golden ziggurat (vermilion / ultramarine
+//              friezes), the athanor tower and the eye in the triangle on the summit, the Tarot
+//              XIX sun rising behind it. The figure climbs the central stair on the kicks.
+//              Root and sacral ignite; each lights its terrace of the mountain.
+// C2  4 beats  HENSHIN: closer on the torso, camera rolling; sunburst from the heart, speed
+//              lines, light ribbons spiralling up the body. Solar plexus, heart (the cut-in).
+// C3a 2 beats  MANGA PANELS: diagonal cut-ins with thick black gutters (the eye with the sun
+//              in it, the throat, the mountain). Throat. Speed lines tick with the snare roll.
+// C3b 2 beats  the eye strip: the third eye opens, everything accelerates into the crown.
+// C4  2 beats  SAHASRARA: arms raised, the seven chakras blaze in a rainbow column, the
+//              thousand-petalled lotus opens above the head, the sun goes white-gold,
+//              extreme push-in into the lotus, whose light floods the frame in magenta and
+//              violet up to the hard cut.
+// C5  2 beats  white-gold under the overlay's full-screen RUBEDO insert (the gap).
+// Natural lengths, stretch behaviour and params of each factory: see "shots (JS)" below.
 //
 // The luminous body is copied from scenes/albedo.js (prefix alb → cit) so the figure is the
 // same being; here the gold rises through it from the feet with the kundalini (ida, pingala
 // and sushumna light up to the highest lit chakra; a molten front separates gold from silver).
 // SwiftShader cost ~ pixels x code size, so every shot is its own shader with #defines and the
-// body is evaluated exactly once per pixel.
+// body is evaluated exactly once per pixel. The variation knobs are uniforms: every cue of a shot
+// shares that shot's one program.
 (() => {
   const BODY = `
 // ===================================================================== THE LUMINOUS BODY
 // (from albedo.js, Sacred Mirrors) + the rising gold. Body space: feet y = -1, crown y = +1.
 uniform float uChakS;     // chakra mandala size (lit)
 uniform float uAuraOcc;   // how much the aura darkens what is behind it (figure-ground)
+uniform vec3  uGTint, uGTint2, uGNerve;   // the colour the body turns as the gold rises (palette knob)
 struct CitBody {
   vec2  pos;        // scene position of the body origin (body y = 0, the pelvis)
   float scale;      // scene units per body unit
@@ -51,7 +56,7 @@ CitBody citBodyDefault() {
   B.aura = 1.0; B.lines = 1.0; B.nerves = 1.0; B.pulse = -1.0;
   B.eye3 = 0.0; B.t = 0.0; B.kh = -1.2; B.gold = 0.0; B.frontI = 1.0;
   B.tint = vec3(0.80, 0.93, 1.0); B.tint2 = vec3(0.50, 0.42, 1.0); B.nerveCol = vec3(0.22, 0.55, 1.7);
-  B.gTint = vec3(1.0, 0.76, 0.34); B.gTint2 = vec3(1.0, 0.34, 0.05); B.gNerve = vec3(1.7, 1.0, 0.32);
+  B.gTint = uGTint; B.gTint2 = uGTint2; B.gNerve = uGNerve;   // gold: (1, .76, .34) (1, .34, .05) (1.7, 1, .32)
   return B;
 }
 
@@ -364,6 +369,10 @@ uniform float uRollP;     // snare roll envelope
 uniform vec4  uLotusP;    // crown lotus: centre xy, radius, opening
 uniform float uColumn;    // rainbow column
 uniform float uSunDark;   // 0 = blazing gold disc, 1 = night-blue disc engraved in gold
+uniform float uBodyL;     // body knob: 1 the luminous body, ~0.15 a dark silhouette
+uniform vec3  uIrA, uIrB; // iris knob: the close-up eye (C3a) or the third eye (C3b), outer and inner colour
+uniform vec3  uEyeGlow;   // the third eye's light (C3b)
+uniform float uSeed;      // seed knob: scatter of stars, yods and speed lines
 
 const vec3 CIT_VERM  = vec3(0.62, 0.035, 0.008);
 const vec3 CIT_ULTRA = vec3(0.004, 0.018, 0.40);
@@ -371,7 +380,7 @@ const vec3 CIT_GOLD  = vec3(1.0, 0.64, 0.18);
 
 // ---------------------------------------------------------------- sky: indigo night to amber dawn
 float citStars(vec2 p) {
-  vec2 sp = p * 70.0; vec2 sid = floor(sp); vec2 so = fract(sp) - 0.5 - (hash22(sid) - 0.5) * 0.6;
+  vec2 sp = p * 70.0; vec2 sid = floor(sp) + uSeed; vec2 so = fract(sp) - 0.5 - (hash22(sid) - 0.5) * 0.6;
   float sh = hash21(sid + 3.1);
   return step(0.90, sh) * exp(-dot(so, so) * 60.0) * (0.6 + 0.4 * sin(uTime * 4.0 + sh * 40.0));
 }
@@ -391,14 +400,15 @@ vec3 citSky(vec2 p, vec2 w) {
     const float CS = 0.26;
     vec2 yp = p + vec2(0.0, uTime * 0.16);
     vec2 cid = floor(yp / CS);
-    vec2 h = hash22(cid + 7.0);
+    vec2 cs = cid + uSeed;   // (one read of the seed: each uniform read costs in SwiftShader)
+    vec2 h = hash22(cs + 7.0);
     vec2 cp = (cid + 0.2 + 0.6 * h) * CS;
     float ys = 0.013 + 0.008 * h.y;
     vec2 dq = (yp - cp) / ys;
     float tear = min(length(dq) - 1.0, sdTaper(dq, vec2(0.0), vec2(0.0, 2.6), 1.0, 0.0));
-    float on = step(0.70, hash21(cid + 1.3)) * smoothstep(-0.2, 0.4, abs(p.x) - 0.25 * (1.0 - abs(p.y)));
+    float on = step(0.70, hash21(cs + 1.3)) * smoothstep(-0.2, 0.4, abs(p.x) - 0.25 * (1.0 - abs(p.y)));
     float pxl = px() / ys;
-    vec3 yc = chakraColor(floor(hash21(cid + 4.1) * 7.0));
+    vec3 yc = chakraColor(floor(hash21(cs + 4.1) * 7.0));
     col += (yc * 0.5 * fill(tear, pxl) + vec3(1.0, 0.75, 0.35) * citLine(tear, pxl, 1.2) * 0.8 + yc * 0.10 * exp(-max(tear, 0.0) * 2.5)) * on;
   }
 #endif
@@ -905,7 +915,7 @@ void main() {
 #endif
 #ifdef CIT_SPEED
   // re-rolled once per 16th (with the roll and the hats), frozen in reduced-flashing mode
-  if (uSpeed > 0.0) col += vec3(1.0, 0.82, 0.5) * citSpeed(p, uSpeedC, 150.0, 0.85, floor(uBeat * 4.0 * (1.0 - uReduced))) * uSpeed * 0.7;
+  if (uSpeed > 0.0) col += vec3(1.0, 0.82, 0.5) * citSpeed(p, uSpeedC, 150.0, 0.85, floor(uBeat * 4.0 * (1.0 - uReduced)) + uSeed * 7.0) * uSpeed * 0.7;
 #endif
   float ck[7];
   for (int i = 0; i < 7; i++) ck[i] = uCk[i];
@@ -921,7 +931,7 @@ void main() {
   col += rb * uRibbon;
 #endif
   vec4 b = citBody(w, B, pxw, ck);
-  col = col * (1.0 - b.a) + b.rgb;
+  col = col * (1.0 - b.a) + b.rgb * uBodyL;
 #ifdef CIT_RIBBONS
   col += rf * uRibbon;
 #endif
@@ -937,16 +947,16 @@ void main() {
   }
 #endif
 #ifdef CIT_EYECU
-  if (pid < 0.5) col = citEyeCU(p, uEyeP.xy, uEyeP.z, uEyeP.w, uEyeO, vec3(0.45, 0.10, 0.005), vec3(1.5, 0.85, 0.22), 1.0, PX).rgb;
+  if (pid < 0.5) col = citEyeCU(p, uEyeP.xy, uEyeP.z, uEyeP.w, uEyeO, uIrA, uIrB, 1.0, PX).rgb;
 #endif
 #ifdef CIT_FACE
   {
     // the eye strip: two closed eyes (mirrored: one evaluation) and the third eye opening
     vec2 fp = p - uFaceP.xy;
     vec4 se = citEyeCU(vec2(abs(fp.x), fp.y), vec2(uFaceP.w, 0.0), uFaceP.z, 0.0, 0.0, vec3(0.4, 0.1, 0.0), vec3(1.4, 0.8, 0.2), 1.0, PX);
-    vec4 te = citEyeCU(fp, vec2(0.0, 0.02), uEyeP.z, 1.5708, uEyeO, vec3(0.16, 0.04, 0.55), vec3(0.95, 0.65, 1.6), 0.0, PX);
+    vec4 te = citEyeCU(fp, vec2(0.0, 0.02), uEyeP.z, 1.5708, uEyeO, uIrA, uIrB, 0.0, PX);
     vec3 fc = mix(se.rgb, te.rgb, te.a);
-    fc += vec3(0.55, 0.30, 1.0) * exp(-length(fp * vec2(1.6, 0.8)) / (0.18 + 0.10 * uRamp)) * (0.5 + 1.3 * uRamp) * uEyeO;
+    fc += uEyeGlow * exp(-length(fp * vec2(1.6, 0.8)) / (0.18 + 0.10 * uRamp)) * (0.5 + 1.3 * uRamp) * uEyeO;
     col = pid > 0.5 && pid < 1.5 ? fc : col;
   }
 #endif
@@ -974,24 +984,66 @@ void main() {
 
   // C5: the gap, under the overlay's full-screen RUBEDO insert: white-gold radiance (cheap)
   const WHITE = `
-uniform float uKickAge;
+uniform mat2 uWRot;             // camera knob: roll / zoom (computed once, in JS)
+uniform vec2 uWPan;             // camera knob: centre
+uniform vec3 uWTint, uWRay;     // palette knob: the radiance and its rays
 void main() {
-  vec2 p = uvCentered(gl_FragCoord.xy);
+  vec2 p = uWRot * uvCentered(gl_FragCoord.xy) + uWPan;
   float r = length(p), a = atan(p.y, p.x);
   float rays = pow(0.5 + 0.5 * cos(a * 32.0 + uTime * 0.6), 6.0);
-  vec3 col = vec3(1.0, 0.86, 0.58) * (1.3 + 1.6 * exp(-r * 1.5)) + vec3(1.0, 0.7, 0.3) * rays * 0.5 * exp(-r * 0.6);
+  vec3 col = uWTint * (1.3 + 1.6 * exp(-r * 1.5)) + uWRay * rays * 0.5 * exp(-r * 0.6);
   fragColor = vec4(col, 1.0);
 }`;
 
-  // ======================================================================== timeline (JS)
+  // ======================================================================== shots (JS)
+  // Every shot is a factory, MO.shot('citrinitas.<name>', (cue) => ...), that a cue of the score
+  // (score.js "cues") places anywhere, at any length. Without a cue list the end of this file
+  // places them at their 30 s windows, so that edit renders exactly as before.
+  //
+  // Clocks inside a shot (all relative to its cue):
+  //   lt  real seconds since the choreography's start (the cue start minus params.offsetBeats):
+  //       one-shot events at the start (ignitions, panel slide-ins, eyes opening, the lotus opening)
+  //   pc  progress seconds, lt scaled by params.speed: camera moves and other motion that would run
+  //       out. Past its natural end a move settles: it keeps the velocity it had and eases to rest
+  //       (velocity-matched exponential, a fraction of the shot's length), never stopping dead
+  //   pe  progress counted back from the cue end: builds into the next cut (C3b's ramp, C4's push
+  //       and flood) stay anchored to the end, before them the shot holds its opening framing
+  //   tm  motion time for continuous animation (uTime, sun rays, ribbons, yods): t at speed 1, seed 0
+  // Kicks, the snare roll and the hats are read from the score at absolute t (MO.env / MO.last), so
+  // pulses follow whatever the score plays under the cue.
+  //
+  // Params of every citrinitas shot (all optional, unknown keys ignored; all are uniforms, so every
+  // cue of a shot shares one compiled program):
+  //   offsetBeats  0..16                 start this far into the choreography (default 0)
+  //   speed        0.25..4 | 'fit'       rate of motion and camera moves; 'fit' = natural length /
+  //                                      cue length, so the moves span the cue (default 1)
+  //   seed         0..99                 shifts animation phases and the scatter of the stars, the
+  //                                      falling yods and the speed lines (default 0)
+  //   zoom         0.5..2                camera zoom multiplier (default 1)
+  //   pan          [x, y] scene units    camera offset; the frame is 2 units tall at zoom 1 (default [0, 0])
+  //   roll         -45..45 degrees       camera roll, added (default 0)
+  //   palette      'gold' | 'silver' | 'rose' | 'violet': the colour the body turns as the kundalini
+  //                rises. gold (default); silver: it stays the moon-white body of ALBEDO under a
+  //                whiter sun and a darker sky; rose: red-gold, a foretaste of RUBEDO, warmer sky;
+  //                violet: Ajna's indigo, night sky
+  //   dawn         -1..1                 added to the sky (0 indigo night .. 1 amber dawn) (default 0)
+  //   body         'lit' | 'dark'        the luminous body, or a dark silhouette (default 'lit')
+  //   chakraStart  0..7                  the chakra that ignites at the choreography's start; the ones
+  //                                      below it are already lit (default: the shot's own, below)
+  //   chakraEvery  0.25..16 beats        spacing of the ignitions (default 2)
+  //   chakraCount  0..7                  how many ignite from chakraStart on (default: all the rest)
+  //   chakras      'score' | [7 beats]   'score': the S.chakras beats inside the cue's score section;
+  //                                      or one beat per chakra (root .. crown) from the choreography's
+  //                                      start, null = never, negative = lit before the cue
+  // A chakra flares when it ignites (a sakuga burst at its place on the body, its Mountain terrace
+  // lights) and stays lit; the gold front in the body rises to the highest lit one.
   const BEAT = MO.BEAT;
   const bt = (b) => b * BEAT;
-  const T0 = bt(32), T1 = bt(36), T2 = bt(40), T2b = bt(42), T3 = bt(44), T4 = bt(46), T5 = bt(48);
-  const IGN = [0, 1, 2, 3, 4, 5, 6].map((i) => bt(32 + 2 * i));
   const CHY = [-0.02, 0.10, 0.25, 0.44, 0.665, 0.865, 1.0];
-  const E = MO.easeInOut, EO = MO.easeOut, EI = MO.easeIn, SM = MO.smooth, C = MO.clamp, mix = MO.mix;
+  const EO = MO.easeOut, EI = MO.easeIn, SM = MO.smooth, C = MO.clamp, mix = MO.mix;
   const R = () => (MO.reduced ? 0.3 : 1);
   const backOut = (x) => { x = C(x); const c1 = 1.7, c3 = c1 + 1; return 1 + c3 * Math.pow(x - 1, 3) + c1 * Math.pow(x - 1, 2); };
+  const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
 
   // scene → screen with a 2D camera (inverse of w = rot(roll) * p / zoom + centre)
   function toScreen(w, cam) {
@@ -999,194 +1051,421 @@ void main() {
     return [cam[2] * (c * ux - s * uy), cam[2] * (s * ux + c * uy)];
   }
 
-  function uniforms(t) {
-    const u = {};
-    const kick = MO.last('kick', t);
-    u.uKickAge = kick ? t - kick.e.t : 9;
-    const kickE = MO.env('kick', t, 0.12);
-    // the 32nd-note roll of C4 (18 Hz) would alias at 30 fps into frame-alternating pulses: there
-    // it reads as a steady buzz instead of per-hit pulses
-    const rollE = t >= T3 ? 0.6 : MO.env('roll', t, 0.06);
-    u.uRollP = rollE;
-    // chakras: lit after their ignition, flaring at it, ticking with the roll
-    let last = -1;
+  // palette presets: the body's gold (tint, aura tint, nerves), sky (dawn) and sun whiteness offsets
+  const GOLD = [[1.0, 0.76, 0.34], [1.0, 0.34, 0.05], [1.7, 1.0, 0.32]];
+  const PALETTES = {
+    gold: { g: GOLD, dawn: 0, white: 0 },
+    silver: { g: [[0.80, 0.93, 1.0], [0.50, 0.42, 1.0], [0.22, 0.55, 1.7]], dawn: -0.3, white: 0.5 },
+    rose: { g: [[1.0, 0.50, 0.44], [1.0, 0.07, 0.10], [1.8, 0.32, 0.36]], dawn: 0.12, white: 0 },
+    violet: { g: [[0.78, 0.62, 1.0], [0.45, 0.10, 1.0], [1.0, 0.45, 1.8]], dawn: -0.4, white: 0.2 },
+  };
+  // iris presets [outer, inner]: the close-up eye of C3a, the third eye of C3b (and its light)
+  const IRIS = {
+    gold: [[0.45, 0.10, 0.005], [1.5, 0.85, 0.22]],
+    violet: [[0.16, 0.04, 0.55], [0.95, 0.65, 1.6]],
+    green: [[0.02, 0.30, 0.06], [0.55, 1.5, 0.35]],
+    blue: [[0.02, 0.12, 0.55], [0.40, 1.0, 1.7]],
+    red: [[0.50, 0.02, 0.02], [1.7, 0.45, 0.20]],
+  };
+  const GLOW = { gold: [1.0, 0.62, 0.20], violet: [0.55, 0.30, 1.0], green: [0.30, 1.0, 0.35], blue: [0.25, 0.55, 1.0], red: [1.0, 0.25, 0.15] };
+
+  // the real time of the latest S.chakras entry for chakra i (list position mod 7) inside the score
+  // section that holds the cue and before the cue end
+  function scoreIgnitions(cue) {
+    const sec = MO.section(cue.from + 1e-4);
+    const a = sec ? sec.bars[0] * MO.BAR : 0;
+    const ign = [Infinity, Infinity, Infinity, Infinity, Infinity, Infinity, Infinity];
+    MO.S.chakras.forEach((c, j) => { const t = bt(c.beat); if (t >= a - 1e-6 && t < cue.to) ign[j % 7] = ign[j % 7] === Infinity ? t : Math.max(ign[j % 7], t); });
+    return ign;
+  }
+
+  // the roll hits in [t0, t1): the ratchet that steps a push forward on each of them (null: none)
+  function ratchetWindow(t0, t1) {
+    let n = 0;
+    for (const e of MO.events.roll) if (e.t >= t0 - 1e-6 && e.t < t1 - 1e-6) n++;
+    const l0 = MO.last('roll', t0 - 1e-4);
+    return n > 0 ? { t0, n, i0: l0 ? l0.i : -1 } : null;
+  }
+  // progress through the window locked to the snare roll: an eased 50 ms step forward on each hit,
+  // never back (a back-and-forth throb makes fine linework flicker at 9 Hz)
+  const ratchet = (tr, W) => {
+    const rl = MO.last('roll', tr);
+    if (!rl || rl.e.t < W.t0) return 0;
+    return C((rl.i - W.i0 - 1 + EO((tr - rl.e.t) / 0.05)) / W.n);
+  };
+
+  // everything a shot needs to know about its cue, computed once per cue
+  function cueContext(cue, sh) {
+    const P = cue.params || {};
+    const natB = sh.nat[1] - sh.nat[0];
+    const cueB = cue.beat1 - cue.beat0;
+    const speed = P.speed === 'fit' ? C(natB / Math.max(cueB, 1e-3), 0.25, 4) : C(num(P.speed, 1), 0.25, 4);
+    const off = C(num(P.offsetBeats, 0), 0, 64);
+    const vb0 = cue.beat0 - off;
+    const seed = C(num(P.seed, 0), 0, 99);
+    const X = {
+      P, cue, from: cue.from, to: cue.to, speed, off, vb0, seed,
+      L: bt(sh.nat[1]) - bt(sh.nat[0]),      // natural length (s)
+      ev: (b) => bt(vb0 + b),                // a start-anchored event b beats into the choreography
+    };
+    X.pc = (t) => off * BEAT + (t - X.from) * speed;
+    X.rt = (x) => X.from + (x - off * BEAT) / speed;
+    X.pe = (t) => X.L - (X.to - t) * speed;
+    X.tmOn = speed !== 1 || seed !== 0;
+    X.tm = (t) => (X.tmOn ? X.from + (t - X.from) * speed + seed * 7.31 : t);
+    // camera knob
+    const zoom = C(num(P.zoom, 1), 0.5, 2), roll = C(num(P.roll, 0), -45, 45) * Math.PI / 180;
+    const pan = Array.isArray(P.pan) ? [num(P.pan[0], 0), num(P.pan[1], 0)] : [0, 0];
+    const camOn = zoom !== 1 || roll !== 0 || pan[0] !== 0 || pan[1] !== 0;
+    X.cam = (cam, panK = 1) => (camOn ? [cam[0] + pan[0] * panK, cam[1] + pan[1] * panK, cam[2] * zoom, cam[3] + roll] : cam);
+    // palette, sky, body, iris
+    const pal = PALETTES[P.palette] || PALETTES.gold;
+    X.gold = pal.g;
+    X.dawn = C(num(P.dawn, 0), -1, 1) + pal.dawn;
+    X.white = pal.white;
+    X.bodyL = P.body === 'dark' ? 0.15 : 1;
+    const iris = IRIS[P.iris] ? P.iris : sh.iris;
+    X.iris = IRIS[iris]; X.glow = GLOW[iris];
+    // chakra ignitions (absolute seconds; Infinity = never)
+    if (P.chakras === 'score') X.ign = scoreIgnitions(cue);
+    else if (Array.isArray(P.chakras)) X.ign = [0, 1, 2, 3, 4, 5, 6].map((i) => (typeof P.chakras[i] === 'number' && Number.isFinite(P.chakras[i]) ? bt(vb0 + P.chakras[i]) : Infinity));
+    else {
+      const s = Math.round(C(num(P.chakraStart, sh.ch0), 0, 7));
+      const every = C(num(P.chakraEvery, 2), 0.25, 16);
+      const n = Math.round(C(num(P.chakraCount, 7 - s), 0, 7));
+      X.ign = [0, 1, 2, 3, 4, 5, 6].map((i) => (i < s + n ? bt(vb0 + (i - s) * every) : Infinity));
+    }
+    return X;
+  }
+
+  // f at progress x; past x1, f keeps the velocity it had just before x1 and eases to rest with time
+  // constant tau (s). f(x, tr) gets the real time tr of that progress for its score lookups.
+  function settle(f, x, x1, tau, t, X) {
+    if (x <= x1) return f(x, t);
+    const h = Math.min(0.02, 0.25 * tau, 0.5 * x1);
+    const a = f(x1, X.rt(x1)), b = f(x1 - h, X.rt(x1 - h)), e = tau * (1 - Math.exp(-(x - x1) / tau)) / h;
+    return a.map((v, i) => v + (v - b[i]) * e);
+  }
+
+  // chakras: lit after their ignition, flaring at it, ticking with the kick and the roll
+  function chakraState(t, ign, kickE, rollE) {
+    let last = -1, recent = -1, rAge = Infinity;
     const ck = [], terr = [];
     for (let i = 0; i < 7; i++) {
-      const age = t - IGN[i];
-      if (age >= 0) last = i;
+      const age = t - ign[i];
+      if (age >= 0) { last = i; if (age <= rAge) { rAge = age; recent = i; } }
       ck[i] = age >= 0 ? 1 + 1.0 * Math.exp(-age / 0.22) * R() + 0.35 * kickE + 0.3 * rollE : 0;
       terr[i] = age >= 0 ? 0.55 + 1.4 * Math.exp(-age / 0.3) + 0.25 * kickE : 0;
     }
-    u.uCk = ck; u.uTerr = terr;
     let kh = -1.2, frontI = 0.4;
     if (last >= 0) {
       const prev = last > 0 ? CHY[last - 1] + 0.04 : -1.12;
-      kh = mix(prev, CHY[last] + 0.04, EO((t - IGN[last]) / 0.32));
+      kh = mix(prev, CHY[last] + 0.04, EO((t - ign[last]) / 0.32));
       // the molten front is bright while it rises to the new chakra, then rests dimmer
-      frontI = 0.4 + 0.6 * Math.exp(-(t - IGN[last]) / 0.3);
+      frontI = 0.4 + 0.6 * Math.exp(-(t - ign[last]) / 0.3);
     }
-    const ignAge = last >= 0 ? t - IGN[last] : -1;
+    // the burst belongs to the most recent ignition
+    return { ck, terr, last, recent, kh, frontI, ignAge: recent >= 0 ? t - ign[recent] : -1 };
+  }
 
-    let cam = [0, 0, 1, 0], cam2 = [0, 0, 1, 0], cam3 = [0, 0, 1, 0], igCam = null, igS = 0;
-    let body = [0, -0.4, 0.4, 0];
-    let gold = 0, eye3 = 0, aura = 1.0;
-    let sun = [0, 0.5, 0.3, 1], sun2 = [t * 0.12, 0, 1.6, 1];
-    let mount = [0, -1.3, 0.85, 0];
-    let dawn = 0.5, speed = 0, speedC = [0, 0], ribbon = 0, ramp = 0, blaze = [0, 0], flood = [0, 0, 0];
-    // progress through a shot locked to the snare roll: an eased 50 ms step forward on each of the
-    // n hits from t0 on, never back (a back-and-forth throb makes fine linework flicker at 9 Hz)
-    const rl = MO.last('roll', t), rn = rl ? rl.i : 0;
-    const ratchet = (t0, n) => {
-      if (!rl || rl.e.t < t0) return 0;
-      const l0 = MO.last('roll', t0 - 1e-4), done = rl.i - (l0 ? l0.i : -1) - 1;
-      return C((done + EO((t - rl.e.t) / 0.05)) / n);
-    };
-    let gutA = [-9, 0, 9, 0], gutW = 0.03, eyeP = [-1.2, 0, 0.5, 0], eyeO = 0;
-    let lotus = [0, 1.12, 0.5, 0], column = 0, sunDark = 0, chakS = 1.45, lotusO = [0, 0, 0, 0, 0], auraOcc = 0, faceP = [0, 0, 0.3, 1];
+  const baseState = () => ({
+    cam: [0, 0, 1, 0], cam2: [0, 0, 1, 0], cam3: [0, 0, 1, 0], igS: 0,
+    body: [0, -0.4, 0.4, 0], gold: 0, eye3: 0, aura: 1.0,
+    sun: [0, 0.5, 0.3, 1], sun2: [0, 0, 1.6, 1], mount: [0, -1.3, 0.85, 0],
+    dawn: 0.5, speed: 0, speedC: [0, 0], ribbon: 0, ramp: 0, blaze: [0, 0], flood: [0, 0, 0],
+    gutA: [-9, 0, 9, 0], gutW: 0.03, eyeP: [-1.2, 0, 0.5, 0], eyeO: 0,
+    lotus: [0, 1.12, 0.5, 0], column: 0, sunDark: 0, chakS: 1.45, lotusO: [0, 0, 0, 0, 0], auraOcc: 0, faceP: [0, 0, 0.3, 1],
+  });
 
-    if (t < T1) {
-      // C1: wide on the Holy Mountain; the figure climbs the stair a step per kick
-      const k = (t - T0) / (T1 - T0);
-      mount = [0, -1.40, 1.0, 0];
-      // start from rest (the frame must not scroll under the decaying beat-32 flash), then rise
-      // and push all the way to the cut, still moving at full speed there; a nudge on each kick
+  // ------------------------------------------------------------------ C1: THE HOLY MOUNTAIN
+  // citrinitas.c1. Natural length 4 beats (1 bar). Wide on the Mountain; the figure climbs the
+  // central stair a step per beat while the camera rises from rest and pushes in, the sun rises,
+  // the sky goes from night to amber dawn. Root ignites at the start, sacral 2 beats in.
+  // Longer: the climb, the rise, the push, the sun and the dawn settle (ease to rest over ~2 s);
+  // flames, falling yods, sun rays, the Providence eye's blink and the kick nudge go on; further
+  // chakras ignite every chakraEvery beats (chakraCount: 2 keeps it to root and sacral). Shorter:
+  // cut early. speed < 1 slows the climb and the push (still a step per kick at speed 1/2, 1/4).
+  // Default chakraStart 0.
+  function c1(t, X, st, kickE, rollE) {
+    const s = baseState();
+    const pc = X.pc(t);
+    s.mount = [0, -1.40, 1.0, 0];
+    // start from rest (the frame must not scroll under a decaying flash on the cut), then rise and
+    // push all the way to the natural end, still moving there
+    const f = (x) => {
+      const k = x / X.L;
       const mv = 0.5 * SM(k) + 0.5 * k * k;
-      cam = [0, mix(-0.30, 0.10, mv), (0.95 + 0.10 * mv) * (1 + 0.01 * kickE * R()), 0];
-      const beat = (t - T0) / BEAT;
+      const beat = x / BEAT;
       const climb = 0.8 * (Math.floor(beat) + EO(C((beat % 1) * 3.0))) + 0.2 * beat;   // a step per kick + a steady ascent
-      body = [0, -0.62 + 0.10 * climb, 0.40, 0.08 * SM(k)];
-      const top = mount[1] + 1.4494 * mount[2];
-      const eyeY = top + (0.30 + 0.24) * mount[2];
-      sun = [0, eyeY - 0.40 * (1 - 0.5 * k - 0.5 * EO(k)), 0.26, 1];
-      sun2 = [t * 0.10, 0, 1.55 + 0.15 * kickE, 1];
-      dawn = 0.15 + 0.7 * SM(k);
-    } else if (t < T2) {
-      // C2: henshin — closer on the torso, the camera rolls, ribbons spiral up the body
-      const k = (t - T1) / (T2 - T1);
-      const TH = bt(38);
-      body = [0, -0.45, 1.25, t < TH ? 0.10 + 0.15 * SM(k * 2) : 0.08];
-      const heart = [0, body[1] + 0.44 * body[2]];
-      if (t < TH) {
-        // C2a: medium, rolling one way, the solar plexus ignites
-        const k2 = (t - T1) / (TH - T1);
-        const m2 = 0.5 * k2 + 0.5 * SM(k2);   // still moving at the cut
-        cam = [0, heart[1] - 0.06 + 0.06 * m2, 1.0 + 0.10 * m2, (-0.18 + 0.22 * m2) * R()];
-      } else {
-        // C2b: cut in on the heart ignition, dutch angle rolling back, slow push
-        const k2 = (t - TH) / (T2 - TH);
-        cam = [0, heart[1] + 0.02, 1.45 + 0.25 * (0.5 * k2 + 0.5 * EO(k2)), (0.24 - 0.18 * k2) * R()];
-      }
-      const rosette = t < TH ? 1 : 0.15;
-      // C2b: a calmer frame after the heart ignites, so the chakra column is the brightest thing
-      // in it (sun ring, aura and ribbons dimmed, fewer speed lines)
-      const calm = t < TH ? 0 : 1;
-      sun = [0, heart[1] + 0.15, 0.78, 1 - 0.3 * calm]; sunDark = 1;
-      sun2 = [-t * 0.22, 0, 1.25 + 0.12 * kickE, rosette];
-      dawn = 0.6;
-      speed = (0.2 + 0.5 * rollE + 0.9 * Math.exp(-ignAge / 0.3) + 0.1 * calm) * R();
-      speedC = toScreen(heart, cam);
-      ribbon = SM((t - T1) / 0.3) * (1 - 0.45 * calm);
-      aura = 1.15 - 0.35 * calm;
-    } else if (t < T2b) {
-      // C3a: manga triptych. World: the figure stands on the summit of the Mountain.
-      //   left: the awakened eye (close-up), centre: the throat ignites, right: the Mountain
-      const k = (t - T2) / (T2b - T2);
-      body = [0, 0, 1, 0.3];
-      mount = [0, -1.0 - 1.4494 * 3.0, 3.0, 0];
-      sun = [0, 0.95, 1.05, 1]; sunDark = 1;
-      sun2 = [t * 0.2, 0.15, 1.3 + 0.12 * kickE, 1];
-      dawn = 0.75;
-      // every panel pushes in, accelerating, ratcheting forward on the 16th-note roll
-      const P = MO.reduced ? k : 0.4 * k + 0.6 * ratchet(T2, 8);
-      cam = [0, 0.62 + 0.05 * k, 1.75 * Math.exp(0.34 * P * (0.6 + 0.4 * P)), (-0.04 - 0.05 * k) * R()];
-      cam3 = [-5.6, -2.2 + 0.15 * k + 0.35 * k * k, 0.24 * (1 + 0.30 * EI(P)), 0];
-      const inL = backOut((t - bt(40.5)) / 0.16), inR = backOut((t - bt(40.875)) / 0.16);
-      gutA = [mix(-3.2, -0.62, inL), 0.32, mix(3.4, 0.66, inR), 0.26];
-      gutW = 0.034 * (1 + 0.3 * rollE * R());
-      eyeP = [mix(-3.0, -1.24, inL) + 0.03 * k, 0.02, 0.50 * (1 + 0.12 * P), -0.10];
-      eyeO = EO((t - bt(40.5) - 0.08) / 0.18);
-      speed = (0.7 + 0.5 * rollE) * R();
-      speedC = toScreen([0, 0.665], cam);
-      aura = 1.2;
-    } else if (t < T3) {
-      // C3b: the eye strip — the face between two black gutters, the third eye opens;
-      //   above: the crown and the sun, below: the column of lit chakras
-      const k = (t - T2b) / (T3 - T2b);
-      body = [0, 0, 1, 0.4];
-      mount = [0, -1.0 - 1.4494 * 3.0, 3.0, 0];
-      // accelerate into the crown: every strip pushes in faster and faster (ratcheting on the roll),
-      // the sun whitens, the third eye's light grows, the face trembles (not in reduced mode)
-      ramp = EI(k);
-      const P = EI(MO.reduced ? k : 0.4 * k + 0.6 * ratchet(T2b, 8));
-      sun = [0, 1.05, 0.62, 1 + 0.6 * ramp]; sunDark = 1;
-      sun2 = [-t * 0.3, 0.3 + 0.5 * ramp, 1.4 + 0.15 * kickE + 0.4 * ramp, 1];
-      dawn = 0.85 + 0.15 * ramp;
-      const jx = MO.reduced ? 0 : 0.004 * rollE * Math.sin(rn * 2.39), jy = MO.reduced ? 0 : 0.004 * rollE * Math.cos(rn * 1.71);
-      cam = [0, 0.86, 6.6 + 0.8 * k, 0.0];
-      cam2 = [0, 0.95 + 0.10 * P, (1.25 + 0.15 * k) * (1 + 0.5 * P), 0.03 + 0.05 * k];
-      cam3 = [0, 0.30 - 0.10 * P, (1.35 + 0.15 * k) * (1 + 0.5 * P), -0.03 - 0.05 * k];
-      const sIn = backOut((t - T2b) / 0.14);
-      gutA = [mix(1.6, 0.40, sIn), -0.07, mix(-1.6, -0.44, sIn), -0.07];
-      gutW = 0.034 * (1 + 0.3 * rollE * R());
-      eye3 = EO((t - T2b) / 0.22);
-      const push = 1 + 0.06 * k + 0.5 * P;
-      faceP = [jx, jy, 0.36 * push, 0.98 * push]; igS = 1.5;
-      eyeP = [0, 0, 0.42 * push, 0];
-      eyeO = EO((t - T2b - 0.03) / 0.2);
-      speed = (0.7 + 0.5 * rollE + 0.4 * ramp) * R();
-      speedC = toScreen([0, 0.873], cam);
-      aura = 1.25;
-    } else if (t < T4) {
-      // C4: SAHASRARA. Arms raised, rainbow column, the lotus opens, extreme push-in
-      const k = (t - T3) / (T4 - T3);
-      body = [0, -0.40, 0.62, 1.0];
-      const crown = [0, body[1] + 1.14 * body[2]];
-      // a steep ease-in (x^4): the lotus stays readable until ~20.1 s and the fastest part of the
-      // push happens under the crown's light flood (see main), where it cannot strobe
-      const zk = Math.pow(C((k - 0.10) / 0.90), 4);
-      const z = 0.80 * Math.exp(Math.log(24) * zk);
-      cam = [0, mix(0.05, crown[1], C(zk * 1.7)), z, 0];
-      sun = [0, crown[1], 0.92, 1]; sunDark = 1;
-      sun2 = [t * 0.3, 0.55 + 0.45 * C(k * 2), 2.6, 0];
-      lotus = [crown[0], crown[1], 1.0, 0];
-      lotusO = [0, 1, 2, 3, 4].map((m) => backOut((t - T3 - 0.03 - m * 0.055) / 0.17));
-      // colour saturates late (keeps the lotus as it is until ~20.0 s); the light rises steadily
-      // from 19.7 s, so the push trends brighter instead of flickering both ways
-      blaze = [EI(C((k - 0.4) / 0.6)), C((k - 0.3) / 0.7)];
-      flood = [...toScreen(crown, cam), 0.85 * SM(C((k - 0.64) / 0.36))];
-      column = SM(k / 0.12) * (1 + 0.3 * rollE);
-      chakS = 1.6; auraOcc = 0.75;
-      dawn = 0.3; gold = SM(k / 0.4);
-      eye3 = 1; aura = 1.4;
-      speed = (0.4 + 0.5 * rollE) * R(); speedC = toScreen(crown, cam);
-      speed *= C(1 - flood[2] / 0.5);   // the speed lines go under the flood (and their cost with them)
-      // no cream wash: the crown's light floods the frame in colour (main) up to the hard cut into
-      // the gap, where the overlay's white RUBEDO card takes over
-    }
+      return [mix(-0.30, 0.10, mv), 0.95 + 0.10 * mv, -0.62 + 0.10 * climb, 0.08 * SM(k), 0.40 * (1 - 0.5 * k - 0.5 * EO(k)), 0.15 + 0.7 * SM(k)];
+    };
+    const m = settle(f, pc, X.L, 0.35 * X.L, t, X);
+    s.cam = X.cam([0, m[0], m[1] * (1 + 0.01 * kickE * R()), 0]);
+    s.body = [0, m[2], 0.40, m[3]];
+    const top = s.mount[1] + 1.4494 * s.mount[2];
+    const eyeY = top + (0.30 + 0.24) * s.mount[2];
+    s.sun = [0, eyeY - m[4], 0.26, 1];
+    s.sun2 = [X.tm(t) * 0.10, 0, 1.55 + 0.15 * kickE, 1];
+    s.dawn = m[5];
+    return s;
+  }
 
-    u.uCam = cam; u.uCam2 = cam2; u.uCam3 = cam3;
-    u.uBodyP = body; u.uBodyQ = [kh, gold, eye3, aura];
-    const ig = last >= 0 ? toScreen([body[0], body[1] + CHY[last] * body[2]], igCam || cam) : [0, 0];
-    u.uIgn = [Math.max(last, 0), ignAge, ig[0], ig[1]];
-    u.uIgnS = igS || body[2] * (igCam || cam)[2];
-    u.uSun = sun; u.uSun2 = sun2; u.uMount = mount; u.uDawn = dawn;
-    u.uSpeed = speed; u.uSpeedC = speedC; u.uRibbon = ribbon; u.uFrontI = frontI; u.uRamp = ramp; u.uBlaze = blaze; u.uFlood = flood;
-    u.uGut = gutA; u.uGutW = gutW; u.uEyeP = eyeP; u.uEyeO = eyeO;
-    u.uLotusP = lotus; u.uColumn = column; u.uSunDark = sunDark; u.uChakS = chakS; u.uLotusO = lotusO; u.uAuraOcc = auraOcc; u.uFaceP = faceP;
+  // ------------------------------------------------------------------ C2: HENSHIN
+  // citrinitas.c2. Natural length 4 beats. C2a (2 beats): medium on the torso, rolling one way,
+  // ribbons spiralling up the body, the solar plexus ignites; C2b: a cut-in on the heart ignition,
+  // dutch angle rolling back, slow push, a calmer frame. The internal cut happens on the heart's
+  // ignition (2 beats in by default); params.cut: beats from the cue start, or 'a' / 'b' to hold
+  // one framing for the whole cue. If the heart is already lit at the start the cue is all C2b, if
+  // it never ignites in the cue, all C2a.
+  // Longer: each framing's roll and push settle; ribbons, rays and speed lines go on, further
+  // chakras ignite. Shorter: cut early (a 2-beat cue is C2a alone). Default chakraStart 2.
+  // Own params: ribbons 0..2 (ribbon brightness, default 1), cut (above).
+  function c2(t, X, st, kickE, rollE) {
+    const s = baseState();
+    const pc = X.pc(t);
+    const kk = pc / X.L;
+    const inA = t < X.cut;
+    s.body = [0, -0.45, 1.25, inA ? 0.10 + 0.15 * SM(kk * 2) : 0.08];
+    const heart = [0, s.body[1] + 0.44 * s.body[2]];
+    if (inA) {
+      // C2a: medium, rolling one way, the solar plexus ignites (still moving at the cut)
+      const fA = (x) => { const k2 = x / X.LA; const m2 = 0.5 * k2 + 0.5 * SM(k2); return [heart[1] - 0.06 + 0.06 * m2, 1.0 + 0.10 * m2, -0.18 + 0.22 * m2]; };
+      const m = settle(fA, pc, X.LA, 0.5 * X.LA, t, X);
+      s.cam = X.cam([0, m[0], m[1], m[2] * R()]);
+    } else {
+      // C2b: cut in on the heart ignition, dutch angle rolling back, slow push
+      const fB = (x) => { const k2 = x / X.LB; return [heart[1] + 0.02, 1.45 + 0.25 * (0.5 * k2 + 0.5 * EO(k2)), 0.24 - 0.18 * k2]; };
+      const m = settle(fB, (t - X.cut) * X.speed, X.LB, 0.5 * X.LB, t, X);
+      s.cam = X.cam([0, m[0], m[1], m[2] * R()]);
+    }
+    const rosette = inA ? 1 : 0.15;
+    // C2b: a calmer frame after the heart ignites, so the chakra column is the brightest thing
+    // in it (sun ring, aura and ribbons dimmed, fewer speed lines)
+    const calm = inA ? 0 : 1;
+    s.sun = [0, heart[1] + 0.15, 0.78, 1 - 0.3 * calm]; s.sunDark = 1;
+    s.sun2 = [-X.tm(t) * 0.22, 0, 1.25 + 0.12 * kickE, rosette];
+    s.dawn = 0.6;
+    s.speed = (0.2 + 0.5 * rollE + 0.9 * (st.ignAge >= 0 ? Math.exp(-st.ignAge / 0.3) : 0) + 0.1 * calm) * R();
+    s.speedC = toScreen(heart, s.cam);
+    s.ribbon = SM((t - X.ev(0)) / 0.3) * (1 - 0.45 * calm) * X.ribbons;
+    s.aura = 1.15 - 0.35 * calm;
+    return s;
+  }
+
+  // ------------------------------------------------------------------ C3a: MANGA PANELS
+  // citrinitas.c3a. Natural length 2 beats. A manga triptych over the figure on the summit:
+  // left the awakened eye (close-up), centre the throat ignites, right the Mountain. The side
+  // panels slide in on the off-beat 8th and the dotted 16th after it (0.5 and 0.875 beats in);
+  // every panel pushes in, accelerating, ratcheting forward on each snare-roll hit (smoothly if
+  // the score has no roll under the cue, and in reduced-motion mode).
+  // Longer: the slide-ins stay at the start; the push settles after its natural length; speed
+  // lines, gutter pulse and rays go on. Shorter: cut early. Default chakraStart 4 (throat).
+  // Own params: iris 'gold' (default) | 'violet' | 'green' | 'blue' | 'red': the close-up eye's iris.
+  function c3a(t, X, st, kickE, rollE) {
+    const s = baseState();
+    const pc = X.pc(t);
+    s.body = [0, 0, 1, 0.3];
+    s.mount = [0, -1.0 - 1.4494 * 3.0, 3.0, 0];
+    s.sun = [0, 0.95, 1.05, 1]; s.sunDark = 1;
+    s.sun2 = [X.tm(t) * 0.2, 0.15, 1.3 + 0.12 * kickE, 1];
+    s.dawn = 0.75;
+    const f = (x, tr) => {
+      const k = x / X.L;
+      const P = MO.reduced || !X.ratchet ? k : 0.4 * k + 0.6 * ratchet(tr, X.ratchet);
+      return [0.62 + 0.05 * k, 1.75 * Math.exp(0.34 * P * (0.6 + 0.4 * P)), -0.04 - 0.05 * k,
+        -2.2 + 0.15 * k + 0.35 * k * k, 0.24 * (1 + 0.30 * EI(P)), 0.03 * k, 0.50 * (1 + 0.12 * P)];
+    };
+    const m = settle(f, pc, X.L, 0.3 * X.L, t, X);
+    s.cam = X.cam([0, m[0], m[1], m[2] * R()]);
+    s.cam3 = X.cam([-5.6, m[3], m[4], 0]);
+    const tL = X.ev(0.5), tR = X.ev(0.875);
+    const inL = backOut((t - tL) / 0.16), inR = backOut((t - tR) / 0.16);
+    s.gutA = [mix(-3.2, -0.62, inL), 0.32, mix(3.4, 0.66, inR), 0.26];
+    s.gutW = 0.034 * (1 + 0.3 * rollE * R());
+    s.eyeP = [mix(-3.0, -1.24, inL) + m[5], 0.02, m[6], -0.10];
+    s.eyeO = EO((t - tL - 0.08) / 0.18);
+    s.speed = (0.7 + 0.5 * rollE) * R();
+    s.speedC = toScreen([0, 0.665], s.cam);
+    s.aura = 1.2;
+    return s;
+  }
+
+  // ------------------------------------------------------------------ C3b: THE EYE STRIP
+  // citrinitas.c3b. Natural length 2 beats. The face in a strip between two black gutters, the
+  // third eye opens; above it the crown and the sun, below the column of lit chakras. Everything
+  // accelerates into the crown: the strips push in faster and faster (ratcheting on the roll), the
+  // sun whitens, the third eye's light grows, the face trembles with the roll.
+  // The strips slide in and the third eye opens at the start; the build (ramp, push, whitening)
+  // is anchored to the cue END, so it always peaks on the cut into C4. Longer: the strip holds its
+  // opening framing (rays, contour flow, speed lines and the roll tremble go on) until the last
+  // 2 beats; speed: 'fit' spreads the build over the whole cue. Shorter: the build starts part-way.
+  // Default chakraStart 5 (third eye).
+  // Own params: iris 'violet' (default) | 'gold' | 'green' | 'blue' | 'red': the third eye's iris and light.
+  function c3b(t, X, st, kickE, rollE) {
+    const s = baseState();
+    let k = C(X.pe(t) / X.L);
+    // a build that starts mid-cue (the cue is longer than the build) starts from rest
+    if (X.lateBuild) k = (k < 0.3 ? k * k / 0.6 : k - 0.15) / 0.85;
+    s.body = [0, 0, 1, 0.4];
+    s.mount = [0, -1.0 - 1.4494 * 3.0, 3.0, 0];
+    s.ramp = EI(k);
+    const P = EI(MO.reduced || !X.ratchet ? k : 0.4 * k + 0.6 * ratchet(t, X.ratchet));
+    s.sun = [0, 1.05, 0.62, 1 + 0.6 * s.ramp]; s.sunDark = 1;
+    s.sun2 = [-X.tm(t) * 0.3, 0.3 + 0.5 * s.ramp, 1.4 + 0.15 * kickE + 0.4 * s.ramp, 1];
+    s.dawn = 0.85 + 0.15 * s.ramp;
+    const rl = MO.last('roll', t), rn = rl ? rl.i : 0;
+    const jx = MO.reduced ? 0 : 0.004 * rollE * Math.sin(rn * 2.39), jy = MO.reduced ? 0 : 0.004 * rollE * Math.cos(rn * 1.71);
+    s.cam = X.cam([0, 0.86, 6.6 + 0.8 * k, 0.0]);
+    s.cam2 = X.cam([0, 0.95 + 0.10 * P, (1.25 + 0.15 * k) * (1 + 0.5 * P), 0.03 + 0.05 * k]);
+    s.cam3 = X.cam([0, 0.30 - 0.10 * P, (1.35 + 0.15 * k) * (1 + 0.5 * P), -0.03 - 0.05 * k]);
+    const t0 = X.ev(0);
+    const sIn = backOut((t - t0) / 0.14);
+    s.gutA = [mix(1.6, 0.40, sIn), -0.07, mix(-1.6, -0.44, sIn), -0.07];
+    s.gutW = 0.034 * (1 + 0.3 * rollE * R());
+    s.eye3 = EO((t - t0) / 0.22);
+    const push = 1 + 0.06 * k + 0.5 * P;
+    s.faceP = [jx, jy, 0.36 * push, 0.98 * push]; s.igS = 1.5;
+    s.eyeP = [0, 0, 0.42 * push, 0];
+    s.eyeO = EO((t - t0 - 0.03) / 0.2);
+    s.speed = (0.7 + 0.5 * rollE + 0.4 * s.ramp) * R();
+    s.speedC = toScreen([0, 0.873], s.cam);
+    s.aura = 1.25;
+    return s;
+  }
+
+  // ------------------------------------------------------------------ C4: SAHASRARA
+  // citrinitas.c4. Natural length 2 beats. Arms raised, the seven chakras blaze in a rainbow
+  // column, the thousand-petalled lotus opens above the head, the sun goes white-gold, then an
+  // extreme push into the lotus, whose light floods the frame in magenta and violet up to the hard
+  // cut (into the gap / the RUBEDO insert). The 32nd-note roll reads as a steady buzz here.
+  // The lotus opening, the column, the sun's whitening and the body turning gold are anchored to
+  // the start; the push, the blaze and the flood to the cue END (they always end on the cut).
+  // Longer: wide on the figure with the lotus open until the last 2 beats (lotus spin, rays, yods,
+  // speed lines go on); speed: 'fit' spreads the push over the cue. Shorter: the push starts
+  // part-way. Default chakraStart 6 (crown).
+  // Own params: push true (default) | false: no push and no flood, a held tableau (the colour still
+  // saturates toward the end).
+  function c4(t, X, st, kickE, rollE) {
+    const s = baseState();
+    const kS = (t - X.ev(0)) / X.L;   // start-anchored (real time)
+    const kE = X.pe(t) / X.L;         // end-anchored (speed-scaled)
+    s.body = [0, -0.40, 0.62, 1.0];
+    const crown = [0, s.body[1] + 1.14 * s.body[2]];
+    // a steep ease-in (x^4): the lotus stays readable until ~0.7 of the way and the fastest part
+    // of the push happens under the crown's light flood (see main), where it cannot strobe
+    const zk = X.push ? Math.pow(C((kE - 0.10) / 0.90), 4) : 0;
+    const z = 0.80 * Math.exp(Math.log(24) * zk);
+    const pk = C(zk * 1.7);
+    s.cam = X.cam([0, mix(0.05, crown[1], pk), z, 0], 1 - pk);
+    s.sun = [0, crown[1], 0.92, 1]; s.sunDark = 1;
+    s.sun2 = [X.tm(t) * 0.3, 0.55 + 0.45 * C(kS * 2), 2.6, 0];
+    s.lotus = [crown[0], crown[1], 1.0, 0];
+    const t0 = X.ev(0);
+    s.lotusO = [0, 1, 2, 3, 4].map((m) => backOut((t - t0 - 0.03 - m * 0.055) / 0.17));
+    // colour saturates late (keeps the lotus as it is until ~0.7); the light rises steadily from
+    // ~0.3, so the push trends brighter instead of flickering both ways
+    s.blaze = [EI(C((kE - 0.4) / 0.6)), C((kE - 0.3) / 0.7)];
+    s.flood = [...toScreen(crown, s.cam), X.push ? 0.85 * SM(C((kE - 0.64) / 0.36)) : 0];
+    s.column = SM(kS / 0.12) * (1 + 0.3 * rollE);
+    s.chakS = 1.6; s.auraOcc = 0.75;
+    s.dawn = 0.3; s.gold = SM(kS / 0.4);
+    s.eye3 = 1; s.aura = 1.4;
+    s.speed = (0.4 + 0.5 * rollE) * R(); s.speedC = toScreen(crown, s.cam);
+    s.speed *= C(1 - s.flood[2] / 0.5);   // the speed lines go under the flood (and their cost with them)
+    return s;
+  }
+
+  // the uniforms of a C1..C4 frame
+  function sceneUniforms(t, X, fn) {
+    const kick = MO.last('kick', t);
+    const kickE = MO.env('kick', t, 0.12);
+    // the 32nd-note roll of C4 (18 Hz) would alias at 30 fps into frame-alternating pulses: there
+    // it reads as a steady buzz instead of per-hit pulses
+    const rollE = X.buzz ? 0.6 : MO.env('roll', t, 0.06);
+    const st = chakraState(t, X.ign, kickE, rollE);
+    const s = fn(t, X, st, kickE, rollE);
+    if (X.dawn !== 0) s.dawn = C(s.dawn + X.dawn);
+    if (X.white !== 0) s.sun2[1] = C(s.sun2[1] + X.white);
+    const u = {};
+    u.uKickAge = kick ? t - kick.e.t : 9;
+    u.uRollP = rollE;
+    u.uCk = st.ck; u.uTerr = st.terr;
+    u.uCam = s.cam; u.uCam2 = s.cam2; u.uCam3 = s.cam3;
+    u.uBodyP = s.body; u.uBodyQ = [st.kh, s.gold, s.eye3, s.aura];
+    const i = st.recent;
+    const ig = i >= 0 ? toScreen([s.body[0], s.body[1] + CHY[i] * s.body[2]], s.cam) : [0, 0];
+    u.uIgn = [Math.max(i, 0), st.ignAge, ig[0], ig[1]];
+    u.uIgnS = s.igS || s.body[2] * s.cam[2];
+    u.uSun = s.sun; u.uSun2 = s.sun2; u.uMount = s.mount; u.uDawn = s.dawn;
+    u.uSpeed = s.speed; u.uSpeedC = s.speedC; u.uRibbon = s.ribbon; u.uFrontI = st.frontI; u.uRamp = s.ramp; u.uBlaze = s.blaze; u.uFlood = s.flood;
+    u.uGut = s.gutA; u.uGutW = s.gutW; u.uEyeP = s.eyeP; u.uEyeO = s.eyeO;
+    u.uLotusP = s.lotus; u.uColumn = s.column; u.uSunDark = s.sunDark; u.uChakS = s.chakS; u.uLotusO = s.lotusO; u.uAuraOcc = s.auraOcc; u.uFaceP = s.faceP;
+    // knobs (always set: a program shared by several cues starts each scene from zeroed uniforms)
+    u.uGTint = X.gold[0]; u.uGTint2 = X.gold[1]; u.uGNerve = X.gold[2];
+    u.uBodyL = X.bodyL; u.uIrA = X.iris[0]; u.uIrB = X.iris[1]; u.uEyeGlow = X.glow; u.uSeed = X.seed;
+    if (X.tmOn) u.uTime = X.tm(t);
     return u;
   }
 
-  const shot = (id, from, to, defs, extra = {}) => MO.scene(Object.assign({
-    id, section: 'citrinitas', from, to,
-    fs: defs.map((d) => `#define ${d}\n`).join('') + BODY + SCENE,
-    uniforms: (t) => uniforms(t),
-    bloom: 0.38,
-    vignette: 0.42,
-  }, extra));
-  shot('citrinitas-c1', T0, T1, ['CIT_MOUNTAIN', 'CIT_BRAZIERS', 'CIT_PROVIDENCE', 'CIT_NERVES', 'CIT_YODS']);
-  shot('citrinitas-c2', T1, T2, ['CIT_NIGHT', 'CIT_SPEED', 'CIT_RIBBONS', 'CIT_BONES', 'CIT_NERVES', 'CIT_YODS']);
-  shot('citrinitas-c3a', T2, T2b, ['CIT_NIGHT', 'CIT_PANELS', 'CIT_MOUNTAIN', 'CIT_EYECU', 'CIT_SPEED', 'CIT_BONES', 'CIT_NERVES']);
-  shot('citrinitas-c3b', T2b, T3, ['CIT_NIGHT', 'CIT_PANELS', 'CIT_STRIPS', 'CIT_FACE', 'CIT_EYE3', 'CIT_SPEED']);
-  shot('citrinitas-c4', T3, T4, ['CIT_NIGHT', 'CIT_LOTUS', 'CIT_COLUMN', 'CIT_EYE3', 'CIT_SPEED', 'CIT_YODS']);
-  MO.scene({ id: 'citrinitas-c5', section: 'citrinitas', from: T4, to: T5, fs: WHITE, uniforms: (t) => uniforms(t), bloom: 0.5, vignette: 0.2 });
+  // ------------------------------------------------------------------ C5: THE GAP
+  // citrinitas.c5. Natural length 2 beats. White-gold radiance with slowly turning rays, under the
+  // overlay's full-screen RUBEDO insert in the gap (cheap: one short shader). Any length: the rays
+  // keep turning. Own params: palette 'gold' (default) | 'white' | 'rose' | 'violet' (the radiance
+  // and its rays); speed (ray rotation); seed (ray phase); zoom, pan [x, y] (screen units), roll.
+  const WHITE_PAL = {
+    gold: [[1.0, 0.86, 0.58], [1.0, 0.7, 0.3]], white: [[1.0, 0.97, 0.92], [1.0, 0.9, 0.75]],
+    rose: [[1.0, 0.50, 0.46], [1.0, 0.25, 0.22]], violet: [[0.72, 0.50, 1.0], [0.55, 0.25, 1.0]],
+  };
+  function whiteUniforms(t, X) {
+    const P = X.P;
+    const pal = WHITE_PAL[P.palette] || WHITE_PAL.gold;
+    const pan = Array.isArray(P.pan) ? [num(P.pan[0], 0), num(P.pan[1], 0)] : [0, 0];
+    const z = C(num(P.zoom, 1), 0.5, 2), a = C(num(P.roll, 0), -45, 45) * Math.PI / 180;
+    const c = Math.cos(a) / z, s = Math.sin(a) / z;
+    // column-major: p = rot(roll) * uv / zoom, as rot() in lib.js
+    const u = { uWRot: [c, -s, s, c], uWPan: pan, uWTint: pal[0], uWRay: pal[1] };
+    if (X.tmOn) u.uTime = X.tm(t);
+    return u;
+  }
+
+  // ------------------------------------------------------------------ registry
+  // nat: the shot's window in the 30 s piece (beats); ch0: the chakra igniting at its start;
+  // cost (SwiftShader, 640x360, frame ms min of runs): see the notes in the inventory
+  const SHOTS = {
+    c1: { nat: [32, 36], ch0: 0, fn: c1, defs: ['CIT_MOUNTAIN', 'CIT_BRAZIERS', 'CIT_PROVIDENCE', 'CIT_NERVES', 'CIT_YODS'] },
+    c2: { nat: [36, 40], ch0: 2, fn: c2, defs: ['CIT_NIGHT', 'CIT_SPEED', 'CIT_RIBBONS', 'CIT_BONES', 'CIT_NERVES', 'CIT_YODS'] },
+    c3a: { nat: [40, 42], ch0: 4, fn: c3a, iris: 'gold', defs: ['CIT_NIGHT', 'CIT_PANELS', 'CIT_MOUNTAIN', 'CIT_EYECU', 'CIT_SPEED', 'CIT_BONES', 'CIT_NERVES'] },
+    c3b: { nat: [42, 44], ch0: 5, fn: c3b, iris: 'violet', defs: ['CIT_NIGHT', 'CIT_PANELS', 'CIT_STRIPS', 'CIT_FACE', 'CIT_EYE3', 'CIT_SPEED'] },
+    c4: { nat: [44, 46], ch0: 6, fn: c4, buzz: true, defs: ['CIT_NIGHT', 'CIT_LOTUS', 'CIT_COLUMN', 'CIT_EYE3', 'CIT_SPEED', 'CIT_YODS'] },
+    c5: { nat: [46, 48], ch0: 7 },
+  };
+  for (const name in SHOTS) {
+    const sh = SHOTS[name];
+    if (sh.defs) sh.fs = sh.defs.map((d) => `#define ${d}\n`).join('') + BODY + SCENE;
+    sh.iris = sh.iris || 'gold';
+    MO.shot('citrinitas.' + name, (cue) => {
+      const X = cueContext(cue, sh);
+      const id = 'citrinitas-' + name + (Array.isArray(MO.S.cues) ? '@' + cue.index : '');
+      if (!sh.fn) {
+        MO.scene({ id, fs: WHITE, uniforms: (t) => whiteUniforms(t, X), bloom: 0.5, vignette: 0.2 });
+        return;
+      }
+      X.buzz = !!sh.buzz;
+      X.ribbons = C(num(X.P.ribbons, 1), 0, 2);
+      X.push = X.P.push !== false;
+      if (name === 'c2') {
+        // the cut-in (C2a -> C2b) lands on the heart's ignition
+        X.LA = bt(38) - bt(36); X.LB = bt(40) - bt(38);
+        const P = X.P, h = X.ign[3];
+        X.cut = P.cut === 'a' || P.cut === false ? Infinity : P.cut === 'b' ? X.from
+          : typeof P.cut === 'number' ? bt(cue.beat0 + P.cut) : h < X.to ? h : Infinity;
+      }
+      if (name === 'c3a') X.ratchet = ratchetWindow(X.ev(0), X.ev(0) + X.L / X.speed);
+      if (name === 'c3b') { X.ratchet = ratchetWindow(X.to - X.L / X.speed, X.to); X.lateBuild = X.to - X.from > X.L / X.speed + 1e-6; }
+      MO.scene({ id, fs: sh.fs, uniforms: (t) => sceneUniforms(t, X, sh.fn), bloom: 0.38, vignette: 0.42 });
+    });
+  }
+
+  // without a cue list: the 30 s edit (and the regression test of this refactor)
+  if (!Array.isArray(MO.S.cues)) for (const name in SHOTS) MO.runShot(MO.makeCue('citrinitas.' + name, SHOTS[name].nat[0], SHOTS[name].nat[1]));
 })();

@@ -1,15 +1,14 @@
-// RUBEDO — XXI The World — 21.176–28.235 s (bars 12–16): THE DROP.
-// Four one-bar shots, each its own shader so only one runs per frame:
-//   R1 bar 12  the Mandala of the Self assembles around the World dancer ("Burn me in the fire")
-//   R2 bar 13  the chemical wedding: Sol and Luna orbit a chrome vessel over a checkerboard
-//              floor; the leaden sphere turns to gold ("turn my lead to gold")
-//   R3 bar 14  fly-through: a tunnel of rings of figures and eyes, lasers ("Magnum Opus")
-//   R4 bar 15  the mandala in full bloom, then a rapid zoom into its heart ("I am whole!")
+// RUBEDO — XXI The World: THE DROP. Owner: rubedo agent. Shot factories (see the cue contract):
+//   rubedo.mandala  R1  the Mandala of the Self around the World dancer ("Burn me in the fire")
+//   rubedo.wedding  R2  the chemical wedding: Sol and Luna orbit a chrome vessel over a checkerboard
+//                       floor; the leaden sphere turns to gold ("turn my lead to gold")
+//   rubedo.tunnel   R3  fly-through: a tunnel of rings of figures and eyes, lasers ("Magnum Opus")
+//   rubedo.bloom    R4  the mandala in full bloom, then a rapid zoom into its heart ("I am whole!")
+// placed by score.js "cues"; without a cue list this file places them at their 30 s windows
+// (one bar each, bars 12–15, 21.176–28.235 s). Each is its own shader so only one runs per frame;
+// natural lengths, stretch behaviour and params: see "shots (JS)" below.
 // Everything is a pure function of time. All helpers here use the rb_ prefix.
 (() => {
-  const B = MO.BAR;
-  const T0 = MO.barTime(12);
-
   // ------------------------------------------------------------------ shared GLSL
   const RB_LIB = `
 uniform float uST;      // seconds since the drop (beat 48)
@@ -22,6 +21,12 @@ uniform float uClapStep;// claps in this section, eased (kaleidoscope steps)
 uniform float uSpinT;   // ring rotation clock (runs faster in R4)
 uniform float uDive;    // 0..1 the final dive into the heart (R4 only)
 uniform float uInvAmt;  // strength of the clap inversion (R4 halves it: its gold figures are brighter)
+// variation knobs (cue params); every one is a uniform, so all cues of a shot share one program
+uniform vec4  uCamK;    // camera: x zoom multiplier (R3: its inverse), y roll (rad), zw pan (screen units)
+uniform float uSeed;    // seed: scatter of the sparkles
+uniform vec4  uRingA;   // rings knob: outer bounds of the quaternity, ring A, ring B, ring C blocks
+uniform vec3  uRingB;   //   ... of the outer field, R4's great petals, the corona (as drawn: 1e4, 2.05, 1.62;
+                        //   a hidden block's bound drops to its inner edge, assembling sweeps it out)
 
 const vec3 RB_CRIM  = vec3(0.80, 0.015, 0.05);
 const vec3 RB_VERM  = vec3(1.00, 0.22, 0.035);
@@ -68,6 +73,13 @@ float rb_blink(float id) {
   return smoothstep(0.0, 0.03, x) * (1.0 - smoothstep(0.06, 0.17, x)) * step(x, 0.3);
 }
 
+// lead into gold: the crimson mandala transmuted to molten gold, white-hot in the highlights,
+// with crimson left only in the deepest shadows (R4's transmutation)
+vec3 rb_aurum(vec3 c) {
+  float l = dot(c, vec3(0.55, 0.38, 0.07));
+  vec3 g = l * mix(vec3(1.30, 0.66, 0.18), vec3(1.05, 0.92, 0.75), smoothstep(0.8, 3.0, l));
+  return mix(c, g, 0.85 * smoothstep(0.015, 0.12, l));
+}
 // almond eye: q local (x along the eye, y across), half width hw, half height hh
 vec3 rb_eye(vec2 q, float hw, float hh, float e, float blink, float seed, float tt) {
   float hhb = max(hh * (1.0 - 0.94 * blink), 0.002);
@@ -329,7 +341,7 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   if (r < 0.40) col = col * (1.0 - rb_fl(sdVesica(p, 0.19, 0.34), e)) + rb_centre(p, e, tt, smoothstep(0.08, 0.5, uST) + bloom, dB, fbp);
 
   // ---- circle C0, quaternity square, lotus petals, four medallions
-  if (r > 0.33 && r < 0.60) {
+  if (r > 0.33 && r < uRingA.x) {
     // lotus petals 16 + 16, between the circle C0 and the square's corners
     vec3 q = rb_polar(p, 16.0, 0.05 * sp + cstep * TAU / 32.0);
     float pd = sdVesica(vec2(q.x, q.y - 0.445), 0.040, 0.085);
@@ -358,7 +370,7 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   }
 
   // ---- ring A: the Net of Being, 24 figures with raised arms, flame auras
-  if (r > 0.56 && r < 0.86) {
+  if (r > 0.56 && r < uRingA.y) {
     float bandA = smoothstep(0.585, 0.59, r) * smoothstep(0.835, 0.83, r);
     col = mix(col, vec3(0.003, 0.004, 0.030) + vec3(0.06, 0.0, 0.01) * smoothstep(0.75, 0.59, r), bandA);
     col += figC;
@@ -367,7 +379,7 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   }
 
   // ---- ring B: 20 almond eyes
-  if (r > 0.84 && r < 1.0) {
+  if (r > 0.84 && r < uRingA.z) {
     col = mix(col, vec3(0.05, 0.0, 0.03), smoothstep(0.848, 0.853, r) * smoothstep(0.972, 0.967, r));
     col += eyeC;
     // diamonds between eyes
@@ -378,7 +390,7 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   }
 
   // ---- ring C: 16 glyph medallions with Holy-Mountain chevrons between
-  if (r > 0.97 && r < 1.17) {
+  if (r > 0.97 && r < uRingA.w) {
     vec3 q = qc;
     // chevrons
     float chev = abs(fract((q.y - abs(q.x) * 0.9) * 22.0) - 0.5);
@@ -391,13 +403,13 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   }
 
   // ---- outer field: log-polar Net of Being (rows of figures and eyes, endless)
-  if (r > 1.40) {
+  if (r > 1.40 && r < uRingB.x) {
     vec3 add = figRow > 0.5 ? figC : eyeC;
     col += add * 0.55 * smoothstep(1.40, 1.55, r);
   }
 
   // ---- full bloom (R4): twelve great magenta lotus petals open behind the corona
-  if (bloom > 0.01 && r > 1.08 && r < 2.05) {
+  if (bloom > 0.01 && r > 1.08 && r < uRingB.y) {
     vec3 q = rb_polar(p, 12.0, -0.03 * sp + TAU / 24.0);
     float pd = sdVesica(vec2(q.x, q.y - 1.12 - 0.42 * bloom), 0.17 * bloom, 0.42 * bloom + 0.001);
     float pf = rb_fl(pd, e);
@@ -408,7 +420,7 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   }
 
   // ---- ring D: the corona: straight rays (Tarot XIX) alternating with nested flame tongues
-  if (r > 1.13 && r < 1.62) {
+  if (r > 1.13 && r < uRingB.z) {
     col += vec3(0.09, 0.0, 0.010) * smoothstep(1.62, 1.16, r) * smoothstep(1.13, 1.17, r);
     vec3 q = rb_polar(p, 36.0, -0.05 * sp);
     float wavy = mod(q.z, 2.0);
@@ -471,8 +483,9 @@ vec3 rb_view(vec2 uv, float zoom, vec2 tl, float roll) {
 // four-point sparkles on the 16th-note hats
 vec3 rb_sparkles(vec2 uv, float sc) {
   vec3 col = vec3(0.0);
+  float hn0 = uHN + uSeed * 17.0;
   for (int i = 0; i < 4; i++) {
-    float hn = uHN - float(i);
+    float hn = hn0 - float(i);
     vec2 h = hash22(vec2(hn * 1.37, float(i) + 3.1));
     vec2 c = (h * 2.0 - 1.0) * vec2(1.6, 0.85);
     float age = uHT + float(i) * 0.110294;
@@ -485,11 +498,14 @@ vec3 rb_sparkles(vec2 uv, float sc) {
 
   // ------------------------------------------------------------------ R1: the mandala assembles
   const R1 = `
-uniform float uImpact;  // 1 during the beat-48 impact frames (the post pass keys them to light lines on black)
+uniform float uImpact;  // 1 during an impact's frames (the post pass keys them to light lines on black)
+uniform float uIT;      // seconds since that impact
+uniform float uLandT;   // seconds since the impact the mandala lands from (99: none)
+uniform float uPT;      // the pull-out's clock: uST scaled by the speed knob
 void main() {
   vec2 uv = uvCentered(gl_FragCoord.xy);
-  float t = uST;
-  vec2 c = vec2(0.0, 0.12);
+  float t = uST, pt = uPT;
+  vec2 c = vec2(0.0, 0.12) + uCamK.zw;
   float sl = speedLines(uv, c, 140.0, uTime, 0.55);
   if (uImpact > 0.5) {
     // the impact frames: the black sun of Nigredo returns as an eclipse, a black disc in a ragged
@@ -499,7 +515,7 @@ void main() {
     float rs = length(d), an = atan(d.y, d.x);
     float R = 0.42;
     float ray = hash11(floor(an / TAU * 90.0) + 3.0);
-    float corona = exp(-max(rs - R, 0.0) / ((0.02 + 0.07 * ray * ray) * (1.0 - 8.0 * t))) * step(R, rs);
+    float corona = exp(-max(rs - R, 0.0) / ((0.02 + 0.07 * ray * ray) * (1.0 - 8.0 * uIT))) * step(R, rs);
     vec3 col = vec3(3.0) * corona + vec3(3.0) * sl * smoothstep(R + 0.15, R + 0.35, rs);
     fragColor = vec4(col, 1.0);
     return;
@@ -507,11 +523,11 @@ void main() {
   float kenv = exp(-uKT / 0.11);
   // pull-out from the dancer to the whole mandala; a quadratic ease (not quartic) keeps the outer
   // field from scrolling past at 10+ rows/s
-  float pull = 1.0 - pow(1.0 - sat(t / 1.72), 2.0);
+  float pull = 1.0 - pow(1.0 - sat(pt / 1.72), 2.0);
   // (reduced: a shorter pull from 1.6 and a third of the roll)
-  float zoom = mix(mix(3.6, 1.6, uReduced), 0.80, pull) * (1.0 + 0.015 * kenv * (1.0 - 0.6 * uReduced));
-  float roll = (-0.17 * t - 0.25 * (1.0 - smoothstep(0.0, 1.0, t))) * (1.0 - 0.65 * uReduced);
-  vec2 tl = vec2(0.30 * (1.0 - pull) + 0.06 * sin(t * 1.7), 0.10 * sin(t * 1.3 + 0.5));
+  float zoom = mix(mix(3.6, 1.6, uReduced), 0.80, pull) * (1.0 + 0.015 * kenv * (1.0 - 0.6 * uReduced)) * uCamK.x;
+  float roll = (-0.17 * pt - 0.25 * (1.0 - smoothstep(0.0, 1.0, pt))) * (1.0 - 0.65 * uReduced) + uCamK.y;
+  vec2 tl = vec2(0.30 * (1.0 - pull) + 0.06 * sin(pt * 1.7), 0.10 * sin(pt * 1.3 + 0.5));
   vec3 vw = rb_view(uv - c, zoom, tl, roll);
   vec2 p = vw.xy;
   // sakuga shock distortion near the kick ring
@@ -525,7 +541,7 @@ void main() {
   // the colour lands over two frames after the impact (86 % -> 100 %): one rising change, rather
   // than a jump followed by a dip that reads as a second flash. Reduced has no impact: the cut from
   // the cream insert is the one change, and the mandala settles from a little brighter after it.
-  col *= mix(mix(0.86, 1.0, sat((t - 0.09) / 0.035)), mix(1.25, 1.0, sat(t / 0.1)), uReduced);
+  col *= mix(mix(0.86, 1.0, sat((uLandT - 0.09) / 0.035)), mix(1.25, 1.0, sat(uLandT / 0.1)), uReduced);
   // drop speed lines
   col += RB_HOT * 1.2 * sl * exp(-t / 0.4) * (1.0 - 0.7 * uReduced);
   col += rb_sparkles(uv, 0.05);
@@ -538,6 +554,10 @@ void main() {
   const R2 = `
 uniform vec3 uRo, uTa, uSol, uLuna, uCD;
 uniform float uGold, uFuse, uOrbit;
+uniform vec3 uMetA, uMetB, uMetF;   // metal knob: the stone's colour before / after the front, the front's glow
+uniform vec2 uMetK;          // x: how leaden it is (tarnish), y: its warmth (floor glow, highlight), as uGold in the 30 s
+uniform vec3 uChkA, uChkB;   // the checkerboard's two colours (floor knob)
+uniform float uFuseAt;       // seconds from the scene start to the fusion
 const vec3 RB_SC = vec3(0.0, 1.6, 0.0);
 const float RB_SR = 1.0;
 
@@ -580,12 +600,10 @@ vec3 rb_orbs(vec3 ro, vec3 rd) {
   return col * (1.0 - uFuse);
 }
 vec3 rb_tint(vec3 n) {
-  // lead -> gold, a front sweeping down the vessel
+  // lead -> gold (the metal knob: uMetA -> uMetB), a front sweeping down the vessel
   float front = mix(1.3, -1.3, uGold);
   float g = smoothstep(front - 0.08, front + 0.08, n.y);
-  vec3 lead = vec3(0.42, 0.45, 0.52);
-  vec3 gold = vec3(1.25, 0.80, 0.34);
-  return mix(lead, gold, g) + vec3(3.0, 1.6, 0.5) * rb_g((n.y - front) / 0.05) * step(0.01, uGold) * step(uGold, 0.99);
+  return mix(uMetA, uMetB, g) + uMetF * rb_g((n.y - front) / 0.05) * step(0.01, uGold) * step(uGold, 0.99);
 }
 vec3 rb_floorBase(vec3 h, vec2 dx, vec2 dy) {
   vec2 g = h.xz * 0.85;
@@ -594,14 +612,14 @@ vec3 rb_floorBase(vec3 h, vec2 dx, vec2 dy) {
   float chk = 0.5 - 0.5 * i.x * i.y;
   float inv = (mod(uClapN, 2.0) > 0.5 ? 1.0 : 0.0) * smoothstep(0.0, 0.02, uCT) * exp(-uCT / 0.25) * (1.0 - 0.7 * uReduced);
   chk = mix(chk, 1.0 - chk, inv);
-  vec3 base = mix(vec3(0.004, 0.0, 0.008), vec3(0.34, 0.0, 0.03), chk);
+  vec3 base = mix(uChkA, uChkB, chk);   // crimson: (0.004, 0, 0.008) / (0.34, 0, 0.03)
   // kick ripple: a ring of light running out across the floor from under the vessel
   float rr = length(h.xz - RB_SC.xz);
   float rk = 1.0 + uKT * 9.0;
   base += vec3(2.4, 0.9, 0.2) * rb_g((rr - rk) / 0.10) * exp(-uKT / 0.3);
   // contact shadow and glow under the vessel
   base *= 0.35 + 0.65 * smoothstep(0.2, 1.4, rr);
-  base += vec3(1.0, 0.3, 0.05) * exp(-rr * 1.5) * 0.35 * (0.4 + uGold);
+  base += vec3(1.0, 0.3, 0.05) * exp(-rr * 1.5) * 0.35 * (0.4 + uMetK.y);
   return base;
 }
 // billboard sprites: Sol (gold face with straight and wavy rays) and Luna (silver crescent)
@@ -699,7 +717,7 @@ void main() {
     vec3 envS = d2.y < 0.0 ? mix(fb + rb_skyGrad(vec3(d2.x, -d2.y, d2.z)) * 0.3, vec3(0.5, 0.06, 0.05), 1.0 - exp(-t2 * 0.02)) + orbs : env;
     float fres = pow(1.0 - max(dot(-rd, nS), 0.0), 4.0);
     col = envS * mix(tint, vec3(1.0), fres * 0.6);
-    col *= 1.0 - 0.35 * (1.0 - uGold) * (0.5 + 0.5 * vnoise(nS.xy * 9.0));   // leaden tarnish
+    col *= 1.0 - 0.35 * (1.0 - uMetK.x) * (0.5 + 0.5 * vnoise(nS.xy * 9.0));   // leaden tarnish
     col += vec3(2.2, 1.1, 0.35) * uFuse * (0.15 + 0.85 * pow(1.0 - max(dot(-rd, nS), 0.0), 2.0));
     col += vec3(1.0, 0.7, 0.4) * pow(max(dot(d2, normalize(vec3(-0.5, 0.8, -0.4))), 0.0), 60.0) * 6.0;
   } else if (hitF) {
@@ -729,7 +747,7 @@ void main() {
   vec3 hc = cam * vec3(0.0); 
   vec3 hv = transpose(cam) * (hl - ro);
   vec2 hs = hv.xy / hv.z * RB_F;
-  col += vec3(3.0, 2.2, 1.4) * sparkle(uv, hs, 0.10 + 0.06 * exp(-uKT / 0.1)) * (0.5 + uGold);
+  col += vec3(3.0, 2.2, 1.4) * sparkle(uv, hs, 0.10 + 0.06 * exp(-uKT / 0.1)) * (0.5 + uMetK.y);
   col += rb_sparkles(uv, 0.045) * 0.7;
   // the fusion (coniunctio): a starburst of rays and a shock ring from the vessel
   if (uFuse > 0.0) {
@@ -737,7 +755,7 @@ void main() {
     vec2 cs = cv.xy / cv.z * RB_F;
     vec2 d = uv - cs; float rr = length(d); float aa = atan(d.y, d.x);
     float rays = pow(0.5 + 0.5 * cos(aa * 12.0 + uTime * 2.0), 8.0) + 0.6 * pow(0.5 + 0.5 * cos(aa * 28.0 - uTime * 3.0), 16.0);
-    float ft = max(uLocal - 1.5441, 0.0);   // seconds since the fusion (beat 55.5)
+    float ft = max(uLocal - uFuseAt, 0.0);  // seconds since the fusion
     col += vec3(2.4, 1.2, 0.35) * rays * smoothstep(0.30, 0.5, rr) * exp(-(rr - 0.3) * 1.5) * uFuse;
     float rk = 0.35 + ft * 2.6;
     col += vec3(3.0, 2.0, 1.0) * rb_g((rr - rk) / 0.012) * exp(-ft / 0.25);
@@ -748,10 +766,14 @@ void main() {
   // ------------------------------------------------------------------ R3: the fly-through
   const R3 = `
 uniform float uTravel, uTunRoll, uImpact, uLand;
+uniform vec3 uLasA, uLasB, uLasC, uLasD;   // laser colours: beam 0, beam 3, beams 2 and 4, beams 1 and 5
+uniform vec2 uLasN;          // x: angle between beams (1.047: six evenly), y: number of beams
+uniform vec2 uWalls;         // ring kind: figures where mod(ring, 2) * x < y (1, .5: alternate; 0, .5: figures; 0, -1: eyes)
 void main() {
   vec2 uv = uvCentered(gl_FragCoord.xy);
-  vec2 vp = vec2(0.06 * sin(uTime * 1.3), 0.10 + 0.04 * sin(uTime * 0.9));
-  vec2 q = rb_rot(uv - vp, uTunRoll);
+  vec2 vp = vec2(0.06 * sin(uTime * 1.3), 0.10 + 0.04 * sin(uTime * 0.9)) + uCamK.zw;
+  vec2 q = rb_rot(uv - vp, uTunRoll) * uCamK.x;    // (uCamK.x = 1 / zoom here)
+  float pq = px() * uCamK.x;                        // one pixel in q units
   float r = max(length(q), 1e-3);
   float a = atan(q.y, q.x);
   // tunnel of radius 1: depth z = F / r
@@ -760,7 +782,7 @@ void main() {
   float zz = z + uTravel;
   float n = 14.0;                                   // figures per ring
   float cw = TAU / n;                               // cell width (tunnel radius 1)
-  float ew = px() * z * z / F;                      // pixel footprint on the wall
+  float ew = pq * z * z / F;                        // pixel footprint on the wall
   float u = a / cw;
   float ringD = abs(fract(zz + 0.5) - 0.5);         // distance to the nearest ring frame (wall units)
   float latt = abs(fract(u + 0.5) - 0.5) * cw;      // distance to the nearest lattice line
@@ -783,7 +805,7 @@ void main() {
   float detail = smoothstep(0.08, 0.025, ew);
   vec3 col = vec3(0.012, 0.004, 0.03);
   // (no clap inversion here: the tunnel already moves the whole frame)
-  if (mod(seg, 2.0) < 0.5) {
+  if (mod(seg, 2.0) * uWalls.x < uWalls.y) {
     float rowRot = seg * 0.5 + uTime * 0.35 * (mod(seg, 4.0) < 1.0 ? 1.0 : -1.0);
     float uu = u + rowRot;
     float id = floor(uu + 0.5);
@@ -821,17 +843,20 @@ void main() {
   float bp = fract(uBeat);
   float throwB = 0.22 * sin(PI * (1.0 - (1.0 - bp) * (1.0 - bp))) * (1.0 - uReduced);
   float gate = mix(0.70 + 0.30 * exp(-uKT / 0.25), 0.65, uReduced);   // kick lift, partial (+43 %)
+  // (the colours are read once, before the loop: uniform reads inside it cost ~10 % of the frame)
+  vec3 lA = uLasA, lB = uLasB, lC = uLasC, lD = uLasD;
+  float ls = uLasN.x, nb = uLasN.y;
   for (int i = 0; i < 6; i++) {
     float fi = float(i);
     float side = mod(fi, 2.0) * 2.0 - 1.0;
-    float ang = (fi * 1.047 + 0.3) + side * (0.6 * sin(uBeat * PI * 0.5 + fi) + throwB);
+    float ang = (fi * ls + 0.3) + side * (0.6 * sin(uBeat * PI * 0.5 + fi) + throwB);
     vec2 dir = vec2(cos(ang), sin(ang));
     float along = dot(q, dir);
     float perp = abs(dot(q, vec2(-dir.y, dir.x)));
     float w = 0.0015 + 0.004 * along;
-    float beam = (1.0 - smoothstep(w, w + px() * 1.5, perp)) * step(0.0, along);
-    vec3 lc = i == 0 ? vec3(0.6, 0.7, 2.6) : i == 3 ? vec3(2.6, 1.8, 0.5) : (mod(fi, 2.0) < 0.5 ? vec3(2.8, 0.15, 0.10) : vec3(2.4, 0.10, 1.2));
-    col += lc * (beam * 1.5 + 0.25 * exp(-perp / (0.02 + 0.03 * max(along, 0.0)))) * gate * smoothstep(0.02, 0.15, along);
+    float beam = (1.0 - smoothstep(w, w + pq * 1.5, perp)) * step(0.0, along);
+    vec3 lc = i == 0 ? lA : i == 3 ? lB : (mod(fi, 2.0) < 0.5 ? lC : lD);   // blue, gold, red, magenta
+    col += lc * (beam * 1.5 + 0.25 * exp(-perp / (0.02 + 0.03 * max(along, 0.0)))) * gate * step(fi + 0.5, nb) * smoothstep(0.02, 0.15, along);
   }
   col += rb_sparkles(uv, 0.05);
   // speed lines
@@ -845,18 +870,11 @@ void main() {
   const R4 = `
 uniform float uZoom, uSpin, uTiltA, uBloomOpen, uAurum, uLand;
 uniform vec2 uTilt;
-// lead into gold: the crimson mandala transmuted to molten gold, white-hot in the highlights,
-// with crimson left only in the deepest shadows
-vec3 rb_aurum(vec3 c) {
-  float l = dot(c, vec3(0.55, 0.38, 0.07));
-  vec3 g = l * mix(vec3(1.30, 0.66, 0.18), vec3(1.05, 0.92, 0.75), smoothstep(0.8, 3.0, l));
-  return mix(c, g, 0.85 * smoothstep(0.015, 0.12, l));
-}
 void main() {
   vec2 uv = uvCentered(gl_FragCoord.xy);
   float kenv = exp(-uKT / 0.11);
   float zoom = uZoom * (1.0 + 0.05 * kenv * (1.0 - 0.6 * uReduced) * (1.0 - uDive));
-  vec2 c = vec2(0.0, 0.10 * (1.0 - uDive));
+  vec2 c = vec2(0.0, 0.10 * (1.0 - uDive)) + uCamK.zw * (1.0 - uDive);
   vec2 tl = uTilt + vec2(0.05 * sin(uTime * 1.1), 0.035 * cos(uTime * 0.8)) * uTiltA;
   vec3 vw = rb_view(uv - c, zoom, tl, uSpin);
   vec2 p = vw.xy;
@@ -899,104 +917,409 @@ void main() {
   fragColor = vec4(rb_grade(col), 1.0);
 }`;
 
-  const common = (t, local, MO) => {
+  // ======================================================================== shots (JS)
+  // Every shot is a factory, MO.shot('rubedo.<name>', (cue) => ...), that a cue of the score places
+  // anywhere, at any length; without a cue list the end of this file places them at their 30 s
+  // windows, so that edit renders exactly as before.
+  //
+  // Clocks inside a shot (all relative to its cue):
+  //   ts    the choreography's start: the cue start minus params.offsetBeats (real time)
+  //   drop  the shot's virtual drop: ts minus the shot's natural distance from beat 48 (0, 4, 8, 12
+  //         beats). Section-wide state is counted from it, as the 30 s piece counted it from the
+  //         drop: the clap kaleidoscope steps, the ring rotation clock and uST (the centre's heat and
+  //         the inversion gate need uST >= 1 s outside the mandala shot, which this guarantees)
+  //   pc    progress seconds, (t - ts) scaled by params.speed: camera moves, travel, spins
+  //   one-shot events: impacts (the score's fx inside the cue window), the gold transmutation (the
+  //         score's words "lead" .. "gold" inside the cue), the fusion and the dive (the cue end)
+  // Kicks, claps and hats come from the score at absolute t.
+  //
+  // Params of every rubedo shot (optional, unknown keys ignored; uniforms, so every cue of a shot
+  // shares one program):
+  //   offsetBeats  0..16                start this far into the choreography (default 0)
+  //   speed        0.25..2 | 'fit'      rate of motion: camera moves, ring spin, travel ('fit':
+  //                                     natural length / cue length) (default 1; the tunnel caps it
+  //                                     at 1.5, faster its rings strobe)
+  //   seed         0..99                kaleidoscope phase (which glyph, eye and figure sits where),
+  //                                     sparkle scatter, animation phases (default 0)
+  //   palette      'crimson' | 'gold' | 'lead' | 'violet' | 'emerald' | 'nigredo': crimson as drawn
+  //                (default); gold: a warm gold duotone; lead: cool silver-grey, before the
+  //                transmutation; violet: albedo moonlight; emerald: the green lion; nigredo: ink and
+  //                violet. These are presets of the engine's generic post grade (scene.grade: zero
+  //                cost in the scene shader); an explicit params.grade wins over them
+  //   zoom         0.5..2               camera zoom multiplier (default 1)
+  //   pan          [x, y] screen units  camera offset (the frame is 2 units tall) (default [0, 0])
+  //   roll         -45..45 degrees      camera roll, added (default 0)
+  //   spin         -3..3                ring rotation rate and direction (-1 reverses) (default 1)
+  //   rings        1..7                 mandala rings drawn, centre outward: 1 the dancer in the
+  //                                     mandorla, 2 + the quaternity, 3 + the Net of Being (24
+  //                                     figures), 4 + 20 eyes, 5 + 16 glyph medallions, 6 + the
+  //                                     corona (and R4's great petals), 7 + the outer field (default 7);
+  //                                     fractions cut part-way (a soft radial edge)
+  //   assemble     0..8 beats           0: all rings at once; > 0: they grow out from the centre,
+  //                                     one ring per that many beats from the cue start, the edge
+  //                                     sweeping out over 0.15 s on each beat (default 0)
+  const BEAT = MO.BEAT;
+  const bt = (b) => b * BEAT;
+  const C = MO.clamp;
+  const num = (v, d) => (typeof v === 'number' && Number.isFinite(v) ? v : d);
+
+  // palette presets: the engine's generic grade (MO.gradeAt: hue, saturation, contrast, gain, lift on
+  // the tone-mapped picture). Measured: a colour matrix or a skipped uniform branch in these shaders
+  // cost 2-3 % of the frame in SwiftShader; the post grade costs nothing here.
+  const PALETTES = {
+    gold: { saturation: 0.35, gain: [1.12, 0.86, 0.46], contrast: 1.05 },
+    lead: { saturation: 0.08, gain: [0.86, 0.9, 1.0], contrast: 1.04 },
+    violet: { hue: -28, saturation: 0.55, gain: [0.78, 0.62, 1.15] },
+    emerald: { hue: 118, saturation: 0.9 },
+    nigredo: { saturation: 0.22, gain: [0.82, 0.70, 0.98], contrast: 1.15 },
+  };
+  // the rings knob: each block's outer bound in rb_mandala, inner edge -> natural bound as ring n
+  // comes in (blocks: quaternity 2, ring A 3, ring B 4, ring C 5, corona and R4's petals 6, outer
+  // field 7). Drawn as in the 30 s piece, the bounds equal the shader's own literals
+  const BLOCKS = [[0.33, 0.60, 2], [0.56, 0.86, 3], [0.84, 1.0, 4], [0.97, 1.17, 5], [1.40, 1e4, 7], [1.08, 2.05, 6], [1.13, 1.62, 6]];
+  const ringBounds = (n) => BLOCKS.map(([a, b, k]) => (n >= k ? b : n <= k - 1 ? a : MO.mix(a, b === 1e4 ? 2.4 : b, n - (k - 1))));
+  const ALL_RINGS = ringBounds(7);
+
+  // the score's impacts inside [a, b), in time order: [{t, dur}]
+  const impactsIn = (a, b) => MO.S.fx.filter((f) => f.type === 'impact').map((f) => ({ t: bt(f.beat), dur: f.duration }))
+    .filter((f) => f.t >= a - 1e-3 && f.t < b).sort((x, y) => x.t - y.t);
+  // words of the score's vocal lines matching re inside [a, b): [t...]
+  function wordsIn(re, a, b) {
+    const out = [];
+    for (const part in MO.S.vocals) for (const line of MO.S.vocals[part]) {
+      if (!Array.isArray(line.words)) continue;
+      for (const [w, step] of line.words) { const t = MO.barTime(line.bar, 0, step); if (re.test(w) && t >= a - 1e-6 && t < b) out.push(t); }
+    }
+    return out.sort((x, y) => x - y);
+  }
+
+  // natural windows (beats) and distance from the drop (beat 48)
+  const NAT = { mandala: [48, 52], wedding: [52, 56], tunnel: [56, 60], bloom: [60, 64] };
+  function cueContext(cue, name) {
+    const P = cue.params || {};
+    const nat = NAT[name], natB = nat[1] - nat[0];
+    const maxSpeed = name === 'tunnel' ? 1.5 : 2;
+    const speed = P.speed === 'fit' ? C(natB / Math.max(cue.beat1 - cue.beat0, 1e-3), 0.25, maxSpeed) : C(num(P.speed, 1), 0.25, maxSpeed);
+    const off = C(num(P.offsetBeats, 0), 0, 64);
+    const vb0 = cue.beat0 - off;
+    const seed = C(num(P.seed, 0), 0, 99);
+    const X = {
+      P, cue, from: cue.from, to: cue.to, speed, off, seed,
+      ts: bt(vb0), drop: bt(vb0 - (nat[0] - 48)),
+      L: bt(nat[1]) - bt(nat[0]),
+      spin: C(num(P.spin, 1), -3, 3),
+      impacts: impactsIn(cue.from, cue.to),
+    };
+    X.pc = (t) => off * BEAT + (t - X.from) * speed;
+    X.tmOn = speed !== 1 || seed !== 0;
+    X.tm = (t) => (X.tmOn ? X.from + (t - X.from) * speed + seed * 7.31 : t);
+    X.impactAt = (t) => { let f = null; for (const i of X.impacts) if (i.t <= t + 1e-9) f = i; return f; };
+    const zoom = C(num(P.zoom, 1), 0.5, 2), roll = C(num(P.roll, 0), -45, 45) * Math.PI / 180;
+    const pan = Array.isArray(P.pan) ? [num(P.pan[0], 0), num(P.pan[1], 0)] : [0, 0];
+    X.zoom = zoom; X.roll = roll; X.pan = pan;
+    X.camK = [zoom, roll, pan[0], pan[1]];
+    // the palette preset goes to the engine's post grade, unless the cue sets params.grade itself
+    X.grade = P.grade == null ? PALETTES[P.palette] : undefined;
+    const rings = C(num(P.rings, 7), 1, 7), asm = C(num(P.assemble, 0), 0, 8);
+    // assemble: a ring per `asm` beats, its edge sweeping out over 0.15 s on the beat
+    const still = rings >= 7 ? ALL_RINGS : ringBounds(rings);
+    X.rings = asm > 0
+      ? (t) => { const b = Math.max(0, t - X.from) / (asm * BEAT); return ringBounds(Math.min(rings, 1 + Math.floor(b) + MO.easeOut((b % 1) * asm * BEAT / 0.15))); }
+      : () => still;
+    return X;
+  }
+
+  // what every rubedo shot sets each frame (a program shared by several cues starts each scene
+  // from zeroed uniforms, so the knobs are always set)
+  const common = (t, X, spinRate = 1, spinFrom = X.drop) => {
     const since = (n) => { const l = MO.last(n, t); return l ? t - l.e.t : 99; };
-    const claps = MO.count('clap', t) - MO.count('clap', T0 - 0.001);
+    const claps = MO.count('clap', t) - MO.count('clap', X.drop - 0.001);
     const ct = since('clap');
-    return {
-      uST: t - T0, uKT: since('kick'), uCT: ct, uOT: since('openHat'), uHT: since('closedHat'),
+    const rate = (MO.reduced ? 0.5 : 1) * spinRate * X.spin * X.speed;
+    const u = {
+      uST: t - X.drop, uKT: since('kick'), uCT: ct, uOT: since('openHat'), uHT: since('closedHat'),
       uHN: MO.count('closedHat', t),
-      // each clap turns the rings one kaleidoscope step; not the drop's first clap (21.6 s), which
-      // lands with the kick and the "in" pop: together they would flash the whole frame
-      uClapStep: Math.max(0, claps - 2) + (claps > 1 ? MO.easeOut(ct / 0.12) : 0),
-      uSpinT: T0 + (MO.reduced ? 0.5 : 1) * (t - T0), uDive: 0, uInvAmt: 1,   // ring rotation clock (half speed in reduced)
+      // each clap turns the rings one kaleidoscope step; not the drop's first clap, which lands
+      // with the kick and the "in" pop: together they would flash the whole frame
+      uClapStep: Math.max(0, claps - 2) + (claps > 1 ? MO.easeOut(ct / 0.12) : 0) + X.seed,
+      uSpinT: spinFrom + rate * (t - spinFrom), uDive: 0, uInvAmt: 1,   // ring rotation clock (half speed in reduced)
+      uCamK: X.camK, uSeed: X.seed,
     };
+    const rb = X.rings(t);
+    u.uRingA = [rb[0], rb[1], rb[2], rb[3]]; u.uRingB = [rb[4], rb[5], rb[6]];
+    if (X.tmOn) u.uTime = X.tm(t);
+    return u;
   };
-
-  const T1 = MO.barTime(13), T2 = MO.barTime(14), T3 = MO.barTime(15), T4 = MO.barTime(16);
   const post = { bloom: 0.32, bloomThreshold: 1.2, vignette: 0.5 };
-  // the beat-48 impact (score.js fx): R1 draws its black-sun graphic for exactly those frames
-  const IMP = MO.S.fx.find((f) => f.type === 'impact' && Math.abs(f.beat * MO.BEAT - T0) < 1e-3);
-  const R1u = (t, local) => Object.assign(common(t, local, MO), { uImpact: IMP && !MO.reduced && t - T0 < IMP.duration ? 1 : 0 });
-  MO.scene(Object.assign({ id: 'rubedo', section: 'rubedo', from: T0, to: T1, fs: RB_LIB + R1, uniforms: R1u }, post));
+  // match-cut numbers shared with the shots that cut from / to the heart iris (coda.eye,
+  // zoomback.set): the iris radius in mandala units (r), its radius on screen at the end of the
+  // bloom's dive (screenR, half-heights) and the black pupil's share of it. Whoever loads first
+  // defines them; nobody else overrides.
+  MO.MATCH = MO.MATCH || {};
+  MO.MATCH.heartIris = MO.MATCH.heartIris || { r: 0.02, screenR: 1.36, pupil: 0.24 };
+  // a scene of the shot: the common post settings, and the palette preset as the engine's grade
+  const scene = (X, def) => MO.scene(Object.assign(X.grade ? { grade: X.grade } : {}, def, post));
+  const sceneId = (name, cue) => name + (Array.isArray(MO.S.cues) ? '@' + cue.index : '');
 
-  // R2 choreography: camera arc, orbits spiralling in, lead -> gold, fusion
-  const tGoldA = MO.barTime(13, 0, 4), tGoldB = MO.barTime(13, 0, 8);
-  const tFuse = MO.barTime(13, 3, 2);
+  // ------------------------------------------------------------------ rubedo.mandala (R1)
+  // Natural length 4 beats (1 bar), "Burn me in the fire". On an impact at the cue start (the drop:
+  // fx impact at beat 48) the black sun of Nigredo returns as an eclipse for the impact frames; the
+  // colour lands over two frames after it. Then the Mandala of the Self around the World dancer,
+  // fully lit, with a pull-out from the dancer to the whole mandala (1.72 s), drop speed lines,
+  // a kick shock ring, clap inversions and kaleidoscope steps, blinking eyes on the open hats.
+  // Any impact of the score inside the cue gets the eclipse frames and the landing; without one
+  // there is no landing dip. Longer: the pull-out holds (it eases to rest by construction); the
+  // roll, tilt, ring spin and every pulse go on. Shorter: cut early. offsetBeats skips into the
+  // pull. Own params: rings / assemble (an intro where the mandala builds ring by ring), spin.
+  MO.shot('rubedo.mandala', (cue) => {
+    const X = cueContext(cue, 'mandala');
+    scene(X, {
+      id: sceneId('rubedo', cue), fs: RB_LIB + R1,
+      uniforms: (t) => {
+        const imp = X.impactAt(t);
+        return Object.assign(common(t, X), {
+          uImpact: imp && !MO.reduced && t - imp.t < imp.dur ? 1 : 0,
+          uIT: imp ? t - imp.t : 99, uLandT: imp ? t - imp.t : 99, uPT: X.pc(t),
+        });
+      },
+    });
+  });
+
+  // ------------------------------------------------------------------ rubedo.wedding (R2)
+  // Natural length 4 beats, "turn my lead to gold". A chrome vessel over an endless checkerboard
+  // under the mandala-sun (a 1996 CD cover); the camera arcs round it over one bar; Sol and Luna
+  // orbit, spiralling in; the leaden sphere turns to gold from the word "lead" to the word "gold"
+  // (looked up in the score inside the cue; without them 1 and 2 beats in); half a beat before the
+  // cue END they fuse into the vessel (coniunctio: starburst and shock ring), so the fusion always
+  // lands on the cut. The floor inverts on claps, a ripple runs out on kicks.
+  // Longer: the arc settles after one bar (speed: 'fit' spreads it); the orbits keep their angular
+  // speed and the spiral stretches to the fusion. Shorter: the spiral is faster (or starts part-way
+  // with offsetBeats). Own params:
+  //   metal  the stone's colour at the end: 'gold' (default; 'transmute' is the same) | 'silver' |
+  //          'ruby' (it passes through gold on the words, then deepens to ruby by 1.5 beats after
+  //          "gold", step 14 of the bar) | 'lead' (no change)
+  //   from   its colour at the start: 'lead' (default) | 'silver' | 'gold'; equal to metal: no change
+  //   fuse   0..4 beats before the cue end (default 0.5) | false: no fusion, Sol and Luna keep
+  //          circling on a slowly tightening orbit
+  //   floor  'crimson' (default) | 'gold' | 'ivory' (black and white, the classic) | 'violet' | 'teal'
+  //   orbit  -180..180 degrees: the camera arc's start angle, added (default 0)
+  //   dist   0.6..1.6: camera distance multiplier (default 1); height -0.5..1.5: camera height added
+  //   (zoom moves the camera in: distance / zoom; pan and roll are not used here)
+  const FLOORS = {
+    crimson: [[0.004, 0.0, 0.008], [0.34, 0.0, 0.03]], gold: [[0.006, 0.002, 0.0], [0.42, 0.22, 0.03]],
+    ivory: [[0.002, 0.002, 0.004], [0.55, 0.50, 0.44]], violet: [[0.004, 0.0, 0.012], [0.16, 0.03, 0.40]],
+    teal: [[0.0, 0.004, 0.006], [0.02, 0.26, 0.26]],
+  };
   const norm = (v) => { const l = Math.hypot(...v); return v.map((x) => x / l); };
-  const camAt = (t) => {
-    const k = MO.clamp((t - T1) / B);
-    const phi = -0.32 + 0.50 * MO.easeInOut(k);
-    const dist = 4.9 - 0.6 * MO.easeInOut(k);
-    return [dist * Math.sin(phi), 0.78 + 0.12 * Math.sin(k * 3.0), -dist * Math.cos(phi)];
-  };
-  const CD = norm([0 - camAt(T1)[0], 1.6 + 0.35 - camAt(T1)[1], 0 - camAt(T1)[2]]);
-  const R2u = (t, local) => {
-    const k = MO.clamp((t - T1) / (tFuse - T1));
-    const rad = 2.15 * (1 - MO.easeIn(k));
-    const ang = 0.9 + 2.2 * k + 2.6 * k * k * k;
-    const tilt = 0.38;
-    const orb = (a) => {
-      const x = Math.cos(a) * rad, z = Math.sin(a) * rad;
-      return [x, 1.6 + z * Math.sin(tilt) * 0.6 + 0.15 * Math.sin(a * 2), z * Math.cos(tilt)];
+  // the stone's colours (tint of the chrome), the glow of the front that turns it, and how
+  // un-leaden a stone of that colour is (1 - tarnish)
+  const METALS = { lead: [0.42, 0.45, 0.52], silver: [0.86, 0.90, 1.0], gold: [1.25, 0.80, 0.34], ruby: [1.20, 0.10, 0.16] };
+  const METAL_F = { lead: [3.0, 1.6, 0.5], silver: [2.2, 2.5, 3.0], gold: [3.0, 1.6, 0.5], ruby: [3.0, 0.5, 0.4] };
+  const METAL_K = { lead: 0, silver: 1, gold: 1, ruby: 1 };
+  MO.shot('rubedo.wedding', (cue) => {
+    const X = cueContext(cue, 'wedding');
+    const P = X.P, B = MO.BAR;
+    const orbit0 = C(num(P.orbit, 0), -180, 180) * Math.PI / 180, distK = C(num(P.dist, 1), 0.6, 1.6) / X.zoom, hK = C(num(P.height, 0), -0.5, 1.5);
+    // the camera arc over one bar of progress x (s, speed-scaled); it eases to rest at its end
+    const camAt = (x) => {
+      const k = C(x / B);
+      const phi = -0.32 + 0.50 * MO.easeInOut(k) + orbit0;
+      const dist = (4.9 - 0.6 * MO.easeInOut(k)) * distK;
+      return [dist * Math.sin(phi), 0.78 + 0.12 * Math.sin(k * 3.0) + hK, -dist * Math.cos(phi)];
     };
-    return Object.assign(common(t, local, MO), {
-      uRo: camAt(t), uTa: [0, 1.32, 0], uCD: norm(CD.map((v, i) => MO.mix(v, norm([0 - camAt(t)[0], 1.95 - camAt(t)[1], 0 - camAt(t)[2]])[i], 0.75))),
-      uSol: orb(ang), uLuna: orb(ang + Math.PI),
-      uGold: MO.smooth(MO.remap(t, tGoldA, tGoldB)),
-      // the fusion ramps in over 5 frames instead of jumping to 0.9: with the beat-56 impact and the
-      // tunnel 0.22 s later it would otherwise be the first of three hard flashes in 0.66 s
-      uFuse: MO.smooth((t - tFuse) / 0.16),
-      uOrbit: k,
+    // past the arc's end (a cue longer than a bar) the camera keeps its last velocity and eases to rest
+    const camArc = (x) => {
+      if (x <= B) return camAt(x);
+      const h = 0.02, tau = 0.25 * B, a = camAt(B), b = camAt(B - h), e = tau * (1 - Math.exp(-(x - B) / tau)) / h;
+      return a.map((v, i) => v + (v - b[i]) * e);
+    };
+    const c0 = camAt(0);
+    const CD = norm([0 - c0[0], 1.6 + 0.35 - c0[1], 0 - c0[2]]);
+    // the transmutation: from "lead" to "gold" in the score, else 1 and 2 beats in
+    const golds = wordsIn(/^gold/i, X.from, X.to);
+    const tGoldB = golds.length ? golds[0] : X.ts + bt(2);
+    const leads = wordsIn(/^lead/i, X.from, tGoldB);
+    const tGoldA = leads.length ? leads[leads.length - 1] : tGoldB - BEAT;
+    // the stone: from -> to on the words (a front sweeping down it), ruby: then gold -> ruby
+    const end = P.metal === 'transmute' || !METALS[P.metal] ? 'gold' : P.metal, start = METALS[P.from] ? P.from : 'lead';
+    const turns = end !== start;
+    const mid = end === 'ruby' ? 'gold' : end;
+    const tRuby = tGoldB + bt(1.5);
+    const metal = (t) => {
+      if (!turns) return { a: METALS[start], b: METALS[start], g: 0, k: [METAL_K[start], METAL_K[start]] };
+      const g1 = MO.smooth(MO.remap(t, tGoldA, tGoldB));
+      if (end === 'ruby' && t >= tGoldB) {
+        const g2 = MO.smooth(MO.remap(t, tGoldB, tRuby));
+        return { a: METALS.gold, b: METALS.ruby, g: g2, k: [1, 1], f: METAL_F.ruby };
+      }
+      // tarnish fades as a leaden stone turns; the warm glow follows the gold (the 30 s piece:
+      // lead -> gold, uMetK = (uGold, uGold))
+      const lead = start === 'lead' ? g1 : 1, warm = mid === 'gold' ? (start === 'gold' ? 1 : g1) : 0.5 * g1;
+      return { a: METALS[start], b: METALS[mid], g: start === mid ? 0 : g1, k: [lead, warm], f: METAL_F[mid] };
+    };
+    // the fusion, anchored to the cue end
+    const fuse = P.fuse !== false;
+    const tFuse = fuse ? X.to - bt(C(num(P.fuse, 0.5), 0, 4)) : X.to;
+    const NF = bt(55.5) - bt(52);   // the orbit's natural span (s) to the fusion
+    const xFuse = X.pc(tFuse);
+    const floor = FLOORS[P.floor] || FLOORS.crimson;
+    scene(X, {
+      id: sceneId('rubedo-wedding', cue), fs: RB_LIB + R2,
+      uniforms: (t) => {
+        const x = X.pc(t);
+        const k = C((t - X.ts) / (tFuse - X.ts));
+        // radius spirals in to the fusion; the angle keeps the natural angular speed (speed-scaled)
+        const rad = fuse ? 2.15 * (1 - MO.easeIn(k)) : 2.15 * (1 - 0.35 * MO.smooth(k));
+        // (the orbit stops where they fuse)
+        const ang = 0.9 + 2.2 * ((fuse ? Math.min(x, xFuse) : x) / NF) + (fuse ? 2.6 * k * k * k : 0) + X.seed * 1.7;
+        const tilt = 0.38;
+        const orb = (a) => {
+          const ox = Math.cos(a) * rad, oz = Math.sin(a) * rad;
+          return [ox, 1.6 + oz * Math.sin(tilt) * 0.6 + 0.15 * Math.sin(a * 2), oz * Math.cos(tilt)];
+        };
+        const ro = camArc(x);
+        return Object.assign(common(t, X), {
+          uRo: ro, uTa: [0, 1.32, 0], uCD: norm(CD.map((v, i) => MO.mix(v, norm([0 - ro[0], 1.95 - ro[1], 0 - ro[2]])[i], 0.75))),
+          uSol: orb(ang), uLuna: orb(ang + Math.PI),
+          ...((m) => ({ uGold: m.g, uMetA: m.a, uMetB: m.b, uMetK: m.k, uMetF: m.f || METAL_F.gold }))(metal(t)),
+          // the fusion ramps in over 5 frames instead of jumping to 0.9: with an impact on the cut and
+          // the next shot 0.22 s later it would otherwise be the first of three hard flashes in 0.66 s
+          uFuse: fuse ? MO.smooth((t - tFuse) / 0.16) : 0,
+          // (the 30 s cut used 1.5441 s; its 18 us bias is kept so that edit renders bit-identically)
+          uFuseAt: tFuse - X.from - (bt(55.5) - bt(52) - 1.5441),
+          uOrbit: k, uChkA: floor[0], uChkB: floor[1],
+        });
+      },
     });
-  };
-  MO.scene(Object.assign({ id: 'rubedo-wedding', section: 'rubedo', from: T1, to: T2, fs: RB_LIB + R2, uniforms: R2u }, post));
+  });
 
-  // R3: forward travel with a lift on every kick. Kept under ~2 rings/s (0.07 ring per frame): faster,
-  // the dark figure rings and white eye rings swap places from frame to frame and the whole tunnel
-  // strobes. The energy comes from the lasers, the hoops and the speed lines instead.
-  // Reduced: a steady glide, no lifts.
-  const IMP56 = MO.S.fx.find((f) => f.type === 'impact' && Math.abs(f.beat * MO.BEAT - T2) < 1e-3);
-  const R3u = (t0, local) => {
-    // under the beat-56 impact the frame holds still (the post keys it to a two-tone card), so the
-    // two impact frames read as one hit, not two
-    const t = IMP56 && !MO.reduced && t0 - T2 < IMP56.duration ? T2 + 0.001 : t0;
-    let travel = (MO.reduced ? 0.9 : 1.0) * (t - T2);
-    const kicks = MO.reduced ? [] : MO.events.kick.filter((e) => e.t >= T2 - 1e-6 && e.t <= t + 1e-6);
-    for (const e of kicks) travel += 0.2 * MO.smooth((t - e.t) / 0.44);
-    return Object.assign(common(t, local, MO), {
-      uTime: t, uBeat: t / MO.BEAT,
-      uImpact: t !== t0 ? 1.1 - 0.6 * (t0 - T2) / IMP56.duration : 0,   // > 0: impact frame, line width
-      uLand: IMP56 && !MO.reduced ? MO.clamp(1 - (t0 - T2 - IMP56.duration) / 0.08) : 0,
-      uTravel: travel, uTunRoll: 0.30 * (t - T2) + 0.12 * Math.sin((t - T2) * 2.1),
-    });
+  // ------------------------------------------------------------------ rubedo.tunnel (R3)
+  // Natural length 4 beats, "Magnum Opus". Fly-through a tunnel of rings of figures and eyes, a
+  // lift on every kick, a hoop of light flying past on each kick, six lasers sweeping from the
+  // vanishing point on the beat, speed lines, sparkles on the hats. Under an impact of the score
+  // inside the cue (beat 56 in the 30 s piece, on the cut) the frame holds still and draws the
+  // two-tone impact card, then lands over three frames.
+  // Any length: the travel, roll and lasers go on (kept under ~2 rings/s: faster, the figure and
+  // eye rings swap places from frame to frame and the tunnel strobes, so speed is capped at 1.5).
+  // Own params:
+  //   lasers  'mixed' (default: blue, magenta, red, gold) | 'gold' | 'red' | 'blue' | 'white' | 'off' |
+  //           'rainbow' (the seven chakra colours: four at a time on the beams, the set stepping
+  //           one chakra on each kick)
+  //   beams   1..6 (default 6): how many lasers, evenly spread
+  //   walls   'mixed' (default: figure and eye rings alternate) | 'figures' | 'eyes'
+  //   (zoom: field of view; pan: vanishing point offset; roll: added to the tunnel roll)
+  // [beam 0, beam 3, beams 2 and 4, beams 1 and 5] (the 30 s set: blue, gold, red, magenta). Four
+  // slots in the 30 s select chain: per-beam colours cost ~7 % of the tunnel's frame in SwiftShader
+  const two = (a, b) => [a, b, a, b];
+  const LASERS = {
+    mixed: [[0.6, 0.7, 2.6], [2.6, 1.8, 0.5], [2.8, 0.15, 0.10], [2.4, 0.10, 1.2]],
+    gold: two([2.6, 1.8, 0.5], [2.8, 1.2, 0.25]), red: two([2.8, 0.15, 0.10], [2.6, 0.05, 0.35]),
+    blue: two([0.6, 0.7, 2.6], [0.3, 1.2, 2.4]), white: two([2.2, 2.0, 1.8], [2.2, 2.0, 1.8]), off: two([0, 0, 0], [0, 0, 0]),
   };
-  MO.scene(Object.assign({ id: 'rubedo-tunnel', section: 'rubedo', from: T2, to: T3, fs: RB_LIB + R3, uniforms: R3u }, post));
+  // the chakra colours as laser light (the energy in the dominant channel, like citrinitas' CIT_HOT)
+  const RAINBOW = [[2.8, 0.05, 0.08], [2.8, 0.7, 0.03], [2.6, 2.0, 0.1], [0.2, 2.6, 0.4], [0.15, 1.1, 2.8], [0.8, 0.3, 2.8], [2.2, 0.6, 2.8]];
+  MO.shot('rubedo.tunnel', (cue) => {
+    const X = cueContext(cue, 'tunnel');
+    const P = X.P;
+    const rainbow = P.lasers === 'rainbow', set = LASERS[P.lasers] || LASERS.mixed;
+    const nb = Math.round(C(num(P.beams, 6), 1, 6));
+    const lasS = nb === 6 ? 1.047 : 1.047 * 6 / nb;
+    const lasers = (t) => {
+      if (!rainbow) return set;
+      const k = MO.count('kick', t);
+      return [0, 1, 2, 3].map((i) => RAINBOW[(2 * i + k) % 7]);
+    };
+    const walls = P.walls === 'figures' ? [0, 0.5] : P.walls === 'eyes' ? [0, -1] : [1, 0.5];
+    const kicks = MO.events.kick.filter((e) => e.t >= X.from - 1e-6 && e.t < X.to);
+    scene(X, {
+      id: sceneId('rubedo-tunnel', cue), fs: RB_LIB + R3,
+      uniforms: (t0) => {
+        // under an impact the frame holds still (the post keys it to a two-tone card), so the two
+        // impact frames read as one hit, not two
+        const imp = X.impactAt(t0);
+        const held = !!(imp && !MO.reduced && t0 - imp.t < imp.dur);
+        const t = held ? imp.t + 0.001 : t0;
+        // forward travel with a lift on every kick (reduced: a steady glide, no lifts)
+        let travel = (MO.reduced ? 0.9 : 1.0) * X.pc(t);
+        if (!MO.reduced) for (const e of kicks) { if (e.t > t + 1e-6) break; travel += 0.2 * MO.smooth((t - e.t) / 0.44); }
+        const x = X.pc(t);
+        const u = Object.assign(common(t, X), {
+          uTime: X.tm(t), uBeat: t / MO.BEAT,
+          uImpact: held ? 1.1 - 0.6 * (t0 - imp.t) / imp.dur : 0,   // > 0: impact frame, line width
+          uLand: imp && !MO.reduced ? C(1 - (t0 - imp.t - imp.dur) / 0.08) : 0,
+          uTravel: travel + X.seed * 0.37, uTunRoll: 0.30 * x + 0.12 * Math.sin(x * 2.1) + X.roll + X.seed * 0.9,
+          ...((l) => ({ uLasA: l[0], uLasB: l[1], uLasC: l[2], uLasD: l[3] }))(lasers(t)),
+          uLasN: [lasS, nb], uWalls: walls,
+        });
+        u.uCamK = [1 / X.zoom, 0, X.pan[0], X.pan[1]];   // the tunnel takes 1 / zoom; roll goes into uTunRoll
+        return u;
+      },
+    });
+  });
 
-  // R4 ("I am whole!"): the mandala in full gold bloom, frontal and larger than R1. One camera move:
-  // a slow push that accelerates on "whole" (beat 62) into a constant-rate dive into the heart from
-  // beat 62.5. It ends on the heart iris at the size the coda opens with (iris radius 1.36 screen
-  // units, black pupil 0.24 of it), so the cut on beat 64 is a match cut.
-  const tWhole = MO.barTime(15, 2), tDive = MO.barTime(15, 2.5);
-  const Z0 = 1.0, V0 = 0.18;                       // start zoom; slow push in log-zoom per second
-  const Z_END = 1.36 / 0.02;                       // heart iris (radius 0.02) at 1.36 screen units
-  const RD = tDive - tWhole;
-  const ramp = (x) => { x = MO.clamp(x); return x * x * x - x * x * x * x / 2; };   // integral of smoothstep
-  const VD = V0 + (Math.log(Z_END / Z0) - V0 * (T4 - T3)) / (0.5 * RD + (T4 - tDive));  // ~5.2/s = 1.19x per frame
-  const logZ = (t) => Math.log(Z0) + V0 * (t - T3) + (VD - V0) * (t < tDive ? RD * ramp((t - tWhole) / RD) : 0.5 * RD + (t - tDive));
-  const LW = logZ(tWhole), LE = logZ(T4);
-  const R4u = (t, local) => {
-    const k = MO.clamp((t - T3) / (tWhole - T3));
-    const dive = MO.clamp((logZ(t) - LW) / (LE - LW));   // dive progress in log-zoom: keys the fades to what is on screen
-    const amp = 0.22 * (1 - 0.4 * MO.smooth(k)) * (1 - MO.smooth(dive / 0.4)), ph = 2.1 + 4.0 * (t - T3);
-    return Object.assign(common(t, local, MO), {
-      uZoom: Math.exp(logZ(t)), uSpin: 0.28 * (t - T3), uTiltA: 1 - dive,
-      // the disc precesses gently like a spinning coin (nearly frontal), flattening for the dive
-      uTilt: [amp * Math.cos(ph), 0.8 * amp * Math.sin(ph)],
-      uSpinT: T3 + (MO.reduced ? 1.0 : 2.0) * (t - T3), uDive: dive, uBloomOpen: 1,
-      uLand: MO.clamp(1 - (t - T3) / 0.07), uInvAmt: 0.5,
-      uAurum: 0.15 + 5.0 * (t - T3),
+  // ------------------------------------------------------------------ rubedo.bloom (R4)
+  // Natural length 4 beats, "I am whole!". The mandala in full gold bloom, frontal and larger than
+  // R1, twelve great magenta petals open behind the corona; a gold front runs out from the heart at
+  // the start (the transmutation); the disc precesses gently like a spinning coin. One camera move:
+  // a slow push that accelerates on "whole" into a constant-rate dive into the heart, ending on the
+  // heart iris at the size the coda opens with (iris radius 1.36 screen units, black pupil 0.24 of
+  // it): the cut into coda.eye is a match cut.
+  // The dive is anchored to the cue END: it starts on the word "whole" if the score sings it in the
+  // cue's last 1..4 beats, else 2 beats before the end, and always ends on the iris at the cut.
+  // Longer: the slow push gets the extra time, at the natural rate up to a 1.8x zoom gain, slower
+  // beyond; the precession and spin go on. Shorter than 2 beats: the dive starts part-way, zoomed
+  // in. The roll is anchored to the end too (the last frame is the same at any length).
+  // Own params:
+  //   dive    'heart' (default) | 'none': no dive, the slow push settles (for a cue not followed by
+  //           the coda)
+  //   aurum   'front' (default: the gold front at the start) | 'gold' (already gold) | 'crimson' (none)
+  //   rings, assemble, spin (as the mandala); zoom/pan/roll fade out during the dive so the last
+  //   frame still matches the coda
+  MO.shot('rubedo.bloom', (cue) => {
+    const X = cueContext(cue, 'bloom');
+    const P = X.P;
+    const ts = X.ts, te = X.to;
+    const Z0 = 1.0, V0 = 0.18;                       // start zoom; slow push in log-zoom per second
+    const IRIS = MO.MATCH.heartIris;
+    const Z_END = IRIS.screenR / IRIS.r;             // heart iris (radius 0.02) at 1.36 screen units
+    const diveOn = P.dive !== 'none' && P.dive !== false;
+    const whole = wordsIn(/^whole/i, te - bt(4), te - bt(1));
+    const tWhole = whole.length ? whole[whole.length - 1] : te - bt(2);
+    const tDive = tWhole + 0.5 * BEAT;
+    const RD = tDive - tWhole;
+    const ramp = (x) => { x = C(x); return x * x * x - x * x * x * x / 2; };   // integral of smoothstep
+    // the slow push before "whole": natural rate, but at most 0.6 in log-zoom however long the cue
+    const Vp = Math.min(V0 * X.speed, 0.6 / Math.max(1e-3, (diveOn ? tWhole : te) - ts));
+    const VD = Vp + (Math.log(Z_END / Z0) - Vp * (te - ts)) / (0.5 * RD + (te - tDive));  // ~5.2/s = 1.19x per frame
+    const logZ = diveOn
+      ? (t) => Math.log(Z0) + Vp * (t - ts) + (VD - Vp) * (t < tDive ? RD * ramp((t - tWhole) / RD) : 0.5 * RD + (t - tDive))
+      : (t) => Math.log(Z0) + 0.6 * (1 - Math.exp(-V0 * X.speed * (t - ts) / 0.6));   // settles at a 1.8x zoom gain
+    const LW = logZ(tWhole), LE = logZ(te);
+    const lzK = Math.log(X.zoom);
+    const aurum = P.aurum === 'gold' ? () => 9 : P.aurum === 'crimson' ? () => -1 : (t) => 0.15 + 5.0 * (t - ts);
+    const NL = bt(64) - bt(60);
+    scene(X, {
+      id: sceneId('rubedo-bloom', cue), fs: RB_LIB + R4,
+      uniforms: (t) => {
+        const k = C((t - ts) / ((diveOn ? tWhole : te) - ts));
+        const dive = diveOn ? C((logZ(t) - LW) / (LE - LW)) : 0;   // dive progress in log-zoom: keys the fades to what is on screen
+        const amp = 0.22 * (1 - 0.4 * MO.smooth(k)) * (1 - MO.smooth(dive / 0.4)), ph = 2.1 + 4.0 * X.speed * (t - ts) + X.seed * 1.3;
+        const lz = lzK !== 0 ? logZ(t) + lzK * (1 - dive) : logZ(t);
+        return Object.assign(common(t, X, 2, ts), {   // the rings spin twice as fast here
+          uZoom: Math.exp(lz),
+          // the roll is anchored to the end: the last frame is the same at any cue length
+          uSpin: 0.28 * (NL - X.speed * (te - t)) + X.roll * (1 - dive),
+          uTiltA: 1 - dive,
+          // the disc precesses gently like a spinning coin (nearly frontal), flattening for the dive
+          uTilt: [amp * Math.cos(ph), 0.8 * amp * Math.sin(ph)],
+          uDive: dive, uBloomOpen: 1,
+          uLand: C(1 - (t - X.from) / 0.07), uInvAmt: 0.5,
+          uAurum: aurum(t),
+        });
+      },
     });
-  };
-  MO.scene(Object.assign({ id: 'rubedo-bloom', section: 'rubedo', from: T3, to: T4, fs: RB_LIB + R4, uniforms: R4u }, post));
+  });
+
+  // without a cue list: the 30 s edit (and the regression test of this refactor)
+  if (!Array.isArray(MO.S.cues)) for (const name in NAT) MO.runShot(MO.makeCue('rubedo.' + name, NAT[name][0], NAT[name][1]));
 })();
