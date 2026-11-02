@@ -13,7 +13,8 @@
 //                  Throat (40), third eye (42). Speed lines tick with the 16th / 32nd roll.
 // C4  beats 44–46  SAHASRARA: arms raised, the seven chakras blaze in a rainbow column, the
 //                  thousand-petalled lotus opens above the head, the sun goes white-gold,
-//                  extreme push-in into the lotus.
+//                  extreme push-in into the lotus, whose light floods the frame in magenta and
+//                  violet up to the hard cut into the gap.
 // C5  beats 46–48  white-gold under the overlay's full-screen RUBEDO insert.
 //
 // The luminous body is copied from scenes/albedo.js (prefix alb → cit) so the figure is the
@@ -180,7 +181,10 @@ vec2 citPetalRing(float r, float a, float np, float rc, float h, float wfac, flo
 // HDR emission in a chakra's hue. ACES + gamma pull bright near-equal RGB to white and lift the
 // secondary channel (orange turns yellow, blue turns cyan-white), so the colour is raised to a
 // power first: the energy sits in the dominant channel and the hue survives the tone map.
-vec3 citHot(float i) { return pow(chakraColor(i), vec3(2.6)); }
+// = pow(chakraColor(i), 2.6) for i = 0..6, precomputed (it is evaluated per pixel).
+const vec3 CIT_HOT[7] = vec3[7](vec3(0.8751, 0.0007, 0.0014), vec3(1.0, 0.0808, 0.0), vec3(1.0, 0.5969, 0.0004),
+  vec3(0.0025, 0.7604, 0.0272), vec3(0.0004, 0.1649, 1.0), vec3(0.0437, 0.0040, 1.0), vec3(0.6554, 0.0652, 1.0));
+vec3 citHot(float i) { return CIT_HOT[int(clamp(i, 0.0, 6.0) + 0.5)]; }
 
 // a chakra mandala: unlit (silver, small) .. lit (its colour, larger, pointed lotus petals with
 // nested contours, turning)
@@ -609,8 +613,8 @@ vec4 citMountain(vec2 w, float pxw) {
 #endif
 
 // ---------------------------------------------------------------- anime speed lines (screen)
-float citSpeed(vec2 p, vec2 c, float n, float inner, float seed) {
-  vec2 d = p - c; float r = length(d); float a = citAtan(d.y, d.x);
+// (polar form for callers that already have the radius and angle around c)
+float citSpeedRA(float r, float a, float n, float inner, float seed) {
   float sx = a / TAU * n; float sid = floor(sx);
   float h = hash11(sid * 1.37 + seed);
   float wpx = 0.7 + 2.6 * h * h;
@@ -618,11 +622,14 @@ float citSpeed(vec2 p, vec2 c, float n, float inner, float seed) {
   float line = 1.0 - smoothstep(0.0, px() * wpx, sw);
   return line * step(0.58, h) * smoothstep(inner * (0.6 + 0.7 * h), inner * (1.0 + 0.7 * h) + 0.25, r);
 }
+float citSpeed(vec2 p, vec2 c, float n, float inner, float seed) {
+  vec2 d = p - c; return citSpeedRA(length(d), citAtan(d.y, d.x), n, inner, seed);
+}
 
 // ---------------------------------------------------------------- a chakra ignites (sakuga)
 // Takes the frame and returns it with the ignition on it. Behind the shock front the picture
-// takes the chakra's hue (a luminance-keeping grade, so it reads as colour, not as a flash),
-// then lets go. A coloured shock ring with a 1-px white-hot leading edge (wider for each chakra,
+// takes the chakra's hue (a grade: the light and linework stay, the hue is replaced, so it reads
+// as colour, not as a white flash), then lets go. A coloured shock ring with a 1-px white-hot leading edge (wider for each chakra,
 // a rainbow for the crown), a lotus bloom, a small white core, sparkles, burst lines. Everything
 // escalates from the root (i = 0) to the crown (i = 6).
 vec3 citBurst(vec3 col, vec2 p, vec2 c, float age, int i, float S) {
@@ -636,10 +643,13 @@ vec3 citBurst(vec3 col, vec2 p, vec2 c, float age, int i, float S) {
   float R1 = 2.6 * (1.0 - exp(-age * 4.0));
   // 0. the colour sweeps out with the shock front (red lingers past the gold flash)
   {
-    float dec = i == 0 ? 0.42 : 0.22 + 0.08 * esc;
+    float dec = i == 0 ? 0.5 : 0.22 + 0.08 * esc;
     // held for ~2 frames, nearly complete at the core: a partial mix of HDR-white linework still
     // tone-maps to white, so the core of the burst has to be (briefly) all chakra colour
     float gA = (0.80 + 0.12 * esc + (i == 0 ? 0.08 : 0.0)) * exp(-max(age - 0.08, 0.0) / dec) * (1.0 - 0.7 * uReduced);
+    // the root rises over 0.2 s under the gold flash of the same beat (which hides the first
+    // frames anyway), so the drop from gold to the darker red does not stack on the flash decay
+    if (i == 0) gA *= smoothstep(0.0, 0.2, age);
     // (the root floods the whole Mountain: it has to win against the gold flash on the same beat)
     float gm = gA * (1.0 - smoothstep(R1 * 0.8 - 0.05, R1, r)) * min((i == 0 ? 0.7 : 0.4) + 0.65 * exp(-r * 1.5), 1.0);
     float lb = dot(col, vec3(0.2126, 0.7152, 0.0722));
@@ -657,7 +667,8 @@ vec3 citBurst(vec3 col, vec2 p, vec2 c, float age, int i, float S) {
     float band = 1.0 - smoothstep(wd, wd + 1.5 * PX, abs(dr));
     float edge = 1.0 - smoothstep(0.0, 1.5 * PX, abs(dr - wd));
     float trail = 1.0 - smoothstep(0.0, wd * 2.5 + 3.0 * PX, abs(dr + wd * 2.0));
-    vec3 kc = i == 6 ? citHot(6.0 - 2.0 * floor(sat((wd - dr) / (2.0 * wd)) * 3.99)) : hc;
+    vec3 kc = hc;
+    if (i == 6) kc = citHot(6.0 - 2.0 * floor(sat((wd - dr) / (2.0 * wd)) * 3.99));
     float fade = exp(-age * 3.2) * I;
     col = mix(col, hc * 1.6, sat(trail * 0.4 * fade));
     col = mix(col, kc * 2.4, sat(band * mix(1.0, seg, 0.6) * fade));
@@ -698,7 +709,7 @@ vec3 citBurst(vec3 col, vec2 p, vec2 c, float age, int i, float S) {
     col += mix(vec3(1.0, 0.95, 0.85), hc * 1.6, 0.6) * 1.8 * sparkle(p, sp, ssz) * (1.0 - smoothstep(0.45, 0.62, age)) * I;
   }
   // 5. burst lines: re-rolled once per 16th note, frozen in reduced-flashing mode
-  if (age < 0.6) col += mix(hc * 1.6, vec3(1.0, 0.9, 0.7), 0.25) * citSpeed(p, c, 120.0, 0.35 + age * 1.5, floor(age * 9.0666667 * (1.0 - uReduced))) * exp(-age * 4.0) * 1.4 * I;
+  if (age < 0.6) col += mix(hc * 1.6, vec3(1.0, 0.9, 0.7), 0.25) * citSpeedRA(r, a, 120.0, 0.35 + age * 1.5, floor(age * 9.0666667 * (1.0 - uReduced))) * exp(-age * 4.0) * 1.4 * I;
   return col;
 }
 
@@ -743,7 +754,8 @@ vec4 citEyeCU(vec2 p, vec2 c, float sc, float ro, float o, vec3 irA, vec3 irB, f
   float mid = 0.5 * (yu + yl);
   float fld = max(e.y > mid ? e.y - yu : yl - e.y, 0.0) * 1.2 + 0.6 * max(abs(e.x) - 0.95, 0.0);
   vec3 col = vec3(0.10, 0.035, 0.006) * (1.25 - 0.5 * sat(fld));
-  col += vec3(1.0, 0.55, 0.15) * citIso(fld / 0.075 - uTime * 1.5, pe / 0.075 * 1.2, 1.0) * 0.30 * smoothstep(0.03, 0.12, fld) * (1.0 - smoothstep(0.5, 1.1, fld));
+  // (in C3b the flow accelerates with the build, uRamp; at most ~0.25 line spacings per frame)
+  col += vec3(1.0, 0.55, 0.15) * citIso(fld / 0.075 - uTime * 1.5 - uRamp * 2.0, pe / 0.075 * 1.2, 1.0) * (0.30 + 0.25 * uRamp) * smoothstep(0.03, 0.12, fld) * (1.0 - smoothstep(0.5, 1.1, fld));
   float cover = withSkin;
   // the brow: fine parallel strokes
   for (int i = 0; i < 4; i++) {
@@ -821,7 +833,7 @@ vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   vec2 pb = citPetalRing(r, a + spin, np, rc + 0.08 * h, max(h * 1.12, 1e-4), 0.95, 0.5);
   vec3 rc0 = m < 0.5 ? vec3(1.0, 0.90, 0.70) : m < 1.5 ? vec3(1.0, 0.70, 0.22) : m < 2.5 ? vec3(1.0, 0.32, 0.30) : m < 3.5 ? vec3(0.90, 0.18, 0.75) : vec3(0.42, 0.16, 1.0);
   // blazing: the same palette, saturated (cream -> gold, gold -> orange, coral -> red ...) and glowing
-  rc0 = mix(rc0, pow(rc0, vec3(m < 0.5 ? 6.0 : 3.0)) * 1.8, uBlaze.x);
+  if (uBlaze.x > 0.0) { vec3 c3 = rc0 * rc0 * rc0; rc0 = mix(rc0, (m < 0.5 ? c3 * c3 : c3) * 1.8, uBlaze.x); }
   float inA = fill(pa.x, pr) * step(0.001, g), inB = fill(pb.x, pr) * step(0.001, g);
   float dA = sat(-pa.x / pa.y), dB = sat(-pb.x / pb.y);
   vec3 col = vec3(0.0);
@@ -839,8 +851,11 @@ vec4 citLotus(vec2 w, vec2 c, float RL, float pxw) {
   col += vec3(1.0, 0.85, 0.6) * citLine(r - R0, pr, 1.5) * og;
   col += vec3(2.4, 2.1, 1.6) * (fill(r - rb, pr) + exp(-r / (rb * 0.9)) * 0.6) * og;
   // blazing: a violet halo with fine rings in the seven chakra colours (the column flows into the crown)
-  float hr = r / R0 * 8.0 - 0.5;
-  col += (citHot(6.0) * (1.3 + 0.6 * uBlaze.x) * exp(-r / (R0 * 0.8)) + citHot(clamp(floor(hr + 0.5) - 1.0, 0.0, 6.0)) * 1.8 * citIso(hr, pr / R0 * 8.0, 1.4) * step(1.0, hr) * step(hr, 7.5)) * uBlaze.x * og;
+  // (uniform branches: SwiftShader skips them while the blaze is off)
+  if (uBlaze.x > 0.0) {
+    float hr = r / R0 * 8.0 - 0.5;
+    col += (citHot(6.0) * (1.3 + 0.6 * uBlaze.x) * exp(-r / (R0 * 0.8)) + citHot(clamp(floor(hr + 0.5) - 1.0, 0.0, 6.0)) * 1.8 * citIso(hr, pr / R0 * 8.0, 1.4) * step(1.0, hr) * step(hr, 7.5)) * uBlaze.x * og;
+  }
   al = max(al, fill(r - R0, pr) * og);
   return vec4(col * (1.0 + 0.4 * uBlaze.y), al * step(r, 1.02));
 }
@@ -890,7 +905,7 @@ void main() {
 #endif
 #ifdef CIT_SPEED
   // re-rolled once per 16th (with the roll and the hats), frozen in reduced-flashing mode
-  col += vec3(1.0, 0.82, 0.5) * citSpeed(p, uSpeedC, 150.0, 0.85, floor(uBeat * 4.0 * (1.0 - uReduced))) * uSpeed * 0.7;
+  if (uSpeed > 0.0) col += vec3(1.0, 0.82, 0.5) * citSpeed(p, uSpeedC, 150.0, 0.85, floor(uBeat * 4.0 * (1.0 - uReduced))) * uSpeed * 0.7;
 #endif
   float ck[7];
   for (int i = 0; i < 7; i++) ck[i] = uCk[i];
@@ -941,11 +956,11 @@ void main() {
 #endif
   col = citBurst(col, p, uIgn.zw, uIgn.y, int(uIgn.x), uIgnS);
 #ifdef CIT_LOTUS
-  // The last ~0.3 s of the push run at up to 1.5x zoom per frame, where the petal linework would
+  // The last ~0.3 s of the push run at up to ~1.7x zoom per frame, where the petal linework would
   // change completely every frame (a strobe). The crown's light floods the frame instead, in the
   // Sahasrara's colours (a white point in hot magenta, violet rim), so it blazes in colour up to
   // the hard cut into the gap: no cream wash. (A gold core mixes with the violet halo to peach.)
-  {
+  if (uFlood.z > 0.0) {
     float fr = length(p - uFlood.xy);
     // energy in the dominant channels (magenta, violet); white only in a small point
     vec3 rad = mix(vec3(2.3, 0.30, 1.10), vec3(1.4, 0.06, 0.80), smoothstep(0.15, 0.85, fr));
@@ -1033,8 +1048,10 @@ void main() {
       // C1: wide on the Holy Mountain; the figure climbs the stair a step per kick
       const k = (t - T0) / (T1 - T0);
       mount = [0, -1.40, 1.0, 0];
-      // rise and push all the way to the cut (no settle), with a nudge on each kick
-      cam = [0, mix(-0.30, 0.10, 0.55 * k + 0.45 * SM(k)), (0.95 + 0.10 * k) * (1 + 0.01 * kickE * R()), 0];
+      // start from rest (the frame must not scroll under the decaying beat-32 flash), then rise
+      // and push all the way to the cut, still moving at full speed there; a nudge on each kick
+      const mv = 0.5 * SM(k) + 0.5 * k * k;
+      cam = [0, mix(-0.30, 0.10, mv), (0.95 + 0.10 * mv) * (1 + 0.01 * kickE * R()), 0];
       const beat = (t - T0) / BEAT;
       const climb = 0.8 * (Math.floor(beat) + EO(C((beat % 1) * 3.0))) + 0.2 * beat;   // a step per kick + a steady ascent
       body = [0, -0.62 + 0.10 * climb, 0.40, 0.08 * SM(k)];
@@ -1106,13 +1123,13 @@ void main() {
       dawn = 0.85 + 0.15 * ramp;
       const jx = MO.reduced ? 0 : 0.004 * rollE * Math.sin(rn * 2.39), jy = MO.reduced ? 0 : 0.004 * rollE * Math.cos(rn * 1.71);
       cam = [0, 0.86, 6.6 + 0.8 * k, 0.0];
-      cam2 = [0, 0.95 + 0.10 * P, (1.25 + 0.15 * k) * (1 + 0.35 * P), 0.03 + 0.05 * k];
-      cam3 = [0, 0.30 - 0.10 * P, (1.35 + 0.15 * k) * (1 + 0.35 * P), -0.03 - 0.05 * k];
+      cam2 = [0, 0.95 + 0.10 * P, (1.25 + 0.15 * k) * (1 + 0.5 * P), 0.03 + 0.05 * k];
+      cam3 = [0, 0.30 - 0.10 * P, (1.35 + 0.15 * k) * (1 + 0.5 * P), -0.03 - 0.05 * k];
       const sIn = backOut((t - T2b) / 0.14);
       gutA = [mix(1.6, 0.40, sIn), -0.07, mix(-1.6, -0.44, sIn), -0.07];
       gutW = 0.034 * (1 + 0.3 * rollE * R());
       eye3 = EO((t - T2b) / 0.22);
-      const push = 1 + 0.06 * k + 0.35 * P;
+      const push = 1 + 0.06 * k + 0.5 * P;
       faceP = [jx, jy, 0.36 * push, 0.98 * push]; igS = 1.5;
       eyeP = [0, 0, 0.42 * push, 0];
       eyeO = EO((t - T2b - 0.03) / 0.2);
@@ -1124,7 +1141,9 @@ void main() {
       const k = (t - T3) / (T4 - T3);
       body = [0, -0.40, 0.62, 1.0];
       const crown = [0, body[1] + 1.14 * body[2]];
-      const zk = EI(C((k - 0.10) / 0.90));
+      // a steep ease-in (x^4): the lotus stays readable until ~20.1 s and the fastest part of the
+      // push happens under the crown's light flood (see main), where it cannot strobe
+      const zk = Math.pow(C((k - 0.10) / 0.90), 4);
       const z = 0.80 * Math.exp(Math.log(24) * zk);
       cam = [0, mix(0.05, crown[1], C(zk * 1.7)), z, 0];
       sun = [0, crown[1], 0.92, 1]; sunDark = 1;
@@ -1134,14 +1153,15 @@ void main() {
       // colour saturates late (keeps the lotus as it is until ~20.0 s); the light rises steadily
       // from 19.7 s, so the push trends brighter instead of flickering both ways
       blaze = [EI(C((k - 0.4) / 0.6)), C((k - 0.3) / 0.7)];
-      flood = [...toScreen(crown, cam), 0.85 * SM(C((k - 0.68) / 0.32))];
+      flood = [...toScreen(crown, cam), 0.85 * SM(C((k - 0.64) / 0.36))];
       column = SM(k / 0.12) * (1 + 0.3 * rollE);
       chakS = 1.6; auraOcc = 0.75;
       dawn = 0.3; gold = SM(k / 0.4);
       eye3 = 1; aura = 1.4;
       speed = (0.4 + 0.5 * rollE) * R(); speedC = toScreen(crown, cam);
-      // no white wash: the crown blazes in colour up to the hard cut into the gap (the overlay's
-      // white RUBEDO card takes over at T4)
+      speed *= C(1 - flood[2] / 0.5);   // the speed lines go under the flood (and their cost with them)
+      // no cream wash: the crown's light floods the frame in colour (main) up to the hard cut into
+      // the gap, where the overlay's white RUBEDO card takes over
     }
 
     u.uCam = cam; u.uCam2 = cam2; u.uCam3 = cam3;

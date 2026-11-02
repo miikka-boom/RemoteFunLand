@@ -21,6 +21,7 @@ uniform float uHN;      // closed hats so far
 uniform float uClapStep;// claps in this section, eased (kaleidoscope steps)
 uniform float uSpinT;   // ring rotation clock (runs faster in R4)
 uniform float uDive;    // 0..1 the final dive into the heart (R4 only)
+uniform float uInvAmt;  // strength of the clap inversion (R4 halves it: its gold figures are brighter)
 
 const vec3 RB_CRIM  = vec3(0.80, 0.015, 0.05);
 const vec3 RB_VERM  = vec3(1.00, 0.22, 0.035);
@@ -286,7 +287,7 @@ vec3 rb_mandala(vec2 p, float e, float tt, float bloom) {
   float sp = uSpinT;
   float cstep = uClapStep;
   // odd claps invert the figures; never on the drop's first clap (uST < 1) nor during the R4 dive
-  float inv = (mod(uClapN, 2.0) > 0.5 ? 1.0 : 0.0) * exp(-uCT / 0.13) * (1.0 - uReduced)
+  float inv = (mod(uClapN, 2.0) > 0.5 ? 1.0 : 0.0) * exp(-uCT / 0.13) * (1.0 - uReduced) * uInvAmt
             * step(1.0, uST) * (1.0 - step(1e-4, uDive));
 
   // ---- shared primitives: each expensive shape is evaluated ONCE per pixel, its instance chosen
@@ -814,12 +815,12 @@ void main() {
   // kick: a hoop of light flying past
   float kz = 6.0 - uKT * 18.0;
   // (it fades out before it reaches the frame's edge, where it would sweep half the screen per frame)
-  col += RB_HOT * 2.2 * rb_g((z - kz) / (0.03 * z * z)) * exp(-uKT / 0.25) * smoothstep(0.6, 1.6, kz) * (1.0 - 0.8 * uReduced);
+  col += RB_HOT * 1.8 * rb_g((z - kz) / (0.03 * z * z)) * exp(-uKT / 0.25) * smoothstep(0.6, 1.6, kz) * (1.0 - 0.8 * uReduced);
   // lasers from the vanishing point, sweeping on the beat: a throw on each beat that eases back.
   // Continuous (0 at both ends of the beat, so the beams never jump) and at most ~0.1 rad per frame
   float bp = fract(uBeat);
   float throwB = 0.22 * sin(PI * (1.0 - (1.0 - bp) * (1.0 - bp))) * (1.0 - uReduced);
-  float gate = mix(0.62 + 0.38 * exp(-uKT / 0.25), 0.6, uReduced);   // kick lift, partial
+  float gate = mix(0.70 + 0.30 * exp(-uKT / 0.25), 0.65, uReduced);   // kick lift, partial (+43 %)
   for (int i = 0; i < 6; i++) {
     float fi = float(i);
     float side = mod(fi, 2.0) * 2.0 - 1.0;
@@ -834,7 +835,7 @@ void main() {
   }
   col += rb_sparkles(uv, 0.05);
   // speed lines
-  col += RB_HOT * 0.9 * slT * (0.4 + 0.6 * exp(-uKT / 0.2)) * (1.0 - 0.7 * uReduced);
+  col += RB_HOT * 0.75 * slT * (0.6 + 0.4 * exp(-uKT / 0.2)) * (1.0 - 0.7 * uReduced);
   // after the impact card the tunnel lands over three frames (75 -> 90 -> 100 %): one rising change
   col *= 1.0 - 0.35 * uLand;
   fragColor = vec4(rb_grade(col), 1.0);
@@ -908,7 +909,7 @@ void main() {
       // each clap turns the rings one kaleidoscope step; not the drop's first clap (21.6 s), which
       // lands with the kick and the "in" pop: together they would flash the whole frame
       uClapStep: Math.max(0, claps - 2) + (claps > 1 ? MO.easeOut(ct / 0.12) : 0),
-      uSpinT: T0 + (MO.reduced ? 0.5 : 1) * (t - T0), uDive: 0,   // ring rotation clock (half speed in reduced)
+      uSpinT: T0 + (MO.reduced ? 0.5 : 1) * (t - T0), uDive: 0, uInvAmt: 1,   // ring rotation clock (half speed in reduced)
     };
   };
 
@@ -992,10 +993,8 @@ void main() {
       uZoom: Math.exp(logZ(t)), uSpin: 0.28 * (t - T3), uTiltA: 1 - dive,
       // the disc precesses gently like a spinning coin (nearly frontal), flattening for the dive
       uTilt: [amp * Math.cos(ph), 0.8 * amp * Math.sin(ph)],
-      // the great petals (r > 1.08) leave the frame once the zoom passes ~2.2; 0 then lets the shader
-      // skip their whole block (a uniform branch) in the deep-dive frames
-      uSpinT: T3 + (MO.reduced ? 1.0 : 2.0) * (t - T3), uDive: dive, uBloomOpen: logZ(t) > Math.log(2.3) ? 0 : 1,
-      uLand: MO.clamp(1 - (t - T3) / 0.07),
+      uSpinT: T3 + (MO.reduced ? 1.0 : 2.0) * (t - T3), uDive: dive, uBloomOpen: 1,
+      uLand: MO.clamp(1 - (t - T3) / 0.07), uInvAmt: 0.5,
       uAurum: 0.15 + 5.0 * (t - T3),
     });
   };

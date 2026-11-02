@@ -1,9 +1,11 @@
 // CODA — 0 The Fool — 28.235–30.000 s (bar 16). Owner: eye.
 // Beat 64: the final hit. ZOOM BACK, CAMERA: we start inside a blazing red-gold mandala that the
-// pull-back reveals as the iris of the same great eye that opened the piece (lead turned to gold:
-// the black pupil is now a white-hot sun around a black eclipse core). The eye rises into the
-// upper part of the frame (the overlay's MAGNUM OPUS logo takes the lower part from beat 65),
-// a last glint crosses the cornea, then the eye slowly closes; black by 29.8 s.
+// pull-back reveals as the iris of the same great eye that opened the piece. The first frame
+// matches R4's dive (a red-gold iris with a black pupil in a crimson blaze); the hit's shockwave
+// sweeps the blaze away and the pupil ignites on screen into a white-hot sun around a black
+// eclipse core (lead turned to gold). The eye rises into the upper part of the frame (the
+// overlay's MAGNUM OPUS logo takes the lower part from beat 65), a last glint crosses the cornea,
+// then the eye slowly closes; black by 29.8 s.
 // The eye GLSL between the EYE markers is identical in nigredo.js.
 (() => {
   const BEAT = MO.BEAT;
@@ -22,6 +24,7 @@ uniform float uPupil;   // pupil size factor
 uniform vec2  uLook;    // iris offset (gaze, tremble)
 uniform float uAura;    // flame aura strength
 uniform float uHi;      // anime cornea highlights 0..1
+uniform float uSun;     // pupil fire 0..1: 0 the black sun, 1 the white-hot sun (unset = 0 in nigredo)
 
 const vec2  EY_IC = vec2(0.0, 0.03);
 const float EY_R  = 0.40;
@@ -147,14 +150,17 @@ vec3 ey_iris(vec2 q, float pe) {
   // limbal ring
   col *= 0.45 + 0.55 * smoothstep(1.0, 0.88, r);
   col += eyVio * (1.1 * ey_st(r - 1.0, pe, 0.8) + 0.25 * ey_gl(r - 1.0, pe, 6.0)) * (0.3 + 0.7 * lit);
-  // pupil: nigredo = the black sun; rubedo = a white-hot sun around a black eclipse core
+  // pupil: nigredo = the black sun; rubedo = a white-hot sun around a black eclipse core.
+  // uSun ignites it on screen (lead to gold): a front of fire runs from the rim in to the core.
   {
     float rpw = rp + 0.008 * sin(a1 * 40.0);
     float pin = 1.0 - smoothstep(-pe, pe, r - rpw);
     float core = r / rp;
+    float fr = 1.0 - 0.75 * uSun;
     vec3 hot = eyHot * (0.7 + 1.5 * (1.0 - core * core)) * smoothstep(0.30, 0.40, core)
              + eyHot * 2.5 * ey_st(core - 0.35, pe / rp, 0.8);
-    col = mix(col, hot * uGold, pin);
+    hot = hot * uSun * smoothstep(fr - 0.15, fr, core) + eyHot * 1.8 * exp(-abs(core - fr) / 0.05) * uSun * (1.0 - uSun) * 4.0;
+    col = mix(col, hot, pin);
     col += mix(eyEmber, eyVerd, 0.5 + 0.5 * sin(a * 20.0)) * 1.4 * ey_st(r - rpw, pe, 0.8) * (0.4 + 0.6 * lit);
   }
   col += edge * mix(eyVerd, eyBone, 0.5) * 1.6;
@@ -283,7 +289,8 @@ uniform vec2  uPC;     // screen position of the iris centre
 uniform float uFade;   // fade to black at the very end
 uniform float uRing;   // shockwave radius from the final hit (screen units)
 uniform float uRingA;
-uniform float uBgA;    // the blazing red ground (fades as the eye is revealed)
+uniform float uBgA;    // the crimson ground (sinks to black as the eye is revealed)
+uniform float uBlaze;  // the Rubedo blaze around the iris at the cut (the shockwave sweeps it out)
 uniform float uLow;    // dims the lower frame for the logo
 uniform float uTing;   // a last sparkle as the lids meet
 
@@ -297,9 +304,20 @@ void main() {
   vec2 d = p - uPC;
   float r = length(d), a = atan(d.y, d.x);
   float ray = 0.5 + 0.5 * cos(a * 16.0 + 0.25 * t);
-  vec3 bg = vec3(0.30, 0.008, 0.02) * (0.45 + 0.55 * ray) * exp(-r * 0.55) * uBgA;
-  bg += vec3(0.006, 0.0005, 0.001) + vec3(0.06, 0.004, 0.006) * exp(-dot(e, e) * 0.5) * (1.0 - uBgA);
+  // the final hit's shockwave sweeps the heat outward: ahead of it (swept = 1) the field still
+  // burns, behind it the ground is already dark (no red coming back after the sweep)
+  float swept = smoothstep(uRing - 0.05, uRing + 0.30, r);
+  vec3 bg = vec3(0.30, 0.008, 0.02) * (0.45 + 0.55 * ray) * exp(-r * 0.55) * uBgA * swept;
+  bg += vec3(0.006, 0.0005, 0.001) + vec3(0.06, 0.004, 0.006) * exp(-dot(e, e) * 0.5) * (1.0 - uBgA * swept);
   vec3 col = ey_eye(bg, e, pe, t);
+  // the blaze: at the cut everything around the iris still burns red-gold, continuing the Rubedo
+  // mandala (R4's ground); it rides ahead of the shockwave, uncovering the dark eye behind it
+  if (uBlaze > 0.0) {
+    float rI = r / (EY_R * uZ);
+    float near = exp(-max(rI - 1.0, 0.0) * 1.2);
+    vec3 bz = mix(vec3(0.62, 0.035, 0.02), vec3(0.95, 0.30, 0.05), 0.35 * ray * near) * (0.30 + 0.70 * ray) * (0.55 + 0.45 * near);
+    col += bz * uBlaze * smoothstep(1.0, 1.05, rI) * swept;
+  }
   // shockwave of the final hit
   if (uRingA > 0.0) {
     float rw = abs(r - uRing) - 0.004 - 0.02 * uRing;
@@ -312,23 +330,32 @@ void main() {
 
   const T0 = MO.barTime(16);           // 28.235
   const T_REVEAL = T0 + 2 * BEAT;      // 29.118: the whole eye is in view
-  const T_SHUT = T0 + 3.5 * BEAT;      // 29.779: the lids meet
+  const T_CLOSED = 29.70;              // the lids meet, so the closed eye and the logo hold while the fade (29.45-29.80) ends
   const uniforms = (t) => {
     const k = MO.clamp((t - T0) / (T_REVEAL - T0));
     const pull = MO.easeInOut(MO.remap(t, T0 + 0.08, T_REVEAL));
     const Z = Math.exp(MO.mix(Math.log(3.4), Math.log(0.80), pull)) * (1 - 0.06 * MO.remap(t, T_REVEAL, 30));
-    const close = MO.easeInOut(MO.remap(t, T_REVEAL + 0.05, T_SHUT));
+    // lead to gold: at the cut the pupil is R4's black disc (0.24 of the iris radius); during the
+    // pull-back it ignites from the rim inward and swells into the white-hot sun
+    const sun = MO.smooth(MO.remap(t, T0 + 0.12, T0 + 0.72));
+    // the slow close: smoothstep on the lid opening, so the visible travel (uOpen 0.9 -> 0.1, below
+    // which the slit already reads as shut) spans about 29.25-29.6 instead of 5 frames
+    const close = MO.smooth(MO.remap(t, T_REVEAL + 0.05, T_CLOSED));
     const settle = 1 + 0.03 * Math.exp(-(t - T0) * 3) * Math.sin((t - T0) * 18);
     return {
       uOpen: (1 - close) * settle, uIgnite: 1, uLines: MO.mix(1, 0.35, MO.easeIn(MO.remap(t, T_REVEAL + 0.2, 29.85))),
-      uGlint: MO.remap(t, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: 1,
-      uSpin: 0.9 * (1 - Math.exp(-(t - T0) * 1.5)), uPupil: 1.0 + 0.12 * Math.exp(-(t - T0) / 0.3),
-      uLook: [0, 0], uAura: 1.0, uHi: 1 - close,
+      uGlint: MO.remap(t, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: 1, uSun: sun,
+      uSpin: 0.9 * (1 - Math.exp(-(t - T0) * 1.5)), uPupil: MO.mix(0.73, 1.0, sun),
+      // the cornea highlights arrive with the eye, not on R4's iris at the cut
+      uLook: [0, 0], uAura: 1.0, uHi: (1 - close) * MO.smooth(MO.remap(t, T0 + 0.25, T0 + 0.7)),
       uZ: Z, uPC: [0, MO.mix(0.0, 0.30, MO.smooth(k))],
       uFade: 1 - MO.smooth(MO.remap(t, 29.45, 29.80)),
       uRing: 0.15 + (t - T0) * 3.0, uRingA: Math.exp(-(t - T0) / 0.35) * (MO.reduced ? 0.4 : 1),
-      uTing: Math.sin(Math.PI * MO.remap(t, T_SHUT - 0.12, T_SHUT + 0.10)), uBgA: 1 - MO.smooth(MO.remap(t, T0 + 0.2, T_REVEAL)), uLow: MO.smooth(MO.remap(t, T0 + BEAT * 0.8, T0 + BEAT * 1.6)),
+      uBlaze: 1 - MO.smooth(MO.remap(t, T0 + 0.5, T0 + 0.9)),
+      uTing: Math.sin(Math.PI * MO.remap(t, T_CLOSED - 0.14, T_CLOSED + 0.06)), uBgA: 1 - MO.smooth(MO.remap(t, T0 + 0.2, T_REVEAL)), uLow: MO.smooth(MO.remap(t, T0 + BEAT * 0.8, T0 + BEAT * 1.6)),
     };
   };
-  MO.scene({ id: 'coda', section: 'coda', from: T0, to: 30.0, fs: FS, uniforms, bloom: 0.4, bloomThreshold: 0.9, vignette: 0.5 });
+  // bloom eases in with the pupil's fire so the first frames keep R4's contrast
+  const bloom = (t) => 0.28 + 0.12 * MO.smooth(MO.remap(t, T0 + 0.2, T0 + 0.7));
+  MO.scene({ id: 'coda', section: 'coda', from: T0, to: 30.0, fs: FS, uniforms, bloom, bloomThreshold: 0.9, vignette: 0.5 });
 })();

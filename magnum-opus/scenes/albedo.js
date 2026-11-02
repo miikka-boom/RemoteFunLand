@@ -8,7 +8,7 @@
 //                               corridor falls away, the floor stacks into a stepped mountain,
 //                               the figure is carried up to the summit under the moon.
 // A4 "to the Self, the light!"  cut in close, push into the third eye, all lines converge,
-//                               white-gold light.
+//                               white-gold light; on the last clap it inhales into the eye.
 //
 // The luminous body is a self-contained GLSL block (BODY below, exported as
 // window.ALBEDO_BODY_GLSL) so the citrinitas scene can reuse it: build an AlbBody with
@@ -382,8 +382,13 @@ uniform float uConverge;  // 0..1 converging speed lines (A4)
 uniform vec2  uFocus;     // screen point the lines converge to
 uniform float uShock;     // merge shockwave age (s), < 0 = none
 uniform float uFlashS;    // scene-level flash (merge)
-uniform vec3  uRings;     // ages of the three fill claps (light rings), < 0 = none
+uniform vec3  uRings;     // ages of the fill claps on steps 12 and 14 (light rings), < 0 = none; z unused
 uniform float uMandorla;  // 0..1 the mandorla behind the body (A1)
+uniform float uPush;      // whole-picture zoom about the centre (A3b: the residual camera push)
+uniform float uFlowV;     // lattice flow speed in cells per 1/30 s (blurs the moving rungs)
+uniform float uLatR;      // A1: the lattice is lit out to this depth (the reveal wave racing away)
+uniform float uClimb;     // A3b: how many steps the figure's feet have passed (0..7)
+uniform float uInhale;    // A4: 0..1 the light pulls back into the third eye before beat 32
 
 const float FOC = 1.75;
 const float MZ = 8.0;       // mountain centre depth
@@ -414,6 +419,7 @@ vec3 albLattice(vec2 p, float walls) {
   vec2 uv = face < 0.5 ? vec2(P.y - FLOOR, P.z + uFlow) : vec2(P.x, P.z + uFlow);
 #ifdef ALB_MOUNTAIN
   // the mountain: 7 stacked boxes on the floor, nearest hit wins
+  float mK = 0.0, mTop = 0.0, mFront = 0.0, mHalf = 0.0;     // the hit step: index, top, front, half width
   {
     float base = FLOOR, mT = 1e9; vec3 mP = vec3(0.0), mN = vec3(0.0);
     vec3 m = 1.0 / rd, am = abs(m), mro = m * ro;
@@ -429,6 +435,7 @@ vec3 albLattice(vec2 p, float walls) {
         mT = tN;
         mN = -sign(rd) * step(t1.yzx, t1.xyz) * step(t1.zxy, t1.xyz);
         mP = ro + rd * tN;
+        mK = fk; mTop = base + h; mFront = MZ - bh.z; mHalf = bh.x;
       }
       base += h;
     }
@@ -444,7 +451,10 @@ vec3 albLattice(vec2 p, float walls) {
   vec2 fw = fwidth(c);
   float pxc = max(fw.x, fw.y);
   vec2 bd = (0.5 - abs(fract(c) - 0.5)) / max(fw, vec2(1e-5));    // distance to the cell border in px
-  float ln = max(1.0 - smoothstep(0.15, 1.1, bd.x), 1.0 - smoothstep(0.15, 1.1, bd.y));
+  // The rails (c.x lines) stay put; the rungs (c.y lines) travel with the flow. Moving more than
+  // ~1/3 of a cell per frame they would strobe (wagon wheel), so they blur into their average cover.
+  float mb = smoothstep(0.2, 0.55, uFlowV);
+  float ln = max(1.0 - smoothstep(0.15, 1.1, bd.x), mix(1.0 - smoothstep(0.15, 1.1, bd.y), min(1.25 * fw.y, 1.0), mb));
   float fade = smoothstep(0.40, 0.12, pxc);
   float fog = exp(-tt * 0.085);
   // kick pulse: a bright square ring racing away down the corridor
@@ -460,7 +470,7 @@ vec3 albLattice(vec2 p, float walls) {
   vec2 f = fract(c) - 0.5;
   vec2 cid = floor(c);
   float hasEye = max(step(hash21(cid + vec2(face * 17.0, 3.0)), 0.38), isMount);
-  float eyeFade = smoothstep(0.07, 0.035, pxc) * smoothstep(0.009, 0.016, pxc) * fog * (1.0 - step(2.5, face)) * hasEye;
+  float eyeFade = smoothstep(0.07, 0.035, pxc) * smoothstep(0.009, 0.016, pxc) * fog * (1.0 - step(2.5, face)) * hasEye * (1.0 - 0.7 * mb);
   vec2 e = face == 0.0 ? vec2(f.y, f.x) : f;                   // (along, across) in the plane
   float blink = mod(cid.x + cid.y + uHatN, 2.0) < 0.5 ? smoothstep(0.0, 0.45, uOpenHat) : 0.0;
   float open = 1.0 - 0.92 * blink * (1.0 - uReduced * 0.7);
@@ -471,8 +481,24 @@ vec3 albLattice(vec2 p, float walls) {
   float torus = albLine(er - 0.36, pxc, 1.0) * 0.45 + albLine(er - 0.405, pxc, 0.8) * 0.2;
   vec3 eyeCol = mix(vec3(0.50, 0.80, 1.0), vec3(0.75, 0.08, 0.30), side);
   col += (eyeCol * (albLine(lidS, pxc, 1.2) * 0.4 + iris * 0.75 + inEye * 0.025) + lineCol * torus * 0.45) * eyeFade * (0.5 + 0.6 * uKick + 0.6 * isMount);
+  // A1: the lattice lights up behind a wave racing away from the camera (dark ground for the reveal)
+  col *= 1.0 - 0.9 * smoothstep(uLatR - 3.0, uLatR, P.z);
   // mountain faces: dark lacquer, the treads lit by the moon
   col += vec3(0.03, 0.05, 0.15) * (face == 3.0 ? 1.0 : face == 2.0 ? 0.12 : face == 4.0 ? 0.06 : 0.0) * fog;
+#ifdef ALB_MOUNTAIN
+  // moonlit rims on the step edges; every step lights up as the figure climbs past it and the
+  // one under its feet flares
+  {
+    vec3 ed = vec3(mTop - P.y, P.z - mFront, mHalf - abs(P.x));   // to the hit step's top, front, side edge
+    float e = face == 2.0 ? min(ed.x, ed.z) : face == 3.0 ? min(ed.y, ed.z) : min(ed.x, ed.y);
+    float aaE = min(fwidth(e), tt * px() * 3.0 / FOC);              // capped: e jumps between steps
+    float k = uClimb - mK;                                          // >= 1: the feet are on or above it
+    float lit = sat(k), under = exp(-(k - 1.0) * (k - 1.0) * 3.0);
+    float rim = albLine(e, aaE, 1.7) * (0.9 + 0.7 * lit + 1.0 * under) + exp(-max(e, 0.0) / 0.05) * (0.06 + 0.1 * lit + 0.15 * under);
+    col += vec3(0.70, 0.82, 1.0) * rim * isMount * fog;
+    col += vec3(0.04, 0.07, 0.20) * (0.5 * lit + 0.6 * under) * (face == 3.0 ? 1.0 : 0.3) * isMount * fog;
+  }
+#endif
   // fog towards the vanishing point
   col += mix(vec3(0.004, 0.006, 0.03), vec3(0.008, 0.016, 0.065), exp(-tt * 0.02)) * (1.0 - fog) * (1.0 - isSky);
   col *= 1.0 - isSky;
@@ -592,8 +618,8 @@ vec4 albPillar(vec2 w, float pxw) {
 #endif
 
 void main() {
-  vec2 p = uvCentered(gl_FragCoord.xy);
-  float PX = px();
+  vec2 p = uvCentered(gl_FragCoord.xy) / uPush;
+  float PX = px() / uPush;
 #ifdef ALB_RIPPLE
   // the clap ripples the mirror: a water-like wave leaving the central axis
   float rippleCrest = 0.0;
@@ -606,15 +632,22 @@ void main() {
 #endif
   // background: night gradient + the lattice
   vec3 col = mix(vec3(0.002, 0.003, 0.016), vec3(0.008, 0.012, 0.05), sat(0.5 - 0.4 * p.y));
-  col += albLattice(p, uWalls);
+  float walls = uWalls;
+#ifdef ALB_SHOCK
+  // the merge's shockwave blows the corridor away: the walls survive only outside its ring
+  float shR = length((p - vec2(0.0, 0.05)) * vec2(1.0, 1.4));
+  float shRing = uShock * (3.0 + 3.5 * uShock);                  // accelerating: off screen by ~0.5 s
+  if (uShock >= 0.0) walls *= step(shRing, shR);
+#endif
+  col += albLattice(p, walls);
 
   // 2D scene coordinates (bodies, moon, pillars)
   vec2 w = rot(uCam.w) * p / uCam.z + uCam.xy;
   float pxw = PX / uCam.z;
 
 #ifdef ALB_MIRROR
-  // the mirror line (behind the moon)
-  col += vec3(0.85, 0.92, 1.0) * (albLine(w.x, pxw, 1.6) * 2.0 + exp(-abs(w.x) / (pxw * 10.0)) * 0.35) * uMirror * smoothstep(-1.2, -0.5, w.y);
+  // the mirror line (behind the moon; a uniform branch, skipped once it has faded)
+  if (uMirror > 0.0) col += vec3(0.85, 0.92, 1.0) * (albLine(w.x, pxw, 1.6) * 2.0 + exp(-abs(w.x) / (pxw * 10.0)) * 0.35) * uMirror * smoothstep(-1.2, -0.5, w.y);
 #endif
 #ifdef ALB_MANDORLA
   // a mandorla (vesica) of quiet darkness behind the figure, rimmed with light
@@ -626,8 +659,8 @@ void main() {
     col += vec3(0.75, 0.88, 1.0) * (albLine(vz, pv, 1.6) * 1.0 + albLine(vz - 0.025, pv, 1.0) * 0.4 + exp(-abs(vz) / 0.03) * 0.07) * uMandorla;
   }
 #endif
-  // the moon
-  {
+  // the moon (a branch on a uniform, so it costs nothing once it has faded out in the A4 push)
+  if (uMoon.w > 0.0) {
     vec3 mc = albMoon(w, pxw);
     float disc = fill(length(w - uMoon.xy) - uMoon.z, pxw) * uMoon.w;
     col = col * (1.0 - disc) + mc;
@@ -665,36 +698,48 @@ void main() {
   }
 
 #ifdef ALB_SHOCK
-  // the merge: a sakuga shockwave ring and a short flash
+  // the merge: a sakuga shockwave ring (it sweeps the corridor away) and a short glow at the
+  // centre; no full-screen white, so the union itself stays visible
   {
-    float sw = albLine(length((p - vec2(0.0, 0.05)) * vec2(1.0, 1.4)) - uShock * 3.0, PX, 2.0 + 14.0 * uShock);
-    col += vec3(0.9, 0.95, 1.0) * sw * 1.4 * exp(-uShock * 2.5) * step(0.0, uShock);
+    float sw = albLine(shR - shRing, PX, 2.0 + 14.0 * uShock);
+    col += vec3(0.9, 0.95, 1.0) * sw * 2.0 * exp(-uShock * 2.0) * step(0.0, uShock);
     float fr0 = length((p - vec2(0.0, 0.1)) * vec2(0.8, 1.0));
-    col += vec3(0.9, 0.95, 1.1) * uFlashS * (4.0 * exp(-fr0 * 2.2) + 0.25);
+    col += vec3(0.9, 0.95, 1.1) * uFlashS * 1.5 * exp(-fr0 * 2.2);
   }
 #endif
 #ifdef ALB_BURST
-  // A4: converging speed lines, light rings on the fill claps, the white-gold light of the Self
+  // A4: light rings on the fill claps, the white-gold light of the Self, the inhale, and the
+  // converging speed lines on top
   vec2 fd = p - uFocus; float fr = length(fd); float fa = albAtan(fd.y, fd.x);
-  {
-    float sx = fa / TAU * 150.0;
-    float sid = floor(sx);
-    float hh = hash11(sid + floor(uTime * 12.0) * 7.31);
-    float sw = abs(fract(sx) - 0.5) * TAU * fr / 150.0;               // distance to the line centre
-    float sl = (1.0 - smoothstep(0.0, PX * (0.6 + 1.6 * hh), sw)) * step(0.55, hh) * smoothstep(0.35 * (0.6 + 0.6 * hh), 0.35 * (0.9 + 0.6 * hh) + 0.3, fr);
-    col += vec3(0.75, 0.88, 1.0) * sl * uConverge * 0.9;
-  }
-  for (int i = 0; i < 3; i++) {
+  for (int i = 0; i < 2; i++) {
     float ra = uRings[i];
     col += vec3(1.0, 0.82, 0.5) * albLine(fr - ra * 4.0, PX, 3.0 + 30.0 * ra) * 3.0 * exp(-ra * 3.0) * step(0.0, ra);
   }
   float rc = 0.5 + 0.5 * cos(fa * 24.0 + 0.4 * sin(fa * 5.0 + uTime * 2.0));
   float rays = rc * rc; rays *= rays; rays *= rays;
-  float rays2 = 0.5 + 0.5 * cos(fa * 72.0 - uTime * 1.5);
   vec3 gold = vec3(1.0, 0.70, 0.30);
   col += gold * (exp(-fr * mix(10.0, 1.2, uBurst)) * 2.5 + rays * exp(-fr * mix(5.0, 0.7, uBurst)) * 1.6) * uBurst;
-  float wash = smoothstep(0.65, 1.0, uBurst);
-  col = mix(col, gold * (1.3 + 0.9 * exp(-fr * 1.5)) + vec3(1.0, 0.85, 0.6) * (rays * 1.2 + rays2 * 0.25) * exp(-fr * 0.8), wash * 0.92);
+  // the inhale (from the accented last clap to beat 32): a ring implodes onto the third eye and
+  // the dark closes in behind it, so the light gathers into the eye just before the cut
+  float ri = 1.6 * (1.0 - uInhale * uInhale);
+  col *= 1.0 - 0.97 * smoothstep(0.0, 0.15, uInhale) * smoothstep(ri - 0.05, ri + 0.25, fr);
+  col += vec3(1.0, 0.86, 0.6) * albLine(fr - ri, PX, 4.0 + 4.0 * uInhale) * (2.0 + 3.0 * uInhale) * step(1e-3, uInhale);
+  {
+    // 150 radial lines, re-rolled once per 16th note (frozen in reduced mode). A line keeps its
+    // 1080p width as a fraction of the frame, but is never drawn thinner than a pixel; it is dimmed
+    // instead, so its energy is the same at any resolution. Where the lines crowd closer than
+    // ~2 px they turn into their average glow. Together: no shimmer at the phone's render scale.
+    float sx = fa / TAU * 150.0;
+    float hh = hash11(floor(sx) + floor(uBeat * 4.0 * (1.0 - uReduced)) * 7.31);
+    float spc = TAU * fr / 150.0;                                     // line spacing
+    float sw = abs(fract(sx) - 0.5) * spc;                            // distance to the line centre
+    float w = (0.6 + 1.6 * hh) * (2.0 / 1080.0), fw = max(w, PX);
+    float sl = (w / fw) * (1.0 - smoothstep(0.0, fw, sw)) * step(0.55, hh);
+    sl = mix(0.45 * 1.84 * (2.0 / 1080.0) / max(spc, 1e-5), sl, smoothstep(1.5, 3.0, spc / PX));
+    float inner = 0.35 * (1.0 - 0.75 * uInhale);                      // the inhale draws them in
+    sl *= smoothstep(inner * (0.6 + 0.6 * hh), inner * (0.9 + 0.6 * hh) + 0.3 * (1.0 - 0.7 * uInhale), fr);
+    col += vec3(0.75, 0.88, 1.0) * sl * uConverge * 0.9;
+  }
 #endif
 #ifdef ALB_RIPPLE
   col += vec3(0.6, 0.75, 1.0) * rippleCrest * 0.22;
@@ -728,15 +773,33 @@ void main() {
   const mixv = (a, b, k) => a.map((v, i) => v + (b[i] - v) * k);
   VP_END = -0.2 - project([0, FLOOR + 7 * 0.55, MZ - 0.5], RO_END, TA_END, [0, 0])[1];
 
+  // lattice flow (depth offset): half a cell per beat, surging forward on each kick. A1 adds a
+  // steady drift (zero at the A2 cut, so the two shots join), A3b holds it (the mountain stands on
+  // the floor) and A4 races down the corridor.
+  function flowAt(t, seg) {
+    const beat = t / BEAT;
+    const f = (Math.floor(beat) + EO(C((beat % 1) * 2.2))) * 0.5;
+    if (seg === 'a1') return f + 0.35 * (beat - 20);
+    if (seg === 'a3b') return Math.round(TM / BEAT) * 0.5;           // = A3's flow at the merge
+    if (seg === 'a4') return f + 16 * EI(C((t - T3) / (T4 - T3)));
+    return f;
+  }
+
+  // A4's inhale: 0..1 from the accented last clap (bar 7, step 15) to beat 32
+  const T_INHALE = MO.barTime(7, 0, 15);
+  const inhaleAt = (t) => C((t - T_INHALE) / (T4 - T_INHALE));
+
   function uniforms(t) {
     const kick = MO.last('kick', t), kickAge = kick ? t - kick.e.t : 9;
     const clap = MO.last('clap', t), clapAge = clap ? t - clap.e.t : 9;
     const u = {};
     u.uKickAge = kickAge;
     u.uHatN = MO.count('openHat', t);
-    // lattice flow: half a cell per beat, surging forward on each kick
-    const beat = t / BEAT;
-    let flow = (Math.floor(beat) + EO(C((beat % 1) * 2.2))) * 0.5;
+    const seg = t < T1 ? 'a1' : t < TM ? 'a2' : t < T3 ? 'a3b' : 'a4';
+    const flow = flowAt(t, seg);
+    // its speed in cells per 1/30 s: fast rungs are blurred in the shader instead of strobing
+    u.uFlowV = Math.abs(flow - flowAt(t - 1 / 30, seg)) / 0.5;
+    let push = 1, kickPush = 0.006, latR = 1e4, climbN = 0, inhale = 0;
 
     let cam = [0, 0, 1, 0];
     let ro = [0, 0, 0], ta = [0, 0, 1], vp = [0, 0.62];
@@ -752,7 +815,9 @@ void main() {
     if (t < T1) {
       // A1: the luminous body; ink floods its left half by "left" (beat 18)
       const k = (t - T0) / (T1 - T0);
-      cam = [0, 0.02 + 0.03 * k, 0.94 + 0.08 * SM(k), 0.0];
+      cam = [0, 0.02 + 0.03 * k, 0.94 + 0.04 * k + 0.07 * k * k, 0.0];   // accelerating into the cut
+      kickPush = 0.015;
+      latR = 1.2 + (t - T0) * 13;     // the lattice lights up behind beat 16's kick ring (same speed)
       A3[3] = 0.15 + 0.85 * EO((t - T0) / 0.38);                  // draw-on behind the flash
       A3[0] = 0.4 + 0.6 * EO((t - T0) / 0.5);
       const ink = E((t - bt(17) + 0.12) / (bt(18) - bt(17) + 0.12));
@@ -794,10 +859,11 @@ void main() {
         const after = t - TM;
         const wash = SM(after / 0.8);
         const camK = E(C(after / 1.2));
-        walls = after < 0.05 ? 1 : 0;                              // the corridor falls away in the flash
+        walls = after < 0.55 ? 1 : 0;             // swept away by the shock ring (per pixel in the shader)
         flashS = C(1 - after / 0.07) * (MO.reduced ? 0.3 : 1);                // two frames
         for (let i = 0; i < 7; i++) steps[i] = EO(C((t - bt(25 + i * 0.42)) / 0.2));
-        flow = (Math.floor(TM / BEAT) + 1) * 0.5;
+        // after the dolly settles the picture keeps creeping in, so the shot cuts on motion
+        push = 1 + 0.1 * Math.max(0, after - 0.4);
         ro = mixv([0, 0, 0], RO_END, camK);
         ta = mixv([0, 0, 1], TA_END, camK);
         vp = [0, mix(0.62, VP_END, camK)];
@@ -806,6 +872,15 @@ void main() {
         const climb = E(C((after - 0.05) / 1.05));
         const sc = mix(0.72, 0.36, climb);
         const feet = mix(-0.84, sp[1], climb);
+        // which step the feet have reached: compare them with each step's projected top front edge
+        let base = FLOOR, yPrev = project([0, FLOOR, MZ - 3.2], ro, ta, vp)[1];
+        for (let i = 0; i < 7; i++) {
+          base += 0.55 * steps[i];
+          const y = project([0, base, MZ - (3.2 - i * 0.42)], ro, ta, vp)[1];
+          if (feet >= y) climbN = i + 1;
+          else { if (feet > yPrev && y > yPrev) climbN = i + (feet - yPrev) / (y - yPrev); break; }
+          yPrev = y;
+        }
         A = [0, feet + sc, sc, 0.7 * SM(after / 1.0)];
         A2 = [0.5 * wash, 1 - wash, 9, 0];
         A3 = [1 + 0.4 * wash, 1 - wash, 0, 1];
@@ -828,24 +903,34 @@ void main() {
       } else {
         const k = E(C((t - tSelf) / 0.22));
         center = mixv([0, -0.02], eye, k);
-        zoom = Math.exp(MO.keys([[tSelf, Math.log(1.28)], [tSelf + 0.22, Math.log(2.6)], [tLight, Math.log(8)], [bt(31.6), Math.log(140)]], t, (x) => x));
+        // exponential push; it keeps creeping in after the light, then recoils in the inhale (the
+        // whole picture contracts into the eye, faster and faster into beat 32)
+        const x = inhaleAt(t);
+        zoom = Math.exp(MO.keys([[tSelf, Math.log(1.28)], [tSelf + 0.22, Math.log(2.6)], [tLight, Math.log(8)], [bt(31.6), Math.log(140)], [T_INHALE, Math.log(158)]], t, (v) => v)
+          + Math.log(105 / 158) * x * x);
       }
       cam = [center[0], center[1], zoom, 0.035 * Math.sin(t * 3.0) * (1 - C((t - tSelf) / 0.4))];
       focus = [(eye[0] - center[0]) * zoom, (eye[1] - center[1]) * zoom];
       vp = focus;
-      flow += 16 * EI(C((t - T3) / (T4 - T3)));
       A = [body[0], body[1], body[2], 0.7];
       A2 = [0.5, 0, 9, 0];
       A3 = [1.4, 0, EO((t - tSelf) / 0.3), 1];
       moon = [0, body[1] + 0.86, 0.40, 0.55 * C(1 - (zoom - 1.3) / 0.6)]; phase = 0.22;
-      converge = SM((t - tSelf) / 0.4) * (1 - SM((t - bt(31.2)) / 0.3));
-      burst = Math.max(SM((t - tLight) / (bt(31.7) - tLight)) * 0.8, SM((t - bt(31.55)) / 0.3));
-      [12, 14, 15].forEach((s, i) => { const ts = MO.barTime(7, 0, s); rings[i] = t >= ts ? t - ts : -1; });
-      latI = 1 - 0.5 * burst;
+      // The light builds to 0.72 by the step-14 clap and holds there (no white-out), so the rings of
+      // the fill claps (steps 12 and 14) read against it. On the accented last clap (step 15) the
+      // inhale begins: the light pulls back into the third eye, an imploding ring lands on it on
+      // beat 32, and the cut, the crash and the gold flash then all expand outward.
+      inhale = inhaleAt(t);
+      converge = Math.max(SM((t - tSelf) / 0.4) * (1 - SM((t - bt(31.2)) / 0.3)), 0.8 * SM(inhale * 2.5));
+      burst = 0.72 * SM((t - tLight) / (MO.barTime(7, 0, 14) - tLight)) * (1 - 0.45 * SM(inhale));
+      [12, 14].forEach((s, i) => { const ts = MO.barTime(7, 0, s); rings[i] = t >= ts ? t - ts : -1; });
+      latI = (1 - 0.5 * burst) * (1 - 0.5 * inhale);
     }
 
-    // gentle kick zoom pulse on the 2D camera
-    cam[2] *= 1 + 0.006 * MO.env('kick', t, 0.1) * (MO.reduced ? 0.3 : 1);
+    // kick zoom pulse on the 2D camera only: on the fine lattice lines it would flicker
+    cam[2] *= 1 + kickPush * MO.env('kick', t, 0.1) * (MO.reduced ? 0.3 : 1);
+    u.uPush = push;
+    u.uLatR = latR; u.uClimb = climbN; u.uInhale = inhale;
     u.uFlow = flow; u.uWalls = walls; u.uLatI = latI;
     u.uCam = cam; u.uRo = ro; u.uTa = ta; u.uVP = vp;
     u.uBodyA = A; u.uBodyA2 = A2; u.uBodyA3 = A3; u.uBodyB = Bb; u.uBodyB2 = B2;
@@ -859,16 +944,17 @@ void main() {
   }
 
   // one shader per shot, each with only the features it needs
-  const shot = (id, from, to, defs) => MO.scene({
+  const shot = (id, from, to, defs, bloom = 0.45) => MO.scene({
     id, section: 'albedo', from, to,
     fs: defs.map((d) => `#define ${d}\n`).join('') + BODY + SCENE,
     uniforms: (t) => uniforms(t),
-    bloom: 0.45,
+    bloom,
     vignette: 0.4,
   });
   shot('albedo-a1', T0, T1, ['ALB_SHADOW', 'ALB_MIRROR', 'ALB_MANDORLA']);
   shot('albedo-a2', T1, T2, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_PILLARS', 'ALB_RIPPLE']);
   shot('albedo-a3', T2, TM, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_PILLARS']);
   shot('albedo-a3b', TM, T3, ['ALB_SHADOW', 'ALB_HAIR', 'ALB_MIRROR', 'ALB_MOUNTAIN', 'ALB_SHOCK']);
-  shot('albedo-a4', T3, T4, ['ALB_EYE3', 'ALB_BURST']);
+  // (the bloom halo shrinks with the inhale, or it would grey the dark that closes in)
+  shot('albedo-a4', T3, T4, ['ALB_EYE3', 'ALB_BURST'], (t) => 0.45 * (1 - 0.75 * inhaleAt(t)));
 })();

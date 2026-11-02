@@ -123,11 +123,11 @@ window.SCORE = {
   },
 
   "fx": [
-    { "type": "flash",  "beat": 16,    "color": [1.0, 1.0, 1.0],  "amount": 0.85, "decay": 0.18 },
+    { "type": "flash",  "beat": 16,    "color": [1.0, 1.0, 1.0],  "amount": 0.85, "decay": 0.12 },
     { "type": "shake",  "beat": 16,    "amount": 0.010, "decay": 0.35 },
     { "type": "flash",  "beat": 32,    "color": [1.0, 0.80, 0.25], "amount": 0.65, "decay": 0.30 },
     { "type": "impact", "beat": 48,    "duration": 0.06, "polarity": -1 },
-    { "type": "shake",  "beat": 48,    "amount": 0.020, "decay": 0.55 },
+    { "type": "shake",  "beat": 48,    "amount": 0.010, "decay": 0.35 },
     { "type": "impact", "beat": 56,    "duration": 0.07 },
     { "type": "shake",  "beat": 56,    "amount": 0.018, "decay": 0.40 },
     { "type": "flash",  "beat": 64,    "color": [1.0, 0.95, 0.85], "amount": 0.45, "decay": 0.12 },

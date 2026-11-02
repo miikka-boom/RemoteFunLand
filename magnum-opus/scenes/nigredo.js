@@ -23,6 +23,7 @@ uniform float uPupil;   // pupil size factor
 uniform vec2  uLook;    // iris offset (gaze, tremble)
 uniform float uAura;    // flame aura strength
 uniform float uHi;      // anime cornea highlights 0..1
+uniform float uSun;     // pupil fire 0..1: 0 the black sun, 1 the white-hot sun (unset = 0 in nigredo)
 
 const vec2  EY_IC = vec2(0.0, 0.03);
 const float EY_R  = 0.40;
@@ -148,14 +149,17 @@ vec3 ey_iris(vec2 q, float pe) {
   // limbal ring
   col *= 0.45 + 0.55 * smoothstep(1.0, 0.88, r);
   col += eyVio * (1.1 * ey_st(r - 1.0, pe, 0.8) + 0.25 * ey_gl(r - 1.0, pe, 6.0)) * (0.3 + 0.7 * lit);
-  // pupil: nigredo = the black sun; rubedo = a white-hot sun around a black eclipse core
+  // pupil: nigredo = the black sun; rubedo = a white-hot sun around a black eclipse core.
+  // uSun ignites it on screen (lead to gold): a front of fire runs from the rim in to the core.
   {
     float rpw = rp + 0.008 * sin(a1 * 40.0);
     float pin = 1.0 - smoothstep(-pe, pe, r - rpw);
     float core = r / rp;
+    float fr = 1.0 - 0.75 * uSun;
     vec3 hot = eyHot * (0.7 + 1.5 * (1.0 - core * core)) * smoothstep(0.30, 0.40, core)
              + eyHot * 2.5 * ey_st(core - 0.35, pe / rp, 0.8);
-    col = mix(col, hot * uGold, pin);
+    hot = hot * uSun * smoothstep(fr - 0.15, fr, core) + eyHot * 1.8 * exp(-abs(core - fr) / 0.05) * uSun * (1.0 - uSun) * 4.0;
+    col = mix(col, hot, pin);
     col += mix(eyEmber, eyVerd, 0.5 + 0.5 * sin(a * 20.0)) * 1.4 * ey_st(r - rpw, pe, 0.8) * (0.4 + 0.6 * lit);
   }
   col += edge * mix(eyVerd, eyBone, 0.5) * 1.6;
@@ -436,13 +440,13 @@ vec3 ng_sky(vec2 w, float pe, float t) {
   if (uShA > 0.0) {
     vec2 bp = (w - vec2(0.0, uRise)) / uSS;
     float bd = sdBody(bp, 0.22) * uSS;
-    float rimK = 0.45 + 0.55 * smoothstep(-0.6, 0.9, w.y);
+    float rimK = 0.60 + 0.40 * smoothstep(-0.6, 0.9, w.y);
     if (bd > 0.0 && bd < 0.45) {
       float wob = bd + 0.010 * sin(w.x * 23.0 + w.y * 7.0 - t * 2.0) * smoothstep(0.02, 0.15, bd);
       float ln = ey_lines(wob / 0.034, pe / 0.034, 0.55);
       col += eyVio * 0.40 * ln * exp(-bd * 6.0) * smoothstep(0.012, 0.03, bd) * uShA;
     }
-    col += vec3(0.30, 0.10, 0.55) * 0.10 * exp(-max(bd, 0.0) / 0.07) * step(0.0, bd) * rimK * uShA;
+    col += vec3(0.30, 0.10, 0.55) * 0.14 * exp(-max(bd, 0.0) / 0.07) * step(0.0, bd) * rimK * uShA;
     float inside = 1.0 - smoothstep(-pe, pe, bd);
     vec3 inner = vec3(0.0007, 0.0003, 0.0014);
     // the skeleton, faint as an X-ray (XIII Death)
@@ -469,7 +473,8 @@ vec3 ng_sky(vec2 w, float pe, float t) {
       }
     }
     col = mix(col, inner, inside * uShA);
-    col += eyVio * (1.0 * ey_st(bd, pe, 0.7) + 0.22 * exp(-abs(bd) / 0.008)) * rimK * uShA;
+    // the violet rim: strong enough that the silhouette reads against the purple glow as soon as it rises
+    col += eyVio * (1.7 * ey_st(bd, pe, 0.8) + 0.28 * exp(-abs(bd) / 0.008)) * rimK * uShA;
     // eye glow spilling out when open
     if (uEyes > 0.0) {
       vec2 g1 = vec2(abs(bp.x) - 0.047, bp.y - 0.862) * uSS;
@@ -607,11 +612,12 @@ void main() {
   // the Shadow rises in lurches, one per kick, on top of a slow steady climb
   const S_SCALE = 1.45;
   const R_FINAL = 0.16 - 0.44 * S_SCALE;      // its heart behind the black sun
-  const R_START = -0.32 - 1.06 * S_SCALE;     // the crown of its head just under the horizon
+  const R_START = -0.32 - 0.99 * S_SCALE;     // the crown (body y 0.975) a hair under the horizon: the beat-8 kick lifts it through
   const riseAt = (t) => {
     const k = MO.clamp((t - T_RISE) / (T_PUSH - 0.25 - T_RISE));
-    const steps = 6, n = Math.min(steps, Math.floor(k * steps)), f = k * steps - n;
-    const stepped = n >= steps ? 1 : (n + MO.easeOut(MO.clamp(f * 2.6))) / steps;
+    // one lurch on each kick of beats 8-13, over the first ~0.17 s of the beat
+    const steps = 6, kb = (t - T_RISE) / BEAT, n = Math.min(steps, Math.max(0, Math.floor(kb))), f = kb - n;
+    const stepped = t < T_RISE ? 0 : n >= steps ? 1 : (n + MO.easeOut(MO.clamp(f * 2.6))) / steps;
     return MO.mix(R_START, R_FINAL, 0.35 * MO.smooth(k) + 0.65 * stepped);
   };
   const birds = (t) => {
@@ -631,19 +637,24 @@ void main() {
     }
     return out;
   };
+  // camera zoom before the face push-in: the approach out of the dark, then a steady push (1.5x by
+  // beat 14) that never stalls; N4's push-in is normalised so it still lands on zoom 6.2 at the cut
+  const Z_FACE = 6.2;
+  const zBase = (t) => MO.mix(0.32, 0.84, MO.easeOut(MO.remap(t, T_CUT, 2.75))) * Math.exp(Math.log(1.25 / 0.84) * Math.max(0, t - 2.6) / (T_PUSH - 2.6));
+  const Z_END = zBase(T_END);
   const N2u = (t) => {
     const lastK = MO.last('kick', t);
     const kt = lastK ? t - lastK.e.t : 10;
     const hats = MO.count('closedHat', t);
-    // camera: approach out of the dark, slow drift, then the fast push-in on the face
-    let Z = MO.keys([[T_CUT, 0.32], [2.75, 0.84], [T_RISE, 0.93], [T_PUSH, 1.02]], t, MO.easeOut) * (1 + (MO.reduced ? 0.005 : 0.018) * MO.env('kick', t, 0.1));
-    let C = [MO.keys([[T_CUT, 0.0], [2.75, 0.09], [T_RISE + 0.6, -0.05], [T_PUSH - 0.3, 0.0]], t) + 0.015 * Math.sin(t * 0.7), MO.keys([[T_CUT, 0.16], [2.75, 0.08], [T_RISE, 0.06], [T_PUSH - 0.4, 0.14]], t)];
+    // camera: approach out of the dark, steady push with a lurch on every kick, then the fast push-in on the face
+    let Z = zBase(t) * (1 + (MO.reduced ? 0.005 : 0.03) * MO.env('kick', t, 0.1));
+    let C = [MO.keys([[T_CUT, 0.0], [2.75, 0.09], [T_RISE + 0.6, -0.05], [T_PUSH - 0.3, 0.0]], t) + 0.015 * Math.sin(t * 0.7), MO.keys([[T_CUT, 0.16], [2.75, 0.08], [T_RISE, 0.05], [T_PUSH - 0.3, 0.24]], t)];
     const rise = riseAt(t);
     const faceY = rise + 0.862 * S_SCALE;
     const pk = MO.remap(t, T_PUSH, T_END);
     const tSnap = (T_EYES - T_PUSH) / (T_END - T_PUSH);
     const push = pk < tSnap ? 0.62 * MO.easeInOut(pk / tSnap) : 0.62 + 0.38 * MO.easeIn((pk - tSnap) / (1 - tSnap)) * 0.6 + 0.38 * 0.4 * MO.easeOut((pk - tSnap) / (1 - tSnap));
-    Z = Z * Math.exp(Math.log(6.2 / 1.02) * push);
+    Z = Z * Math.exp(Math.log(Z_FACE / Z_END) * push);
     C = [MO.mix(C[0], 0.0, push), MO.mix(C[1], faceY, MO.smooth(MO.clamp(pk * 1.4)))];
     const eu = t - T_EYES;
     const eyes = eu < 0 ? 0 : MO.clamp(1.0 - Math.exp(-40 * eu) * Math.cos(30 * eu) + 0.15 * Math.exp(-8 * eu) * Math.sin(30 * eu), 0, 1.2);
@@ -654,7 +665,7 @@ void main() {
       uZc: Z, uCc: C, uTilt: tilt,
       uRise: rise, uSS: S_SCALE, uShA: MO.remap(t, T_RISE - 0.2, T_RISE + 0.3),
       uEyes: eyes, uEyeGlow: (t > T_EYES ? 0.6 * claps : 0) + 1.6 * MO.easeIn(MO.remap(t, T_EYES + 0.15, T_END)),
-      uKT: kt, uKA: t >= T_ENTER ? 1 : 0, uSunR: 0.24 * (1 + 0.012 * Math.exp(-kt / 0.12)),
+      uKT: kt, uKA: t >= T_ENTER ? 1 : 0, uSunR: 0.24 * (1 + (MO.reduced ? 0.012 : 0.03) * Math.exp(-kt / 0.12)),
       uBird: birds(t), uBirdA: MO.remap(t, T_CUT + 0.2, 2.9),
       uSpeed: (MO.reduced ? 0.4 : 1) * (MO.remap(t, T_RISE - 0.05, T_RISE + 0.2) * (0.35 + 0.65 * MO.env('closedHat', t, 0.09)) + 0.6 * MO.env('openHat', t, 0.12)),
       uSnap: t > T_EYES ? Math.exp(-(t - T_EYES) / 0.22) * (MO.reduced ? 0.4 : 1) : 0, uSnapR: 0.32 + Math.max(0, t - T_EYES) * 5.0, uEyeS: (() => { const dx = (0 - C[0]) * Z, dy = (faceY - C[1]) * Z, a = -tilt; return [Math.cos(a) * dx - Math.sin(a) * dy, Math.sin(a) * dx + Math.cos(a) * dy]; })(),
