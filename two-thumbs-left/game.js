@@ -62,7 +62,7 @@
 
   const pct = (v) => Math.round(v * 100) + '%';
   const LAB = [
-    { group: 'Move stick · left thumb' },
+    { group: () => `Move stick · ${cfg.lefty ? 'right' : 'left'} thumb` },
     { key: 'mode', label: 'Placement', type: 'seg', options: [['floating', 'Floating'], ['fixed', 'Fixed']], hint: 'Floating: the stick appears wherever your thumb lands.' },
     { key: 'size', label: 'Stick size', type: 'range', min: 0, max: 96, step: 2, fmt: (v) => (v === 0 ? 'auto (' + IN.R + ' px)' : v + ' px') },
     { key: 'follow', label: 'Base follows thumb', type: 'toggle', hint: 'When your thumb runs past the rim, the stick slides along with it.' },
@@ -72,7 +72,7 @@
     { key: 'moveCurve', label: 'Response curve', type: 'range', min: 0.5, max: 2.5, step: 0.05, fmt: (v) => v.toFixed(2) + (v === 1 ? ' linear' : v > 1 ? ' fine' : ' twitchy') },
     { key: 'speed', label: 'Run speed', type: 'range', min: 140, max: 260, step: 5, fmt: (v) => v + ' u/s' },
     { key: 'accelMs', label: 'Get up to speed in', type: 'range', min: 0, max: 300, step: 10, fmt: (v) => v + ' ms' },
-    { group: 'Aim stick · right thumb' },
+    { group: () => `Aim stick · ${cfg.lefty ? 'left' : 'right'} thumb` },
     { key: 'fireMode', label: 'Firing', type: 'seg', options: [['ring', 'Ring'], ['any', 'On aim'], ['auto', 'Auto']] },
     { key: 'fireAt', label: 'Fire ring', type: 'range', min: 0.25, max: 0.95, step: 0.01, fmt: pct, hint: 'Inside the ring you aim the flashlight without spending ammo; past it you shoot.' },
     { key: 'fireHys', label: 'Ring stickiness', type: 'range', min: 0, max: 0.25, step: 0.01, fmt: pct },
@@ -83,7 +83,7 @@
     { key: 'assistCone', label: 'Assist cone', type: 'range', min: 4, max: 30, step: 1, fmt: (v) => '±' + v + '°' },
     { key: 'assistMax', label: 'Assist max pull', type: 'range', min: 2, max: 20, step: 1, fmt: (v) => v + '°' },
     { group: 'Shove' },
-    { key: 'tapShove', label: 'Tap the right side to shove', type: 'toggle' },
+    { key: 'tapShove', label: () => `Tap the ${cfg.lefty ? 'left' : 'right'} side to shove`, type: 'toggle' },
     { key: 'flickShove', label: 'Flick to shove (aims the shove)', type: 'toggle' },
     { key: 'shoveBtn', label: 'Shove button', type: 'toggle' },
     { group: 'Layout & comfort' },
@@ -757,8 +757,13 @@
     D.warn = { ang: Math.atan2(ay - P.y, ax - P.x), t: sec, max: sec };
   }
 
+  function refreshFieldP() {
+    const tx = Math.floor(P.x / T), ty = Math.floor(P.y / T);
+    flowField(fieldP, tx, ty); fieldPTile = ty * M.W + tx; fieldPT = 0.12;
+  }
   function director(dt) {
     if (mode === 'run' && state !== 'play') return; // nothing new behind the end screen
+    if (D.labCue) { D.labCue = false; SFX.hordeCue(); banner('HORDE!', 'danger', 2.4); } // queued by the lab's 'Horde now'
     const near400 = Z.some((z) => z.state !== Z_IDLE && Math.abs(z.x - P.x) < 400 && Math.abs(z.y - P.y) < 400);
     if (!near400 && gameTime - D.lastHurt > 3) D.intensity = Math.max(0, D.intensity - 0.035 * dt);
     const ch = chasers();
@@ -1137,14 +1142,13 @@
       startCrescendo();
     }
   }
+  const SIREN_S = 4.5; // seconds of alarm wail after the switch is pulled
   function startCrescendo() {
     M.gate.state = 'opening'; M.gate.t = 0;
     D.cresc = true; D.waveT = 2.5; D.waveN = 0; D.phase = 'peak'; D.pending = null;
     makeNoise(P.x, P.y, 2000);
     if (mode === 'run') {
-      SFX.clunk(); SFX.siren(true); SFX.motor(true); SFX.setDrums(true);
-      const run = runId;
-      setTimeout(() => { if (run === runId) SFX.siren(false); }, 4500);
+      SFX.clunk(); SFX.siren(true); SFX.motor(true); SFX.setDrums(true); // the siren stops at gate time SIREN_S (updateGate)
     }
     banner('ALARM! Hold out while the gate opens', 'danger', 3);
     bump(0.5);
@@ -1153,6 +1157,7 @@
     const g = M.gate;
     if (g.state !== 'opening') return;
     g.t += dt;
+    if (mode === 'run' && g.t >= SIREN_S && g.t - dt < SIREN_S) SFX.siren(false);
     if (g.t >= g.dur) {
       g.state = 'open';
       for (let y = g.y0; y <= g.y1; y++) { const i = y * M.W + g.x; M.flags[i] &= NOSPAWN | YARD; M.kind[i] = K.NONE; }
@@ -1271,7 +1276,7 @@
     // --- flow field toward the survivor
     const pt = Math.floor(P.y / T) * M.W + Math.floor(P.x / T);
     fieldPT -= dt;
-    if (pt !== fieldPTile && fieldPT <= 0) { flowField(fieldP, Math.floor(P.x / T), Math.floor(P.y / T)); fieldPTile = pt; fieldPT = 0.12; }
+    if (pt !== fieldPTile && fieldPT <= 0) refreshFieldP();
 
     // --- is the survivor standing in light (or firing)?
     playerLit = P.firingT > 0;
@@ -1647,11 +1652,16 @@
     let ox = (Math.cos(P.aim) * 120 * am + (spd > 0.05 ? (P.vx / (Math.hypot(P.vx, P.vy) || 1)) * 50 * spd : 0)) * cfg.lookAhead;
     let oy = (Math.sin(P.aim) * 120 * am + (spd > 0.05 ? (P.vy / (Math.hypot(P.vx, P.vy) || 1)) * 50 * spd : 0)) * cfg.lookAhead;
     ox = clamp(ox, -viewW * 0.15, viewW * 0.15); oy = clamp(oy, -viewH * 0.15, viewH * 0.15);
+    // portrait: looking south lifts the survivor toward the button row above the stick zones.
+    // Stop before it, or the row covers the survivor and whatever is within 80 u of them.
+    // (The view below the survivor is already the deep one in portrait.)
+    const liftF = portrait ? 0.02 : 0.05;
+    if (portrait && rowBottom > 0) oy = Math.min(oy, Math.max(0, (ch * (0.5 - liftF) - rowBottom) / cam.zoom - 80));
     const kl = 1 - Math.exp(-3.5 * dt);
     cam.lx += (ox - cam.lx) * kl; cam.ly += (oy - cam.ly) * kl;
     // thumbs cover the bottom of the screen: sit the survivor a little above centre
     // (portrait only a touch, so the button row above the stick zones stays clear of it)
-    const lift = viewH * (portrait ? 0.02 : 0.05);
+    const lift = viewH * liftF;
     const tx = P.x + cam.lx, ty = P.y + cam.ly + lift;
     const k = 1 - Math.exp(-9 * dt);
     cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
@@ -1714,24 +1724,36 @@
   }
 
   // Thumb buttons: an arc above the aim stick's home (landscape) or a row above the stick zones (portrait).
+  // returns the centre y it settled on
   function placeEl(el, x, y, w, h) {
-    if (!el) return;
     x = clamp(x, insets.l + w / 2 + 6, Math.max(insets.l + w / 2 + 6, cw - insets.r - w / 2 - 6));
     y = clamp(y, insets.t + 64 + h / 2, Math.max(insets.t + 64 + h / 2, ch - insets.b - h / 2 - 6));
-    el.style.transform = `translate(${Math.round(x - w / 2)}px, ${Math.round(y - h / 2)}px)`;
+    if (el) {
+      const tf = `translate(${Math.round(x - w / 2)}px, ${Math.round(y - h / 2)}px)`;
+      if (el.style.transform !== tf) el.style.transform = tf;
+    }
+    return y;
   }
-  // The Use pill sits just under the survivor, between the thumbs, where a landing thumb won't hit it.
+  // The Use pill rides just under the survivor (camera look-ahead included), centred between the
+  // thumbs. It holds still while a finger is on it, so it never slides out from under a press.
+  const useBox = { label: null, w: 0, h: 0 };
+  if (document.fonts) document.fonts.addEventListener('loadingdone', () => { useBox.w = 0; }); // the label got wider
   function placeUse() {
     const el = hud.use;
-    if (!el || el.hidden) return;
-    const w = el.offsetWidth || 120, h = el.offsetHeight || 54;
-    const sy = ch / 2 - ch * (ch > cw ? 0.02 : 0.05); // where the camera holds the survivor
-    placeEl(el, cw / 2, sy + 40 + h / 2, w, h);
+    if (!el || el.hidden || useHeld) return;
+    const label = hud.useLabel.textContent;
+    if (useBox.label !== label || !useBox.w) {
+      if (!el.offsetWidth) return; // the HUD is hidden behind a screen: measure once it shows again
+      useBox.label = label; useBox.w = el.offsetWidth; useBox.h = el.offsetHeight;
+    }
+    const sy = ch / 2 + (P.y - cam.y) * cam.zoom; // the survivor's screen y, shake and recoil left out
+    placeEl(el, cw / 2, sy + 40 + useBox.h / 2, useBox.w, useBox.h);
   }
+  let rowBottom = 0; // portrait: the bottom edge of the thumb-button row (0 in landscape)
   function layoutButtons() {
     const R = IN.R, portrait = ch > cw;
     const am = IN.sticks.aim, mv = IN.sticks.move;
-    const place = (el, x, y, size) => placeEl(el, x, y, size, size);
+    const place = (el, x, y, size) => placeEl(el, x, y, size, size) + size / 2; // returns the bottom edge
     const flip = cfg.lefty ? -1 : 1;
     if (!portrait) {
       const rad = clamp(am.homeY - (insets.t + 64) - 38, 96, R + 100);
@@ -1743,14 +1765,16 @@
       const atL = (deg, r) => ({ x: mv.homeX - Math.cos(deg * DEG) * r * flip, y: mv.homeY - Math.sin(deg * DEG) * r });
       p = atL(90, ml); place(hud.med, p.x, p.y, 56);
       p = atL(58, ml); place(hud.pills, p.x, p.y, 56);
+      rowBottom = 0;
     } else {
       const y = ch * 0.4 - 12 - 33;
       const rx = (f) => (cfg.lefty ? cw * (1 - f) : cw * f);
-      place(hud.shove, rx(0.83), y, 66);
-      place(hud.reload, rx(0.64), y + 4, 56);
-      place(hud.bomb, rx(0.64), y - 64, 56);
-      place(hud.med, rx(0.12), y, 56);
-      place(hud.pills, rx(0.3), y + 4, 56);
+      rowBottom = Math.max(
+        place(hud.shove, rx(0.83), y, 66),
+        place(hud.reload, rx(0.64), y + 4, 56),
+        place(hud.bomb, rx(0.64), y - 64, 56),
+        place(hud.med, rx(0.12), y, 56),
+        place(hud.pills, rx(0.3), y + 4, 56));
     }
     placeUse();
   }
@@ -1995,8 +2019,9 @@
   function litAt(x, y, dx, dy) {
     const d = Math.hypot(dx, dy);
     if (d < 130) return true;
-    // the sprite is drawn twice as tall as it is wide, so the bright core reads about ±44°
-    if (!P.dead && d < FLASH_R && Math.abs(angDiff(Math.atan2(dy, dx), P.aim)) < 0.77) return true;
+    // the cone sprite's full-bright core is about ±44° and the floor is still over 70% as bright at ±56°;
+    // anything drawn that brightly in the beam counts as lit (past that it fades fast to dark by ±63°)
+    if (!P.dead && d < FLASH_R && Math.abs(angDiff(Math.atan2(dy, dx), P.aim)) < 0.98) return true;
     for (const f of flashes) if (!f.shove && Math.hypot(f.x - x, f.y - y) < (f.boom ? 300 : 210)) return true;
     for (const L of M.lights) { if (L.inside || L.insideEnd) continue; if (lightLevel(L) > 0.5 && Math.hypot(L.x - x, L.y - y) < L.r * 0.7) return true; }
     return false;
@@ -2374,7 +2399,8 @@
     setOnce('pips', pips, (v) => hud.pips.forEach((p, i) => p.classList.toggle('on', i < v)));
     let label = '';
     if (useTarget) label = useTarget.t === 'weapon' ? 'Take ' + WEAP[useTarget.w].name.toLowerCase() : 'Hold: LOUD switch';
-    setOnce('use', label, (v) => { hud.use.hidden = !v; hud.useLabel.textContent = v; placeUse(); });
+    setOnce('use', label, (v) => { hud.use.hidden = !v; hud.useLabel.textContent = v; });
+    if (label) placeUse(); // follows the survivor every frame (a no-op while held)
     hud.useFill.style.transform = `scaleX(${clamp(useHoldT / 0.6, 0, 1)})`;
     let obj;
     if (M.gate.state === 'closed') obj = !P.primary && inRoomRect(P, M.startRoom) ? 'Grab a gun from the table' : 'Find the gate in the east wall →';
@@ -2402,7 +2428,10 @@
     const set = (sel, html) => { const el = $(sel); if (el) el.innerHTML = html; };
     set('#howMove', `<b>${mv} thumb</b> anywhere on the ${mv.toLowerCase()}: move.`);
     set('#howAim', `<b>${am} thumb</b>: aim the light. ` + (cfg.fireMode === 'ring' ? 'Push past the ring to <b>fire</b>.' : cfg.fireMode === 'auto' ? 'It <b>fires</b> by itself at lit zombies.' : 'Push it to <b>fire</b>.'));
-    set('#howShove', cfg.tapShove ? `<b>Tap</b> the ${am.toLowerCase()} side to <b>shove</b> when they get close.` : '<b>Shove</b> button when they get close.');
+    set('#howShove', cfg.tapShove ? `<b>Tap</b> the ${am.toLowerCase()} side to <b>shove</b> when they get close.`
+      : cfg.shoveBtn ? 'Hit the <b>Shove</b> button when they get close.'
+      : cfg.flickShove ? `<b>Flick</b> the ${am.toLowerCase()} stick to <b>shove</b> when they get close.`
+      : 'No shove in this setup: <b>back off</b> and shoot.');
   }
 
   // ================================================================ screens
@@ -2454,7 +2483,7 @@
     if (state !== 'paused') return;
     state = 'play';
     SFX.resume();
-    if (mode === 'run' && M.gate.state === 'opening') SFX.motor(true);
+    if (mode === 'run' && M.gate.state === 'opening') { SFX.motor(true); if (M.gate.t < SIREN_S) SFX.siren(true); }
     show(null);
     IN.releaseAll();
     armBack();
@@ -2491,7 +2520,9 @@
     const scroller = $('#labScroll');
     const scroll = scroller.scrollTop;
     body.innerHTML = '';
-    for (const row of LAB) {
+    const txt = (v) => (typeof v === 'function' ? v() : v); // some labels name a side, which flips with 'Swap sides'
+    for (const row0 of LAB) {
+      const row = { ...row0, group: txt(row0.group), label: txt(row0.label) };
       if (row.group) { const h = document.createElement('h3'); h.textContent = row.group; body.appendChild(h); continue; }
       const wrap = document.createElement('div'); wrap.className = 'row row-' + row.type;
       const id = 'cfg-' + row.key;
@@ -2504,7 +2535,10 @@
         wrap.innerHTML = `<label class="tog"><span>${row.label}</span><input id="${id}" type="checkbox" role="switch"><i aria-hidden="true"></i></label>`;
         const inp = wrap.querySelector('input');
         inp.checked = !!cfg[row.key];
-        inp.addEventListener('change', () => { cfg[row.key] = inp.checked; applyCfg(); saveCfg(); });
+        inp.addEventListener('change', () => {
+          cfg[row.key] = inp.checked; applyCfg(); saveCfg();
+          if (row.key === 'lefty') { buildLab(); const again = $('#' + id); if (again) again.focus(); } // relabel the sides
+        });
       } else if (row.type === 'seg') {
         wrap.innerHTML = `<span class="lbl">${row.label}</span><div class="seg" role="radiogroup" aria-label="${row.label}">${row.options.map(([v, l]) => `<button type="button" role="radio" data-v="${v}">${l}</button>`).join('')}</div>`;
         const btns = wrap.querySelectorAll('button');
@@ -2561,6 +2595,7 @@
     tapBtn($('#btnPause'), () => pause());
     $('#playBtn').addEventListener('click', startRun);
     $('#resumeBtn').addEventListener('click', resume);
+    $('#resumeIcon').addEventListener('click', resume); // on the Pause button's spot: tap there again to go back
     $('#restartBtn').addEventListener('click', startRun);
     $('#againBtn').addEventListener('click', startRun);
     $('#labBtnTitle').addEventListener('click', () => openLab('title'));
@@ -2576,9 +2611,11 @@
     $('#labHorde').addEventListener('click', () => {
       if (mode !== 'run' || state === 'won' || state === 'dead') { toast('Start a run first'); return; }
       if (D.cresc) { toast('Already a crescendo'); return; }
+      refreshFieldP(); // paused, so the field may still point at where the survivor was before 'Skip to gate'
       const p = planMob(Math.round((rand(10, 16.99) + D.mobs) * cfg.horde), 16, 28, 0.6);
       if (!p) { toast('No hidden spot for a horde here'); return; }
       warnFrom(p, 3); releaseMob(p, gameTime + 3); D.mobs++; stats.mobs++;
+      D.labCue = true; // the HORDE! cue plays on the first tick after resume, not under the pause card
       closeLab(); toast('Horde in 3 seconds…');
     });
     $('#labCresc').addEventListener('click', () => {
@@ -2586,7 +2623,7 @@
       const ft = freeTileNear(WALLX - 2, M.gate.y0 - 1);
       P.x = (ft.x + 0.5) * T; P.y = (ft.y + 0.5) * T; P.vx = P.vy = 0;
       if (!P.primary) { P.primary = { kind: 'smg', mag: 50, res: 400 }; P.cur = 'primary'; }
-      cam.x = P.x; cam.y = P.y; fieldPTile = -1;
+      cam.x = P.x; cam.y = P.y; refreshFieldP();
       for (let i = Z.length - 1; i >= 0; i--) if (Math.hypot(Z[i].x - P.x, Z[i].y - P.y) < 700) Z.splice(i, 1);
       D.phase = 'relax'; D.relaxT = 1e9;
       closeLab(); toast('At the gate. Hold the switch to start.');

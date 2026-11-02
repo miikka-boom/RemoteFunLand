@@ -176,7 +176,7 @@ window.TwinStick = (function () {
     for (const id of debugTouches.keys()) if (!live.has(id)) debugTouches.delete(id);
   }
   function onTouchStart(e) {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     if (!enabled) return;
     source = 'touch';
     reconcile(e.touches); // free any stick whose finger vanished before binding the new ones
@@ -190,7 +190,7 @@ window.TwinStick = (function () {
     }
   }
   function onTouchMove(e) {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     reconcile(e.touches);
     for (const t of e.changedTouches) {
       const d = debugTouches.get(t.identifier);
@@ -205,7 +205,7 @@ window.TwinStick = (function () {
     }
   }
   function onTouchEnd(e) {
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     const cancel = e.type === 'touchcancel';
     for (const t of e.changedTouches) {
       debugTouches.delete(t.identifier);
@@ -280,11 +280,24 @@ window.TwinStick = (function () {
     window.addEventListener('mouseup', (e) => { if (e.button === 0) { mouse.fire = false; mouseButtons &= ~1; } });
   }
 
+  // A thumb that lands near the edge of the glass has less than a stick radius left to push into.
+  // Past the dead zone, travel toward that edge is stretched so reaching the edge reads as (nearly)
+  // a full push. Only the strength is stretched: the direction is still where the thumb really is.
+  function pushLen(s, dx, dy) {
+    if (!s.floating) return Math.hypot(dx, dy);
+    const dz = R * (s.role === 'aim' ? cfg.aimDead : cfg.moveDead);
+    const st = (room, v) => {
+      const a = Math.abs(v);
+      return room >= R || a <= dz ? a : dz + ((a - dz) * R) / Math.max(room, R * 0.4);
+    };
+    return Math.hypot(st(dx > 0 ? W - s.ox : s.ox, dx), st(dy > 0 ? H - s.oy : s.oy, dy));
+  }
+
   function computeStick(s, dt) {
     if (!s.active) { s.mag = 0; s.x = 0; s.y = 0; s.hasDir = false; s.hadDir = false; s.firing = false; s.angVel = 0; return; }
     const dx = s.px - s.ox, dy = s.py - s.oy;
     const d = Math.hypot(dx, dy);
-    s.mag = Math.min(d / R, 1);
+    s.mag = Math.min(pushLen(s, dx, dy) / R, 1);
     if (s.role === 'move') {
       if (d > 0.5) s.ang = Math.atan2(dy, dx);
       let t = clamp((s.mag - cfg.moveDead) / Math.max(0.01, cfg.moveSat - cfg.moveDead), 0, 1);
@@ -391,12 +404,11 @@ window.TwinStick = (function () {
       if (!s.active) {
         let bx = s.homeX, by = s.homeY;
         if (s.relT > 0) { const u = 1 - s.relT / 0.15; bx = s.drawX + (s.homeX - s.drawX) * u; by = s.drawY + (s.homeY - s.drawY) * u; }
+        if (!opts.showGhost) continue; // mouse, keys and pad: no touch sticks on screen (the Shove button dims instead)
         if (isAim && opts.shoveBlocked > 0) {
-          // a tap-shove on cooldown: flash where the thumb just was
-          const fx = opts.showGhost ? bx : s.drawX, fy = opts.showGhost ? by : s.drawY;
-          ctx.save(); ctx.globalAlpha = Math.min(1, opts.shoveBlocked * 4); ringP(ctx, fx, fy, R + 4, '#ff4b2f', 3); ctx.restore();
+          // a tap-shove on cooldown: flash the ring as it slides back from where the thumb was
+          ctx.save(); ctx.globalAlpha = Math.min(1, opts.shoveBlocked * 4); ringP(ctx, bx, by, R + 4, '#ff4b2f', 3); ctx.restore();
         }
-        if (!opts.showGhost) continue;
         ctx.save();
         ctx.globalAlpha = cfg.mode === 'fixed' ? 0.34 : 0.22;
         ringP(ctx, bx, by, R, '#ece8df', 2);
