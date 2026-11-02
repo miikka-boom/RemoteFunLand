@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<title>You Are Slime</title>
+<meta name="description" content="A soft-body slime sandbox: crawl, climb, stretch and squish a slime made of physics particles around a night-time street and sewer, and eat goo to grow.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@500;700;800&display=swap">
+<style>
+/* Layout: the street fills the screen. HUD along the top edge; on touch screens a floating
+   stick on the left half and a jump button on the right. */
+:root {
+  --p1: #2bff6b;
+  --ink: #e9edf7;
+  --soft: #9aa6c4;
+  --panel: rgba(10, 14, 30, .78);
+  --f: "Rubik", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; height: 100% }
+body {
+  background: #081129;
+  color: var(--ink);
+  font: 500 15px/1.4 var(--f);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none; user-select: none;
+  -webkit-touch-callout: none;
+}
+canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none }
+button { font: inherit; color: inherit }
+a:focus-visible, button:focus-visible { outline: 2px solid var(--p1); outline-offset: 2px }
+
+.hud {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 2; pointer-events: none;
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+  padding: max(10px, env(safe-area-inset-top, 0px)) max(14px, env(safe-area-inset-right, 0px)) 0 max(14px, env(safe-area-inset-left, 0px));
+}
+.hud > * { pointer-events: auto }
+.brand { display: grid; gap: 3px; min-width: 0 }
+.back { color: var(--soft); text-decoration: none; font-weight: 700; font-size: 12px; letter-spacing: .08em; text-transform: uppercase }
+.back:hover { color: var(--ink) }
+.title { margin: 0; font-weight: 800; font-size: clamp(18px, 2.8vw, 30px); line-height: 1; letter-spacing: .03em; white-space: nowrap; text-shadow: 0 2px 0 rgba(0,0,0,.4) }
+.title b { color: var(--p1); text-shadow: 0 0 18px rgba(43,255,107,.45), 0 2px 0 rgba(0,0,0,.4) }
+.mass { font-weight: 700; font-size: 12px; letter-spacing: .1em; color: var(--soft) }
+.mass b { color: var(--p1); font-size: 15px; font-variant-numeric: tabular-nums }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end }
+.tools button {
+  border: 1px solid rgba(154,166,196,.35); background: var(--panel); border-radius: 999px;
+  padding: 6px 12px; font-weight: 700; font-size: 12px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer;
+}
+.tools button:hover { border-color: var(--p1) }
+.tools button[aria-pressed="false"] { color: var(--soft) }
+
+.stick, .jump { position: fixed; z-index: 1; display: none; pointer-events: none }
+body.touch .stick, body.touch .jump { display: block }
+.stick {
+  width: 124px; height: 124px; margin: -62px 0 0 -62px; border-radius: 50%;
+  border: 2px solid rgba(233,237,247,.22); background: rgba(233,237,247,.05);
+  left: calc(max(16px, env(safe-area-inset-left, 0px)) + 80px); top: calc(100% - max(16px, env(safe-area-inset-bottom, 0px)) - 80px);
+  opacity: .55; transition: opacity .2s;
+}
+.stick.on { opacity: 1; transition: none }
+.knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px; border-radius: 50%; background: rgba(43,255,107,.55); box-shadow: 0 0 18px rgba(43,255,107,.5) }
+.stick::before, .stick::after { content: ""; position: absolute; left: 50%; width: 0; height: 0; border: 7px solid transparent; margin-left: -7px }
+.stick::before { top: 6px; border-bottom-color: rgba(233,237,247,.35) }
+.stick::after { bottom: 6px; border-top-color: rgba(233,237,247,.35) }
+.jump {
+  right: max(20px, env(safe-area-inset-right, 0px)); bottom: max(20px, env(safe-area-inset-bottom, 0px));
+  width: 104px; height: 104px; border-radius: 50%;
+  border: 2px solid rgba(43,255,107,.6); background: rgba(43,255,107,.14);
+  display: none; place-items: center; font-weight: 800; letter-spacing: .1em; font-size: 15px; color: #d9ffe6;
+}
+body.touch .jump { display: grid }
+.jump.on { background: rgba(43,255,107,.38); transform: scale(.94) }
+
+.hint {
+  position: fixed; z-index: 1; left: 50%; bottom: max(14px, env(safe-area-inset-bottom, 0px)); transform: translateX(-50%);
+  margin: 0; padding: 7px 14px; border-radius: 999px; background: var(--panel); color: var(--soft);
+  font-size: 13px; text-align: center; pointer-events: none; transition: opacity .8s; max-width: calc(100% - 32px);
+}
+body.touch .hint { bottom: auto; top: calc(max(10px, env(safe-area-inset-top, 0px)) + 86px); font-size: 12px }
+.hint.gone { opacity: 0 }
+
+.intro {
+  position: fixed; inset: 0; z-index: 3; display: grid; place-items: center; padding: 16px;
+  background: rgba(5, 8, 20, .55);
+}
+.intro[hidden] { display: none }
+.card {
+  width: min(460px, 100%); max-height: 100%; overflow: auto; padding: 22px 22px 20px; border-radius: 18px;
+  background: rgba(12, 17, 36, .94); border: 1px solid rgba(154,166,196,.25);
+  box-shadow: 0 20px 60px rgba(0,0,0,.5);
+}
+.card h1 { margin: 0 0 6px; font-weight: 800; font-size: clamp(30px, 8vw, 42px); line-height: 1; letter-spacing: .02em }
+.card h1 b { color: var(--p1); text-shadow: 0 0 22px rgba(43,255,107,.5) }
+.card p { margin: 0 0 12px; color: var(--soft) }
+.card ul { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 7px }
+.card li { display: grid; grid-template-columns: 92px 1fr; gap: 10px; font-size: 14px }
+.card li span:first-child { font-weight: 700; color: var(--ink) }
+.card li span:last-child { color: var(--soft) }
+.keys { display: inline }
+body.touch .keys { display: none }
+#play {
+  width: 100%; padding: 13px; border: 0; border-radius: 12px; cursor: pointer;
+  background: var(--p1); color: #062611; font-weight: 800; font-size: 17px; letter-spacing: .08em; text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(43,255,107,.35);
+}
+#play:hover { filter: brightness(1.08) }
+@media (max-width: 520px) {
+  .tools button { padding: 5px 9px; font-size: 11px }
+  .card li { grid-template-columns: 78px 1fr }
+}
+@media (prefers-reduced-motion: reduce) {
+  .stick, .hint { transition: none }
+}
+</style>
+
+<canvas id="c"></canvas>
+
+<header class="hud">
+  <div class="brand">
+    <a class="back" href="../">← Gallery</a>
+    <p class="title">YOU ARE <b>SLIME</b></p>
+    <span class="mass">MASS <b id="mass">40</b> CELLS</span>
+  </div>
+  <div class="tools">
+    <button id="rain" type="button" title="Drop a shower of goo on yourself">Goo rain</button>
+    <button id="reset" type="button" title="Rebuild the arena">Reset</button>
+    <button id="snd" type="button" aria-pressed="true" title="Sound on or off">Sound</button>
+  </div>
+</header>
+
+<div class="stick" id="stick" aria-hidden="true"><div class="knob" id="knob"></div></div>
+<div class="jump" id="jump" aria-hidden="true">JUMP</div>
+<p class="hint gone" id="hint"></p>
+
+<div class="intro" id="intro">
+  <div class="card" role="dialog" aria-labelledby="introTitle">
+    <h1 id="introTitle">YOU ARE <b>SLIME</b></h1>
+    <p>Forty squishy cells of goo held together by soft-body physics. Roll around the yard, climb the walls, ooze through the grate into the sewer, and eat golden goo to grow.</p>
+    <ul>
+      <li><span>Stick ← →</span><span>crawl and roll. Push into a wall to climb it. <span class="keys">(A D / ← →)</span></span></li>
+      <li><span>Stick ↑</span><span>stretch tall and firm. Against a ceiling, cling to it. <span class="keys">(W / ↑)</span></span></li>
+      <li><span>Stick ↓</span><span>go soft and flat: squeeze under the duct, ooze through the grate. <span class="keys">(S / ↓)</span></span></li>
+      <li><span>Jump</span><span>hold for a higher jump, also off walls. <span class="keys">(Space)</span></span></li>
+    </ul>
+    <button id="play" type="button">Play</button>
+  </div>
+</div>
+
+<script src="sim.js"></script>
+<script src="view.js"></script>
+<script src="main.js"></script>
+</html>
