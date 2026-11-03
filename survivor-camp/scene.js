@@ -223,6 +223,7 @@
         return { x: p.x - 22, y: y - 22, w: 44, h: 44, z: 5 };
       });
       const b = place(cands);
+      if ((focusReq || tween) && (b.x < LAY.safeL || b.x + b.w > W - LAY.safeR)) continue;   // panned under a notch or off screen by a sheet
       bubblePos[id] = { x: b.x + 22, y: b.y + 22 };
       out.push(Object.assign({ key: 'bubble:' + id, kind: 'bubble', id }, b));
     }
@@ -749,8 +750,8 @@
       drawBubble(p.x, y, ic, col, b.full ? 'FULL' : txt, b.full);
     }
     // crate, truck and pile
-    if (view.crate && anchors.crate) { const a = anchors.crate; drawBubble(a.x, a.y - 30 + bob(1), 'crate', '#ffc66b', 'TAP', false); }
-    const tr = view.truck; if (tr && tr.scrap + tr.food + tr.meds > 0 && anchors.truck) { const a = anchors.truck; drawBubble(a.x, a.y - 28 + bob(2), 'crate', '#ff7a2f', 'TRUCK', false); }
+    if (view.crate && anchors.crate) { const a = anchors.crate; drawBubble(a.x, a.y - 8 + bob(1), 'crate', '#ffc66b', 'TAP', false); }
+    const tr = view.truck; if (tr && tr.scrap + tr.food + tr.meds > 0 && anchors.truck) { const a = anchors.truck; drawBubble(a.x, a.y - 8 + bob(2), 'crate', '#ff7a2f', 'TRUCK', false); }
     if (state.pile > 0 && anchors.pile) {
       const a = anchors.pile, t = (now / 900) % 1, sz = 5 + 4 * Math.sin(t * Math.PI);
       ctx.strokeStyle = 'rgba(255,241,196,' + (0.9 * Math.sin(t * Math.PI)).toFixed(2) + ')'; ctx.lineWidth = 1.5;

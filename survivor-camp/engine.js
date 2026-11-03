@@ -130,7 +130,11 @@
   const personById = (s, id) => (id ? s.people.find((p) => p.id === id) || null : null);
   const freeBeds = (s) => beds(s) - s.people.length - s.gate.length - (s.recruit ? 1 : 0);
   const routeUnlocked = (s, r) => !r.radio || s.lv.radio >= r.radio;
-  function frontier(s) { let f = DATA.ROUTES[0]; for (const r of DATA.ROUTES) if (routeUnlocked(s, r)) f = r; return f; }
+  function frontier(s) {
+    let f = null, best = DATA.ROUTES[0], bo = -1;
+    for (const r of DATA.ROUTES) { if (!routeUnlocked(s, r)) continue; const o = odds(s, r.id, null, { deltas: false }).odds; if (o >= 0.6) f = r; if (o > bo) { bo = o; best = r; } }
+    return f || best;
+  }
   const campDay = (s) => Math.floor((s.createdAt + s.tzOffsetMs + s.campNow) / DAY);
   const nextMidnight = (s) => (Math.max(campDay(s), s.daily.day) + 1) * DAY - s.createdAt - s.tzOffsetMs;
   function workers(s) {
@@ -170,6 +174,7 @@
     for (const p of s.people) used.add(p.name);
     for (const g of s.gate) used.add(g.name);
     if (s.recruit) used.add(s.recruit.name);
+    for (const n of s.gone) used.add(n);
     if (s.pending && s.pending.handoff && s.pending.handoff.route && s.pending.handoff.route.rescue) used.add(s.pending.handoff.route.rescue.name);
     for (const n of DATA.ROSTER) if (!used.has(n)) return n;
     for (let i = 1; ; i++) if (!used.has('Survivor ' + i)) return 'Survivor ' + i;
@@ -195,8 +200,9 @@
   }
   function soonestJob(s) { let j = null; for (const x of s.jobs) if (!j || x.endAt < j.endAt) j = x; return j; }
 
+  const own = (o, k) => typeof k === 'string' && Object.prototype.hasOwnProperty.call(o, k);
   function buildCheck(s, id) {
-    const b = B[id]; if (!b) return { ok: false, reason: 'unknown', label: 'Unknown building' };
+    const b = own(B, id) ? B[id] : null; if (!b) return { ok: false, reason: 'unknown', label: 'Unknown building' };
     const lv = s.lv[id] + 1;
     if (lv > b.max) return { ok: false, reason: 'max', lv: b.max, label: 'Max level' };
     const c = cost(id, lv, s), t = buildTime(id, lv, s), req = reqCL(id, lv);
@@ -323,7 +329,7 @@
       stock: { medkit: 0, pills: 0, bomb: 0 },
       weapons: { smg: false, shotgun: false, rifle: false },
       people: st.people.map((n, i) => person('p' + (i + 1), n, 0)),
-      gate: [],
+      gate: [], gone: [],
       recruit: null,
       parties: [],
       truck: { scrap: 0, food: 0, meds: 0 },
@@ -455,10 +461,11 @@
       s.flags.stashGiven = true; s.buf.infirmary += B.infirmary.stash;
     } else if (id === 'radio' && lv === 1 && !s.flags.dropGiven) {
       s.flags.dropGiven = true; const d = DATA.SUPPLY_DROP;
-      s.stock.medkit = Math.min(DATA.STOCK_MAX, s.stock.medkit + d.medkit);
-      s.stock.pills = Math.min(DATA.STOCK_MAX, s.stock.pills + d.pills);
-      const g = gain(s, { scrap: d.scrap }, 'drop', ev, ctx);
-      ev.push({ type: 'supplyDrop', medkit: d.medkit, pills: d.pills, scrap: d.scrap, stored: g.stored });
+      const room = (k) => Math.max(0, DATA.STOCK_MAX - s.stock[k] - s.craft[DATA.CRAFTS[k].building].filter((c) => c.item === k).length);
+      const mk = Math.min(d.medkit, room('medkit')), pl = Math.min(d.pills, room('pills'));
+      s.stock.medkit += mk; s.stock.pills += pl;
+      const g = gain(s, { scrap: d.scrap, meds: (d.medkit - mk) * DATA.CRAFTS.medkit.cost.meds + (d.pills - pl) * DATA.CRAFTS.pills.cost.meds }, 'drop', ev, ctx);
+      ev.push({ type: 'supplyDrop', medkit: mk, pills: pl, meds: (d.medkit - mk) * DATA.CRAFTS.medkit.cost.meds + (d.pills - pl) * DATA.CRAFTS.pills.cost.meds, scrap: d.scrap, stored: g.stored });
     } else if (id === 'bunkhouse') moveGate(s, ev);
     for (const r of DATA.ROUTES) if (r.radio && id === 'radio' && r.radio === lv) unlock(s, 'route:' + r.id);
   }
@@ -662,7 +669,7 @@
   }
   function canStartRun(s, routeId) {
     if (s.pending) return { ok: false, err: 'A run is already under way' };
-    const route = ROUTE[routeId]; if (!route) return { ok: false, err: 'Unknown route' };
+    const route = own(ROUTE, routeId) ? ROUTE[routeId] : null; if (!route) return { ok: false, err: 'Unknown route' };
     if (!routeUnlocked(s, route)) return { ok: false, err: 'Needs Radio Mast Lv ' + route.radio };
     if (!pickRunner(s)) return { ok: false, err: 'Nobody can run' };
     return { ok: true, err: null };
@@ -682,14 +689,24 @@
     const match = (x) => (f === 'win' ? x.win : f === 'loss' ? !x.win : f === 'gateLoss' ? !x.win && x.endedAt === 'gate' : true);
     for (const skill of [L.skill || 0, f === 'win' ? 1 : -1]) {
       const LL = skill === (L.skill || 0) ? L : Object.assign({}, L, { skill });
+      let hurtWin = null;                                      // a forced win prefers a seed that leaves the runner unhurt
       for (let k = 0; k < 200; k++) {
         const sd = (p.seed + k * 7919) >>> 0, x = Run.simulate(route, LL, sd);
-        if (match(x)) return resultPayload(p, x, sd);
+        if (!match(x)) continue;
+        if (f !== 'win' || !x.secondWindUsed) return resultPayload(p, x, sd);
+        if (!hurtWin) hurtWin = [x, sd];
       }
+      if (hurtWin) return resultPayload(p, hurtWin[0], hurtWin[1]);
     }
     return resultPayload(p, Run.simulate(route, L, p.seed), p.seed);
   }
 
+  function seedOf(res, pending, notes) {
+    const want = pending.seed >>> 0, got = typeof res.seed === 'number' && isFinite(res.seed) ? Math.floor(res.seed) >>> 0 : want;
+    const d = (got - want + 4294967296) % 4294967296;
+    if (got === want || (pending.force && pending.force !== 'auto' && d % 7919 === 0 && d / 7919 < 200)) return got;
+    notes.push('seed ignored: the camp uses the handoff seed'); return want;
+  }
   function validateResult(res, pending) {
     const errors = [], notes = [];
     if (!pending || !pending.handoff) return { ok: false, res: null, errors: ['No run is waiting for a result'], notes };
@@ -719,7 +736,7 @@
     let endedAt = win ? null : (['wander', 'horde', 'gate'].includes(res.endedAt) ? res.endedAt : null);
     const events = Array.isArray(res.events) ? res.events.filter((e) => Array.isArray(e) && typeof e[0] === 'number' && isFinite(e[0]) && typeof e[1] === 'string').slice(0, 200).map((e) => e.slice(0, 6)) : [];
     const out = {
-      v: 1, runId: res.runId, seed: typeof res.seed === 'number' && isFinite(res.seed) ? Math.floor(res.seed) >>> 0 : pending.seed,
+      v: 1, runId: res.runId, seed: seedOf(res, pending, notes),
       source: ['sim', 'paste', 'game'].includes(res.source) ? res.source : 'paste', result: res.result,
       progress: win ? 1 : num('progress', 0, 1), endedAt,
       time: num('time', 0, 1800, true), kills: num('kills', 0, 2000, true), accuracy: num('accuracy', 0, 100, true),
@@ -854,7 +871,7 @@
     },
     collect(s, a, ev, ctx) {
       const id = a.id; let n = 0;
-      if (PROD_RES[id]) n = collectBuffer(s, id, ev, ctx);
+      if (own(PROD_RES, id)) n = collectBuffer(s, id, ev, ctx);
       else if (id === 'generator') n = collectGenerator(s, ev, ctx);
       else if (id === 'radio') n = collectParties(s, ev, ctx);
       else if (id === 'truck') n = unloadTruck(s, ev);
@@ -875,7 +892,7 @@
     openCrate(s, a, ev, ctx) { if (!s.crate) return fail('No crate'); openCrateInternal(s, ev, ctx); return {}; },
     unloadTruck(s, a, ev) { if (!unloadTruck(s, ev)) return fail(s.truck.scrap + s.truck.food + s.truck.meds ? 'Storage full' : 'The truck is empty'); return {}; },
     craft(s, a, ev) {
-      const d = DATA.CRAFTS[a.item]; if (!d || (a.building && d.building !== a.building)) return fail('Unknown recipe');
+      const d = own(DATA.CRAFTS, a.item) ? DATA.CRAFTS[a.item] : null; if (!d || (a.building && d.building !== a.building)) return fail('Unknown recipe');
       const b = d.building;
       if (s.lv[b] < d.minLv) return fail('Needs ' + B[b].name + ' Lv ' + d.minLv);
       const q = s.craft[b]; if (q.length >= DATA.QUEUE_MAX) return fail('Queue full');
@@ -912,10 +929,11 @@
       return { logData: { name } };
     },
     sendParty(s, a, ev) {
-      const kind = DATA.PARTIES.kinds[a.kind]; if (!kind) return fail('Unknown party');
+      const kind = own(DATA.PARTIES.kinds, a.kind) ? DATA.PARTIES.kinds[a.kind] : null; if (!kind) return fail('Unknown party');
       if (s.lv.radio < DATA.PARTIES.minRadio) return fail('Needs Radio Mast Lv ' + DATA.PARTIES.minRadio);
       if (activeParties(s).length >= partySlots(s)) return fail('No free party slot');
-      const fit = fitPeople(s); if (fit.length < 2) return fail('Someone has to stay at camp');
+      const rid = s.pending && s.pending.handoff.runner ? s.pending.handoff.runner.id : null;
+      const fit = fitPeople(s).filter((p) => p.id !== rid); if (fit.length < 2) return fail('Someone has to stay at camp');
       const who = fit[fit.length - 1];
       const m = B.radio.partyMul[s.lv.radio];
       const loot = {}; for (const k of RES) loot[k] = Math.round(kind.loot[k] * m);
@@ -938,7 +956,7 @@
       return {};
     },
     claimPack(s, a, ev) {
-      const n = DATA.PACKS[a.size]; if (!n) return fail('Unknown pack');
+      const n = own(DATA.PACKS, a.size) ? DATA.PACKS[a.size] : 0; if (!n) return fail('Unknown pack');
       earnBat(s, n, 'pack', null, true); bump(s.tele.packs, a.size);
       log(s, 'pack_claimed', { size: a.size }, false);
       ev.push({ type: 'packClaimed', size: a.size, bat: n });
@@ -948,7 +966,7 @@
       const p = isObj(a.patch) ? a.patch : {};
       if (p.primary != null && !weaponOwned(s, p.primary)) return fail('Weapon not unlocked');
       if (p.runner != null) { const r = personById(s, p.runner); if (!r) return fail('Unknown survivor'); if (r.state === 'party') return fail(r.name + ' is out on a party'); }
-      if (p.route != null) { const r = ROUTE[p.route]; if (!r) return fail('Unknown route'); if (!routeUnlocked(s, r)) return fail('Needs Radio Mast Lv ' + r.radio); }
+      if (p.route != null) { const r = own(ROUTE, p.route) ? ROUTE[p.route] : null; if (!r) return fail('Unknown route'); if (!routeUnlocked(s, r)) return fail('Needs Radio Mast Lv ' + r.radio); }
       if (p.primary != null) s.loadout.primary = p.primary;
       if (isObj(p.use)) for (const k of ITEMS) if (typeof p.use[k] === 'boolean') s.loadout.use[k] = p.use[k];
       if (p.runner != null) s.loadout.runner = p.runner;
@@ -1012,11 +1030,12 @@
         const r = rw.rescue; s.crate.person = r.name;
         if (r.where === 'bed') { const np = person(newPersonId(s), r.name, Math.round(s.campNow)); s.people.push(np); unlock(s, 'survivors' + s.people.length); }
         else if (r.where === 'gate') s.gate.push({ id: newPersonId(s), name: r.name });
-        else s.crate.food += r.food;
+        else { s.crate.food += r.food; s.gone.push(r.name); if (s.gone.length > 200) s.gone.splice(0, s.gone.length - 200); }
         const line = (r.where === 'bed' ? DATA.ARRIVAL_LINES.rescue : DATA.ARRIVAL_LINES[r.where]).replace('{name}', r.name).replace('{place}', r.place);
         ev.push({ type: 'rescued', name: r.name, where: r.where, text: line });
       }
       if (win && p.handoff.loadout.medkit) s.flags.medRunWin = true;
+      s.lastResult = res; s.lastReward = rw; s.pending = null;
       // telemetry
       const T = s.tele.runs, br = T.byRoute[route.id] || (T.byRoute[route.id] = { n: 0, wins: 0, odds: 0 });
       T.total++; br.n++; br.odds += p.handoff.odds || 0; T.timeMs = (T.timeMs || 0) + res.time * SEC;
@@ -1025,7 +1044,6 @@
       for (let i = 0; i < 10; i++) if (!s.tele.buckets[i]) s.tele.buckets[i] = { n: 0, wins: 0 };
       bk.n++; if (win) bk.wins++;
       rw.momentum = mom;
-      s.lastResult = res; s.lastReward = rw; s.pending = null;
       ev.push({ type: 'runResolved', win, runId: res.runId, route: route.id, reward: rw });
       return { reward: rw, result: res, notes: v.notes, logData: { runId: res.runId, route: route.id, win, odds: p.handoff.odds } };
     },
@@ -1368,7 +1386,7 @@
     } else if (c.wins) {
       const r = ROUTE[c.wins];
       if (!routeUnlocked(s, r)) g = levelGoal(s, 'radio', r.radio, 'Radio Mast to ' + r.radio);
-      else g = { text: runGoalText(s, r), target: 'play', route: r.id, etaSec: 360, eta: '≈ 1 run', kind: 'run' };
+      else { const o = odds(s, r.id, null, { deltas: false }).odds; g = { text: (o < 0.6 ? 'Gear up for ' : 'Run ') + r.name + ' (' + Math.round(o * 100) + '%)', target: 'play', route: r.id, etaSec: 360, eta: '≈ 1 run', kind: 'run', blocked: o < 0.6 }; }
     } else if (c.flag === 'taughtSkip') {
       const timers = s.jobs.filter((j) => j.endAt - s.campNow > s.dev.freeSec * SEC);
       if (timers.length) { const j = timers[0]; const pr = priceSkip((j.endAt - s.campNow) / SEC, s); g = { text: 'Speed up ' + B[j.id].name + ' ' + j.toLv + ' · ' + pr + ' bat', target: j.id, etaSec: 0, eta: 'ready now', kind: 'skip' }; }
@@ -1376,33 +1394,44 @@
     } else if (c.survivors) {
       if (s.recruit) { const sec = (s.recruit.endAt - s.campNow) / SEC; g = { text: o.text + ' · ' + s.recruit.name + ' is on the way', target: 'radio', etaSec: sec, eta: 'ready in ' + fmtDur(sec), kind: 'timer' }; }
       else if (freeBeds(s) < 1) g = levelGoal(s, 'bunkhouse', s.lv.bunkhouse + 1, 'Bunkhouse to ' + (s.lv.bunkhouse + 1));
-      else if (s.lv.radio >= 1) g = { text: 'Recruit at the Radio Mast', target: 'radio', etaSec: 0, eta: '', kind: 'recruit' };
+      else if (s.lv.radio >= 1) {
+        const need = DATA.RECRUIT.foodPer * s.people.length;
+        if (s.res.food >= need) g = { text: 'Recruit at the Radio Mast', target: 'radio', etaSec: 0, eta: 'ready now', kind: 'recruit' };
+        else { const e = shortfallEta(s, { food: need - s.res.food }); g = { text: 'Recruit (' + need + ' food)', target: 'radio', etaSec: e.sec, eta: e.text, kind: 'resources', missing: { food: need - s.res.food } }; }
+      }
       else g = { text: 'Rescue survivors on runs', target: 'play', etaSec: 360 * 4, eta: '', kind: 'run' };
     } else if (c.flag === 'medRunWin') {
       if (s.stock.medkit > 0) g = { text: o.text, target: 'play', etaSec: 360, eta: '≈ 1 run', kind: 'run' };
-      else if (s.lv.infirmary >= 1) g = { text: 'Craft a medkit at the Infirmary', target: 'infirmary', etaSec: 480, eta: '', kind: 'craft' };
+      else if (s.lv.infirmary >= 1 && s.craft.infirmary.some((x) => x.item === 'medkit')) g = { text: 'Craft a medkit at the Infirmary', target: 'infirmary', etaSec: 480, eta: '', kind: 'craft' };
+      else if (s.lv.infirmary >= 1) g = s.res.meds >= 20 ? { text: 'Craft a medkit at the Infirmary', target: 'infirmary', etaSec: 0, eta: 'ready now', kind: 'craft' }
+        : (() => { const e = shortfallEta(s, { meds: 20 - s.res.meds }); return { text: 'Craft a medkit (20 meds)', target: 'infirmary', etaSec: e.sec, eta: e.text, kind: 'resources', missing: { meds: 20 - s.res.meds } }; })();
       else g = levelGoal(s, 'infirmary', 1, 'Build the Infirmary');
     } else if (c.flag === 'partySent') {
       if (s.lv.radio < 2) g = levelGoal(s, 'radio', 2, 'Radio Mast to 2');
       else g = { text: 'Send a scavenging party', target: 'radio', etaSec: 0, eta: '', kind: 'party', blocked: fitPeople(s).length < 2 || activeParties(s).length >= partySlots(s) };
     } else if (c.flag === 'bombMade') {
       if (s.lv.workbench < 3) g = levelGoal(s, 'workbench', 3, 'Workbench to 3');
-      else g = { text: 'Craft a noise bomb at the Workbench', target: 'workbench', etaSec: 300, eta: '', kind: 'craft' };
+      else if (s.craft.workbench.some((x) => x.item === 'bomb')) g = { text: 'Craft a noise bomb at the Workbench', target: 'workbench', etaSec: 300, eta: '', kind: 'craft' };
+      else { const c = DATA.CRAFTS.bomb.cost, miss = {}; for (const k of RES) if ((c[k] || 0) > s.res[k]) miss[k] = c[k] - s.res[k];
+        if (!Object.keys(miss).length) g = { text: 'Craft a noise bomb at the Workbench', target: 'workbench', etaSec: 0, eta: 'ready now', kind: 'craft' };
+        else { const e = shortfallEta(s, miss); g = { text: 'Craft a noise bomb (' + RES.filter((k) => c[k]).map((k) => c[k] + ' ' + k).join(' + ') + ')', target: 'workbench', etaSec: e.sec, eta: e.text, kind: 'resources', missing: miss }; } }
     } else if (c.crewsOrSurvivors) {
-      if (cl(s) >= DATA.CREW.thirdFromCL) g = { text: 'Hire the third crew (' + DATA.CREW.thirdPrice + ' bat) or recruit', target: 'campfire', etaSec: null, eta: s.res.bat + ' / ' + DATA.CREW.thirdPrice + ' bat', kind: 'crew', blocked: s.res.bat < DATA.CREW.thirdPrice };
+      if (cl(s) >= DATA.CREW.thirdFromCL) g = { text: 'Crew 3 or ' + c.crewsOrSurvivors[1] + ' survivors', target: 'campfire', etaSec: null, eta: s.res.bat + '/' + DATA.CREW.thirdPrice + ' bat', kind: 'crew', blocked: s.res.bat < DATA.CREW.thirdPrice };
       else g = { text: 'Have 6 survivors (' + s.people.length + ' / 6)', target: freeBeds(s) >= 1 ? 'radio' : 'bunkhouse', etaSec: null, eta: '', kind: 'survivors' };
     }
     if (!g) g = { text: o.text, target: o.target || 'play', etaSec: 0, eta: '', kind: 'objective' };
     if (g.blocked == null) g.blocked = false;
     return Object.assign(base, { objectiveText: o.text }, g);
   }
-  function sideGoal(s) {
-    for (const id of DATA.PRODUCERS) if (s.lv[id] && bubble(s, id).full) return { text: 'Collect the ' + B[id].name, target: id, kind: 'collect' };
+  // The "Meanwhile" line. With the main goal a build that can start now, one free crew stays reserved for it.
+  function sideGoal(s, main) {
+    for (const id of DATA.PRODUCERS) if (s.lv[id] && bubble(s, id).full && s.res[PROD_RES[id]] < caps(s)[PROD_RES[id]]) return { text: 'Collect the ' + B[id].name, target: id, kind: 'collect' };
     if (s.lv.infirmary >= 1 && !s.stock.medkit && !s.stock.pills && !s.craft.infirmary.length && s.res.meds >= 10)
       return { text: s.res.meds >= 20 ? 'Craft a medkit' : 'Craft pills', target: 'infirmary', kind: 'craft' };
-    if (s.jobs.length < s.crews) {
+    const reserve = main && main.kind === 'build' && main.etaSec === 0 ? 1 : 0;
+    if (s.jobs.length < s.crews - reserve) {
       let best = null;
-      for (const id of DATA.BUILDING_IDS) { const chk = buildCheck(s, id); if (chk.ok && chk.time <= 30 * 60 && (!best || chk.cost.scrap < best.chk.cost.scrap)) best = { id, chk }; }
+      for (const id of DATA.BUILDING_IDS) { const chk = buildCheck(s, id); if (chk.ok && !(reserve && id === main.target) && chk.time <= 30 * 60 && (!best || chk.cost.scrap < best.chk.cost.scrap)) best = { id, chk }; }
       if (best) return { text: (s.lv[best.id] ? 'Upgrade the ' : 'Build the ') + B[best.id].name + ' (' + fmtDur(best.chk.time) + ')', target: best.id, kind: 'build' };
     }
     if (s.lv.radio >= DATA.PARTIES.minRadio && activeParties(s).length < partySlots(s) && fitPeople(s).length >= 2) return { text: 'Send a party', target: 'radio', kind: 'party' };
@@ -1427,7 +1456,9 @@
   }
   function goal(s) {
     const main = mainGoal(s);
-    const side = main.kind === 'ftue' ? null : (main.blocked || main.etaSec == null || main.etaSec > 1800 || main.kind === 'done') ? sideGoal(s) : null;
+    const sg = main.kind === 'ftue' ? null : sideGoal(s, main);
+    const same = sg && sg.kind === main.kind && sg.target === main.target;
+    const side = sg && !same && (main.blocked || main.etaSec == null || main.etaSec > 1800 || main.kind === 'done' || sg.kind === 'collect' || sg.kind === 'craft' || sg.kind === 'build') ? sg : null;
     return { main, side, long: longGoal(s) };
   }
 
@@ -1576,7 +1607,8 @@
       .map((p) => ({ id: p.id, name: p.name, state: ['home', 'party', 'injured'].includes(p.state) ? p.state : 'home', until: typeof p.until === 'number' && isFinite(p.until) ? p.until : null,
         runs: int0(p.runs, 0), wins: int0(p.wins, 0), joinedAt: nn(p.joinedAt, 0) }));
     if (!s.people.length) { note('people reset'); s.people = t.people; }
-    s.gate = (Array.isArray(o.gate) ? o.gate : []).filter((x) => isObj(x) && typeof x.id === 'string' && typeof x.name === 'string').slice(0, DATA.GATE_MAX).map((x) => ({ id: x.id, name: x.name }));
+    s.gate = (Array.isArray(o.gate) ? o.gate : []).filter((x) => isObj(x) && typeof x.id === 'string' && typeof x.name === 'string' && !pids.has(x.id) && pids.add(x.id)).slice(0, DATA.GATE_MAX).map((x) => ({ id: x.id, name: x.name }));
+    s.gone = (Array.isArray(o.gone) ? o.gone : []).filter((n) => typeof n === 'string').slice(-200);
     const rc = o.recruit;
     s.recruit = isObj(rc) && typeof rc.name === 'string' && typeof rc.endAt === 'number' && isFinite(rc.endAt) && rc.dur > 0 ? { name: rc.name, endAt: rc.endAt, dur: rc.dur, cut: nn(rc.cut, 0) } : null;
     s.parties = (Array.isArray(o.parties) ? o.parties : []).filter((p) => isObj(p) && typeof p.id === 'string' && typeof p.who === 'string' && DATA.PARTIES.kinds[p.kind] && typeof p.endAt === 'number' && isFinite(p.endAt))
@@ -1600,7 +1632,7 @@
     s.daily = { day: Math.min(Math.floor(fin(dl.day, 0)), Math.floor((s.createdAt + s.tzOffsetMs + s.campNow) / DAY)), wins: int0(dl.wins, 0) };
     const lo = isObj(o.loadout) ? o.loadout : {}, use = isObj(lo.use) ? lo.use : {};
     s.loadout = { primary: weaponOwned(s, lo.primary) ? lo.primary : 'pistol', use: { medkit: bool(use.medkit, true), pills: bool(use.pills, true), bomb: bool(use.bomb, true) },
-      runner: s.people.some((p) => p.id === lo.runner) ? lo.runner : s.people[s.people.length > 1 ? 1 : 0].id, route: ROUTE[lo.route] && routeUnlocked(s, ROUTE[lo.route]) ? lo.route : 'R1' };
+      runner: s.people.some((p) => p.id === lo.runner) ? lo.runner : s.people[s.people.length > 1 ? 1 : 0].id, route: own(ROUTE, lo.route) && routeUnlocked(s, ROUTE[lo.route]) ? lo.route : 'R1' };
     s.runSeq = int0(o.runSeq, 0);
     const pe = o.pending;
     s.pending = isObj(pe) && isObj(pe.handoff) && typeof pe.handoff.runId === 'string' && isObj(pe.handoff.route) && ROUTE[pe.handoff.route.id] && isObj(pe.handoff.loadout) && isObj(pe.handoff.stats)
@@ -1620,9 +1652,9 @@
       income: isObj(te.income) && isObj(te.income.all) && isObj(te.income.hour) && isObj(te.income.prevHour) ? clone(te.income) : tt.income,
       bat: isObj(te.bat) && isObj(te.bat.earned) && isObj(te.bat.spent) ? clone(te.bat) : tt.bat,
       packs: isObj(te.packs) ? clone(te.packs) : tt.packs,
-      runs: isObj(te.runs) && isObj(te.runs.byRoute) ? Object.assign(tt.runs, clone(te.runs)) : tt.runs,
-      buckets: Array.isArray(te.buckets) ? clone(te.buckets) : tt.buckets,
-      kpi: isObj(te.kpi) && isObj(te.kpi.waste) && isObj(te.kpi.fullMs) && isObj(te.kpi.items) && isObj(te.kpi.batFirstHour) ? Object.assign(tt.kpi, clone(te.kpi)) : tt.kpi,
+      runs: isObj(te.runs) && isObj(te.runs.byRoute) && Object.values(te.runs.byRoute).every((b) => isObj(b) && isFinite(b.n) && isFinite(b.wins) && isFinite(b.odds)) ? Object.assign(tt.runs, clone(te.runs)) : tt.runs,
+      buckets: Array.isArray(te.buckets) && te.buckets.length <= 10 && te.buckets.every((b) => isObj(b) && isFinite(b.n) && isFinite(b.wins)) ? clone(te.buckets) : tt.buckets,
+      kpi: isObj(te.kpi) && isObj(te.kpi.waste) && isObj(te.kpi.waste.truck) && isObj(te.kpi.fullMs) && isObj(te.kpi.items) && ['crafted', 'used', 'returned'].every((k) => isObj(te.kpi.items[k])) && isObj(te.kpi.batFirstHour) ? Object.assign(tt.kpi, clone(te.kpi)) : tt.kpi,
     };
     const dv = isObj(o.dev) ? o.dev : {}, td = t.dev, L = DATA.LAB, m = isObj(dv.mul) ? dv.mul : {}, sm = isObj(dv.sim) ? dv.sim : {};
     s.dev = {
@@ -1645,10 +1677,11 @@
   // a generator at level 0 holds nothing, locked routes and unowned weapons fall back, crafts need their building.
   function normalize(s, notes) {
     const note = (m) => { if (notes) notes.push(m); };
-    const cp = caps(s);
+    const cp = caps(s), lim = capsAt({ dev: { mul: { cost: DATA.LAB.mul.max } } }, s.lv.storehouse);
     for (const k of RES) {
-      if (s.res[k] > cp[k]) { const over = s.res[k] - cp[k]; s.res[k] = cp[k]; s.truck[k] = Math.min(cp[k], s.truck[k] + over); note(k + ' above cap moved to the truck'); }
-      if (s.truck[k] > cp[k]) { s.truck[k] = cp[k]; note('truck ' + k + ' above cap trimmed'); }
+      const keep = s.res[k] + s.truck[k] <= 2 * lim[k];   // holdings a Lab costs multiplier could have produced are kept
+      if (s.res[k] > cp[k]) { const over = s.res[k] - cp[k]; s.res[k] = cp[k]; s.truck[k] = keep ? s.truck[k] + over : Math.min(cp[k], s.truck[k] + over); note(k + ' above cap moved to the truck'); }
+      if (!keep && s.truck[k] > cp[k]) { s.truck[k] = cp[k]; note('truck ' + k + ' above cap trimmed'); }
     }
     if (!s.lv.generator) { if (s.gen.charges || s.gen.accMs) note('generator reset'); s.gen.charges = 0; s.gen.accMs = 0; }
     else s.gen.charges = Math.min(s.gen.charges, B.generator.holds[s.lv.generator]);

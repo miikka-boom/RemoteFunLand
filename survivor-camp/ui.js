@@ -49,7 +49,9 @@
   };
 
   let S = null, V = null, G = null, demo = false, noSave = false, paused = false;
-  const myTab = 't' + Math.floor(Math.random() * 2176782336).toString(36);
+  // A tab's id is its claim time (base36 ms) plus a random tiebreak: the newest claim keeps the camp (SPEC 8.6).
+  let myTab = '';
+  function claimTab() { myTab = 't' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 46656).toString(36); }
   const ui = {
     sheet: null, side: 'right', sheetHtml: '', sheetAt: 0, confirm: null,
     overlay: null, modal: null, modalQ: [], bannerQ: [], bannerUntil: 0, celebrations: 0,
@@ -125,7 +127,7 @@
         case 'healed': if (!off) toast(e.text); break;
         case 'objectiveDone': onObjective(e); break;
         case 'supplyDrop': {
-          banner('Supply drop', 'done', 'Medkit + pills + ' + e.scrap + ' scrap at the Radio Mast');
+          banner('Supply drop', 'done', [e.medkit && 'Medkit', e.pills && 'pills', e.meds && e.meds + ' meds', e.scrap + ' scrap'].filter(Boolean).join(' + ') + ' at the Radio Mast');
           if (e.stored && e.stored.scrap) fly('scrap', e.stored.scrap, Scene.anchor('radio'), { delay: 300 });
           break;
         }
@@ -164,14 +166,14 @@
     switch (id) {
       case 'salvage': return { main: 'scrap/h ' + b.rate[lv] };
       case 'garden': return { main: 'food/h ' + b.rate[lv] };
-      case 'infirmary': return { main: 'meds/h ' + b.rate[lv], run: 'Max HP ' + b.maxHp[lv] + (b.secondWind[lv] > 1 ? ' · Second wind ×2' : '') };
+      case 'infirmary': return { main: 'meds/h ' + b.rate[lv], run: [b.maxHp[lv] !== b.maxHp[lv - 1] ? 'Max HP ' + b.maxHp[lv] : '', b.secondWind[lv] !== b.secondWind[lv - 1] ? 'Second wind ×' + b.secondWind[lv] : ''].filter(Boolean).join(' · ') };
       case 'storehouse': return { main: 'holds ' + fmt.num(B.storehouse.caps.scrap[lv]) + ' scrap' };
       case 'bunkhouse': return { main: b.beds[lv] + ' beds' };
       case 'radio': {
         const r = D.ROUTES.find((x) => x.radio === lv);
-        return { main: r ? r.name + ' open' : lv === 2 ? 'scavenging parties' : 'party loot ×' + b.partyMul[lv].toFixed(2), run: 'horde warning ' + b.hordeWarnS[lv].toFixed(1) + ' s · +' + (b.gear[lv] - b.gear[lv - 1]) + ' gear' };
+        return { main: r ? r.name + ' open' : lv === 2 ? 'scavenging parties' : 'party loot ×' + b.partyMul[lv].toFixed(2), run: [b.hordeWarnS[lv] !== b.hordeWarnS[lv - 1] ? 'horde warning ' + b.hordeWarnS[lv].toFixed(1) + ' s' : '', b.gear[lv] > b.gear[lv - 1] ? '+' + (b.gear[lv] - b.gear[lv - 1]) + ' gear' : ''].filter(Boolean).join(' · ') };
       }
-      case 'workbench': return { main: lv === 3 ? 'noise bombs' : 'weapons', run: 'damage ×' + b.damageMul[lv].toFixed(2) + (b.magMul[lv] !== b.magMul[lv - 1] ? ' · magazine ×' + b.magMul[lv].toFixed(1) : '') + ' · +' + (b.gear[lv] - b.gear[lv - 1]) + ' gear' };
+      case 'workbench': return { main: lv === 3 ? 'noise bombs' : 'weapons', run: [b.damageMul[lv] !== b.damageMul[lv - 1] ? 'damage ×' + b.damageMul[lv].toFixed(2) : '', b.magMul[lv] !== b.magMul[lv - 1] ? 'magazine ×' + b.magMul[lv].toFixed(1) : '', b.gear[lv] > b.gear[lv - 1] ? '+' + (b.gear[lv] - b.gear[lv - 1]) + ' gear' : ''].filter(Boolean).join(' · ') };
       case 'generator': return { main: '1 battery every ' + b.intervalH[lv] + ' h', run: 'flashlight ' + b.flashlightR[lv] + ' · +1 gear' };
       default: return { main: '' };
     }
@@ -210,14 +212,15 @@
     sfx('clup');
     if (e.final) setTimeout(endCard, off || ui.reduced ? 0 : 1300);
   }
-  function onObjective(e) {
-    const rw = e.reward || {}, from = $('goal').hidden ? { x: innerWidth / 2, y: innerHeight - 40 } : centre($('goal'));
+  function onObjective(e, deferred) {
+    const rw0 = e.reward || {};
+    if (ui.overlay) { if (!deferred) for (const k of ['scrap', 'food', 'meds', 'bat']) if (rw0[k]) ui.held[k] += rw0[k]; setTimeout(() => onObjective(e, true), 400); return; }
+    const rw = rw0, from = $('goal').hidden ? { x: innerWidth / 2, y: innerHeight - 40 } : centre($('goal'));
     const parts = [];
     let d = 300;
-    for (const k of ['scrap', 'food', 'meds', 'bat']) if (rw[k]) { parts.push('+' + rw[k] + ' ' + RES_NAME[k]); fly(k, rw[k], from, { delay: d }); d += 120; }
+    for (const k of ['scrap', 'food', 'meds', 'bat']) if (rw[k]) { parts.push('+' + rw[k] + ' ' + RES_NAME[k]); fly(k, rw[k], from, { delay: d, preHeld: !!deferred }); d += 120; }
     banner('Done: ' + e.text, 'done', parts.join(' · ') || (e.n === 4 ? 'The supply drop is in' : ''));
     $('goal').classList.add('done'); setTimeout(() => $('goal').classList.remove('done'), 900);
-    if (e.end) setTimeout(endCard, 1200);
   }
 
   // ------------------------------------------------------------------ flyers and float texts (#fx canvas)
@@ -236,6 +239,7 @@
     if (!(amount > 0) || !from) { if (o.preHeld) ui.held[res] = Math.max(0, ui.held[res] - (amount || 0)); return; }
     ui.rev[res] = true;
     if (!o.preHeld) ui.held[res] += amount;
+    if (ui.overlay) { ui.held[res] = Math.max(0, ui.held[res] - amount); return; }   // a run overlay hides the chips: no flight over it
     if (ui.reduced || !(ui.particles > 0)) {        // reduced motion: no flight; the chip pulses, the number steps, "+38" fades in place
       ui.held[res] = Math.max(0, ui.held[res] - amount); pulse(chipEl(res)); floatText(from.x, from.y, '+' + amount, RES_COL[res], true);
       sfx(res === 'bat' ? 'battery' : 'chunk'); return;
@@ -262,7 +266,7 @@
       for (let i = 0; i < n; i++) flyers.push({ res: k, spend: true, x0: from.x, y0: from.y, bx: from.x, by: from.y, tx: to.x + (Math.random() - 0.5) * 20, ty: to.y, t0: now() + i * 40, dur: 350, lift: 40 + Math.random() * 40, step: i });
     }
   }
-  function floatText(x, y, text, col, still) { floats.push({ x, y, text, col: col || '#ece8df', t0: now(), still: !!still }); }
+  function floatText(x, y, text, col, still) { if (ui.overlay) return; floats.push({ x, y, text, col: col || '#ece8df', t0: now(), still: !!still }); }
   function arrive(f) {
     ui.held[f.res] = Math.max(0, ui.held[f.res] - f.part);
     gulp(chipEl(f.res)); sfx('tick', { step: Math.min(7, f.step) });
@@ -339,6 +343,7 @@
       if (bottom > flame.y - 4) { m.classList.add('side'); card.style.maxWidth = Math.max(220, Math.round(flame.x - 30 - card.offsetLeft)) + 'px'; }
     }
     if (c.onShow) c.onShow();
+    $('banners').innerHTML = ''; ui.bannerUntil = 0;   // a card replaces the banner on screen (queued banners wait for it)
     document.body.classList.add('modal-open');
     E.log(S, 'screen', { name: 'card:' + c.kind });
     const b = $('mcard').querySelector('button'); if (b) setTimeout(() => { try { b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 260);
@@ -352,16 +357,17 @@
   function personCard(name) {
     const p = V && V.people.find((x) => x.name === name), rw = S.lastReward;
     const line = rw && rw.rescue && rw.rescue.name === name ? (rw.rescue.where === 'bed' ? D.ARRIVAL_LINES.rescue : D.ARRIVAL_LINES[rw.rescue.where]).replace('{name}', name).replace('{place}', rw.rescue.place) : D.ARRIVAL_LINES.recruit.replace('{name}', name);
-    queueCard({ kind: 'person', html: '<p class="kick">Someone new</p>' + personHtml(name, line, p) + '<div class="btns"><button class="btn primary" type="button" data-a="good">Welcome</button></div>' });
+    const where = rw && rw.rescue && rw.rescue.name === name ? rw.rescue.where : null, away = where === 'food';
+    queueCard({ kind: 'person', html: '<p class="kick">' + (away ? 'Passing through' : 'Someone new') + '</p>' + personHtml(name, line, p, where) + '<div class="btns"><button class="btn primary" type="button" data-a="good">' + (away ? 'OK' : 'Welcome') + '</button></div>' });
   }
-  function worksText(p) {
-    if (!p) return 'Waits at the gate for a free bed';
+  function worksText(p, where) {
+    if (!p) return where === 'food' ? 'Headed north · +' + D.EXTRA_RESCUE_FOOD + ' food in the crate' : 'Needs a free bed: Bunkhouse to ' + (S.lv.bunkhouse + 1);
     if (p.state === 'injured') return 'Resting: hurt';
     if (p.state === 'party') return 'Out on a party';
     return p.worksAt && p.worksAt !== 'fire' ? 'Works the ' + B[p.worksAt].name : 'Sits by the fire, ready to run or go on a party';
   }
-  function personHtml(name, line, p) {
-    return '<div class="person"><span class="av">' + esc(name[0]) + '</span><div><b>' + esc(name) + '</b><p>' + esc(line) + '</p><span class="works">' + esc(worksText(p)) + '</span></div></div>';
+  function personHtml(name, line, p, where) {
+    return '<div class="person"><span class="av">' + esc(name[0]) + '</span><div><b>' + esc(name) + '</b><p>' + esc(line) + '</p><span class="works">' + esc(worksText(p, where)) + '</span></div></div>';
   }
   // Welcome back (SPEC 4.9): one row per source, staggered 80 ms; Collect all sends every bubble's flyers. It is queued
   // before the celebrations from the same gap, so those play after it closes, 600 ms apart.
@@ -375,6 +381,7 @@
     const any = w.rows.some((r) => r.kind === 'bubble' || r.kind === 'generator' || r.kind === 'party' || r.kind === 'truck');
     queueCard({
       kind: 'welcome', front: true, cls: 'welcome',
+      onShow: () => { const r = $('mcard').querySelector('.rows'); const f = () => r.classList.toggle('more', r.scrollTop + r.clientHeight < r.scrollHeight - 2); f(); r.addEventListener('scroll', f, { passive: true }); },
       html: '<p class="kick">While you were away · ' + esc(fmt.dur(w.ms / 1000)) + '</p><h2>Welcome back</h2><div class="rows">' + rows + '</div>' +
         '<div class="btns"><button class="btn" type="button" data-a="good">' + (any ? 'Later' : 'Good') + '</button>' + (any ? '<button class="btn primary" type="button" data-a="collectAll">Collect all</button>' : '') + '</div>',
     });
@@ -478,7 +485,7 @@
     if (sb._m !== muted) { sb._m = muted; sb.querySelector('use').setAttribute('href', muted ? '#i-snd-off' : '#i-snd'); sb.setAttribute('aria-label', muted ? 'Sound is off: tap to unmute' : 'Sound is on: tap to mute'); }
     // goal chip
     const g = $('goal');
-    setHidden(g, !rv.goal);
+    setHidden(g, !rv.goal || !!ui.overlay);
     if (rv.goal && G) {
       const m = G.main, eta = m.eta && m.eta !== '' ? m.eta : '';
       setText(g.querySelector('.g1'), m.text + (eta ? ' · ' + eta : ''));
@@ -494,7 +501,7 @@
     setHidden(p, hideP); p._shown = !hideP;
     if (!hideP) {
       const o = V.frontierOdds != null ? ' · ' + pct(V.frontierOdds) : '';
-      setText(p.querySelector('.pl1'), (innerWidth < 640 ? 'RUN' : 'GO ON A RUN') + o);
+      setText(p.querySelector('.pl1'), (!(ui.playW >= 170) ? 'RUN' : 'GO ON A RUN') + o);
       setText(p.querySelector('.pl2'), 'Daily ' + '●'.repeat(Math.min(V.daily.max, V.daily.wins)) + '○'.repeat(Math.max(0, V.daily.max - V.daily.wins)));
       const pul = !S.ftue.done && S.ftue.step === 3; if (p._pul !== pul) { p.classList.toggle('pulse', pul); p._pul = pul; }
       const lab = 'Go on a run: ' + (V.frontierOdds != null ? pct(V.frontierOdds) + ' on ' + D.ROUTES.find((r) => r.id === V.frontier).name : ''); if (p._lab !== lab) { p.setAttribute('aria-label', lab); p._lab = lab; }
@@ -515,8 +522,16 @@
     const m = G && G.main; if (!m) return;
     const t = m.target;
     if (t === 'play') return openRoutes(m.route);
-    if (B[t]) return openSheet(t);
+    if (B[t]) { openSheet(t); showGoalRow(m); return; }
     if (t === 'crate' && S.crate) return act({ type: 'openCrate' });
+  }
+
+  function showGoalRow(m) {
+    const q = m.kind === 'unlock' ? '[data-a^="unlock:"]' : m.kind === 'party' ? '[data-a^="send:"]' : /^Recruit/.test(m.text) ? '[data-a="recruit"]'
+      : /medkit/i.test(m.text) ? '[data-a="craft:medkit"]' : /noise bomb/i.test(m.text) ? '[data-a="craft:bomb"]' : null;
+    const body = $('sheetBody'), el = q && body.querySelector(q); if (!el) return;
+    const row = el.closest('.li') || el, r = row.getBoundingClientRect(), br = body.getBoundingClientRect();
+    if (r.bottom > br.bottom) body.scrollTop += r.bottom - br.bottom + 6; else if (r.top < br.top) body.scrollTop -= br.top - r.top + 6;
   }
 
   // ------------------------------------------------------------------ hotspots
@@ -568,9 +583,11 @@
   function openSheet(id) {
     if (!B[id]) return;
     const swap = !!ui.sheet && ui.sheet !== id;
+    const fresh = ui.sheet !== id;
     ui.sheetHtml = ''; ui.confirm = null;
     ui.doneAway.delete(id);
     const el = placeSheet(id, swap);
+    if (fresh) $('sheetBody').scrollTop = 0;
     if (!swap) arm(el);
     renderSheet(now(), true);
     E.log(S, 'screen', { name: 'sheet:' + id });
@@ -681,7 +698,7 @@
       h += '<h3>Build crews · ' + V.crewsFree + ' of ' + V.crews + ' free</h3>';
       const c3 = V.crew3;
       if (c3.owned) h += '<div class="li"><span class="grow"><span class="t">Three crews</span><span class="s">All hired</span></span></div>';
-      else if (c3.visible) h += '<div class="li"><span class="grow"><span class="t">' + esc(c3.label) + '</span><span class="s">' + (c3.available ? 'Three builds at once' : 'Save batteries for it') + '</span></span>' + (c3.available ? '<button class="mini bat" type="button" data-a="buyCrew">Hire · 250</button>' : ic('lock')) + '</div>';
+      else if (c3.visible) h += '<div class="li"><span class="grow"><span class="t">' + esc(c3.label) + '</span><span class="s">' + (c3.available ? 'Three builds at once' : 'Save batteries for it') + '</span></span>' + (c3.available ? '<button class="mini bat" type="button" data-a="buyCrew">' + (ui.confirm && ui.confirm.key === 'crew' && now() < ui.confirm.until ? 'Confirm 250?' : 'Hire · 250') + '</button>' : ic('lock')) + '</div>';
       h += '<div class="li"><span class="grow"><span class="t">Collect everything</span><span class="s">Bubbles, party crates and the truck</span></span><button class="mini primary" type="button" data-a="collectAll">Collect all</button></div>';
     } else if (id === 'storehouse') {
       const t = V.truck, any = t.scrap + t.food + t.meds > 0;
@@ -741,7 +758,8 @@
           h += '<p class="desc">Slots: ' + V.partiesActive + ' of ' + V.partySlots + ' out' + (who ? ' · ' + esc(who) + ' would go' : ' · someone has to stay at camp') + '</p>';
           if (free > 0 && who) for (const k of D.PARTIES.order) {
             const kd = D.PARTIES.kinds[k], m = B.radio.partyMul[L];
-            h += '<div class="li"><span class="grow"><span class="t">' + esc(kd.name) + ' · ' + fmt.dur(kd.sec * (S.dev.mul.time || 1)) + '</span><span class="s">' + RES.filter((r) => kd.loot[r]).map((r) => Math.round(kd.loot[r] * m) + ' ' + r).join(' · ') + '</span></span><button class="mini" type="button" data-a="send:' + k + '">Send</button></div>';
+            const over = RES.map((r) => [r, Math.round(kd.loot[r] * m) - Math.max(0, V.caps[r] - S.res[r]) - Math.max(0, V.caps[r] - S.truck[r])]).filter((x) => x[1] > 0);
+            h += '<div class="li"><span class="grow"><span class="t">' + esc(kd.name) + ' · ' + fmt.dur(kd.sec * (S.dev.mul.time || 1)) + '</span><span class="s">' + RES.filter((r) => kd.loot[r]).map((r) => Math.round(kd.loot[r] * m) + ' ' + r).join(' · ') + '</span>' + (over.length ? '<span class="s red">Won\'t fit: ' + over.map((x) => x[1] + ' ' + x[0]).join(' · ') + ' left behind</span>' : '') + '</span><button class="mini" type="button" data-a="send:' + k + '">Send</button></div>';
           }
         }
       }
@@ -847,7 +865,7 @@
       case 'resources': {
         if (nx.shortfall) {
           const key = 'buildNow:' + id, p = nx.shortfall.price, conf = ui.confirm && ui.confirm.key === key && now() < ui.confirm.until;
-          return { label: conf ? 'Confirm ' + p + '?' : nx.shortfall.label, cls: (conf ? 'confirm' : 'bat') + ' short', fn: () => buildNow(id, p) };
+          return { label: conf ? 'Confirm ' + p + '?' : 'Build now · ' + p + ' bat', cls: (conf ? 'confirm' : 'bat') + ' short', fn: () => buildNow(id, p) };
         }
         return { label: nx.label, cls: 'blocked', fn: () => cantAfford(nx) };
       }
@@ -886,7 +904,7 @@
   }
   function sheetClick(e) {
     const b = e.target.closest('[data-a]'); if (!b) return;
-    gesture();
+    gesture(); armSheet();
     const [a, x, y] = b.dataset.a.split(':');
     switch (a) {
       case 'craft': act({ type: 'craft', item: x }); break;
@@ -911,7 +929,7 @@
     if (!E.routeUnlocked(S, S.loadout.route)) act({ type: 'setLoadout', patch: { route: 'R1' } }, { quiet: true });
     ui.overlay = 'routes'; ui.routesHtml = '';
     const el = $('routes'); el.hidden = false; arm(el);
-    $('start').hidden = false; arm($('start'));
+    $('start').hidden = false; arm($('start'), 400);
     renderRoutes(true);
     E.log(S, 'screen', { name: 'routes' });
     sfx('tap');
@@ -1110,7 +1128,7 @@
       if (rw.rescue) {
         const r = rw.rescue, p = E.view(S, { odds: false }).people.find((x) => x.name === r.name);
         const line = (r.where === 'bed' ? D.ARRIVAL_LINES.rescue : D.ARRIVAL_LINES[r.where]).replace('{name}', r.name).replace('{place}', r.place);
-        L += personHtml(r.name, line, r.where === 'bed' ? p : null);
+        L += personHtml(r.name, line, r.where === 'bed' ? p : null, r.where);
       }
       R += '<p class="where">The loot is in the crate by the fire.</p>';
     } else {
@@ -1128,7 +1146,7 @@
     $('resLeft').innerHTML = L + box; $('resRight').innerHTML = R;
     const rb = $('resultBox'); if (rb) rb.addEventListener('toggle', () => { ui.resultPayloadOpen = rb.open; });
     const el = $('result'); el.hidden = false; el.scrollTop = 0; arm(el);
-    $('resultBack').hidden = false; arm($('resultBack'));
+    $('resultBack').hidden = false; arm($('resultBack'), 400);
     E.log(S, 'screen', { name: win ? 'result' : 'loss' });
     // count-ups and the battery flight
     const t0 = now();
@@ -1208,7 +1226,7 @@
       if (y < 50 + top) y = r.bottom + 14;
       if (y + bh > innerHeight - 4) y = Math.max(50, r.top - bh - 14);
       if (r.left > W * 0.62 && r.top > innerHeight * 0.6) { x = clamp(r.left - bw - 12, 8, W - bw - 8); y = clamp(cy - bh / 2 - 30, 50, innerHeight - bh - 8); }
-      if (c.inSheet) { const sr = $('sheet').getBoundingClientRect(); x = ui.side === 'right' ? sr.left - bw - 10 : sr.right + 10; x = clamp(x, 8, W - bw - 8); y = clamp(cy - bh / 2, 50, innerHeight - bh - 8); }
+      if (c.inSheet) { const sr = $('sheet').getBoundingClientRect(); if (ui.side === 'bottom') { x = clamp(cx - bw / 2, 8, W - bw - 8); y = Math.max(50, sr.top - bh - 10); } else { x = ui.side === 'right' ? sr.left - bw - 10 : sr.right + 10; x = clamp(x, 8, W - bw - 8); y = clamp(cy - bh / 2, 50, innerHeight - bh - 8); } }
       co.style.transform = 'translate(' + Math.round(x) + 'px,' + Math.round(y) + 'px)';
     } else setHidden(co, true);
     if (!c.noHand) { setHidden(hand, false); hand.style.transform = 'translate(' + Math.round(cx - 14) + 'px,' + Math.round(cy - 2) + 'px)'; } else setHidden(hand, true);
@@ -1254,7 +1272,7 @@
     V = E.view(S); G = E.goal(S);
     ui.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || !!S.dev.reducedMotion;
     Scene.setReduced(ui.reduced);
-    wire();
+    wire(); claimTab();
     if (welcome) welcomeCard(welcome);
     if (offlineEv.length) handle(offlineEv, { offline: true });
     if (S.pending) beginRunScreen();
@@ -1270,7 +1288,7 @@
     const top = $('top').getBoundingClientRect().height || 44;
     const playW = parseFloat(cs.getPropertyValue('--play-w')) || 112, goalW = parseFloat(cs.getPropertyValue('--goal-w')) || 190;
     ui.portrait = PORTRAIT.matches;
-    ui.topH = Math.round(top);
+    ui.topH = Math.round(top); ui.playW = playW;
     // portrait fallback (SPEC 8.6): the camp fits the width in the top 55%; sheets come up from the bottom
     const bottom = ui.portrait ? Math.max(playH + Math.max(8, safeB), Math.round(innerHeight * 0.45)) : playH + Math.max(8, safeB);
     Scene.setLayout({ W: innerWidth, H: innerHeight, top, bottom, safeL, safeR, padL: Math.max(8, safeL), padR: Math.max(8, safeR), playW, blW: 44 + 6 + goalW });
@@ -1293,13 +1311,13 @@
   function useHere() {
     const r = E.load(store.get(KEY), Date.now(), { tzOffsetMs: -new Date().getTimezoneOffset() * 60000 });
     if (r.status === 'ok' || r.status === 'migrated') { S = r.state; E.resume(S, Date.now()); }
-    S.tabId = myTab; paused = false; syncAmb();
+    claimTab(); S.tabId = myTab; paused = false; syncAmb();
     $('modal').hidden = true; ui.modal = null; document.body.classList.remove('modal-open');
     for (const id of ['routes', 'runscr', 'result', 'start', 'resultBack']) $(id).hidden = true;
     ui.overlay = null; closeSheet(); run = null;
     V = E.view(S); G = E.goal(S);
     save();
-    if (S.pending) beginRunScreen();
+    if (S.pending) beginRunScreen(); else setTimeout(pumpCards, 400);
   }
   // Close every screen and forget what the HUD had revealed: after reset, import, replay FTUE or set Camp Level.
   function resetUi() {
@@ -1324,11 +1342,16 @@
     replaceState(fresh);
     E.log(S, 'dev:resetSave', null, true);
   }
-  function arm(el) { el.classList.add('arming'); clearTimeout(el._arm); el._arm = setTimeout(() => el.classList.remove('arming'), 250); }
+  function arm(el, ms) { el.classList.add('arming'); clearTimeout(el._arm); el._arm = setTimeout(() => el.classList.remove('arming'), ms || 250); }
+  // A sheet button can change meaning under the finger (UPGRADE -> SKIP, Recruit -> SKIP, SKIP 47 -> Confirm 47?):
+  // after a tap the sheet's buttons ignore taps for 350 ms, so a double tap never spends batteries.
+  function armSheet() { arm($('sheetBody'), 350); arm($('sheetAct').parentNode, 350); }
   function wire() {
+    // the real bottom edge of the (wrapping) top bar, for the banners and top cards
+    try { new ResizeObserver(() => document.documentElement.style.setProperty('--hud-b', Math.round($('top').getBoundingClientRect().bottom) + 'px')).observe($('top')); } catch (e) { /* the CSS fallback applies */ }
     $('sheetBody').addEventListener('click', sheetClick);
     $('sheetX').addEventListener('click', () => { gesture(); closeSheet(); });
-    $('sheetAct').addEventListener('click', (e) => { gesture(); const fn = e.currentTarget._fn; if (fn) fn(); });
+    $('sheetAct').addEventListener('click', (e) => { gesture(); const fn = e.currentTarget._fn; if (fn) { armSheet(); fn(); } });
     $('scene').addEventListener('click', () => { gesture(); closeSheet(); });
     $('play').addEventListener('click', () => { gesture(); openRoutes(); });
     $('goal').addEventListener('click', tapGoal);
@@ -1372,8 +1395,9 @@
     addEventListener('storage', (e) => {
       if (e.key !== KEY || !e.newValue || demo || paused) return;
       let other = null; try { other = JSON.parse(e.newValue).tabId; } catch (x) { return; }
-      if (other && other !== myTab) {
+      if (other && other !== myTab && other > myTab) {
         paused = true; syncAmb();
+        if (ui.modal) ui.modalQ.unshift(ui.modal);
         showCard({ kind: 'tab', html: '<h2>Camp open in another tab</h2><p>This tab is paused so the two tabs don\'t overwrite each other.</p><div class="btns"><button class="btn primary" type="button" data-a="useHere">Use here</button></div>' });
       }
     });
