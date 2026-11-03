@@ -135,6 +135,12 @@
   // Match-cut constants shared by shots that must line up across a cut (spec risk 8). Scene files add
   // their entries with `MO.MATCH.key = MO.MATCH.key || {...}` and read the others' entries at cue time.
   MO.MATCH = MO.MATCH || {};
+  // the shared numbers of the 96.1 and 100.1 match cuts (rubedo.bloom -> zoomback.set -> coda.eye), defined
+  // here once; the scene files keep identical `|| {...}` fallbacks
+  MO.MATCH.heartIris = { r: 0.02, screenR: 1.36, pupil: 0.24 };
+  MO.MATCH.bloomEnd = { roll: 0.28 * 4 * BEAT, grade: { saturation: 0.35, gain: [1.12, 0.86, 0.46], contrast: 1.05 },
+    bloom: 0.32, bloomThreshold: 1.2, vignette: 0.5 };
+  MO.MATCH.codaEye = { zoom: 3.4, pupil: 0.73, pc: [0, 0], spin: 0, blaze: 1, bloom: 0.28, bloomThreshold: 0.9, vignette: 0.5 };
 
   MO.globals = (t) => ({
     uTime: t,
@@ -159,13 +165,14 @@
     for (const f of S.fx) {
       const t0 = f.beat * BEAT; if (t < t0) continue;
       const dt = t - t0;
-      if (f.type === 'flash') { const a = f.amount * Math.exp(-dt / f.decay); if (a > flash) { flash = a; flashColor = f.color; } }
+      // reduced mode scales each flash by its own "reduced" factor (default 0.25; 0 = off)
+      if (f.type === 'flash') { const a = f.amount * (MO.reduced ? (f.reduced ?? 0.25) : 1) * Math.exp(-dt / f.decay); if (a > flash) { flash = a; flashColor = f.color; } }
       else if (f.type === 'impact') { if (dt < f.duration) { impact = 1; impactPol = f.polarity || 1; } }
       else if (f.type === 'shake') shake += f.amount * Math.exp(-dt / f.decay);
     }
     const e = MO.energy(t);
     const pump = e > 0.6 ? MO.env('kick', t, 0.1) * (e - 0.6) * 0.03 : 0;
-    if (MO.reduced) { flash *= 0.25; impact = 0; shake *= 0.3; }
+    if (MO.reduced) { impact = 0; shake *= 0.3; }
     // chromatic aberration follows the shake but is capped so a hit never smears the frame
     return { flash, flashColor, impact, impactPol, shake, zoom: MO.reduced ? pump * 0.3 : pump, ca: 0.5 + Math.min(2.0, 6 * shake * 30) };
   }

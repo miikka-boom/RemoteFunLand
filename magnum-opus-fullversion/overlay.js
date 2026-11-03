@@ -1679,11 +1679,13 @@
   // frames, and words that open on a long consonant lead by that consonant's length plus one frame.
   // PRE_ROLL: seconds of audible consonant before the step, measured on the rap stem (30 s build).
   const PRE_ROLL = { Shadow: 0.059, Holy: 0.059, to: 0.045, Self: 0.087, left: 0.030, light: 0.024 };
-  const lead = (word) => Math.max(2 * FRAME, (PRE_ROLL[word] || 0) + FRAME);
+  // line.preRoll (seconds per word, measured on the full soundtrack: audio/timing.json) wins when present
+  const lead = (word, pr) => Math.max(2 * FRAME, (Number.isFinite(pr) ? pr : PRE_ROLL[word] || 0) + FRAME);
   const RAP = arr(V.rap).filter((l) => l.style !== 'shout').map((line) => {
     const w = within(W_SUB, barT(line.bar) + 1e-4);
     if (!w) return null;
-    const toks = tokens(line).map((k) => ({ ...k, t: barT(line.bar, k.step) - lead(k.word) }));
+    const pre = Array.isArray(line.preRoll) && line.preRoll.length === arr(line.words).length ? line.preRoll : null;
+    const toks = tokens(line).map((k, i) => ({ ...k, t: barT(line.bar, k.step) - lead(k.word, pre ? pre[i] : undefined) }));
     return { line, style: line.style || 'verse', jp: line.jp || '', toks, t0: Math.min(...toks.map((k) => k.t)), w, st: stageAt(barT(line.bar) + 1e-3) };
   }).filter(Boolean);
   RAP.forEach((l, i) => { const n = RAP[i + 1]; l.t1 = n && n.w === l.w ? Math.min(n.t0, l.w.b) : l.w.b; l.last = !(n && n.w === l.w); });
@@ -2176,14 +2178,23 @@
     const pxBig = heldBig(line, w);
     const age = t - w.t;
     if (t < h.tShatter) {
-      // before the grow: the normal slam at line size
-      const cur = mix(lay.px, pxBig, growK);
+      // Anti-strobe (spec 7.3): the grow is a zoom-dissolve. Scaling the striped chrome continuously to
+      // ~1700 px swept its bands over each pixel several times in half a second (a 10-degree flash fail,
+      // normal and reduced); now the line-size word fades out in place while the big word fades in,
+      // settling from 0.96x, so each pixel changes about once.
       const bm = chromeWord(w.text, pxBig, line.kind);
-      const sc = (cur / pxBig) * (growK > 0 ? 1 : 1 + 1.0 * Math.exp(-age * 30) * Math.cos(34 * age));
-      const cx = mix(w.x + w.w / 2, heldGeom(line, w).cx, growK), base = mix(lay.base, 700, growK);
+      if (growK < 1) {
+        const sc0 = (lay.px / pxBig) * (growK > 0 ? 1 : 1 + 1.0 * Math.exp(-age * 30) * Math.cos(34 * age));
+        ctx.save();
+        ctx.globalAlpha = clamp(age / 0.03) * (1 - growK);
+        drawChrome(ctx, bm, w.x + w.w / 2, lay.base, sc0, Math.exp(-age / 0.06) * (MO.reduced ? 0.2 : 0.85), SQ);
+        ctx.restore();
+      }
+      if (growK <= 0) return;
+      const sc = mix(0.96, 1, growK), cx = heldGeom(line, w).cx, base = 700;
       ctx.save();
-      ctx.globalAlpha = clamp(age / 0.03);
-      drawChrome(ctx, bm, cx, base, sc, Math.exp(-age / 0.06) * 0.85, SQ);
+      ctx.globalAlpha = growK;
+      drawChrome(ctx, bm, cx, base, sc, 0, SQ);
       // a slow shine sweep across the held word
       const sw = remap(t, h.tGrow + 0.12 + BEAT * 0.9, h.tShatter - 0.02);
       if (sw > 0 && sw < 1) {
@@ -2191,7 +2202,7 @@
         const fx = mix(ix, ix + bm.cw, easeInOut(sw));
         ctx.translate(cx, base - bm.capH * 0.5); ctx.scale(sc * SQ, sc); ctx.translate(-cx, -(base - bm.capH * 0.5));
         ctx.beginPath(); ctx.moveTo(fx - 60, iy); ctx.lineTo(fx + 40, iy); ctx.lineTo(fx - 80, iy + bm.ch); ctx.lineTo(fx - 180, iy + bm.ch); ctx.closePath(); ctx.clip();
-        ctx.globalAlpha = 0.75; ctx.drawImage(bm.white, ix, iy, bm.cw, bm.ch);
+        ctx.globalAlpha = MO.reduced ? 0.2 : 0.4; ctx.drawImage(bm.white, ix, iy, bm.cw, bm.ch);
       }
       ctx.restore();
       if (growK >= 1) star(ctx, cx + bm.w * SQ * 0.4, base - bm.capH * 0.95, 150 * (0.7 + 0.3 * Math.sin(t * 6)), 0.85);
@@ -2511,7 +2522,12 @@
   // ================================================================ 13. EYECATCH (mid-show card, flips, iris-in)
   function lanternAt(t) {
     const a = MO.anchors && MO.anchors.lantern;
-    const v = typeof a === 'function' ? a(t) : a;
+    let v = typeof a === 'function' ? a(t) : a;
+    // hermit.lantern publishes MO.hermitLantern(t) -> {x, y, r} (frame fractions, y down)
+    if (!(Array.isArray(v) && v.length >= 2) && typeof MO.hermitLantern === 'function') {
+      const L = MO.hermitLantern(t);
+      if (L && Number.isFinite(L.x) && Number.isFinite(L.y)) v = [L.x, L.y];
+    }
     return Array.isArray(v) && v.length >= 2 ? [v[0] * 1920, v[1] * 1080] : [770, 390];
   }
   function toneImg() {
