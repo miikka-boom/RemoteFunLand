@@ -75,6 +75,8 @@
   const RES_PROD = { scrap: 'salvage', food: 'garden', meds: 'infirmary' };
   const RES_NAME = { scrap: 'scrap', food: 'food', meds: 'meds' };
   const ITEM_NAME = { medkit: 'medkit', pills: 'pills', bomb: 'noise bomb' };
+  // "a medkit", "2 noise bombs", "pills", "3 pills": pills are already plural.
+  const itemCount = (item, n) => item === 'pills' ? (n > 1 ? n + ' pills' : 'pills') : (n > 1 ? n + ' ' + ITEM_NAME[item] + 's' : 'a ' + ITEM_NAME[item]);
   // Median win haul per route (SPEC 5.5), used only for the goal chip's "≈ N runs".
   const MEDIAN_HAUL = { R1: { scrap: 126, food: 38, meds: 0 }, R2: { scrap: 225, food: 71, meds: 6 }, R3: { scrap: 341, food: 103, meds: 12 },
     R4: { scrap: 697, food: 205, meds: 24 }, R5: { scrap: 1091, food: 313, meds: 33 } };
@@ -418,7 +420,7 @@
       if (c.item === 'bomb') s.flags.bombMade = true;
       bump(s.tele.kpi.items.crafted, c.item);
       if (q.length) q[0].endAt = s.campNow + q[0].dur;
-      ev.push({ type: 'craftDone', building: n.ref, item: c.item, text: B[n.ref].name + ' made a ' + ITEM_NAME[c.item] });
+      ev.push({ type: 'craftDone', building: n.ref, item: c.item, text: B[n.ref].name + ' made ' + itemCount(c.item, 1) });
     } else if (n.kind === 'recruit') {
       const r = s.recruit; s.recruit = null;
       const p = person(newPersonId(s), r.name, Math.round(s.campNow));
@@ -1221,7 +1223,7 @@
       else if (e.type === 'recruitDone') rows.push({ id: 'radio', kind: 'recruit', text: e.name + ' joined the camp' });
       else if (e.type === 'clUp') rows.push({ id: 'campfire', kind: 'cl', text: 'Camp Lv ' + e.cl });
     }
-    for (const k of Object.keys(crafted)) { const [b, item] = k.split(':'); const n = crafted[k]; rows.push({ id: b, kind: 'craft', text: B[b].name + ' made ' + n + ' ' + ITEM_NAME[item] + (n > 1 ? (item === 'pills' ? '' : 's') : '') }); }
+    for (const k of Object.keys(crafted)) { const [b, item] = k.split(':'); const n = crafted[k]; rows.push({ id: b, kind: 'craft', text: B[b].name + ' made ' + itemCount(item, n) }); }
     if (s.gen.charges > 0) rows.push({ id: 'generator', kind: 'generator', amount: s.gen.charges, text: 'Generator: ' + s.gen.charges + ' batter' + (s.gen.charges > 1 ? 'ies' : 'y') });
     if (s.truck.scrap + s.truck.food + s.truck.meds > 0) rows.push({ id: 'truck', kind: 'truck', text: 'The truck holds overflow' });
     return { ms, rows };
