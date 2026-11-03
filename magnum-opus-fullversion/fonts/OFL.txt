@@ -1,11 +1,14 @@
 Fonts used by Magnum Opus (all under the SIL Open Font License 1.1, full text below).
-The Japanese fonts are subsets made by the Google Fonts API (only the glyphs drawn).
+The Japanese fonts are subsets made by the Google Fonts API (only the glyphs drawn): every
+Japanese string in score.js, the kana and kanji the overlay draws itself, and printable ASCII.
+The subsets remain under the SIL Open Font License 1.1.
 
 cinzel-latin.woff2                 Cinzel            Copyright 2020 The Cinzel Project Authors (https://github.com/NDISCOVER/Cinzel)
 shippori-mincho-b1-800-sub.woff2   Shippori Mincho B1 ExtraBold, subset
                                    Copyright 2021 The Shippori Mincho Project Authors (https://github.com/fontdasu/ShipporiMincho)
-mplus-rounded-800-sub.woff2        M PLUS Rounded 1c ExtraBold, subset
-                                   Copyright 2016 The M+ Project Authors (https://github.com/coz-m/MPLUS_FONTS)
+mplus-rounded-800-sub.woff2        M PLUS Rounded 1c ExtraBold (Rounded Mplus 1c ExtraBold), subset
+                                   Copyright 2016 The Rounded M+ Project Authors; M+ FONTS by
+                                   The M+ Project Authors (https://github.com/coz-m/MPLUS_FONTS)
 exo2-black-italic-latin.woff2      Exo 2 Black Italic, latin
                                    Copyright 2013 The Exo 2 Project Authors (https://github.com/googlefonts/Exo-2.0)
 michroma-latin.woff2               Michroma, latin

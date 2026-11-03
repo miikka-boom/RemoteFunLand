@@ -20,6 +20,17 @@
 // C5  2 beats  white-gold under the overlay's full-screen RUBEDO insert (the gap).
 // Natural lengths, stretch behaviour and params of each factory: see "shots (JS)" below.
 //
+// Photosensitivity (spec 7.3, 7.5), built into every cue and measured with the flash analyser:
+//   rule 1  the speed lines (C2, C3a, C3b, C4) re-roll once a beat and their brightness follows the
+//           snare roll's density in the bar, not its hits (per 16th, pulsed on every hit, the dense
+//           fans of the build flickered at 4.5-9 Hz); the ignition's burst lines re-roll per 8th; the
+//           henshin ribbons (C2) turn at 4 rad/s with a dimmer far side (at 7 they crossed each pixel
+//           of the body six times a second)
+//   rule 6  the root's red wash ramps up over 0.3 s (72.1 in the build: it floods the frame)
+//   rule 7  the build's cuts (72-79) are measured against the orrery's amber void (report numbers)
+//   reduced (7.5): burst lines and speed lines frozen (as the 30 s piece), ignitions dimmed, every
+//           ignition's colour wash kept within 0.65 of its chakra (under 25 % of the frame)
+//
 // The luminous body is copied from scenes/albedo.js (prefix alb → cit) so the figure is the
 // same being; here the gold rises through it from the feet with the kundalini (ida, pingala
 // and sushumna light up to the highest lit chakra; a molten front separates gold from silver).
@@ -657,11 +668,12 @@ vec3 citBurst(vec3 col, vec2 p, vec2 c, float age, int i, float S) {
     // held for ~2 frames, nearly complete at the core: a partial mix of HDR-white linework still
     // tone-maps to white, so the core of the burst has to be (briefly) all chakra colour
     float gA = (0.80 + 0.12 * esc + (i == 0 ? 0.08 : 0.0)) * exp(-max(age - 0.08, 0.0) / dec) * (1.0 - 0.7 * uReduced);
-    // the root rises over 0.2 s under the gold flash of the same beat (which hides the first
-    // frames anyway), so the drop from gold to the darker red does not stack on the flash decay
-    if (i == 0) gA *= smoothstep(0.0, 0.2, age);
+    // the root's red wash ramps up over 0.3 s (spec 7.3 rule 6: a frame-wide red wash must not
+    // step), so the drop from gold to the darker red never stacks on a flash decay either; reduced:
+    // it stays under 25 % of the frame (below)
+    if (i == 0) gA *= smoothstep(0.0, 0.3, age);
     // (the root floods the whole Mountain: it has to win against the gold flash on the same beat)
-    float gm = gA * (1.0 - smoothstep(R1 * 0.8 - 0.05, R1, r)) * min((i == 0 ? 0.7 : 0.4) + 0.65 * exp(-r * 1.5), 1.0);
+    float gm = gA * (1.0 - smoothstep(min(R1 * 0.8 - 0.05, mix(9.0, 0.45, uReduced)), min(R1, mix(9.0, 0.65, uReduced)), r)) * min((i == 0 ? 0.7 : 0.4) + 0.65 * exp(-r * 1.5), 1.0);
     float lb = dot(col, vec3(0.2126, 0.7152, 0.0722));
     col = mix(col, hc * (2.2 * lb + 0.05), gm);
   }
@@ -718,19 +730,23 @@ vec3 citBurst(vec3 col, vec2 p, vec2 c, float age, int i, float S) {
     float ssz = (0.035 + 0.05 * h) * exp(-age * 2.5) * (0.6 + 0.4 * S) * (0.8 + 0.4 * esc);
     col += mix(vec3(1.0, 0.95, 0.85), hc * 1.6, 0.6) * 1.8 * sparkle(p, sp, ssz) * (1.0 - smoothstep(0.45, 0.62, age)) * I;
   }
-  // 5. burst lines: re-rolled once per 16th note, frozen in reduced-flashing mode
-  if (age < 0.6) col += mix(hc * 1.6, vec3(1.0, 0.9, 0.7), 0.25) * citSpeedRA(r, a, 120.0, 0.35 + age * 1.5, floor(age * 9.0666667 * (1.0 - uReduced))) * exp(-age * 4.0) * 1.4 * I;
+  // 5. burst lines: re-rolled once per 8th note (spec 7.3 rule 1: each pixel changes about twice a
+  // second; per 16th it was four times), frozen in reduced-flashing mode
+  if (age < 0.6) col += mix(hc * 1.6, vec3(1.0, 0.9, 0.7), 0.25) * citSpeedRA(r, a, 120.0, 0.35 + age * 1.5, floor(age * 4.5333333 * (1.0 - uReduced))) * exp(-age * 4.0) * 1.4 * I;
   return col;
 }
 
 #ifdef CIT_RIBBONS
 // ---------------------------------------------------------------- henshin: three light ribbons
 // spiralling up around the body (body units). front = in front of the body, back = behind.
+// Spec 7.3 rule 1: each ribbon crosses a point of the body twice a turn (in front, then behind), so
+// the turn rate is 4 rad/s (the 30 s piece: 7, six crossings of a pixel a second for the three) and
+// the far side is dimmer: the bright front passes a pixel about twice a second.
 void citRibbons(vec2 q, float aa, out vec3 back, out vec3 front) {
   back = vec3(0.0); front = vec3(0.0);
   for (int j = 0; j < 3; j++) {
     float fj = float(j);
-    float ph = q.y * 6.0 - uTime * 7.0 + fj * TAU / 3.0;
+    float ph = q.y * 6.0 - uTime * 4.0 + fj * TAU / 3.0;
     float R = 0.34 + 0.05 * sin(q.y * 2.3 + fj * 2.0);
     float xc = R * sin(ph);
     float z = cos(ph);
@@ -743,7 +759,7 @@ void citRibbons(vec2 q, float aa, out vec3 back, out vec3 front) {
     float vis = smoothstep(-1.15, -0.8, q.y) * (1.0 - smoothstep(1.0, 1.35, q.y));
     vec3 c = j == 0 ? vec3(1.0, 0.70, 0.22) : j == 1 ? vec3(1.0, 0.88, 0.60) : vec3(1.0, 0.34, 0.06);
     vec3 rc = c * (band * 0.14 + lines * 1.0 + core * 1.8) * vis * (0.5 + 0.5 * abs(z));
-    if (z > 0.0) front += rc; else back += rc * 0.6;
+    if (z > 0.0) front += rc; else back += rc * 0.3;
   }
 }
 #endif
@@ -914,8 +930,12 @@ void main() {
   }
 #endif
 #ifdef CIT_SPEED
-  // re-rolled once per 16th (with the roll and the hats), frozen in reduced-flashing mode
-  if (uSpeed > 0.0) col += vec3(1.0, 0.82, 0.5) * citSpeed(p, uSpeedC, 150.0, 0.85, floor(uBeat * 4.0 * (1.0 - uReduced)) + uSeed * 7.0) * uSpeed * 0.7;
+  // re-rolled once a beat, frozen in reduced-flashing mode. Anti-strobe (spec 7.3 rule 1): a line is
+  // on in at most 42 % of the rolls, so a pixel under one changes at most ~1.1 times a second, 0.04 a
+  // frame, where moAntiStrobe leaves full contrast (per 16th it was 4.4 times a second, a strobe; per
+  // 8th the dense fan of the C2b cut-in still flickered); their brightness follows the snare roll's
+  // density, not its hits (JS)
+  if (uSpeed > 0.0) col += vec3(1.0, 0.82, 0.5) * citSpeed(p, uSpeedC, 150.0, 0.85, floor(uBeat * (1.0 - uReduced)) + uSeed * 7.0) * uSpeed * 0.7;
 #endif
   float ck[7];
   for (int i = 0; i < 7; i++) ck[i] = uCk[i];
@@ -1036,7 +1056,12 @@ void main() {
   //                                      or one beat per chakra (root .. crown) from the choreography's
   //                                      start, null = never, negative = lit before the cue
   // A chakra flares when it ignites (a sakuga burst at its place on the body, its Mountain terrace
-  // lights) and stays lit; the gold front in the body rises to the highest lit one.
+  // lights) and stays lit; the gold front in the body rises to the highest lit one. The root's red
+  // colour wash ramps up over 0.3 s (spec 7.3 rule 6); in reduced mode every wash stays within 0.65
+  // of its chakra. Speed lines re-roll once a beat and swell with the roll's density, never per hit.
+  // Rule 7 (the build, 72-79, two cuts a bar against orrery.thieves): measured mean luminance (linear,
+  // no overlay) of these shots is about 0.21-0.30 at their cuts; the ignition on each cue's first beat
+  // lifts the first ~0.2 s, then it settles (see the build report for the per-cut numbers).
   const BEAT = MO.BEAT;
   const bt = (b) => b * BEAT;
   const CHY = [-0.02, 0.10, 0.25, 0.44, 0.665, 0.865, 1.0];
@@ -1245,7 +1270,7 @@ void main() {
     s.sun = [0, heart[1] + 0.15, 0.78, 1 - 0.3 * calm]; s.sunDark = 1;
     s.sun2 = [-X.tm(t) * 0.22, 0, 1.25 + 0.12 * kickE, rosette];
     s.dawn = 0.6;
-    s.speed = (0.2 + 0.5 * rollE + 0.9 * (st.ignAge >= 0 ? Math.exp(-st.ignAge / 0.3) : 0) + 0.1 * calm) * R();
+    s.speed = (0.2 + 0.5 * X.rollS(t) + 0.9 * (st.ignAge >= 0 ? Math.exp(-st.ignAge / 0.3) : 0) + 0.1 * calm) * R();
     s.speedC = toScreen(heart, s.cam);
     s.ribbon = SM((t - X.ev(0)) / 0.3) * (1 - 0.45 * calm) * X.ribbons;
     s.aura = 1.15 - 0.35 * calm;
@@ -1284,7 +1309,7 @@ void main() {
     s.gutW = 0.034 * (1 + 0.3 * rollE * R());
     s.eyeP = [mix(-3.0, -1.24, inL) + m[5], 0.02, m[6], -0.10];
     s.eyeO = EO((t - tL - 0.08) / 0.18);
-    s.speed = (0.7 + 0.5 * rollE) * R();
+    s.speed = (0.7 + 0.5 * X.rollS(t)) * R();
     s.speedC = toScreen([0, 0.665], s.cam);
     s.aura = 1.2;
     return s;
@@ -1327,7 +1352,7 @@ void main() {
     s.faceP = [jx, jy, 0.36 * push, 0.98 * push]; s.igS = 1.5;
     s.eyeP = [0, 0, 0.42 * push, 0];
     s.eyeO = EO((t - t0 - 0.03) / 0.2);
-    s.speed = (0.7 + 0.5 * rollE + 0.4 * s.ramp) * R();
+    s.speed = (0.7 + 0.5 * X.rollS(t) + 0.4 * s.ramp) * R();
     s.speedC = toScreen([0, 0.873], s.cam);
     s.aura = 1.25;
     return s;
@@ -1373,6 +1398,16 @@ void main() {
     s.speed = (0.4 + 0.5 * rollE) * R(); s.speedC = toScreen(crown, s.cam);
     s.speed *= C(1 - s.flood[2] / 0.5);   // the speed lines go under the flood (and their cost with them)
     return s;
+  }
+
+  // the snare roll's density in the bar holding t (hits / 16, at most 1) x 0.45, the mean of its
+  // per-hit envelope at 16ths: what the speed lines follow (spec 7.3 rule 1: pulsing them on every
+  // hit of an 8th or 16th roll flickered the dense fans at 4.5-9 Hz)
+  function rollDensity(t) {
+    const b0 = Math.floor(t / MO.BAR + 1e-6) * MO.BAR;
+    let n = 0;
+    for (const e of MO.events.roll) { if (e.t >= b0 + MO.BAR - 1e-6) break; if (e.t >= b0 - 1e-6) n++; }
+    return 0.45 * Math.min(1, n / 16);
   }
 
   // the uniforms of a C1..C4 frame
@@ -1451,6 +1486,7 @@ void main() {
         return;
       }
       X.buzz = !!sh.buzz;
+      X.rollS = X.buzz ? () => 0.6 : rollDensity;
       X.ribbons = C(num(X.P.ribbons, 1), 0, 2);
       X.push = X.P.push !== false;
       if (name === 'c2') {

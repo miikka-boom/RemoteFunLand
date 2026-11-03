@@ -22,15 +22,19 @@ one melody/hook run per contiguous sung passage. flite renders are cached by has
 Stems, voice renders, analysis images, report.json and timing.json (the measured syllable, word and
 gap times the picture keys on) go next to the WAV (--stems DIR to change that), never into the repo.
 The run ends with a verification report (timing, gaps, vocals, pitch, loudness arc, true peak, MP3
-alignment); --no-verify skips it.
+alignment); --no-verify skips it, and --verify-only re-runs it from <stems>/state.pkl and the written files.
+A render takes about 10 minutes on an idle machine (most of it the full-length filters and the mastering
+passes that steer the loudness arc); repeated notes come from a render cache, voices from the flite cache.
 """
 import argparse
 import hashlib
 import json
+import pickle
 import re
 import subprocess
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 from scipy import signal
@@ -929,7 +933,7 @@ def analyse_voice(x):
         v0, v1 = int(c[vi[0]]), int(min(len(x), c[vi[-1]] + 220))
     else:
         v0, v1 = 0, len(x)
-    return dict(x=x, marks=marks, v0=v0, v1=v1, f0=float(np.median(f0[v])) if v.any() else 0.0)
+    return dict(x=x, marks=marks, v0=v0, v1=v1, lead=ns(lead_in(x)), f0=float(np.median(f0[v])) if v.any() else 0.0)
 
 
 LEAD_SOS = signal.butter(4, (150, 1000), 'band', fs=SR, output='sos')
@@ -962,19 +966,30 @@ def pre_roll(y, cap=0.12):
     return float(min(cap, (1.0 if lead < pk * 10 ** (-24 / 20) else 0.7) * v0 / SR))
 
 
-def warp_map(an, n_out):
-    """Output-sample -> input-sample map: consonants ~1:1, the voiced nucleus stretched/compressed."""
+def warp_map(an, n_out, cons_max=None):
+    """Output-sample -> input-sample map. The onset consonant (up to the vowel: the later of the f0 voicing onset
+    and the energy-based vowel onset) runs 1:1, or is shortened to cons_max samples when the note leaves it less
+    time (a singer shortens a long "s"). When the note is longer than the syllable, the vowel's first 60 ms and
+    last 50 ms run 1:1 too (a crisp consonant-vowel transition and a natural release) and only its steady middle
+    is stretched; when shorter, the 30 s rule (the nucleus gives up to 55 % of itself, the consonants the rest).
+    (The 30 s map stretched the whole voiced region, so a weak voiced onset, the "g" of a 16-step "GOLD!", grew
+    to a 240 ms fade-in, and an "s" the f0 tracker called voiced was stretched: "sun" sang its vowel 170 ms late.)"""
     n0 = len(an['x'])
-    v0, v1 = an['v0'], an['v1']
-    pre, voi, post = v0, max(1, v1 - v0), n0 - v1
-    if n_out >= n0:
-        knots = [(0, 0), (pre, v0), (n_out - post, v1), (n_out, n0)]
+    v0 = min(n0 - 2, max(an['v0'], an.get('lead', 0)))
+    v1 = min(n0, max(an['v1'], v0 + 2))
+    pre, voi, post = v0, v1 - v0, n0 - v1
+    pre_o = pre if cons_max is None else max(1, min(pre, int(cons_max)))
+    n0e = pre_o + voi + post
+    if n_out >= n0e:
+        a = min(ns(0.06), int(0.3 * voi))
+        b = min(ns(0.05), int(0.2 * voi))
+        knots = [(0, 0), (pre_o, v0), (pre_o + a, v0 + a), (n_out - post - b, v1 - b), (n_out - post, v1), (n_out, n0)]
     else:
-        cut = n0 - n_out
+        cut = n0e - n_out
         cv = min(cut, 0.55 * voi)
         rest = cut - cv
-        cons = max(1, pre + post)
-        pre2 = pre - rest * pre / cons
+        cons = max(1, pre_o + post)
+        pre2 = pre_o - rest * pre_o / cons
         post2 = post - rest * post / cons
         voi2 = voi - cv
         knots = [(0, 0), (pre2, v0), (pre2 + voi2, v1), (pre2 + voi2 + post2, n0)]
@@ -1157,6 +1172,100 @@ def sub_swell(dur):
     f = 30.0 + 32.0 * np.exp(-u / (0.4 * k))
     x = np.sin(2 * np.pi * np.cumsum(f) / SR) * np.exp(-u / (0.75 * k))
     return fades(x, 0.05, 0.015)
+
+
+def shatter(dur=1.2):
+    """A mask shattering (not in the current score; a "shatter" hit type if one is added): a cracking transient,
+    a scatter of short inharmonic glassy pings over 250 ms and a dark thud. Returns (stereo, thud mono)."""
+    n = ns(dur)
+    t = tt(n)
+    out = np.zeros((2, n))
+    out += st(bw(noise(n), 'high', 1500, order=2) * np.exp(-t / 0.006) * 1.2)
+    for _ in range(36):
+        o = RNG.uniform(0.0, 0.25) ** 1.5
+        f = RNG.uniform(2200, 9000)
+        u = t - o
+        ping = np.where(u >= 0, np.sin(2 * np.pi * f * u) * np.exp(-np.maximum(u, 0) / RNG.uniform(0.01, 0.06)), 0.0)
+        out += st(ping * RNG.uniform(0.15, 0.4), RNG.uniform(-0.9, 0.9))
+    thud = (np.sin(2 * np.pi * 70 * t) * np.exp(-t / 0.09) + bw(noise(n), 'low', 250) * np.exp(-t / 0.03)) * np.minimum(1, t / 0.002)
+    return fades(out / np.abs(out).max(), 0.0003, 0.2), fades(thud / np.abs(thud).max(), 0.001, 0.1)
+
+
+# ------------------------------------------------------------------ render cache
+# The full song plays thousands of identical notes (stabs, hats, claps, plucks, bells). Every instrument below is
+# linear in its velocity (or keyed on it), so each distinct note is synthesised once and re-used, like a sampler;
+# hits that vary (hats, claps, kicks, crashes) rotate through a few renders (round robin) instead of one.
+_MEMO = {}
+_RR = {}
+
+
+def _memo(key, make):
+    v = _MEMO.get(key)
+    if v is None:
+        v = np.asarray(make(), float)
+        v.setflags(write=False)
+        _MEMO[key] = v
+    return v
+
+
+def _rr(name, k):
+    i = _RR.get(name, 0)
+    _RR[name] = i + 1
+    return i % k
+
+
+_piano_note, _pluck, _bell, _hat, _clap, _kick, _snare, _bass_note, _music_box, _crash = \
+    piano_note, pluck, bell, hat, clap, kick, snare, bass_note, music_box, crash
+
+
+def piano_note(midi, dur, vel=1.0):
+    return _memo(('piano', midi, round(dur, 3)), lambda: _piano_note(midi, dur, 1.0)) * vel
+
+
+def bell(midi, dur=3.2, vel=1.0):
+    return _memo(('bell', midi, round(dur, 3)), lambda: _bell(midi, dur, 1.0)) * vel
+
+
+def music_box(midi, dur=1.8, vel=1.0):
+    return _memo(('mbox', midi, round(dur, 3)), lambda: _music_box(midi, dur, 1.0)) * vel
+
+
+def pluck(midi, dur=0.32, vel=1.0, bright=1.0, decay=0.16):
+    b = round(vel * bright, 2)    # the filter envelope depends on vel * bright only
+    return _memo(('pluck', midi, round(dur, 3), b, round(decay, 3)), lambda: _pluck(midi, dur, 1.0, b, decay)) * vel
+
+
+def bass_note(midi, dur, vel=1.0):
+    v = round(vel, 2)
+    return _memo(('bass', midi, round(dur, 3), v), lambda: _bass_note(midi, dur, v))
+
+
+def hat(vel=1.0, open_=False):
+    k = _rr(('hat', open_), 8)
+    return _memo(('hat', open_, k), lambda: _hat(1.0, open_)) * vel
+
+
+def clap(vel=1.0):
+    k = _rr('clap', 6)
+    return _memo(('clap', k), lambda: _clap(1.0)) * vel
+
+
+def kick(vel=1.0, muffle=None):
+    if muffle is None or muffle >= 15000:
+        k = _rr('kick', 4)
+        return _memo(('kick', k), lambda: _kick(1.0)) * vel
+    fc = float(np.exp(round(np.log(muffle) * 50) / 50))   # 2 % steps
+    return _memo(('kick', fc), lambda: _kick(1.0, fc)) * vel
+
+
+def snare(vel=1.0, pitch=200.0, decay=0.13):
+    pq, dq = round(pitch / 4) * 4, round(decay, 3)
+    return _memo(('snare', pq, dq), lambda: _snare(1.0, pq, dq)) * vel
+
+
+def crash(dur=2.6, bright=1.0):
+    k = _rr(('crash', round(dur, 2), bright), 3)
+    return _memo(('crash', round(dur, 3), bright, k), lambda: _crash(dur, bright))
 
 
 def formant_bank(x, vowel):
@@ -1351,6 +1460,8 @@ class Song:
         except long buffers that are silent there (gap_ok: a vocal passage's lead-in)."""
         if not gap_ok and self.in_gap_t(t):
             return
+        if stops and any(a - 1e-9 <= t < a + self.T.bar - (a % self.T.bar) for a in self.stops):
+            return   # after a dead stop the bar is air
         place(self.stem(name, ch), self.until_gap(np.asarray(x, float), t, stops), t, gain, pan)
 
     def bar_start(self, bar):
@@ -1504,6 +1615,10 @@ class Song:
                 self.put('fx', crack, t)
                 self.put('low', rumble * 0.9, t, ch=1)
                 self.put('fx', st(bw(rumble, 'band', (120, 900), order=2)) * 0.5, t)
+            elif typ == 'shatter':
+                glass, thud = shatter()
+                self.put('fx', glass, t)
+                self.put('low', thud * 0.7, t, ch=1)
             elif typ == 'slate':
                 # dry, in the gap with the director: on the bypass bus
                 place(self.stem('gapfx'), st(woodblock(1.0), 0.1), t)
@@ -1574,7 +1689,7 @@ class Song:
                 over = tvf(x, 'bp', ot, q=14, block=64) * 1.8
                 env = keys_curve(n, [(0, 0), (0.08 * L, 0.9), (0.25 * L, 1.0), (0.5 * L, 0.7), (0.92 * L, 0.4), (L, 0.0)])
                 self.put('drone', (body * 0.5 + over * 0.6) * env, t0)
-                self.put('low', np.sin(2 * np.pi * 55 * t) * env * 0.35, t0, ch=1)
+                self.put('low', np.sin(2 * np.pi * 55 * t) * env * 0.2, t0, ch=1)
                 wn = noise(n, 2)
                 fc = 550 + 420 * np.sin(2 * np.pi * 0.21 * t) + 260 * np.sin(2 * np.pi * 0.47 * t + 1)
                 w = tvf(wn, 'bp', fc, q=1.6, block=128)
@@ -1802,7 +1917,7 @@ class Song:
                     self.put('piano', sum(piano_note(m, 0.2, 0.55) for m in notes), T.t(bar, 0, s))
             elif kind == 'whole-notes':
                 low = VOICING[name][0]
-                x = sum(piano_note(m, T.bar - 0.05, 0.62) for m in [low] + notes) * 0.8
+                x = sum(piano_note(m, T.bar - 0.05, 0.62) for m in [low] + notes) * 1.3
                 self.put('piano', bw(x, 'low', 3500), T.t(bar))
             elif kind.startswith('broken'):
                 # the breakdown ballad: a broken chord in 8ths over the low root, pedal down through the bar
@@ -1811,7 +1926,7 @@ class Song:
                 seq = [low, tones[0], tones[1], tones[2], tones[3], tones[2], tones[1], tones[0]]
                 for k, m in enumerate(seq):
                     s = 2 * k
-                    v = (0.78 if k == 0 else 0.62 if k in (4,) else 0.52) * (0.85 if bar == self.sec_span(self.sec[bar])[0] else 1.0)
+                    v = 2.0 * (0.78 if k == 0 else 0.62 if k in (4,) else 0.52) * (0.85 if bar == self.sec_span(self.sec[bar])[0] else 1.0)
                     self.put('piano', piano_note(m, (16 - s) * T.step + 0.1, v), T.t(bar, 0, s), pan=0.25 * (m - 60) / 12)
             elif kind == 'chords':
                 for s in (0, 8):
@@ -1878,7 +1993,6 @@ class Song:
     def lead_line(self, notes, stem, down=0.55, up=0.22, bright=1.0, pluck_amt=0.35, t_a=None):
         """A supersaw lead playing [(t, dur, midi)]: legato notes glide (25 ms), a filter envelope per note,
         the octave below for body, a soft octave above, and a pluck layered on each attack."""
-        T = self.T
         notes = sorted(notes)
         t_a = notes[0][0] - 0.01 if t_a is None else t_a
         t_b = max(t + d for t, d, m in notes) + 0.3
@@ -2065,7 +2179,7 @@ class Song:
             pre.append(p)
         recs = []
         for k, s in enumerate(syl):
-            x, an = src[k], ans[k]
+            an = ans[k]
             nxt = syl[k + 1]['t'] if k + 1 < len(syl) else None
             legato = nxt is not None and nxt - (s['t'] + s['dur']) < 0.03
             start = s['t'] - pre[k]
@@ -2074,7 +2188,7 @@ class Song:
                 end = min(end, nxt - pre[k + 1] - (0.0 if legato else 0.005))
             D = end - start
             n_out = ns(D)
-            warp = warp_map(an, n_out)
+            warp = warp_map(an, n_out, cons_max=ns(pre[k] + 0.025))
             j0 = ns(start) - i0p
             seg = P['mel'][j0:j0 + n_out]
             y = psola(an, n_out, warp, hz(seg - 12))
@@ -2288,7 +2402,7 @@ class Song:
         """The 30 s rap pipeline for any spoken voice: each word rendered by flite (rms), time-fitted into its
         slot by rubberband, P-centre placed (it starts ahead of its step by its unvoiced lead-in, taken from
         the word before), one buffer per layer (tempo, pitch, delay). Returns the buffers and the records."""
-        T, V = self.T, self.V
+        V = self.V
         words = self.word_slots(lines)
         weak = {'on', 'the', 'to', 'a', 'in', 'is', 'of', 'my', 'at', 'it'}
         src = []
@@ -2303,7 +2417,7 @@ class Song:
         def say(x, D, tm=1.0, pc=pitch_main):
             y = trim(V.rubberband(x, tempo=len(x) / SR / D * tm, pitch=2 ** (pc / 12)))
             return fit_len(y, ns(D / tm))
-        pre = [pre_roll(say(x, dur(x, w['avail']))) for x, w in zip(src, words)]
+        pre = [pre_roll(say(x, dur(x, w['avail'])), cap=0.16) for x, w in zip(src, words)]
         bufs = [np.zeros(n) for _ in layers]
         recs = []
         for i, (x, w) in enumerate(zip(src, words)):
@@ -2311,7 +2425,7 @@ class Song:
             nxt_pre = pre[i + 1] if joined else 0.0
             D = min(dur(x, w['avail']), 0.9 * (w['avail'] + pre[i] - nxt_pre) + 0.02)
             y0 = say(x, D)
-            p = min(pre[i], pre_roll(y0))   # a word squeezed for the next one's pre-roll has a shorter lead-in
+            p = min(pre[i], pre_roll(y0, cap=0.16))   # a word squeezed for the next one's pre-roll has a shorter lead-in
             for buf, (tm, pc, dt_) in zip(bufs, layers):
                 y = y0 if (tm == 1.0 and pc == pitch_main) else say(x, D, tm, pc)
                 place(buf, fades(y, 0.002, 0.015), ns(w['t'] - p + dt_) - i_lo)
@@ -2459,7 +2573,7 @@ class Song:
                             t0=T.t(l['bar']), t1=T.t(l['bar'] + 1)) for l in lines]
 
     def announcer(self):
-        T, V = self.T, self.V
+        V = self.V
         self.timing['announcer'] = []
         A = self.stem('announcer')
         send = self.stem('ann_send')
@@ -2509,7 +2623,7 @@ class Song:
                 # a stage shouted into its gap (the 30 s RUBEDO chain), fitted to the gap + 0.12 s, its own hall
                 max_len = (gap[1] - gap[0]) + 0.12 if gap else None
                 y, main = self.shout_voice(text, max_len=max_len)
-                place(A, st(y) * 0.45, t)
+                place(A, st(y), t)
                 sd = st(y) * 0.45
                 if 'bright' in style:
                     sd = eq(sd, 'hs', 4500, 0.7, 4.0)
@@ -2568,11 +2682,11 @@ GAINS = {  # dB, before the master gain (the 30 s values for the 30 s stems)
     'kick': -1.5, 'clap': 3.0, 'snare': -3.0, 'hats': -9.0, 'roll': -7.0, 'crash': -11.0, 'revcym': -12.0,
     'revcym_gap': -10.0, 'bass': -7.0, 'low': -6.0, 'pad': -6.0, 'choir': -6.0, 'piano': -5.0, 'arp': -14.0,
     'tease': -12.0, 'lead': -12.0, 'bells': -17.0, 'orch': -2.0, 'gong': -9.0, 'drone': -8.0, 'wind': -10.0,
-    'swell': -5.0, 'riser': -13.0, 'announcer': -3.0, 'rap': 0.0, 'hook': 0.0, 'echo': -3.0,
+    'swell': -5.0, 'riser': -13.0, 'announcer': -3.0, 'rap': 0.0, 'hook': 0.8, 'echo': -3.0,
     # the full version's
-    'riff': -9.0, 'pre': -0.5, 'metal': 0.0, 'ghost': -1.0, 'bridge': -1.0, 'coda': -2.0, 'crowd': -10.0,
-    'chops': -7.0, 'whisper': -5.0, 'shout': -4.0, 'hermit': -1.0, 'hermit_dry': -9.0, 'title': -3.0,
-    'director': -4.0, 'jingle': -13.0, 'whisperfx': -14.0, 'musicbox': -11.0, 'fx': -9.0, 'gapfx': -9.0,
+    'riff': -6.5, 'pre': -0.5, 'metal': 2.0, 'ghost': -1.0, 'bridge': 1.0, 'coda': -2.0, 'crowd': -7.0,
+    'chops': -7.0, 'whisper': -1.0, 'shout': 0.0, 'hermit': 2.0, 'hermit_dry': -6.0, 'title': -3.0,
+    'director': 2.7, 'jingle': -13.0, 'whisperfx': -14.0, 'musicbox': -11.0, 'fx': -9.0, 'gapfx': -9.0,
 }
 SEND_HALL = {'pad': 0.12, 'choir': 0.45, 'piano': 0.22, 'lead': 0.22, 'bells': 0.6, 'orch': 0.55, 'gong': 0.35,
              'clap': 0.10, 'rap': 0.10, 'hook': 0.28, 'arp': 0.25, 'tease': 0.4, 'crash': 0.08, 'snare': 0.15,
@@ -2625,7 +2739,7 @@ def arc_units(song):
     final chorus (LU): sections (gaps excluded), the build bar by bar (+8 LU over 8 bars), the stage gaps
     (the shout within 2 LU of its drop). Units without a target are only measured."""
     T = song.T
-    ARC = {'riff1': -2.8, 'verse1': -5.0, 'pre1': -4.0, 'chorus1': -2.5, 'riff2': -2.6, 'verse2': -3.5,
+    ARC = {'coldopen': -8.0, 'intro': -6.0, 'riff1': -2.8, 'verse1': -5.0, 'pre1': -4.0, 'chorus1': -2.5, 'riff2': -2.6, 'verse2': -3.5,
            'pre2': -2.8, 'chorus2': -1.0, 'riff3': -1.6, 'breakdown': -10.2, 'chorus3': 0.0, 'rapriff': -0.3,
            'chorus4': 0.0}
     gaps = song.gaps_s
@@ -2659,8 +2773,9 @@ def arc_units(song):
         drop = next((u['name'] for u in units if u['kind'] == 'section' and song.sec[drop_bar] == u['name']), None)
         stage = fa in shout_beats and song.S['vocals']['announcer'] and \
             any(a['beat'] == fa and a.get('voice', 'rms') == 'rms' for a in song.S['vocals']['announcer'])
-        units.append(dict(name=f'gap@{fa:g}', spans=[(ga, gb)], target=None, kind='gap', drop=drop,
-                          drop_bar=(T.t(drop_bar), T.t(drop_bar + 1)), stage=bool(stage)))
+        director = any(a['beat'] == fa and a.get('voice') == 'awb' for a in song.S['vocals'].get('announcer', []))
+        units.append(dict(name=f'gap@{fa:g}', spans=[(ga, gb)], target=-5.0 if director else None, kind='gap',
+                          drop=drop, drop_bar=(T.t(drop_bar), T.t(drop_bar + 1)), stage=bool(stage)))
     return units
 
 
@@ -2913,6 +3028,8 @@ def end_fade(song):
     k = ns(b)
     fade[k:] *= np.linspace(1, 0, N - k) ** 2
     fade[ns(T.dur - 0.025):] = 0.0
+    k0 = ns(0.003)
+    fade[:k0] *= 0.5 - 0.5 * np.cos(np.pi * np.arange(k0) / k0)
     return fade
 
 
@@ -3029,33 +3146,30 @@ def spectrogram_png(x, path, title, T, t0=0.0, t1=None, width=1600, height=520, 
     im.save(path)
 
 
-def detect_kicks(k, T, expected, thr=0.08):
-    """Blind onset detection on the kick stem (envelope rise after near-silence), then match."""
-    a = np.abs(k)
-    env = maximum_filter1d(a, ns(0.002))
-    pk = env.max()
+def detect_kicks(k, T, expected, rise_db=6.0, floor_db=40.0):
+    """Blind onset detection on the kick stem: an onset is a rise of the 10 ms peak envelope by more than
+    rise_db within 10 ms, within floor_db of the loudest hit (one onset per run of rising frames; runs closer
+    than 100 ms are one hit), refined to the first sample above 10 % of the hit's peak. Then each expected
+    kick is matched to the nearest onset. (A 2 ms envelope falls to zero at every zero crossing of a 55 Hz
+    tail and re-triggered there.)"""
+    a = np.abs(np.asarray(k, float))
+    env = maximum_filter1d(a, ns(0.010))
+    e = 20 * np.log10(env + 1e-9)
+    lag = ns(0.010)
+    d = np.full_like(e, -99.0)
+    d[lag:] = e[lag:] - e[:-lag]
+    idx = np.flatnonzero((d > rise_db) & (e > e.max() - floor_db))
     on = []
-    i = 0
-    above = env > thr * pk
-    quiet = env < 0.01 * pk
-    n = len(a)
-    while i < n:
-        j = np.argmax(above[i:])
-        if not above[i + j]:
-            break
-        i += j
-        w = a[max(0, i - ns(0.03)):i + ns(0.05)]
-        first = max(0, i - ns(0.03)) + int(np.argmax(w > 0.1 * w.max()))
-        on.append(first / SR)
-        # re-arm only after the hit has died away (hysteresis)
-        q = np.argmax(quiet[first + ns(0.02):])
-        i = first + ns(0.02) + max(1, q)
+    last = -10 ** 9
+    for i in idx:
+        if i - last > ns(0.1):
+            i0 = max(0, i - ns(0.015))
+            w = a[i0:i + ns(0.04)]
+            on.append((i0 + int(np.argmax(w > 0.1 * w.max()))) / SR)
+        last = i
     on = np.array(on)
-    errs = []
-    for t in expected:
-        k_ = np.argmin(np.abs(on - t))
-        errs.append((on[k_] - t) * 1000)
-    return on, np.array(errs)
+    errs = np.array([(on[np.argmin(np.abs(on - t))] - t) * 1000 for t in expected]) if len(on) else np.array([np.nan])
+    return on, errs
 
 
 def band_energy(x, t0, t1, lo=300, hi=3000):
@@ -3072,8 +3186,10 @@ def check_lines(song):
     out = []
     for l in song.lines:
         x = song.stems.get(l['stem'])
-        e = band_energy(x, l['t0'], l['t1']) if x is not None else -200.0
-        before = band_energy(x, l['t0'] - 0.6, l['t0'] - 0.25) if x is not None else -200.0
+        a = max(0, int(round((l['t0'] - 0.7) * SR)))
+        seg = x[..., a:int(round(l['t1'] * SR))] if x is not None else None
+        e = band_energy(seg, l['t0'] - a / SR, l['t1'] - a / SR) if x is not None else -200.0
+        before = band_energy(seg, max(0.0, l['t0'] - 0.6 - a / SR), max(0.0, l['t0'] - 0.25 - a / SR)) if x is not None else -200.0
         out.append(dict(kind=l['kind'], style=l['style'], bar=l['bar'], text=l['text'], stem=l['stem'],
                         db=round(e, 1), db_before=round(before, 1), present=bool(e > -60.0)))
     return out
@@ -3089,11 +3205,16 @@ def kick_check(song):
         i0, i1 = ns(t - 0.02), ns(t + 0.05)
         w = a[i0:i1]
         errs.append((i0 + int(np.argmax(w > 0.1 * w.max())) - t * SR) / SR * 1000 if w.max() > 0 else np.nan)
-    on, _ = detect_kicks(k, T, exp, thr=0.02)
+    on, _ = detect_kicks(k, T, exp)
     # every detected onset must belong to a kick of the patterns (nothing extra)
     extra = [float(o) for o in on if np.min(np.abs(exp - o)) > 0.03]
+    filt = np.array([song.kick_filter(t / T.beat)[0] is not None for t in exp])
+    errs = np.array(errs)
     return dict(expected=int(len(exp)), detected_blind=int(len(on)), extra_onsets=extra[:10],
                 max_abs_err_ms=round(float(np.nanmax(np.abs(errs))), 3), mean_err_ms=round(float(np.nanmean(errs)), 3),
+                full_kicks=dict(n=int((~filt).sum()), max_abs_err_ms=round(float(np.nanmax(np.abs(errs[~filt]))), 3)),
+                low_passed_kicks=dict(n=int(filt.sum()), max_abs_err_ms=round(float(np.nanmax(np.abs(errs[filt]))), 3),
+                                      note='intro muffle, heartbeat (150 Hz) and the build opening: slow attacks'),
                 per_bar_counts_match=bool(all(
                     sum(1 for e in song.ev['kick'] if e[3] == b) == sum(1 for o in on if T.t(b) - 0.01 <= o < T.t(b + 1) - 0.01)
                     for b in range(song.bars))))
@@ -3313,15 +3434,31 @@ def main():
     ap.add_argument('--score', default=str(SCORE_PATH))
     ap.add_argument('--timing', help='timing.json path (default: <stems>/timing.json)')
     ap.add_argument('--no-verify', action='store_true')
+    ap.add_argument('--verify-only', action='store_true',
+                    help='re-run the verification (and rewrite timing.json) from <stems>/state.pkl and the written WAV/MP3')
     ap.add_argument('--no-stems', action='store_true')
     ap.add_argument('--ref-lufs', type=float, default=-7.6, help='short-term loudness of the final chorus (the arc reference)')
-    ap.add_argument('--ceiling', type=float, default=-1.5, help='start true-peak ceiling, dBTP')
+    ap.add_argument('--ceiling', type=float, default=-2.1, help='start true-peak ceiling, dBTP')
     args = ap.parse_args()
     wav = Path(args.wav)
     wav.parent.mkdir(parents=True, exist_ok=True)
     out_dir = Path(args.stems) if args.stems else wav.parent
     out_dir.mkdir(parents=True, exist_ok=True)
+    if args.verify_only:
+        st_ = pickle.loads((out_dir / 'state.pkl').read_bytes())
+        song = Song(st_['S'], out_dir)
+        for k in ('timing', 'presence', 'vox_layers', 'master_gain', 'ceiling'):
+            setattr(song, k, st_[k])
+        song.stems['kick'] = st_['kick']
+        mixer = SimpleNamespace(stats=st_['stats'], gap_info=st_['gap_info'], monitor_spans=st_['monitor_spans'])
+        arc = dict(st_['arc'], units=arc_units(song))
+        y = wavfile.read(wav)[1].T.astype(float)
+        report(song, mixer, y, arc, Path(args.mp3) if args.mp3 else None, out_dir, args)
+        return
     score = load_score(args.score)
+    missing = [k for k in ('arrangement', 'gaps', 'bass', 'riff', 'filters') if k not in score]
+    if missing:
+        raise SystemExit(f'{args.score} is not a full-version score (no {", ".join(missing)}): pass --score <full score.js>')
     song = Song(score, out_dir)
     log(f"score {args.score}: {score['bpm']} BPM, {score['bars']} bars, {song.N} samples ({song.N / SR:.6f} s)")
     mixer = Mixer(song)
@@ -3349,7 +3486,7 @@ def main():
             break
         # lossy coding adds inter-sample peaks: lower the ceiling so the WAV and the MP3 stay the same master
         ceiling -= tpm + 1.0 + 0.08
-        y, arc = master_arc(song, glued, ceiling, args.ref_lufs, iters=2, v=arc['v'], gain=arc['gain'])
+        y, arc = master_arc(song, glued, ceiling, args.ref_lufs, iters=5, v=arc['v'], gain=arc['gain'])
     song.ceiling = ceiling
     song.master_gain = pre * arc['gain']
     log('wrote', wav, mp3 or '')
@@ -3357,6 +3494,11 @@ def main():
     tj = timing_json(song, mixer, y.shape[-1] / SR)
     tpath.write_text(json.dumps(tj, indent=1, ensure_ascii=False, default=float))
     log('timing', tpath)
+    (out_dir / 'state.pkl').write_bytes(pickle.dumps(dict(
+        S=score, timing=song.timing, presence=song.presence, vox_layers=song.vox_layers, kick=song.stems['kick'],
+        master_gain=song.master_gain, ceiling=song.ceiling, stats=mixer.stats, gap_info=mixer.gap_info,
+        monitor_spans=mixer.monitor_spans, arc=dict(v=arc['v'], gain=arc['gain'], meas=arc['meas'], hist=arc['hist'],
+                                                    err=arc['err']))))
     if not args.no_stems:
         sd = out_dir / 'stems'
         sd.mkdir(exist_ok=True)
@@ -3365,6 +3507,15 @@ def main():
         images(song, mixer, y, out_dir)
         log('stems and images in', out_dir)
     if not args.no_verify:
+        report(song, mixer, y, arc, mp3, out_dir, args)
+    log('done')
+
+
+def report(song, mixer, y, arc, mp3, out_dir, args):
+    if args.verify_only:
+        tpath = Path(args.timing) if args.timing else out_dir / 'timing.json'
+        tpath.write_text(json.dumps(timing_json(song, mixer, y.shape[-1] / SR), indent=1, ensure_ascii=False, default=float))
+    if True:
         rep = verify(song, mixer, y, arc, mp3, out_dir)
         (out_dir / 'report.json').write_text(json.dumps(rep, indent=1, default=float, ensure_ascii=False))
         for k, v in rep.items():
@@ -3379,7 +3530,6 @@ def main():
             print('   ', r)
         bad = [l for l in rep['vocal_lines'] if not l['present']]
         print('vocal lines missing:', bad if bad else 'none')
-    log('done')
 
 
 if __name__ == '__main__':

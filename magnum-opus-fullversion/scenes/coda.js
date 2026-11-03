@@ -7,7 +7,8 @@
 // part from the second beat), a last glint crosses the cornea, then the eye slowly closes and the
 // picture fades to black just before the end. Every knob is a uniform, so one program serves every
 // cue. Without a cue list in the score the file places the shot at its 30 s window (end of file).
-// The eye GLSL between the EYE markers is identical in nigredo.js.
+// The eye GLSL between the EYE markers is identical in nigredo.js (and zoomback.js; see nigredo.js for
+// its anti-strobe input uAS).
 (() => {
   const BEAT = MO.BEAT;
 
@@ -66,6 +67,9 @@ uniform vec2  uLook;    // iris offset (gaze, tremble)
 uniform float uAura;    // flame aura strength
 uniform float uHi;      // anime cornea highlights 0..1
 uniform float uSun;     // pupil fire 0..1: 0 the black sun, 1 the white-hot sun (unset = 0 in nigredo)
+uniform vec3  uAS;      // anti-strobe (spec 7.3 rule 1), the eye's motion per 1/30 s: x = |d ln zoom| (zoom about
+                        // EY_IC), y = |drift| in eye units (camera + gaze), z = |d spin| (radians). Linework that
+                        // would cross a pixel faster fades to its average coverage (moAntiStrobe). 0 = still.
 
 const vec2  EY_IC = vec2(0.0, 0.03);
 const float EY_R  = 0.40;
@@ -120,6 +124,12 @@ float ey_lam(vec2 e) {
 vec3 ey_iris(vec2 q, float pe) {
   float r = length(q), rr = max(r, 0.03);
   float a = atan(q.y, q.x);
+  // anti-strobe: fibres crossing this pixel per 1/30 s. The zoom slides the wavy fibres sideways (bounds of
+  // their slope along r), the drift and the spin carry them across; fast fibres fade to their average.
+  float mzr = r * uAS.x, mdr = 2.5 * uAS.y / rr;
+  float as1 = moAntiStrobe(3.2 * mzr + 14.3 * (mdr + uAS.z));
+  float as2 = moAntiStrobe(15.5 * mzr + 23.9 * (mdr + 0.7 * uAS.z));
+  float as3 = moAntiStrobe(6.4 * mzr + 5.7 * (mdr + 0.7 * uAS.z));
   float rp = 0.33 * uPupil;
   float front = mix(rp - 0.02, 1.35, uIgnite);
   float lit = smoothstep(front + 0.01, front - 0.20, r);
@@ -134,20 +144,25 @@ vec3 ey_iris(vec2 q, float pe) {
 
   // pupillary zone: dense straight fibres (a corona around the pupil)
   float v1 = a1 / TAU * 90.0 + 0.20 * sin(r * 16.0 + a1 * 6.0);
-  float f1 = ey_lines(v1, 90.0 / (TAU * rr) * pe, 0.6) * inner * smoothstep(rp, rp + 0.05, r);
+  float fw1 = 90.0 / (TAU * rr) * pe, m1 = inner * smoothstep(rp, rp + 0.05, r);
+  float f1 = ey_lines(v1, fw1, 0.6) * inner * smoothstep(rp, rp + 0.05, r) * as1;
   float h1 = hash11(floor(v1 + 0.5) + 11.0);
   col += mix(eyVerd, eyBone, 0.15 * h1) * f1 * (0.30 + 0.55 * h1) * lit;
+  col += mix(eyVerd, eyBone, 0.075) * 0.575 * min(1.0, 1.2 * fw1) * m1 * (1.0 - as1) * lit;
   // ciliary zone: fine wavy fibres in beaded segments
   float ci = (1.0 - inner) * smoothstep(0.995, 0.93, r);
   float v2 = (a2 + 0.06 * sin(a2 * 8.0 + r * 10.0) + 0.05 * (r - rc)) / TAU * 150.0;
-  float f2 = ey_lines(v2, 150.0 / (TAU * rr) * pe, 0.55) * ci;
+  float fw2 = 150.0 / (TAU * rr) * pe;
+  float f2 = ey_lines(v2, fw2, 0.55) * ci * as2;
   float h2 = hash11(floor(v2 + 0.5) + 3.0);
   float seg = 0.55 + 0.45 * sin(r * 34.0 + h2 * TAU);
   col += mix(eyVio, eyBone, 0.10 * h2) * f2 * (0.25 + 0.45 * h2) * seg * lit;
   // bold trabeculae
   float v3 = (a2 + 0.16 * sin(r * 7.0 + a2 * 3.0)) / TAU * 36.0;
-  float f3 = ey_lines(v3, 36.0 / (TAU * rr) * pe, 1.1) * ci;
+  float fw3 = 36.0 / (TAU * rr) * pe;
+  float f3 = ey_lines(v3, fw3, 1.1) * ci * as3;
   col += mix(eyVio, eyVerd, 0.5) * f3 * 0.55 * lit;
+  col += (mix(eyVio, eyBone, 0.05) * 0.26 * min(1.0, 1.1 * fw2) * (1.0 - as2) + mix(eyVio, eyVerd, 0.5) * 0.55 * min(1.0, 2.2 * fw3) * (1.0 - as3)) * ci * lit;
 
   // crypts: dark lenses with bright outlines
   {
@@ -233,6 +248,12 @@ vec3 ey_eye(vec3 bg, vec2 e, float pe, float t) {
     float ln = ey_lines(u, fw, 0.55);
     float idx = floor(u + 0.5);
     float major = mod(idx, 4.0) < 0.5 ? 0.75 : 0.20;
+    // anti-strobe: lines crossing this pixel per 1/30 s (zoom about the eye, drift); the fine lines fade to
+    // their average coverage, the major ones (every 4th line, crossing 4x less often) at 4x the speed
+    float cr = fw * (length(e - EY_IC) * uAS.x + uAS.y) / pe;
+    float asc = moAntiStrobe(major > 0.5 ? 0.25 * cr : cr);
+    ln = ln * asc + min(1.0, 1.1 * fw) * (1.0 - asc);
+    major = major * asc + 0.3375 * (1.0 - asc);
     float lf = mix(1.0, 5.5, uLines);
     float reveal = smoothstep(lf, lf - 0.25, lam);
     float lead = ey_st(lam - lf + 0.1, fwidth(lam), 0.8) * step(0.001, uLines) * (1.0 - uLines);
@@ -335,6 +356,8 @@ uniform float uBlaze;  // the Rubedo blaze around the iris at the cut (the shock
 uniform float uLow;    // dims the lower frame for the logo
 uniform float uTing;   // a last sparkle as the lids meet
 uniform float uColdK;  // palette knob (1 - params.gold): 0 rubedo .. 1 the nigredo grade
+uniform vec2  uRC;     // the ground's and the blaze's ray centre: held where the hit lands, so the 16 rays do
+                       // not sweep across the crimson frame as the eye rises (spec 7.3 rules 1 and 6)
 // the palette knob's grade: a colour matrix fitted (for hue, scaled up for brightness) so the rubedo
 // palette lands on the nigredo one: crimson -> violet, amber -> teal, gold -> pale verdigris. Column-major.
 const mat3 EY_COLD = mat3(0.430, 0.264, 0.613,  -0.381, 1.032, 0.296,  1.826, -0.419, -0.120);
@@ -347,8 +370,9 @@ void main() {
   float t = uTime;
   // ground: crimson heat with slow Tarot sun rays, continuing the Rubedo mandala; it sinks to black
   vec2 d = p - uPC;
-  float r = length(d), a = atan(d.y, d.x);
-  float ray = 0.5 + 0.5 * cos(a * 16.0 + 0.25 * t);
+  float r = length(d);
+  vec2 dr = p - uRC;
+  float ray = 0.5 + 0.5 * cos(atan(dr.y, dr.x) * 16.0 + 0.25 * t);
   // the final hit's shockwave sweeps the heat outward: ahead of it (swept = 1) the field still
   // burns, behind it the ground is already dark (no red coming back after the sweep)
   float swept = smoothstep(uRing - 0.05, uRing + 0.30, r);
@@ -394,16 +418,41 @@ void main() {
   //   blaze      0..1 (1)      the crimson blaze and ground at the start (rubedo's dive); 0 starts on black
   //   close      0/1 (1)       the eye closes and the picture fades to black at the end; 0 holds it open
   //   low        0..1 (1)      dims the lower frame (for the overlay's logo or titles)
-  //   spin       -2..2 (0)     keeps the iris rings turning (radians per second)
+  //   spin       -2..2 (0)     keeps the iris rings turning (radians per second; above ~0.1 the fine
+  //                            fibres stay soft, see Safety)
   //   zoom       0.3..3 (1)    camera zoom
   //   x, y       -1..1 (0)     eye screen position (added to its rise into the upper frame)
   //   speed      0..16 (1)     ambient motion rate (flame flicker, line wobble, the ground's rays)
   //   seed       any (0)       phase of that motion
   //   offsetBeats 0..4 (0)     start partway (2 = the eye already revealed)
   // Coupling: its first frame matches rubedo's last (the dive into a red-gold iris with a black pupil
-  //   in a crimson blaze: zoom 3.4, pupil 0.73); the overlay's logo sits in the dimmed lower frame from
-  //   the second beat; with close it ends on black.
+  //   in a crimson blaze: zoom 3.4, pupil 0.73) and, in the full version, zoomback.set's last: the numbers
+  //   live in MO.MATCH.codaEye (defined here or by zoomback.js, whichever loads first) and this shot reads
+  //   them; the overlay's logo sits in the dimmed lower frame from the second beat; with close it ends on
+  //   black.
+  // Safety (7.3 rule 1): the iris settles from 0.7 rad/s after the hit (the 30 s piece: 1.35 rad/s, which
+  //   swept the 22 crypts and the rosette across a pixel 3-6 times a second); the crimson ground's and the
+  //   blaze's 16 rays stay centred where the hit lands (uRC) instead of sliding with the rising eye, which
+  //   flickered the saturated red field (rule 6). uAS carries the pull-back (x4.25 in 2 beats), the eye's
+  //   rise and the iris's spin (plus params.spin) per 1/30 s, measured one frame back, so the first frame is
+  //   still and matches the shot before. Reduced mode draws no shockwave ring (passing over the saturated
+  //   crimson field it dips and restores the red: a red flash).
+  // Red (rule 6, measured with zoomback.set before it): the score's warm flash on the hit over the crimson
+  //   frame is a red flash by itself (amount 0.45; at 0.11 it is not); the sweep that clears the crimson
+  //   blaze off the eye is one more red transition, so the second after the hit holds 1.5-2 red flashes in
+  //   normal mode and 0-0.5 in reduced. While they move fast the contour lines and the iris fibres
+  //   fade to their average glow and sharpen again as the eye settles (about 1.2 s after the hit). spin
+  //   above about 0.1 rad/s keeps the fine ciliary fibres partly soft for the whole hold. The shockwave ring
+  //   is x0.4 in reduced mode; the lids close once, slowly (0.35 s): not a blink.
   // Cost: as in the 30 s piece (one shader; about 60 ms per 640x360 frame on SwiftShader).
+  // coda.eye's first frame, shared through MO.MATCH with zoomback.set, whose pull-back settles on it (spec
+  // 4.1 rule 9: the cut 99.4 -> 100.1). Whoever loads first defines it; nobody overrides it. zoom: screen
+  // units per eye unit (the iris, 0.40, at 1.36: rubedo's heart iris, MO.MATCH.heartIris); pupil: the pupil
+  // factor (0.33 x 0.73 = 0.24 of the iris); pc: the iris centre; spin 0; the blaze and the crimson ground
+  // at full strength; its post settings.
+  MO.MATCH = MO.MATCH || {};
+  MO.MATCH.codaEye = MO.MATCH.codaEye || { zoom: 3.4, pupil: 0.73, pc: [0, 0], spin: 0, blaze: 1, bloom: 0.28, bloomThreshold: 0.9, vignette: 0.5 };
+  const M = MO.MATCH.codaEye;
   const N_T0 = MO.barTime(16);                // 28.235: the final hit in the 30 s piece
   const N_REVEAL = N_T0 + 2 * BEAT;           // 29.118: the whole eye is in view
   // the first hit or fx flash / impact of the score in [a, b], or null
@@ -431,11 +480,17 @@ void main() {
     // which the slit already reads as shut) spans about 0.35 s instead of 5 frames
     const C_FROM = Math.min(Math.max(R_REVEAL + 0.05, K.E(N_REVEAL + 0.05)), T_CLOSED - 0.25);
     const F0 = K.E(29.45), F1 = K.E(29.80), L1 = K.E(29.85), Z1 = K.E(30);
-    const uniforms = (t) => {
+    // the camera (zoom, the eye's rise) and the iris spin at time t
+    const cam = (t) => {
       const h = th(t), mt = K.M(t), a = Math.max(0, h - T0);
       const k = MO.clamp((h - T0) / (T_REVEAL - T0));
       const pull = MO.easeInOut(MO.remap(h, T0 + 0.08, T_REVEAL));
-      const Z = Math.exp(MO.mix(Math.log(3.4), Math.log(0.80), pull)) * (1 - 0.06 * MO.remap(t, R_REVEAL, Z1)) * zoom;
+      const Z = Math.exp(MO.mix(Math.log(M.zoom), Math.log(0.80), pull)) * (1 - 0.06 * MO.remap(t, R_REVEAL, Z1)) * zoom;
+      return { Z, y: MO.mix(M.pc[1], 0.30, MO.smooth(k)) + ey, spin: 0.9 * (1 - Math.exp(-a * 0.78)) + spin * (mt - T0) };   // settles from 0.7 rad/s (7.3 rule 1: the crypts and the rosette)
+    };
+    const uniforms = (t) => {
+      const h = th(t), mt = K.M(t), a = Math.max(0, h - T0);
+      const c = cam(t), c0 = cam(t - 1 / 30), Z = c.Z, c0y = cam(T0).y;
       // lead to gold: at the cut the pupil is rubedo's black disc (0.24 of the iris radius); during
       // the pull-back it ignites from the rim inward and swells into the white-hot sun
       const sun = MO.smooth(MO.remap(h, T0 + 0.12, T0 + 0.72));
@@ -444,12 +499,14 @@ void main() {
       const u = {
         uOpen: (1 - close) * settle, uIgnite: 1, uLines: MO.mix(1, 0.35, MO.easeIn(MO.remap(t, R_REVEAL + 0.2, L1))),
         uGlint: MO.remap(h, T_REVEAL - 0.30, T_REVEAL + 0.02), uGold: gold, uColdK: 1 - gold, uSun: sun * ignite,
-        uSpin: 0.9 * (1 - Math.exp(-a * 1.5)) + spin * (mt - T0), uPupil: MO.mix(0.73, 1.0, sun),
+        uSpin: c.spin, uPupil: MO.mix(M.pupil, 1.0, sun),
         // the cornea highlights arrive with the eye, not on rubedo's iris at the cut
         uLook: [0, 0], uAura: 1.0, uHi: (1 - close) * MO.smooth(MO.remap(h, T0 + 0.25, T0 + 0.7)),
-        uZ: Z, uPC: [ex, MO.mix(0.0, 0.30, MO.smooth(k)) + ey],
+        uZ: Z, uPC: [M.pc[0] + ex, c.y], uRC: [M.pc[0] + ex, c0y],
+        // anti-strobe (7.3 rule 1): the pull back, the rise and the spin per 1/30 s (the first frame is still)
+        uAS: [Math.abs(Math.log(c.Z / c0.Z)), Math.abs(c.y - c0.y) / Z, Math.abs(c.spin - c0.spin)],
         uFade: closeOn ? 1 - MO.smooth(MO.remap(t, F0, F1)) : 1,
-        uRing: 0.15 + (h - T0) * 3.0, uRingA: h < T0 ? 0 : Math.exp(-(h - T0) / 0.35) * (MO.reduced ? 0.4 : 1),
+        uRing: 0.15 + (h - T0) * 3.0, uRingA: h < T0 || MO.reduced ? 0 : Math.exp(-(h - T0) / 0.35),   // reduced: no ring (it dips the crimson field's red: a red flash)
         uBlaze: (1 - MO.smooth(MO.remap(h, T0 + 0.5, T0 + 0.9))) * blaze,
         uTing: closeOn ? Math.sin(Math.PI * MO.remap(t, T_CLOSED - 0.14, T_CLOSED + 0.06)) : 0,
         uBgA: (1 - MO.smooth(MO.remap(h, T0 + 0.2, T_REVEAL))) * blaze,
@@ -459,8 +516,8 @@ void main() {
       return u;
     };
     // bloom eases in with the pupil's fire so the first frames keep rubedo's contrast
-    const bloom = (t) => 0.28 + 0.12 * MO.smooth(MO.remap(th(t), T0 + 0.2, T0 + 0.7));
-    MO.scene({ id: K.ident ? 'coda' : 'coda.eye#' + cue.index, fs: FS, uniforms, bloom, bloomThreshold: 0.9, vignette: 0.5 });
+    const bloom = (t) => M.bloom + 0.12 * MO.smooth(MO.remap(th(t), T0 + 0.2, T0 + 0.7));
+    MO.scene({ id: K.ident ? 'coda' : 'coda.eye#' + cue.index, fs: FS, uniforms, bloom, bloomThreshold: M.bloomThreshold, vignette: M.vignette });
   });
 
   // without a cue list in the score (the 30 s piece) the shot takes its 30 s window itself

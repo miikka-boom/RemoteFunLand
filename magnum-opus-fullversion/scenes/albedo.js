@@ -13,6 +13,19 @@
 //                                       white-gold light; on the last clap it inhales into the eye.
 // Without a cue list in the score the file places the five shots at their 30 s windows (end of file).
 //
+// Safety (spec 7.3, 7.5):
+// - rule 1 (anti-strobe), measured per 1/30 s: the body's repeated linework (albIso: topographic lines,
+//   flame contours, hair, brain, moon rings, pillar flutes; the ribs and vertebrae) fades to its average
+//   cover where the picture moves fast (uMoveV: the 2D camera's zoom, roll and pan without the kick
+//   pulse, the bodies' travel and scale); the lattice fades the same way when its whole image slides
+//   (uLatV: a4's lens shift, a3b's dolly) and its rungs blur when the flow races (uFlowV). Still = no-op.
+// - rule 3: the lattice's eyes never blink (hundreds are on screen; the 30 s piece closed half of them on
+//   every open hat).
+// - rule 5: the lattice's kick pulse is +15 % of its rest brightness (+25 % from the key change, the final
+//   chorus; x0.3 reduced), down from +114 %; its colour shift scales with it.
+// - reduced: a4's speed lines freeze; the nerves' kick impulses are off; a4's corridor is dimmer; the merge's
+//   flash, the clap ripple, the hat aura swell, a2's sway and the kick zoom pulse are smaller.
+//
 // The luminous body is a self-contained GLSL block (BODY below, exported as
 // window.ALBEDO_BODY_GLSL) so the citrinitas scene can reuse it: build an AlbBody with
 // albBodyDefault(), set its fields and call albedoBody(). See the comments in the block.
@@ -31,7 +44,8 @@
 // sdBody). Layers: flame aura (fine contour lines licking outward), skin line, topographic
 // body lines (iso-lines of the body SDF), x-ray skeleton, nervous system with impulses,
 // seven chakra mandalas (unlit .. lit), eyes.
-// Optional features, enabled by #define before this block:
+// Optional features, enabled by #define before this block (the scene below also has ALB_MOUNTAIN,
+// ALB_PILLARS, ALB_MIRROR, ALB_MANDORLA, ALB_RIPPLE, ALB_SHOCK, ALB_BURST and ALB_BURN):
 //   ALB_SHADOW  the ink Shadow (B.shadow / B.shadowEdge) and its glowing red-ringed eyes
 //   ALB_HAIR    the Anima's long hair and crescent crown (B.hair)
 //   ALB_EYE3    the third eye on the brow (B.eye3)
@@ -118,14 +132,22 @@ float albBodySDF(vec2 p, float fem, AlbJoints j) {
   return d;
 }
 
+// anti-strobe input: the picture's speed at the pixel being drawn, in pixels per 1/30 s (the scene sets it
+// before albedoBody; 0 = still, and then every line below renders exactly as without it)
+float albSpd = 0.0, albDim = 1.0;   // albDim: the motion-blur dimming of a ~1.4 px line at that speed
 // iso-lines of a field: v = field / spacing, pv = one pixel in those units; fades out when
 // the lines get denser than ~3 px so they never shimmer
+// the shimmer in time as well (spec 7.3 rule 1): albSpd (above) is the picture's speed at the pixel being
+// drawn; lines that would cross a pixel more than ~2 times a second fade to their average coverage
 float albIso(float v, float pv, float widthPx) {
   float dd = abs(fract(v + 0.5) - 0.5) / max(pv, 1e-6);
-  return (1.0 - smoothstep(0.5 * widthPx - 0.5, 0.5 * widthPx + 0.8, dd)) * smoothstep(2.5, 5.0, 1.0 / max(pv, 1e-6));
+  float sp = smoothstep(2.5, 5.0, 1.0 / max(pv, 1e-6)), as = moAntiStrobe(pv * albSpd);
+  return (1.0 - smoothstep(0.5 * widthPx - 0.5, 0.5 * widthPx + 0.8, dd)) * sp * as + min(1.0, (widthPx + 0.3) * pv) * sp * (1.0 - as);
 }
-// an anti-aliased line along an SDF's zero set, widthPx pixels wide (aa = one pixel)
-float albLine(float d, float aa, float widthPx) { return 1.0 - smoothstep(0.5 * widthPx * aa - 0.5 * aa, 0.5 * widthPx * aa + 0.8 * aa, abs(d)); }
+// an anti-aliased line along an SDF's zero set, widthPx pixels wide (aa = one pixel). Faster than 2 px per
+// 1/30 s it dims like a motion-blurred line (albDim: its width over the distance it travels), so the
+// outlines of a figure rushing past do not flash pixel by pixel (spec 7.3 rule 1); exact no-op when slow.
+float albLine(float d, float aa, float widthPx) { return (1.0 - smoothstep(0.5 * widthPx * aa - 0.5 * aa, 0.5 * widthPx * aa + 0.8 * aa, abs(d))) * albDim; }
 // cheap atan2 (|error| < 0.005 rad): the builtin is slow on SwiftShader
 float albAtan(float y, float x) {
   float ax = abs(x), ay = abs(y);
@@ -299,8 +321,10 @@ vec4 albedoBody(vec2 w, AlbBody B, float pxw, float ck[7]) {
     float topo = albIso(dep / 0.019, aa / 0.019, 1.0) * exp(-dep * 9.0) * step(0.006, dep);
     col += mix(tint * 0.28, VIOLET * 0.10, sh) * topo * B.lines * rv;
     // skeleton
-    float bone = albLine(albBones(q, j), aa, 1.0) * inside;
+    float asB = moAntiStrobe(aa / 0.031 * albSpd);                 // the ribs and vertebrae repeat every ~0.03
+    float bone = albLine(albBones(q, j), aa, 1.0) * inside * asB;
     col += mix(mix(vec3(0.70, 0.76, 1.0), tint, 0.4) * 0.55, VIOLET * 0.09, sh) * bone * B.lines * rv;
+    col += mix(mix(vec3(0.70, 0.76, 1.0), tint, 0.4) * 0.55, VIOLET * 0.09, sh) * min(1.0, 0.7 * aa / 0.031) * inside * (1.0 - asB) * B.lines * rv;
     // brain: gyri as wrinkled iso-lines inside the cranium
     vec2 br = q - vec2(0.0, 0.89);
     float brm = (1.0 - smoothstep(-0.005, 0.0, sdEllipse(br, vec2(0.074, 0.07)))) * step(-0.035, br.y);
@@ -365,7 +389,6 @@ uniform vec4  uCam;       // 2D camera for bodies / moon / pillars: xy centre, z
 uniform float uFlow;      // lattice flow (depth offset)
 uniform float uWalls;     // 1 = corridor (walls + ceiling), 0 = open floor under the sky
 uniform float uLatI;      // lattice brightness
-uniform float uHatN;      // open-hat count (alternating eye blinks)
 uniform float uKickAge;   // seconds since the last kick
 uniform float uSplit;     // 0..1 the left half of the world turns to the Shadow's palette
 uniform vec4  uMoon;      // xy, radius, intensity (2D scene units)
@@ -397,6 +420,16 @@ uniform vec2  uTurn;      // knob: whole-frame roll as (cos, sin) of the angle (
 uniform float uPalOn;     // knob: 1 = apply the palette matrix uPalM (0 = the moon palette as is)
 uniform mat3  uPalM;      // knob: palette colour matrix
 uniform float uSeedL;     // knob: reshuffles which lattice cells hold an eye
+uniform float uLatV;      // anti-strobe: how far the lattice image slides per 1/30 s (lens shift, dolly; units of p)
+uniform float uKickL;     // the lattice's kick pulse (spec 7.3 rule 5: +15 % of its rest brightness, +25 % in the
+                          // final chorus, x0.3 reduced; the 30 s piece pulsed it +114 %)
+uniform vec2  uMoveV;     // anti-strobe: the 2D picture's motion per 1/30 s: x = |d ln zoom| + |d roll| (+ the
+                          // bodies' scale) about the centre, y = its pan and the bodies' travel (units of p)
+#ifdef ALB_BURN
+uniform vec4  uBurn;      // a1 burn knob: x = the burn front in body units (ink above it; -9 = off), y = the
+                          // world split's front in screen y (the Shadow's half recedes above it; -9 = off),
+                          // z = the embers' clock (s), w = the embers and the front's glow (0 = off)
+#endif
 
 const float FOC = 1.75;
 const float MZ = 8.0;       // mountain centre depth
@@ -463,16 +496,23 @@ vec3 albLattice(vec2 p, float walls) {
   // ~1/3 of a cell per frame they would strobe (wagon wheel), so they blur into their average cover.
   float mb = smoothstep(0.2, 0.55, uFlowV);
   float ln = max(1.0 - smoothstep(0.15, 1.1, bd.x), mix(1.0 - smoothstep(0.15, 1.1, bd.y), min(1.25 * fw.y, 1.0), mb));
+  // anti-strobe (7.3 rule 1): when the whole lattice image slides (uLatV), lines that would cross a pixel
+  // more than ~2 times a second fade to their average cover; the cell eyes (finer) fade out sooner
+  float slide = pxc * uLatV / (px() / uPush), asL = moAntiStrobe(slide), asE = moAntiStrobe(3.0 * slide);
+  ln = ln * asL + min(1.0, 1.25 * (fw.x + fw.y)) * (1.0 - asL);
   float fade = smoothstep(0.40, 0.12, pxc);
   float fog = exp(-tt * 0.085);
   // kick pulse: a bright square ring racing away down the corridor
   float ringZ = P.z - (1.2 + uKickAge * 13.0);
   float ring = exp(-ringZ * ringZ * 2.0) * exp(-uKickAge * 2.5) * step(face, 1.5) * walls;
   float side = smoothstep(0.06, -0.06, p.x) * uSplit;          // the Shadow's half of the world
-  vec3 lineCol = mix(vec3(0.16, 0.36, 1.0), vec3(0.55, 0.78, 1.0), 0.25 + 0.4 * uKick);
+#ifdef ALB_BURN
+  side *= smoothstep(uBurn.y - 0.15, uBurn.y + 0.15, p.y);       // burn: it recedes upward with the front
+#endif
+  vec3 lineCol = mix(vec3(0.16, 0.36, 1.0), vec3(0.55, 0.78, 1.0), 0.25 + 0.5 * uKickL * uKick);
   lineCol = mix(lineCol, vec3(0.30, 0.05, 0.62), side);
   float isMount = step(1.5, face);
-  float lineI = mix(0.26, 1.0, isMount) * (0.7 + 0.8 * uKick) + 2.0 * ring;
+  float lineI = mix(0.26, 1.0, isMount) * (0.7 + uKickL * uKick) + 2.0 * ring;
   vec3 col = lineCol * ln * fade * fog * lineI;
   // an eye in every cell (walls, floor, mountain risers), inside a ring
   vec2 f = fract(c) - 0.5;
@@ -480,15 +520,15 @@ vec3 albLattice(vec2 p, float walls) {
   float hasEye = max(step(hash21(cid + vec2(face * 17.0, 3.0 + uSeedL)), 0.38), isMount);
   float eyeFade = smoothstep(0.07, 0.035, pxc) * smoothstep(0.009, 0.016, pxc) * fog * (1.0 - step(2.5, face)) * hasEye * (1.0 - 0.7 * mb);
   vec2 e = face == 0.0 ? vec2(f.y, f.x) : f;                   // (along, across) in the plane
-  float blink = mod(cid.x + cid.y + uHatN, 2.0) < 0.5 ? smoothstep(0.0, 0.45, uOpenHat) : 0.0;
-  float open = 1.0 - 0.92 * blink * (1.0 - uReduced * 0.7);
-  float lidS = sdVesica(vec2(e.y, e.x), max(0.10 * open, 0.004), 0.23);
+  // the lattice eyes stay open: hundreds are on screen, so by spec 7.3 rule 3 they never blink (the
+  // 30 s piece closed half of them on every open hat)
+  float lidS = sdVesica(vec2(e.y, e.x), 0.10, 0.23);
   float er = length(e);
   float inEye = fill(lidS, pxc);
   float iris = (albLine(er - 0.07, pxc, 1.1) + fill(er - 0.028, pxc)) * inEye;
   float torus = albLine(er - 0.36, pxc, 1.0) * 0.45 + albLine(er - 0.405, pxc, 0.8) * 0.2;
   vec3 eyeCol = mix(vec3(0.50, 0.80, 1.0), vec3(0.75, 0.08, 0.30), side);
-  col += (eyeCol * (albLine(lidS, pxc, 1.2) * 0.4 + iris * 0.75 + inEye * 0.025) + lineCol * torus * 0.45) * eyeFade * (0.5 + 0.6 * uKick + 0.6 * isMount);
+  col += (eyeCol * (albLine(lidS, pxc, 1.2) * 0.4 + iris * 0.75 + inEye * 0.025) + lineCol * torus * 0.45) * eyeFade * asE * (0.5 + 0.75 * uKickL * uKick + 0.6 * isMount);
   // A1: the lattice lights up behind a wave racing away from the camera (dark ground for the reveal)
   col *= 1.0 - 0.9 * smoothstep(uLatR - 3.0, uLatR, P.z);
   // mountain faces: dark lacquer, the treads lit by the moon
@@ -629,6 +669,8 @@ void main() {
   vec2 p = uvCentered(gl_FragCoord.xy) / uPush;
   if (uTurn.y != 0.0) p = mat2(uTurn.x, -uTurn.y, uTurn.y, uTurn.x) * p;   // roll knob = rot(angle) * p; a uniform branch, free when off
   float PX = px() / uPush;
+  albSpd = (length(p) * uMoveV.x + uMoveV.y) / PX;   // the picture's speed here in px per 1/30 s (anti-strobe)
+  albDim = 2.4 / (2.4 + max(albSpd - 2.0, 0.0));
 #ifdef ALB_RIPPLE
   // the clap ripples the mirror: a water-like wave leaving the central axis
   float rippleCrest = 0.0;
@@ -693,6 +735,25 @@ void main() {
     B.arms = useB ? uBodyB.w : uBodyA.w;
     B.fem = useB ? uBodyB2.x : uBodyA2.x;
     B.shadow = useB ? uBodyB2.z : uBodyA2.y;
+#ifdef ALB_BURN
+    // burn: the ink burns off from the feet up behind a ragged, flickering flame front (ink above it); the
+    // embers shed behind the front drift up and die out. One uniform branch, skipped when burn is off.
+    vec3 burnC = vec3(0.0), burnE = vec3(0.0);
+    if (uBurn.w > 0.0) {
+      vec2 bq = (w - B.pos) / B.scale;
+      float fy = uBurn.x + 0.035 * sin(bq.x * 31.0 + uTime * 9.0) + 0.02 * sin(bq.x * 67.0 - uTime * 13.0);
+      B.shadow *= smoothstep(fy - 0.02, fy + 0.03, bq.y);
+      float lh = smoothstep(0.08, -0.04, bq.x) * step(abs(bq.x), 0.5) * uBurn.w;   // the Shadow's (left) half
+      vec2 eg = vec2(bq.x, bq.y - 0.55 * uBurn.z) * 18.0;
+      vec2 ec = floor(eg), eh = hash22(ec + 7.0);
+      vec2 eo = (eh - 0.5) * 0.7 + vec2(0.12 * sin(uBurn.z * 3.0 + eh.y * 20.0), 0.0);
+      vec2 ed = (fract(eg) - 0.5 - eo) / 18.0;
+      float below = uBurn.x - bq.y;
+      float life = exp(-max(below, 0.0) / 0.35) * step(0.0, below) * step(0.62, eh.x) * step(-1.05, bq.y);
+      burnC = vec3(1.0, 0.78, 0.5) * 1.8 * exp(-dot(ed, ed) / 0.00005) * life * (0.6 + 0.4 * eh.y) * lh;
+      burnE = vec3(1.0, 0.62, 0.30) * 1.2 * exp(-abs(bq.y - fy) / 0.025) * lh;   // the burning edge (x the body's cover)
+    }
+#endif
     B.shadowEdge = uBodyA2.z;
     B.hair = useB ? uBodyB2.y : 0.0;
     B.eyes = useB ? uBodyB2.w : uBodyA3.y;
@@ -701,9 +762,12 @@ void main() {
     B.tint2 = useB ? vec3(0.72, 0.55, 1.0) : vec3(0.50, 0.42, 1.0);
     B.nerveCol = useB ? vec3(0.50, 0.55, 1.7) : vec3(0.22, 0.55, 1.7);
     B.t = uTime;
-    B.pulse = uKickAge * 3.0;
+    B.pulse = uReduced > 0.5 ? -1.0 : uKickAge * 3.0;   // the nerves' kick impulse; off in reduced mode (7.5: kick pump)
     vec4 b = albedoBody(w, B, pxw, ck);
     col = col * (1.0 - b.a) + b.rgb;
+#ifdef ALB_BURN
+    col += burnC + burnE * b.a;
+#endif
   }
 
 #ifdef ALB_SHOCK
@@ -871,13 +935,33 @@ void main() {
   }
 
   // the uniforms of one albedo shot at time t; X holds its cue's anchors (real times) and knobs
+  const LAT_REF = [[0, FLOOR, 4], [0, FLOOR, 20], [2.5, 0.6, 8], [-2.5, 0.6, 8]];
+  // the uniforms at t, plus the picture's motion over the last 1/30 s for the anti-strobe (uMoveV: the 2D
+  // camera without its kick pulse, and the bodies)
   function uniforms(t, X) {
+    const u = state(t, X), v = state(t - 1 / 30, X);
+    const a = u._cam, b = v._cam, za = a[2] * u.uPush, zb = b[2] * v.uPush;
+    const A = u.uBodyA, Ab = v.uBodyA, Bn = u.uBodyB, Bb = v.uBodyB;
+    const dB = Bn[2] > 0 && Bb[2] > 0 ? Math.hypot(Bn[0] - Bb[0], Bn[1] - Bb[1]) : 0;
+    u.uMoveV = [Math.abs(Math.log(za / zb)) + Math.abs(a[3] - b[3]) + Math.abs(Math.log(A[2] / Ab[2])),
+      za * (Math.hypot(a[0] - b[0], a[1] - b[1]) + Math.max(Math.hypot(A[0] - Ab[0], A[1] - Ab[1]), dB)) / u.uPush];
+    // the lattice image's slide: the lens shift and the 3D camera, measured on a few reference points
+    let lat = 0;
+    for (const P of LAT_REF) {
+      const q0 = project(P, u.uRo, u.uTa, u.uVP), q1 = project(P, v.uRo, v.uTa, v.uVP);
+      if (q0[2] > 0.5 && q1[2] > 0.5) lat = Math.max(lat, Math.hypot(q0[0] - q1[0], q0[1] - q1[1]));
+    }
+    u.uLatV = lat;
+    delete u._cam;
+    return u;
+  }
+  function state(t, X) {
     const K = X.K, id = X.id;
     const kick = MO.last('kick', t), kickAge = kick ? t - kick.e.t : 9;
     const clap = MO.last('clap', t), clapAge = clap ? t - clap.e.t : 9;
     const u = {};
     u.uKickAge = kickAge;
-    u.uHatN = MO.count('openHat', t);
+    u.uKickL = X.kickL * (MO.reduced ? 0.3 : 1);
     const flow = flowAt(t, X);
     // its speed in cells per 1/30 s: fast rungs are blurred in the shader instead of strobing
     u.uFlowV = Math.abs(flow - flowAt(t - 1 / 30, X)) / 0.5;
@@ -909,6 +993,16 @@ void main() {
       split = ink;
       mirror = 0.3 * ink;
       u.uMandorla = EO((t - T0) / 0.3) * X.mandorla;
+      let burn = [-9, -9, 0, 0];
+      if (X.burn) {
+        // burn: the 30 s end state (the left half ink, the Shadow's eye open, the world's left half violet)
+        // burns off from the feet up; the front reaches the crown on X.tFire, the world's violet half recedes
+        // upward with it (a travelling front, never a full-frame step), the embers die out after it
+        const kb = C((t - X.tBurn0) / (X.tFire - X.tBurn0)), f = 0.35 * kb + 0.65 * SM(kb);
+        A2 = [0, kb < 1 ? X.inkK : 0, 0, 0]; A3[1] = 1; split = X.inkK; mirror = 0.3 * X.inkK * (1 - kb);   // no ink once burnt
+        burn = [mix(-1.12, 1.18, f), mix(-1.3, 1.35, f), mt - T0, X.inkK * (1 - SM((t - X.tFire) / 0.6))];
+      }
+      u.uBurn = burn;
     } else if (id === 'a2') {
       // A2: the syzygy. Out of the mirror: the Shadow to the left, the Anima to the right.
       const T1 = X.T1, k = (t - T1) / (X.T2 - T1);
@@ -1009,9 +1103,10 @@ void main() {
       converge = Math.max(SM((t - tSelf) / 0.4) * (1 - SM((t - X.t312) / 0.3)), 0.8 * SM(inhale * 2.5)) * X.raysK;
       burst = 0.72 * SM((t - tLight) / (X.tBurst - tLight)) * (1 - 0.45 * SM(inhale)) * X.lightK;
       X.ringT.forEach((ts, i) => { rings[i] = t >= ts ? t - ts : -1; });
-      latI = (1 - 0.5 * burst) * (1 - 0.5 * inhale);
+      latI = (1 - 0.5 * burst) * (1 - 0.5 * inhale) * (MO.reduced ? 0.55 : 1);   // reduced: the corridor dimmer under the rush
     }
 
+    u._cam = cam.slice();
     // kick zoom pulse on the 2D camera only: on the fine lattice lines it would flicker
     cam[2] *= 1 + kickPush * MO.env('kick', t, 0.1) * (MO.reduced ? 0.3 : 1);
     u.uPush = push * X.zoom;
@@ -1039,6 +1134,8 @@ void main() {
     MO.shot('albedo.' + name, (cue) => {
       const K = cueClock(cue, nb0, nb1, headBeats, tailBeats);
       const X = Object.assign({ id: name, K, b0: cue.beat0, b1: cue.beat1 }, knobs(K));
+      const kc = MO.S.keyChange;
+      X.kickL = kc && typeof kc.bar === 'number' && cue.bar0 >= kc.bar ? 0.175 : 0.105;   // rule 5: +25 % in the final chorus
       setup(X, cue, K);
       MO.scene({
         id: K.ident ? legacy : `albedo.${name}#${cue.index}`, fs,
@@ -1071,9 +1168,20 @@ void main() {
   //   the cue; the lattice keeps flowing with the beat, the nerves pulse on the kicks.
   // Params: ink 0..1 (1) how far the ink floods (0 = the body stays luminous, no Shadow);
   //   eyeBeats 0.. (from the vocals) beats after the cue start when the Shadow opens its eye;
-  //   mandorla 0..1 (1) the vesica of darkness behind the figure.
+  //   mandorla 0..1 (1) the vesica of darkness behind the figure;
+  //   burn 0/1 (0) the reverse of the 30 s flood (ALBEDO arrives): the cue starts on the flood's end state
+  //     (the left half ink, the Shadow's red-ringed eye open, the world's left half violet) and the ink burns
+  //     off from the feet up behind a ragged flickering flame front with a burning edge, shedding embers that
+  //     drift up and die out; the front reaches the crown on the first long word (the last word of the first
+  //     vocal line in the cue, "fire"; else 2 beats in), and the world's violet half recedes upward with it
+  //     (a travelling front, never a full-frame step); the Shadow's eye closes as the front passes it; the
+  //     embers fade over 0.6 s after the word. ink scales the starting ink. Stretch: the burn spans the cue
+  //     start to the word; the creep, the lattice and the nerves run on to the cut.
+  //   fireBeats 0.. (from the vocals) with burn: beats after the cue start when the front reaches the crown.
   // Coupling: the lattice drift is zero on the cut, so the lattice runs on into albedo.a2 unbroken.
-  shot('a1', 'albedo-a1', 16, 20, 2.3, 0, ['ALB_SHADOW', 'ALB_MIRROR', 'ALB_MANDORLA'], (X, cue, K) => {
+  // Cost: burn lives in one uniform branch of a1's program only (skipped when off: the 30 s a1 renders
+  //   bit-identically); on, it adds one ember lookup per pixel (a hash, no loop).
+  shot('a1', 'albedo-a1', 16, 20, 2.3, 0, ['ALB_SHADOW', 'ALB_MIRROR', 'ALB_MANDORLA', 'ALB_BURN'], (X, cue, K) => {
     X.T0 = K.S(bt(16)); X.T1 = K.E(bt(20));
     let tEye = K.S(bt(18));
     if (typeof K.P.eyeBeats === 'number') tEye = cue.from + K.P.eyeBeats * BEAT;
@@ -1084,6 +1192,18 @@ void main() {
     const dL = K.d(tEye - bt(18));
     X.tInk = bt(17) + dL; X.tEye = bt(18) + dL;
     X.inkK = K.p('ink', 1, 0, 1); X.mandorla = K.p('mandorla', 1, 0, 1);
+    X.burn = K.p('burn', 0, 0, 1) > 0;
+    if (X.burn) {
+      // the first long word: params.fireBeats, else the last word of the first vocal line in the cue
+      // ("fire"), else 2 beats in
+      let tF = K.S(bt(18));
+      if (typeof K.P.fireBeats === 'number') tF = cue.from + K.P.fireBeats * BEAT;
+      else {
+        const l = firstLine(cue.from, cue.to), w = l && l.words[l.words.length - 1].t;
+        if (w && w > cue.from + 0.3 && w < cue.to - 0.05) tF = w;
+      }
+      X.tBurn0 = cue.from; X.tFire = Math.max(tF, cue.from + 0.2);
+    }
   });
 
   // ALBEDO.A2 "Anima on the right,": the mirror; the Shadow steps out to the left, the Anima to the
