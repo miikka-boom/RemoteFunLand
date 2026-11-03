@@ -773,6 +773,15 @@ void main() {
     B.t = uTime;
     B.pulse = uReduced > 0.5 ? -1.0 : uKickAge * 3.0;   // the nerves' kick impulse; off in reduced mode (7.5: kick pump)
     vec4 b = albedoBody(w, B, pxw, ck);
+#ifdef ALB_BURST
+    // a4's push into the third eye: the raised arms rush out through the lower corners, and their skin,
+    // second-skin and aura lines cross each pixel there several times a second (spec 7.6, 10-degree fields).
+    // Where the picture moves faster than ~4 px (at 360p) per frame the body dissolves like a long exposure;
+    // the centre of the frame (the head and the third eye) always stays sharp. No-op when still.
+    float bodyK = 1.0 - 0.8 * smoothstep(4.0, 10.0, albSpd * 360.0 / uRes.y)
+                            * smoothstep(0.5, 0.95, length(uvCentered(gl_FragCoord.xy)));
+    b *= bodyK;
+#endif
     col = col * (1.0 - b.a) + b.rgb;
 #ifdef ALB_BURN
     burnE *= b.a;
