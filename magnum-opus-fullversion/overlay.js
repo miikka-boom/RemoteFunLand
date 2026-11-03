@@ -330,6 +330,12 @@
   }
   // a fade-in over 3 frames in reduced mode (the inserts and the eyecatch); a hard cut otherwise
   const reducedIn = (t, a) => (MO.reduced ? clamp((t - a) / (3 * FRAME) + 1 / 3) : 1);
+  // reduced: an insert whose hidden shot is pale (citrinitas.c5 under ALBEDO and CITRINITAS) fades in
+  // from black, not over that shot, or its first two frames would flash it (SPEC 7.5)
+  const reducedBlack = (ctx, t, a) => {
+    if (!MO.reduced || t >= a + 3 * FRAME) return;
+    ctx.save(); ctx.globalAlpha = 1; ctx.fillStyle = '#000'; ctx.fillRect(0, 0, VW, 1080); ctx.restore();
+  };
   // window gate with soft edges: in over fin, out over fout (seconds)
   const gate = (t, a, b, fin, fout) => (t < a || t >= b ? 0 : easeOut(remap(t, a, a + fin)) * (1 - MO.smooth(remap(t, b - fout, b))));
   // lyric tokens: the line's own spelling when it splits into as many tokens as there are words
@@ -935,6 +941,7 @@
     const span = (w.b - w.a) / BEAT, ub = (t - w.a) / BEAT;
     const syl = INS_SYL.albedo;
     const sLast = syl[Math.min(2, syl.length - 1)], uL = sLast + 0.18;
+    reducedBlack(ctx, t, w.a);
     ctx.globalAlpha = reducedIn(t, w.a);
     const g = cached('albGround', () => {
       const gg = ctx.createRadialGradient(960, 520, 40, 960, 540, 1150);
@@ -986,6 +993,7 @@
     const span = (w.b - w.a) / BEAT, ub = (t - w.a) / BEAT;
     const syl = INS_SYL.citrinitas;
     const sLatin = syl[Math.min(3, syl.length - 1)];
+    reducedBlack(ctx, t, w.a);
     ctx.globalAlpha = reducedIn(t, w.a);
     ctx.fillStyle = '#c99a2e'; ctx.fillRect(0, 0, VW, 1080);
     // 24 static XIX rays a shade lighter, straight and wavy alternating (nothing flashes)
@@ -1598,7 +1606,12 @@
     const syl = arr(c.syllables).map(([sy, st]) => ({ text: CHOP_TEXT[String(sy).toLowerCase()] || String(sy).toUpperCase(), t: barT(c.bar, st) }));
     const first = syl.length ? syl[0].t : t0;
     const w = within(W_CHOP, first + 1e-4);
-    return w ? { syl, t0: first, t1: Math.min(barT(c.bar + 1), w.b + 0.001), kind: styleOf(stageAt(t0 + 1e-3).id).chrome } : null;
+    // a low, zoomed club angle (bar 10: the ball, the Shadow's head and raised hands fill the upper
+    // third) takes the chops in the free bottom band instead, over the crowd's hands
+    const cu = arr(S.cues).find((q) => q && q.bars && first >= barT(q.bars[0]) && first < barT(q.bars[1]));
+    const fz = cu && cu.shot === 'club.stage' && cu.params && cu.params.frame ? cu.params.frame.zoom : null;
+    const low = typeof fz === 'number' && fz > 1.2;
+    return w ? { syl, t0: first, t1: Math.min(barT(c.bar + 1), w.b + 0.001), kind: styleOf(stageAt(t0 + 1e-3).id).chrome, low } : null;
   }).filter(Boolean);
   const CHOP_PX = 120;
   function chopLayout(ch) {
@@ -1615,7 +1628,7 @@
     if (!ch) return false;
     const out = remap(t, ch.t1 - 3 * FRAME, ch.t1);
     const inWheel = inside(W_WHEEL, t);
-    const base = inWheel ? 648 : 296;                  // in the wheel of trumps' empty hub while it turns (centre y 616)
+    const base = inWheel ? 648 : ch.low ? 900 : 296;   // in the wheel of trumps' empty hub while it turns (centre y 616)
     ctx.save();
     ctx.globalAlpha = 1 - out;
     if (inWheel) { ctx.translate(960, base - 40); ctx.scale(0.6, 0.6); ctx.translate(-960, -(base - 40)); }
@@ -2279,7 +2292,7 @@
     CODA.syl.forEach((k, i) => {
       ctx.strokeStyle = 'rgba(10,4,0,0.75)'; ctx.lineWidth = 6; ctx.fillStyle = 'rgba(236,229,218,0.55)';
       spaced(ctx, k.text, x, y, sp, 'left', 'both');
-      const wu = easeInOut(remap(t, k.t, k.t + k.d));
+      const wu = remap(t, k.t - FRAME, k.t + k.d);       // linear: the fill starts on the word, not 0.3 of the way in
       if (wu > 0) {
         ctx.save();
         ctx.beginPath(); ctx.rect(x - 4, y - 60, (ws[i] + 8) * wu, 90); ctx.clip();
@@ -2296,7 +2309,7 @@
     CODA.jpParts.forEach((p, i) => {
       ctx.strokeStyle = 'rgba(10,4,0,0.75)'; ctx.lineWidth = 5; ctx.fillStyle = 'rgba(236,229,218,0.5)';
       spaced(ctx, p.jp, jx, y + 40, 6, 'left', 'both');
-      const wu = easeInOut(remap(t, p.t, p.t + p.d));
+      const wu = remap(t, p.t - FRAME, p.t + p.d);
       if (wu > 0) { ctx.save(); ctx.beginPath(); ctx.rect(jx - 4, y + 8, (jw[i] + 8) * wu, 46); ctx.clip(); ctx.fillStyle = '#ffd36a'; spaced(ctx, p.jp, jx, y + 40, 6); ctx.restore(); }
       jx += jw[i];
     });
@@ -2452,8 +2465,15 @@
   function drawWheel(ctx, t) {
     const w = W_WHEEL;
     if (!w || t < w.a || t >= w.b || !TRUMPS.length) return false;
-    const u = (t - w.a) / (w.b - w.a);
-    const theta = 21 * (0.3 * u + 0.7 * u * u);         // accelerating: 0 LE MAT on top at the start, XXI at the end
+    const dur = w.b - w.a, u = (t - w.a) / dur;
+    // accelerating: 0 LE MAT on top at the start, XXI at the end (reduced: a steady turn)
+    const theta = MO.reduced ? 21 * u : 21 * (0.3 * u + 0.7 * u * u);
+    // anti-strobe (SPEC 7.3 rule 1): cps = cards passing the top per second (1 at the start, 5.8 at the
+    // end). From about 2 a second the wheel turns into a motion blur instead of a strobe: the cards fade
+    // to their average coverage (a soft annulus under them), they stop swelling at the top, the glow
+    // there holds still and the ribbon holds the wheel's own name. Reduced: blurred from the start.
+    const cps = MO.reduced ? 21 / dur : 21 * (0.3 + 1.4 * u) / dur;
+    const blur = MO.reduced ? 1 : MO.smooth(remap(cps, 1.5, 2.6));
     const col = easeIn(remap(t, w.b - 2 * BEAT, w.b));     // collapses into the club's sun ball
     const fin = easeOut(remap(t, w.a, w.a + 0.35));
     ctx.save();
@@ -2463,24 +2483,49 @@
     ctx.restore();
     const WR = 372;                                        // wheel radius (units)
     const cx = 960, cy = mix(616, 324, col);
-    const scale = mix(1, 0.05, col) * (1 + 0.04 * MO.env('kick', t, 0.1));
+    const scale = mix(1, 0.05, col) * (1 + 0.04 * (1 - blur) * MO.env('kick', t, 0.1));
     ctx.save();
-    ctx.globalAlpha = fin * (1 - col * col);
+    const a0 = fin * (1 - col * col);
+    ctx.globalAlpha = a0;
     ctx.translate(cx, cy); ctx.scale(scale, scale);
+    // the motion blur: the cards' average coverage, a soft cream annulus over the card band (WR -+ 57)
+    if (blur > 0) {
+      const ag = cached('wheelBlur', () => {
+        const g = ctx.createRadialGradient(0, 0, WR - 70, 0, 0, WR + 70);
+        g.addColorStop(0, 'rgba(232,214,172,0)'); g.addColorStop(0.16, 'rgba(232,214,172,0.85)');
+        g.addColorStop(0.5, 'rgba(239,227,196,1)'); g.addColorStop(0.84, 'rgba(232,214,172,0.85)'); g.addColorStop(1, 'rgba(232,214,172,0)');
+        return g;
+      });
+      ctx.globalAlpha = a0 * 0.5 * blur;
+      ctx.fillStyle = ag;
+      ctx.beginPath(); ctx.arc(0, 0, WR + 70, 0, TAU); ctx.arc(0, 0, WR - 70, 0, TAU, true); ctx.fill();
+      // a still glow at 12 o'clock, where the swelling card's own glow was
+      const tg = cached('wheelTopGlow', () => {
+        const g = ctx.createRadialGradient(0, -WR, 20, 0, -WR, 300);
+        g.addColorStop(0, 'rgba(255,214,120,0.5)'); g.addColorStop(1, 'rgba(255,180,60,0)');
+        return g;
+      });
+      ctx.globalAlpha = a0 * 0.7 * blur;
+      ctx.fillStyle = tg; ctx.fillRect(-310, -WR - 310, 620, 620);
+      ctx.globalAlpha = a0;
+    }
     // the rim
     ctx.strokeStyle = 'rgba(243,200,103,0.55)'; ctx.lineWidth = 2;
     ctx.beginPath(); ctx.arc(0, 0, WR, 0, TAU); ctx.stroke();
     const RI = WR * 0.625, RS = WR * 0.825;
     ctx.lineWidth = 1; ctx.beginPath(); ctx.arc(0, 0, RI, 0, TAU); ctx.stroke();
+    ctx.globalAlpha = a0 * (1 - 0.6 * blur);
     for (let k = 0; k < 22; k++) { const an = (k - theta + 0.5) * TAU / 22; ctx.beginPath(); ctx.moveTo(Math.sin(an) * RI, -Math.cos(an) * RI); ctx.lineTo(Math.sin(an) * RS, -Math.cos(an) * RS); ctx.stroke(); }
+    ctx.globalAlpha = a0;
     const items = [];
     for (let n = 0; n < 22; n++) {
       let d = ((n - theta) % 22 + 22) % 22;
       if (d > 11) d -= 22;
-      const k = MO.smooth(1 - Math.min(1, Math.abs(d)));
+      const k = MO.smooth(1 - Math.min(1, Math.abs(d))) * (1 - blur);   // no swell once it blurs
       items.push({ n, ang: d * TAU / 22, k, sc: mix(0.55, 2, k) });
     }
     items.sort((p, q) => p.sc - q.sc);
+    const cardA = 1 - 0.7 * blur;                       // ghosts of the cards stay, for the sense of speed
     for (const it of items) {
       const x = Math.sin(it.ang) * WR, y = -Math.cos(it.ang) * WR + it.k * 14;
       const cw = 120 * it.sc, chh = 208 * it.sc;
@@ -2490,15 +2535,18 @@
         ctx.fillStyle = gl; ctx.fillRect(x - 330, y - 330, 660, 660);
       }
       ctx.save();
-      ctx.globalAlpha *= mix(0.8, 1, it.k);
+      ctx.globalAlpha *= mix(0.8, 1, it.k) * cardA;
       ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(x - cw / 2 + 6, y - chh / 2 + 8, cw, chh);
       ctx.drawImage(cardImg(it.n, it.sc > 1.05 ? 240 : 120), x - cw / 2, y - chh / 2, cw, chh);
       ctx.restore();
     }
-    // name ribbon under the top card
-    const topN = ((Math.round(theta) % 22) + 22) % 22;
+    // name ribbon under the top card; from between II and III (or throughout, reduced) it holds still
+    // on the wheel's own card, X · LA ROUE DE FORTUNE, instead of pulsing once per card
+    const hold = MO.reduced || theta >= 2.5;
+    const topN = hold ? 10 : ((Math.round(theta) % 22) + 22) % 22;
     const tr = TRUMP_N[topN];
-    const nearK = MO.smooth(1 - Math.min(1, Math.abs(theta - Math.round(theta)) * 2.2));
+    const nearK = hold ? (MO.reduced ? 1 : MO.smooth(remap(theta, 2.5, 3.3)))
+      : MO.smooth(1 - Math.min(1, Math.abs(theta - Math.round(theta)) * 2.2));
     if (tr && nearK > 0.02) {
       ctx.globalAlpha *= nearK;
       const ry = -WR + 14 + 208 + 34;

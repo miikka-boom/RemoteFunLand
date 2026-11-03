@@ -21,8 +21,10 @@
 //              the band rims.
 //   transmute  planet i turns gold at S.chakras[i].beat + 2 (beat 3 of its build bar, her sung metal):
 //              molten gold floods the sphere from the top down in 0.6 s (a wavy liquid front with a
-//              white-hot edge), its thief burns away along a noisy front, its glyph flares white, and a
-//              head of gold light runs once round its band in 1.3 s, leaving the band blazing. Sol
+//              white-hot edge, level on screen and sweeping down at a constant speed), its thief burns
+//              away along a noisy front, its glyph flares white, and a head of gold light runs once
+//              round its band in 1.3 s, leaving the band blazing (flare and head ramp in over 4
+//              frames: the focus cues cut in on the transmutation beat itself). Sol
 //              (S.chakras[6].beat + 2 = 78.3) ignites from the rim inward into a white-hot sun with a
 //              Marseille face and sixteen XIX rays (0.22 s; 0.4 s reduced).
 // Cameras (cam / focus):
@@ -78,7 +80,11 @@
 //   seed        any (0): phase of that clock and of every planet on its band
 //   offsetBeats 0..256 (0): shifts the cue's own events (eclipseAt, alignAt) earlier by that much
 //   grade, frame: the engine's post knobs (cue 61 uses grade gain 0.58 under the wheel of trumps)
-// Safety (spec 7.3 / 7.5): the floods are travelling fronts on one sphere (< 15 % of the frame); the
+// Safety (spec 7.3 / 7.5): the floods are travelling fronts on one sphere (< 15 % of the frame), level
+//   on screen and at a constant speed (about 20 % of a 10-degree field per two frames, under the 25 %
+//   region threshold; the old eased polar front crossed the middle 4x faster and its white-hot edge
+//   made an up and a down event right after each build cut); the glyph flare and the band's head of
+//   light ramp in over 4 frames instead of starting lit on the cut; the
 //   ignition is a front on one disc; the corona a thin ring; no large area pulses with the kick (only
 //   the bands' engraving, +15 %); every repeated line pattern that moves (band ticks, wheel ticks,
 //   zodiac ticks, contour lines) fades to its average coverage with moAntiStrobe(features per frame)
@@ -88,9 +94,12 @@
 //   Flash analyser (flash2.py, BLOCK=5, 30 fps 640 clips of every cue window, normal / reduced): each
 //   cue alone has at most 2 full-screen large-area transitions in any 1 s window, a flickering
 //   fraction <= 0.022 (10-degree windows <= 0.09, at most 6 transitions) and no red transition. The
-//   whole build clip 72-79 with the citrinitas shots: at most 3 full-screen transitions per 1 s
-//   window (1.5 flashes) and a flickering fraction of 0.110 / 0.126 reduced; its remaining 10-degree
-//   misses sit inside citrinitas c2b and at the two-beat cuts.
+//   whole build clip 72-79 with the citrinitas shots (126.8-140.2 s): at most 3 full-screen
+//   transitions per 1 s window (1.5 flashes); per-pixel > 3 flashes on at most 0.024 / 0.030 reduced
+//   of the screen and 0.153 / 0.160 of a 10-degree field (inside citrinitas c2b); at most 6
+//   transitions per 1 s in any 10-degree field, normal and reduced (was 7 at the Jupiter and Luna
+//   cuts, 129.73 and 136.73 s). What remains there is the cut swaps themselves, the exposure swell
+//   into the next downbeat and the citrinitas shot after the cut (spec 7.3 rule 7).
 // Cost (SwiftShader; CPU time of the GPU process, interleaved with albedo.a2 = 95 ms at 640x360): focus
 //   cues about 1.2x the reference (~115 ms at 640x360), the eclipse about 1.45x (~138 ms), whole-orrery
 //   frames (61, the end of 78.5, 85) about 1.55x (~147 ms). On SwiftShader every instruction runs for
@@ -467,11 +476,12 @@ void main() {
     float nz = vnoise(n.xy * 6.0 + n.z * 2.0 + float(si) * 5.1);
     base *= 1.0 - (si == 0 ? 0.40 : 0.0) * nz;
     base = si == 2 ? mix(base, vec3(0.42, 0.12, 0.03) * (envD + 0.25), smoothstep(0.42, 0.72, nz)) : base;
-    // the gold flood from the top: a wavy liquid front with a white-hot edge
+    // the gold flood from the top: a wavy liquid front with a white-hot edge, level on screen (the
+    // camera's up), so it sweeps down the disc at a constant screen speed (no fast middle: spec 7.3)
     float act = step(0.001, fl) * step(fl, 0.999);
-    float fy = mix(-0.15, PI + 0.15, fl);
-    float gy = or_acos(n.y) + (0.08 * sin(dot(n.xz, vec2(7.0, 4.0)) + tt * 5.0)) * act;
-    float g = smoothstep(gy - 0.035, gy + 0.035, fy);
+    float fy = mix(1.12, -1.12, fl);
+    float gy = dot(n, uCam[1]) + (0.07 * sin(dot(n.xz, vec2(7.0, 4.0)) + tt * 5.0)) * act;
+    float g = smoothstep(fy - 0.03, fy + 0.03, gy);
     float edge = smoothstep(0.09, 0.0, abs(gy - fy)) * act;
     vec3 gold = env * OR_AU * (0.92 + 0.10 * sin(n.y * 16.0 - tt * 2.5));
     vec3 mc = mix(base, gold, g) + OR_HOT * mix(1.6, 0.7, uReduced) * edge;
@@ -881,8 +891,11 @@ void main() {
         const oc = sub(cam.C, c);
         uPO.push(oc[0], oc[1], oc[2], dot(oc, oc));
         const T = TT[i], dt = t - T;
-        const flood = i === 6 ? 0 : MO.easeInOut(MO.clamp(dt / 0.6));
-        const flare = dt >= 0 ? Math.exp(-dt / 0.45) * (red() ? 0.5 : 1) : 0;
+        // the flood runs linearly (the shader's front is level on screen: a constant sweep); the glyph
+        // flare and the band's head of light ramp in over 4 frames, so a cut onto them is not lit at once
+        const flood = i === 6 ? 0 : MO.clamp(dt / 0.6);
+        const ramp = MO.smooth(dt / 0.133);
+        const flare = dt >= 0 ? ramp * Math.exp(-dt / 0.45) * (red() ? 0.5 : 1) : 0;
         const mask = i === 6 ? 0 : 1 - MO.clamp((dt - 0.05) / 0.5);
         uPS.push(flood, flare, mask, 0);
         const f = o.fr[i];
@@ -895,7 +908,7 @@ void main() {
         const a0 = T > -1e8 && T < 1e8 ? orrery(T, null).ph[i] : 0;
         uRE.push(f.e1[0], f.e1[1], f.e1[2], ((a0 % TAU) + TAU) % TAU);
         const arc = T < -1e8 ? TAU + 0.1 : TAU * MO.easeInOut(MO.clamp(dt / 1.3)) + (dt >= 1.3 ? 0.1 : 0);
-        const head = dt >= 0 && dt < 1.6 ? (1 - MO.smooth(MO.remap(dt, 1.1, 1.6))) * (red() ? 0.5 : 1) : 0;
+        const head = dt >= 0 && dt < 1.6 ? ramp * (1 - MO.smooth(MO.remap(dt, 1.1, 1.6))) * (red() ? 0.5 : 1) : 0;
         const glint = red() ? 0 : MO.env('openHat', t, 0.11);
         uRP.push(arc, head, glint, MO.env('kick', t, 0.15) * (red() ? 0.3 : 1));
         // the sphere's outline on screen (an ellipse, exact under perspective)

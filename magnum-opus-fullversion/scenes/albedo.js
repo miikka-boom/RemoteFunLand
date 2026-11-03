@@ -23,6 +23,9 @@
 //   every open hat).
 // - rule 5: the lattice's kick pulse is +15 % of its rest brightness (+25 % from the key change, the final
 //   chorus; x0.3 reduced), down from +114 %; its colour shift scales with it.
+// - rule 5 and rule 1 in a2: the kick swells the aura +15 % (was +35 %); the clap's mirror flash is 0.2 (was
+//   0.8) and its ripple sways the picture half as far (0.011): together they lit the moon side 3+ times a second.
+// - the merge's flash (a3b) is centre only (7.4): exp(-r * 4.5), so under 25 % of the frame steps by 0.1.
 // - reduced: a4's speed lines freeze; the nerves' kick impulses are off; a4's corridor is dimmer; the merge's
 //   flash, the clap ripple, the hat aura swell, a2's sway and the kick zoom pulse are smaller.
 //
@@ -429,6 +432,8 @@ uniform vec2  uMoveV;     // anti-strobe: the 2D picture's motion per 1/30 s: x 
 uniform vec4  uBurn;      // a1 burn knob: x = the burn front in body units (ink above it; -9 = off), y = the
                           // world split's front in screen y (the Shadow's half recedes above it; -9 = off),
                           // z = the embers' clock (s), w = the embers and the front's glow (0 = off)
+uniform vec3  uBurnCC;    // the embers' colour and uBurnCE the burning edge's: added after the palette matrix, so
+uniform vec3  uBurnCE;    // they keep their colour under any palette (JS: orange; silver: a bright ice-white seam)
 #endif
 
 const float FOC = 1.75;
@@ -672,13 +677,14 @@ void main() {
   albSpd = (length(p) * uMoveV.x + uMoveV.y) / PX;   // the picture's speed here in px per 1/30 s (anti-strobe)
   albDim = 2.4 / (2.4 + max(albSpd - 2.0, 0.0));
 #ifdef ALB_RIPPLE
-  // the clap ripples the mirror: a water-like wave leaving the central axis
+  // the clap ripples the mirror: a water-like wave leaving the central axis. Rule 1: its sway carries every
+  // line it crosses back and forth, so it is half the 30 s piece's (0.011, crest 0.5x), with the mirror flash
   float rippleCrest = 0.0;
   {
     float fr = abs(p.x) - uRippleAge * 2.4;
     float env = exp(-fr * fr * 18.0) * uRipple * (1.0 - 0.7 * uReduced);
-    p.x += sin(fr * 30.0) * env * 0.022 * sign(p.x);
-    rippleCrest = env * (0.5 + 0.5 * sin(fr * 30.0 + 1.2));
+    p.x += sin(fr * 30.0) * env * 0.011 * sign(p.x);
+    rippleCrest = 0.5 * env * (0.5 + 0.5 * sin(fr * 30.0 + 1.2));
   }
 #endif
   // background: night gradient + the lattice
@@ -725,6 +731,10 @@ void main() {
 
   float ck[7];
   for (int i = 0; i < 7; i++) ck[i] = 0.0;
+#ifdef ALB_BURN
+  // burn: the embers and the burning edge (intensities), added after the palette so they keep their colour
+  float burnC = 0.0, burnE = 0.0;
+#endif
   // one body evaluation: left of the mirror the luminous body / the Shadow (A), right of it
   // the Anima (B) when she is present
   {
@@ -738,7 +748,6 @@ void main() {
 #ifdef ALB_BURN
     // burn: the ink burns off from the feet up behind a ragged, flickering flame front (ink above it); the
     // embers shed behind the front drift up and die out. One uniform branch, skipped when burn is off.
-    vec3 burnC = vec3(0.0), burnE = vec3(0.0);
     if (uBurn.w > 0.0) {
       vec2 bq = (w - B.pos) / B.scale;
       float fy = uBurn.x + 0.035 * sin(bq.x * 31.0 + uTime * 9.0) + 0.02 * sin(bq.x * 67.0 - uTime * 13.0);
@@ -750,8 +759,8 @@ void main() {
       vec2 ed = (fract(eg) - 0.5 - eo) / 18.0;
       float below = uBurn.x - bq.y;
       float life = exp(-max(below, 0.0) / 0.35) * step(0.0, below) * step(0.62, eh.x) * step(-1.05, bq.y);
-      burnC = vec3(1.0, 0.78, 0.5) * 1.8 * exp(-dot(ed, ed) / 0.00005) * life * (0.6 + 0.4 * eh.y) * lh;
-      burnE = vec3(1.0, 0.62, 0.30) * 1.2 * exp(-abs(bq.y - fy) / 0.025) * lh;   // the burning edge (x the body's cover)
+      burnC = exp(-dot(ed, ed) / 0.00005) * life * (0.6 + 0.4 * eh.y) * lh;
+      burnE = exp(-abs(bq.y - fy) / 0.025) * lh;   // the burning edge (x the body's cover, below)
     }
 #endif
     B.shadowEdge = uBodyA2.z;
@@ -766,7 +775,7 @@ void main() {
     vec4 b = albedoBody(w, B, pxw, ck);
     col = col * (1.0 - b.a) + b.rgb;
 #ifdef ALB_BURN
-    col += burnC + burnE * b.a;
+    burnE *= b.a;
 #endif
   }
 
@@ -777,7 +786,7 @@ void main() {
     float sw = albLine(shR - shRing, PX, 2.0 + 14.0 * uShock);
     col += vec3(0.9, 0.95, 1.0) * sw * 2.0 * exp(-uShock * 2.0) * step(0.0, uShock);
     float fr0 = length((p - vec2(0.0, 0.1)) * vec2(0.8, 1.0));
-    col += vec3(0.9, 0.95, 1.1) * uFlashS * 1.5 * exp(-fr0 * 2.2);
+    col += vec3(0.9, 0.95, 1.1) * uFlashS * exp(-fr0 * 4.5);   // centre only (7.4): < 25 % of the frame steps by 0.1
   }
 #endif
 #ifdef ALB_BURST
@@ -818,6 +827,9 @@ void main() {
   col += vec3(0.6, 0.75, 1.0) * rippleCrest * 0.22;
 #endif
   if (uPalOn > 0.5) col = max(uPalM * col, 0.0);   // palette knob: a uniform branch, free when off
+#ifdef ALB_BURN
+  col += uBurnCC * burnC + uBurnCE * burnE;        // after the palette: the flame front keeps its colour
+#endif
   fragColor = vec4(col, 1.0);
 }
 `;
@@ -1002,7 +1014,7 @@ void main() {
         A2 = [0, kb < 1 ? X.inkK : 0, 0, 0]; A3[1] = 1; split = X.inkK; mirror = 0.3 * X.inkK * (1 - kb);   // no ink once burnt
         burn = [mix(-1.12, 1.18, f), mix(-1.3, 1.35, f), mt - T0, X.inkK * (1 - SM((t - X.tFire) / 0.6))];
       }
-      u.uBurn = burn;
+      u.uBurn = burn; u.uBurnCC = X.burnCC; u.uBurnCE = X.burnCE;
     } else if (id === 'a2') {
       // A2: the syzygy. Out of the mirror: the Shadow to the left, the Anima to the right.
       const T1 = X.T1, k = (t - T1) / (X.T2 - T1);
@@ -1013,14 +1025,14 @@ void main() {
       const breathe = 0.012 * Math.sin(bph) * s;
       A = [-x, y + breathe, sc, 0.04 * s * (0.5 + 0.5 * Math.sin(bph))];
       A2 = [0, 1, 9, 0];
-      A3 = [1 + 0.35 * MO.env('kick', t, 0.15), 1, 0, 1];
+      A3 = [1 + 0.15 * MO.env('kick', t, 0.15), 1, 0, 1];   // rule 5: at most +15 % kick swell
       Bb = [x, y - breathe, sc, 0.04 * s * (0.5 - 0.5 * Math.sin(bph))];
       B2 = [C(s * 1.4), C(s * 1.5), 0, 0.6];
       moon = [0, mix(0.72, 0.40, s), mix(0.30, 0.28, s), mix(0.65, 1, s) * X.moonK];
       phase = mix(0.2, 0.4, s);
       pillars = C((t - T1) / 0.55) * X.pillarsK; pillarX = X.pillarX;
       split = 1;
-      mirror = 0.7 - 0.45 * s + 0.8 * MO.env('clap', t, 0.15);
+      mirror = 0.7 - 0.45 * s + 0.2 * MO.env('clap', t, 0.15);   // the clap's mirror flash (0.8 in the 30 s piece)
     } else if (id === 'a3') {
       // A3: back into the mirror, accelerating into the merge on the cut
       const T2 = X.T2, TM = X.TM;
@@ -1175,8 +1187,10 @@ void main() {
   //     drift up and die out; the front reaches the crown on the first long word (the last word of the first
   //     vocal line in the cue, "fire"; else 2 beats in), and the world's violet half recedes upward with it
   //     (a travelling front, never a full-frame step); the Shadow's eye closes as the front passes it; the
-  //     embers fade over 0.6 s after the word. ink scales the starting ink. Stretch: the burn spans the cue
-  //     start to the word; the creep, the lattice and the nerves run on to the cut.
+  //     embers fade over 0.6 s after the word. The flame is added after the palette matrix: orange taken
+  //     through the cue's palette, except under 'silver' (which would grey it out on a grey body), where the
+  //     front and the embers are a bright moon-white / ice seam. ink scales the starting ink. Stretch: the
+  //     burn spans the cue start to the word; the creep, the lattice and the nerves run on to the cut.
   //   fireBeats 0.. (from the vocals) with burn: beats after the cue start when the front reaches the crown.
   // Coupling: the lattice drift is zero on the cut, so the lattice runs on into albedo.a2 unbroken.
   // Cost: burn lives in one uniform branch of a1's program only (skipped when off: the 30 s a1 renders
@@ -1204,6 +1218,13 @@ void main() {
       }
       X.tBurn0 = cue.from; X.tFire = Math.max(tF, cue.from + 0.2);
     }
+    // the flame's colours, added after the palette matrix: orange (through the cue's palette, as it was
+    // before the matrix); silver greys orange out, so there the front is a bright moon-white / ice seam
+    const ICE = [0.85, 0.95, 1.25];
+    const pal = (c) => (X.palOn ? [0, 1, 2].map((i) => Math.max(0, X.palM[i] * c[0] + X.palM[3 + i] * c[1] + X.palM[6 + i] * c[2])) : c);
+    const silver = K.P.palette === 'silver';
+    X.burnCC = silver ? ICE.map((v) => v * 1.8 * 1.5) : pal([1.8, 0.78 * 1.8, 0.5 * 1.8]);
+    X.burnCE = silver ? ICE.map((v) => v * 1.2 * 1.5) : pal([1.2, 0.62 * 1.2, 0.30 * 1.2]);
   });
 
   // ALBEDO.A2 "Anima on the right,": the mirror; the Shadow steps out to the left, the Anima to the

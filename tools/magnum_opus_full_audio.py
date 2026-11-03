@@ -21,8 +21,10 @@ one melody/hook run per contiguous sung passage. flite renders are cached by has
 
 Stems, voice renders, analysis images, report.json and timing.json (the measured syllable, word and
 gap times the picture keys on) go next to the WAV (--stems DIR to change that), never into the repo.
+Next to the WAV it also writes <name>-aac.wav, the master lowered until ffmpeg's AAC of it (256k and 192k) stays
+under -1 dBTP: mux the MP4 from that file (render-video.cjs --audio <name>-aac.wav --abr 256k), never from the WAV.
 The run ends with a verification report (timing, gaps, vocals, pitch, loudness arc, true peak, MP3
-alignment); --no-verify skips it, and --verify-only re-runs it from <stems>/state.pkl and the written files.
+alignment, the MP4 audio feed); --no-verify skips it, and --verify-only re-runs it from <stems>/state.pkl and the written files.
 A render takes about 10 minutes on an idle machine (most of it the full-length filters and the mastering
 passes that steer the loudness arc); repeated notes come from a render cache, voices from the flite cache.
 """
@@ -1611,10 +1613,12 @@ class Song:
                 a, b = self.bt(h['fromBeat']), self.bt(h['toBeat'])
                 self.put('low', sub_swell(b - a) * 0.9, a, ch=1)
             elif typ == 'thunder':
+                # the crack on its own bus (GAINS['thunder']: on the fx bus it sat under the white riser and the
+                # drums; the mixer also ducks those under it, THUNDER_DUCK_DB), the rumble's small-speaker body +4 dB
                 crack, rumble = thunder(2.0)
-                self.put('fx', crack, t)
+                self.put('thunder', crack, t)
                 self.put('low', rumble * 0.9, t, ch=1)
-                self.put('fx', st(bw(rumble, 'band', (120, 900), order=2)) * 0.5, t)
+                self.put('fx', st(bw(rumble, 'band', (120, 900), order=2)) * (0.5 * 10 ** (4 / 20)), t)
             elif typ == 'shatter':
                 glass, thud = shatter()
                 self.put('fx', glass, t)
@@ -2491,6 +2495,8 @@ class Song:
                 slap = np.zeros_like(out)
                 place(slap, bw(out.mean(0), 'band', (300, 3500)) * 0.28, ns(T.step))
                 out = out + slap[::-1]  # opposite side (L<->R swap)
+                if style == 'hype':
+                    out = out * 10 ** (HYPE_GAIN_DB / 20)   # over the riff: the loudest rap
                 self.put('rap', out, t_lo, stops=False, gap_ok=True)
                 stem = 'rap'
             self.lines += [dict(kind='rap', style=style, bar=l['bar'], text=l['text'], stem=stem,
@@ -2687,13 +2693,14 @@ GAINS = {  # dB, before the master gain (the 30 s values for the 30 s stems)
     'riff': -6.5, 'pre': -0.5, 'metal': 2.0, 'ghost': -1.0, 'bridge': 1.0, 'coda': -2.0, 'crowd': -7.0,
     'chops': -7.0, 'whisper': -1.0, 'shout': 0.0, 'hermit': 2.0, 'hermit_dry': -6.0, 'title': -3.0,
     'director': 2.7, 'jingle': -13.0, 'whisperfx': -14.0, 'musicbox': -11.0, 'fx': -9.0, 'gapfx': -9.0,
+    'thunder': 3.0,
 }
 SEND_HALL = {'pad': 0.12, 'choir': 0.45, 'piano': 0.22, 'lead': 0.22, 'bells': 0.6, 'orch': 0.55, 'gong': 0.35,
              'clap': 0.10, 'rap': 0.10, 'hook': 0.28, 'arp': 0.25, 'tease': 0.4, 'crash': 0.08, 'snare': 0.15,
              'echo': 0.8, 'drone': 0.3, 'swell': 0.2, 'riser': 0.15, 'roll': 0.08,
              'riff': 0.18, 'pre': 0.3, 'metal': 0.32, 'ghost': 0.2, 'bridge': 0.15, 'crowd': 0.5, 'chops': 0.15,
              'whisper': 0.4, 'shout': 0.3, 'hermit': 0.6, 'jingle': 0.45, 'whisperfx': 0.6, 'musicbox': 0.5,
-             'fx': 0.25, 'title': 0.05}
+             'fx': 0.25, 'thunder': 0.25, 'title': 0.05}
 SEND_BIG = {'ghost': 0.7, 'gong': 0.25, 'jingle': 0.25, 'bells': 0.15, 'whisperfx': 0.3}   # the 4.5 s hall
 SEND_PLATE = {'clap': 0.30, 'snare': 0.35, 'hook': 0.25, 'rap': 0.16, 'lead': 0.10, 'roll': 0.15, 'piano': 0.1,
               'pre': 0.22, 'metal': 0.25, 'bridge': 0.5, 'title': 0.45, 'shout': 0.22, 'riff': 0.08, 'chops': 0.2}
@@ -2705,6 +2712,9 @@ PUMPED = {'pad': 0.65, 'choir': 0.45, 'bass': 0.8, 'lead': 0.4, 'piano': 0.35, '
           'delay': 0.4, 'riff': 0.42, 'crowd': 0.3}
 LOW_GROUP = ('kick', 'bass', 'low')
 DUCKED = ('pad', 'choir', 'piano', 'arp', 'lead', 'tease', 'riff')  # everything else is high-passed at ~130 Hz
+HYPE_GAIN_DB = 2.0                     # the hype rap (over the riff, bars 88-92) over the other rap styles
+RAP_DUCK_DB = {'riff': 5.0, 'lead': 4.0}   # ...and the supersaws under it dip while its words sound (broadband)
+THUNDER_DUCK_DB = {'riser': 10.0, 'clap': 6.0, 'snare': 6.0, 'hats': 6.0, 'roll': 6.0, 'crash': 6.0}  # under the crack
 BYPASS = ('announcer', 'revcym_gap', 'director', 'gapfx')            # not gated: the gaps' shouts and their fx
 VOCAL_STEMS = ('hook', 'metal', 'pre', 'ghost', 'bridge', 'coda', 'crowd', 'rap', 'whisper', 'shout', 'hermit',
                'hermit_dry', 'announcer', 'ann_send', 'title', 'director')
@@ -2712,7 +2722,7 @@ DUCK_KEY = ('rap', 'hook', 'pre', 'metal', 'ghost', 'bridge', 'coda', 'whisper',
 KEEP_STEMS = ('kick',)
 GROUPS = {'drums': ('kick', 'clap', 'snare', 'hats', 'roll', 'crash', 'revcym'), 'bass': ('bass', 'low'),
           'vocals': VOCAL_STEMS + ('chops', 'echo', 'whisperfx'),
-          'fx': ('riser', 'orch', 'gong', 'swell', 'fx', 'jingle', 'musicbox', 'bells', 'revcym_gap', 'gapfx')}
+          'fx': ('riser', 'orch', 'gong', 'swell', 'fx', 'thunder', 'jingle', 'musicbox', 'bells', 'revcym_gap', 'gapfx')}
 
 
 def group_of(name):
@@ -2840,6 +2850,19 @@ class Mixer:
             curve = np.exp(np.linspace(np.log(20.0), np.log(top), i1 - i0) ** 1.0)
             self.hp_sweeps.append((i0, i1, curve, names))
         self.duck = np.ones(N, F32)
+        self.rapduck = None
+        # the thunder (SPEC-full 1.4, the sixth moment) clears the air: under its crack the white riser and the
+        # drums' clap, snare roll, hats and crash dip (3 ms down, held 0.3 s, back over 0.25 s), the kick stays
+        self.thunder_duck = None
+        th = [song.bt(h['beat']) for h in song.S['hits'] if h['type'] == 'thunder']
+        if th:
+            w = np.zeros(N)
+            k = ns(0.553)
+            seg = keys_curve(k, [(0, 0.0), (0.003, 1.0), (0.303, 1.0), (0.553, 0.0)])
+            for t in th:
+                i0 = ns(t) - ns(0.003)
+                w[i0:i0 + k] = np.maximum(w[i0:i0 + k], seg[:N - i0])
+            self.thunder_duck = {nm: (10 ** (-d * w / 20)).astype(F32) for nm, d in THUNDER_DUCK_DB.items()}
 
     def set_duck(self, song):
         """Vocal-keyed dynamic EQ: while anyone sings, raps or shouts, the harmony instruments dip (up to 6 dB)
@@ -2858,6 +2881,20 @@ class Mixer:
         rate = 30.0 / SR  # recover at 30 dB/s
         ddb = np.minimum.accumulate(ddb - idx * rate) + idx * rate
         self.duck = (10 ** (ddb / 20)).astype(F32)
+        # the hype rap sits in the supersaw riff's band (1-4 kHz): while each of its words sounds (from its rendered
+        # start, consonant included, for its rendered length) the riff and the lead dip as a whole, 10 ms down,
+        # back at 25 dB/s
+        key = np.zeros(self.N)
+        for r in song.timing.get('rap', []):
+            if r.get('style') == 'hype':
+                key[ns(r['start_s']):ns(r['start_s'] + r['dur_s'])] = 1.0
+        if key.any():
+            key = uniform_filter1d(key, ns(0.010))
+            self.rapduck = {}
+            for k, d in RAP_DUCK_DB.items():
+                g = -d * key
+                g = np.minimum.accumulate(g - idx * (25.0 / SR)) + idx * (25.0 / SR)
+                self.rapduck[k] = (10 ** (g / 20)).astype(F32)
 
     def stat(self, name, y, o=0):
         """K-weighted mean power of a stem (starting at sample o) in every arc unit."""
@@ -2886,6 +2923,10 @@ class Mixer:
             band = bw(y, 'band', (900, 5000), order=2, zero_phase=True)
             y = y - band * (1 - self.duck[o:e])
             del band
+        if self.rapduck and name in self.rapduck:
+            y = y * self.rapduck[name][o:e]
+        if self.thunder_duck and name in self.thunder_duck:
+            y = y * self.thunder_duck[name][o:e]
         if name in PUMPED:
             y = y * (1 - PUMPED[name] * self.P[o:e])
         for (i0, i1, curve, names) in self.hp_sweeps:
@@ -3401,6 +3442,32 @@ def encode_mp3(wav, mp3):
                     str(mp3)], check=True)
 
 
+def aac_feed(y, wav, work, rates=('256k', '192k'), target=-1.2):
+    """The MP4's audio track (tools/render-video.cjs --audio <this> --abr 256k): ffmpeg's native AAC encoder adds
+    2-3 dB of overshoot to this master at 192-256 kbps (+0.3 to +0.9 dBTP, sample peaks over 0 dBFS), so the MP4
+    is muxed from its own copy, the master lowered in 0.5 dB steps until the decoded AAC stays under target dBTP
+    at every rate in rates. The WAV and the MP3 stay as they are. Returns the facts for the report."""
+    path = Path(wav).with_name(Path(wav).stem + '-aac.wav')
+    m4a = Path(work) / 'aac_check.m4a'
+    for g in np.arange(-1.5, -6.01, -0.5):
+        wavfile.write(path, SR, (y * 10 ** (g / 20)).T.astype(np.float32))
+        tps = {}
+        for br in rates:
+            subprocess.run(['ffmpeg', '-hide_banner', '-loglevel', 'error', '-y', '-i', str(path), '-c:a', 'aac',
+                            '-b:a', br, str(m4a)], check=True)
+            d = decode_audio(m4a, work)
+            tps[br] = (round(float(20 * np.log10(true_peak(d))), 2), round(float(20 * np.log10(np.abs(d).max())), 2))
+        m4a.unlink()
+        log(f'MP4 audio feed at {g:+.1f} dB: decoded AAC true peak / sample peak (dB) ' +
+            ', '.join(f'{br} {a:+.2f} / {b:+.2f}' for br, (a, b) in tps.items()))
+        if max(a for a, _ in tps.values()) <= target:
+            break
+    return dict(path=str(path), gain_db=round(float(g), 2), target_dbtp=target,
+                aac_true_peak_dbtp={br: a for br, (a, _) in tps.items()},
+                aac_sample_peak_dbfs={br: b for br, (_, b) in tps.items()},
+                lufs_integrated=round(lufs(y * 10 ** (g / 20)), 2))
+
+
 def decode_audio(path, work):
     """Decode with ffmpeg (which applies the LAME encoder-delay/padding tag) to float stereo."""
     dec = Path(work) / 'decoded_check.wav'
@@ -3449,6 +3516,7 @@ def main():
         song = Song(st_['S'], out_dir)
         for k in ('timing', 'presence', 'vox_layers', 'master_gain', 'ceiling'):
             setattr(song, k, st_[k])
+        song.aac = st_.get('aac')
         song.stems['kick'] = st_['kick']
         mixer = SimpleNamespace(stats=st_['stats'], gap_info=st_['gap_info'], monitor_spans=st_['monitor_spans'])
         arc = dict(st_['arc'], units=arc_units(song))
@@ -3490,13 +3558,15 @@ def main():
     song.ceiling = ceiling
     song.master_gain = pre * arc['gain']
     log('wrote', wav, mp3 or '')
+    song.aac = aac_feed(y, wav, out_dir)
+    log('wrote', song.aac['path'], f"(MP4 audio feed, {song.aac['gain_db']:+.1f} dB)")
     tpath = Path(args.timing) if args.timing else out_dir / 'timing.json'
     tj = timing_json(song, mixer, y.shape[-1] / SR)
     tpath.write_text(json.dumps(tj, indent=1, ensure_ascii=False, default=float))
     log('timing', tpath)
     (out_dir / 'state.pkl').write_bytes(pickle.dumps(dict(
         S=score, timing=song.timing, presence=song.presence, vox_layers=song.vox_layers, kick=song.stems['kick'],
-        master_gain=song.master_gain, ceiling=song.ceiling, stats=mixer.stats, gap_info=mixer.gap_info,
+        master_gain=song.master_gain, ceiling=song.ceiling, aac=song.aac, stats=mixer.stats, gap_info=mixer.gap_info,
         monitor_spans=mixer.monitor_spans, arc=dict(v=arc['v'], gain=arc['gain'], meas=arc['meas'], hist=arc['hist'],
                                                     err=arc['err']))))
     if not args.no_stems:
@@ -3517,6 +3587,8 @@ def report(song, mixer, y, arc, mp3, out_dir, args):
         tpath.write_text(json.dumps(timing_json(song, mixer, y.shape[-1] / SR), indent=1, ensure_ascii=False, default=float))
     if True:
         rep = verify(song, mixer, y, arc, mp3, out_dir)
+        if getattr(song, 'aac', None):
+            rep['mp4_audio'] = song.aac
         (out_dir / 'report.json').write_text(json.dumps(rep, indent=1, default=float, ensure_ascii=False))
         for k, v in rep.items():
             if k in ('vocal_lines', 'sung_pitch', 'stem_lufs_by_unit', 'loudness_arc', 'gaps'):

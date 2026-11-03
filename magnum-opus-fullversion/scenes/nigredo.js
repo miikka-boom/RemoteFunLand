@@ -425,6 +425,7 @@ uniform float uSnap;     // the eyes' snap burst (decays)
 uniform float uSnapR;    // its shockwave radius
 uniform vec2  uEyeS;     // screen position between the Shadow's eyes
 uniform float uGoldK;    // palette knob (params.gold): 0 nigredo .. 1 the rubedo grade
+uniform float uSunK;     // safety (7.3 rule 1, JS): the corona's fringe and rim, faded while the push slides the sun fast
 uniform float uMoon;     // moon knob (params.moon): 0 the black sun .. 1 a full moon with a silver corona, white
                          // doves for the ravens, an ultramarine sky and a pearl sea (exact no-op at 0)
 ${GOLD}
@@ -579,9 +580,9 @@ vec3 ng_sky(vec2 w, float pe, float t) {
     vec3 cc = mix(eyEmber, eyVio, sat(x / 0.35));
     cc = mix(cc, eyVerd, sat((x - 0.45) / 0.5));
     cc = mix(cc, mix(vec3(0.85, 0.90, 1.0), vec3(0.45, 0.55, 0.95), sat(x / 0.6)), mo);
-    col += cc * ln * exp(-x / L) * (0.9 + 0.8 * kick) * (0.5 + 0.5 * h) * smoothstep(0.0, 0.015, x);
+    col += cc * ln * exp(-x / L) * (0.9 + 0.8 * kick) * (0.5 + 0.5 * h) * smoothstep(0.0, 0.015, x) * uSunK;
     float l2 = ey_lines(a / TAU * 300.0, 300.0 / (TAU * r) * pe, 0.4);
-    col += mix(mix(eyBone, eyEmber, 0.45), vec3(0.85, 0.90, 1.0), mo) * 0.45 * l2 * exp(-x / (0.05 + 0.05 * kick));
+    col += mix(mix(eyBone, eyEmber, 0.45), vec3(0.85, 0.90, 1.0), mo) * 0.45 * l2 * exp(-x / (0.05 + 0.05 * kick)) * uSunK;
     col += mix(mix(eyEmber, eyVio, sat(x * 2.0)), vec3(0.40, 0.50, 0.90), mo) * 0.10 * exp(-x / (0.12 + 0.30 * stream)) * (1.0 + kick) * (1.0 - 0.6 * smoothstep(0.3, 0.9, sin(a)) * uShA);
   }
   // the black disc with a diamond-thin rim
@@ -592,7 +593,7 @@ vec3 ng_sky(vec2 w, float pe, float t) {
   vec2 dm = d / rs, dmm = dm + vec2(0.30, -0.25);
   col += vec3(0.80, 0.84, 0.93) * (0.80 + 0.20 * min(dot(dmm, dmm) * 2.5, 1.0)) * (0.80 + 0.20 * (1.0 - dot(dm, dm)))
        * (1.0 - smoothstep(-pe, pe, sd)) * mo;
-  col += mix(mix(eyBone, eyEmber, 0.35), vec3(0.85, 0.92, 1.1), mo) * (1.8 * ey_st(sd, pe, 0.7) + 0.25 * ey_gl(sd, pe, 3.0)) * (0.8 + 0.6 * kick);
+  col += mix(mix(eyBone, eyEmber, 0.35), vec3(0.85, 0.92, 1.1), mo) * (1.8 * ey_st(sd, pe, 0.7) * uSunK + 0.25 * ey_gl(sd, pe, 3.0)) * (0.8 + 0.6 * kick);
   // ravens
   if (uBirdA > 0.0) {
     vec3 fillB = mix(vec3(0.0005), vec3(0.74, 0.77, 0.86), mo);   // the doves keep the ravens' iridescent edge
@@ -652,19 +653,19 @@ void main() {
       col += mix(ashA, ashB, step(0.93, h.x)) * 0.30 * flake * (0.6 + 0.4 * sin(t * 2.3 + h.y * 30.0));
     }
   }
-  // the snap: bright anime speed lines and a red shockwave from the Shadow's eyes
+  // the snap: bright anime speed lines and a red shockwave from the Shadow's eyes. Safety (7.3 rule 1):
+  // one ring, leaving the frame in about 0.4 s; the lines at half strength and one fixed set (re-rolled at
+  // 15 Hz they switched the same pixels on and off), so the burst is one decaying flash
   if (uSnap > 0.01) {
     vec2 sp = p - uEyeS;
     float a = atan(sp.y, sp.x), r = length(sp);
     float v = a / TAU * 90.0;
-    float h = hash11(floor(v) + floor(uTime * 15.0) * 3.1);
+    float h = hash11(floor(v) + 3.1);
     float sl = smoothstep(0.40, 0.5, abs(fract(v) - 0.5)) * step(0.45, h) * smoothstep(0.35 + 0.4 * h, 0.9 + 0.5 * h, r);
-    col += vec3(0.85, 0.75, 1.0) * 0.9 * sl * uSnap;
+    col += vec3(0.85, 0.75, 1.0) * 0.45 * sl * uSnap;
     float rr = length(sp * vec2(0.75, 1.0));
     float ring = abs(rr - uSnapR) - 0.003 - 0.015 * uSnapR;
     col += vec3(1.0, 0.10, 0.06) * 1.8 * exp(-max(ring, 0.0) / 0.008) * uSnap;
-    float ring2 = abs(rr - uSnapR * 0.72) - 0.002;
-    col += vec3(1.0, 0.6, 0.8) * 0.8 * exp(-max(ring2, 0.0) / 0.004) * uSnap;
   }
   if (uGoldK > 0.0) col = mix(col, max(EY_GOLD * col, 0.0), uGoldK);   // palette knob (uniform branch)
   fragColor = vec4(col * uFade, 1.0);
@@ -681,6 +682,10 @@ void main() {
   //   the eye half open.
   // Params (range (default): what it looks like):
   //   dive       0/1 (1)       the last beat dives into the pupil; 0 holds the open eye to the cut
+  //   diveBeats  0.5..4 (1)    how many beats before the cut the dive starts (a slower dive the longer it
+  //                            is). Unset: 1, or, when the music cuts dead inside the cue's last 4 beats
+  //                            (a score gap running to the cue end: the cold open's 'I am—'), the dive
+  //                            starts on that dead stop and the pupil swallows the frame in the silence
   //   gold       0..1 (0)      palette: 0 nigredo (bone, violet, verdigris), 1 the rubedo grade (gold,
   //                            crimson, amber; a colour matrix) and the iris's gold fill
   //   sun        0..1 (0)      the pupil: 0 the black sun, 1 a white-hot sun around a black core
@@ -695,8 +700,9 @@ void main() {
   //                            in, the glint): 0.6 parts the lids and lights the iris 1.7x slower (the
   //                            cold open's slow reveal across the a cappella hook); the push, the dive and
   //                            the ambient motion keep their own clocks
-  // Triangle: it draws in with the opening and, on a cue longer than the 30 s window, holds until the last
-  //   third of the push-in, then leaves as the push nears the dive; with dive 0 it holds to the cut.
+  // Triangle: it draws in with the opening and, on a cue longer than the 30 s window, holds to the dive and
+  //   drops out on its first 3 frames (on the cold open: with the music's dead stop); with dive 0 it holds
+  //   to the cut.
   // Coupling: its last frame (the black pupil filling the frame, dark speed lines) cuts into
   //   nigredo.sun's fade from black; both are anchored to that cut, so they match at any lengths.
   // Safety (7.3 rule 1): uAS carries the push-in, the dive, the iris's rise, the gaze tremble and the spin
@@ -715,21 +721,31 @@ void main() {
     const u = t - 0.80;
     return 1.0 - 0.90 * Math.exp(-6.5 * u) * Math.cos(10.0 * u);
   };
+  // the beats from the dive's start to the cut: params.diveBeats, else the music's dead stop when a score
+  // gap runs to the cue end and starts inside its last 4 beats, else 1
+  const diveBeatsOf = (cue) => {
+    const v = (cue.params || {}).diveBeats;
+    if (typeof v === 'number' && Number.isFinite(v)) return MO.clamp(v, 0.5, 4);
+    const g = (MO.S.gaps || []).find((x) => x && Math.abs(x.toBeat - cue.beat1) < 1e-6 && x.fromBeat < cue.beat1 - 0.5 && x.fromBeat >= cue.beat1 - 4);
+    return g ? cue.beat1 - g.fromBeat : 1;
+  };
   MO.shot('nigredo.eye', (cue) => {
-    const K = cueClock(cue, 0, 5, 4, 1);
+    const diveB = diveBeatsOf(cue);
+    const K = cueClock(cue, 0, 5, 4, diveB);
     const dive = K.on('dive', true);
     const gold = K.p('gold', 0, 0, 1), sun = K.p('sun', 0, 0, 1), tri = K.p('triangle', 1, 0, 2), pulse = K.p('pulse', 0, 0, 2);
     const zoom = K.p('zoom', 1, 0.3, 3), ex = K.p('x', 0, -1, 1), ey = K.p('y', 0, -1, 1);
     const T0 = K.S(0);                                        // the shot starts (the gong)
-    const T_ENTER = dive ? K.E(4 * BEAT) : cue.to;           // 1.765: the dive starts (kick, orch hit, "Nigredo")
+    const T_ENTER = dive ? K.E((5 - diveB) * BEAT) : cue.to;  // 1.765: the dive starts (kick, orch hit, "Nigredo")
     const T_CUT = dive ? K.E(5 * BEAT) : cue.to + 1;         // 2.206: the cut under the NIGREDO insert
     const T_PC = K.S(0.5);
     // natural head time; params.pace plays the opening (lids, ignition, triangle, glint) slower or faster
     const pace = K.p('pace', 1, 0.25, 4);
     const H = pace === 1 ? K.H : (t) => K.H(cue.from + (t - cue.from) * pace);
-    // the triangle leaves with the push-in: in the 30 s window on its natural times; in any other cue over
-    // the last third of the push, so a long cue holds it; without the dive it stays to the cut
-    const triOut = K.ident ? (t, h) => MO.remap(h, 1.2, 1.75) : dive ? (t) => MO.remap((t - T0) / (T_ENTER - T0), 0.68, 0.99) : () => 0;
+    // the triangle leaves with the push-in: in the 30 s window on its natural times; in any other cue it
+    // holds to the dive and drops out on its first 3 frames (the cold open: the music's dead stop marked in
+    // the picture); without the dive it stays to the cut
+    const triOut = K.ident ? (t, h) => MO.remap(h, 1.2, 1.75) : dive ? (t) => MO.smooth(MO.remap(t, T_ENTER, T_ENTER + 0.1)) : () => 0;
     // the camera (zoom, iris height), the gaze tremble and the iris spin at time t. The tremble keeps its
     // 30 s rate and screen size whatever the speed and zoom knobs (at speed 3 and zoom 2.6 it shook the
     // frame-filling iris at 29 Hz), and is off in reduced mode (7.3 rule 1)
@@ -801,8 +817,14 @@ void main() {
   //   its eyes glowing, into albedo.a1's white flash (an fx flash on the next downbeat in the score).
   //   A cue that cuts in from another shot (not from the dive) fades up from black over its first 0.44 s
   //   and approaches from 0.32x; give it offsetBeats 1-2 to cut in on a picture already in place.
-  // Safety: the snap's burst is x0.4 and the kick lurch and the sun's kick swell are smaller in reduced
-  //   mode (7.4); the hat speed lines are x0.4 there.
+  // Safety (7.3 rule 1, measured: the 1 s from the push-in to the 8.1 impact lit a third of the centre field
+  //   past 3 flashes a second): the push to the snap is a smoothstep (peak 0.11 in log-zoom per frame);
+  //   the eclipse's corona fringe and rim fade to a soft glow while it slides the sun fast (uSunK, from the
+  //   sun's travel on screen per frame, kick lurch excluded: 1 everywhere else); from the push-in the kicks
+  //   no longer lurch, swell the sun, flare the corona or step the sky's contours; the eyes snap open
+  //   without an after-wobble; the snap draws one ring (about 0.4 s to leave the frame) and one fixed set
+  //   of speed lines at half strength. Reduced mode (7.4): the snap's burst is x0.4, the kick lurch and the
+  //   sun's kick swell are smaller and the hat speed lines are x0.4.
   // Cost: as in the 30 s piece (one shader; about 115-130 ms per 640x360 frame on SwiftShader).
   const S_SCALE = 1.45;
   const R_FINAL = 0.16 - 0.44 * S_SCALE;      // its heart behind the black sun
@@ -855,34 +877,57 @@ void main() {
     const T_P3 = (shadow ? T_PUSH : T_END) - 0.3;
     const KX = mono([[T_CUT, 0.0], [A_275, 0.09], [T_RISE + 0.6, -0.05], [T_P3, 0.0]]);
     const KY = mono([[T_CUT, 0.16], [A_275, 0.08], [T_RISE, 0.05], [T_P3, 0.24]]);
-    const uniforms = (t) => {
+    // the camera at t: zoom Z, centre C (world), dutch tilt, and the face height and push progress
+    // (lurch false: without the kick lurch, for the sun's travel below)
+    const camAt = (t, lurch = true) => {
       const mt = K.M(t);
-      const lastK = MO.last('kick', t);
-      const kt = lastK ? t - lastK.e.t : 10;
-      const hats = MO.count('closedHat', t);
-      // camera: approach out of the dark, steady push with a lurch on every kick, then the fast push-in on the face
-      let Z = zBase(t) * (1 + (MO.reduced ? 0.005 : 0.03) * MO.env('kick', t, 0.1));
+      // approach out of the dark, steady push with a lurch on every kick, then the fast push-in on the face
+      // (from the push-in on the face the push carries the beat: no kick lurch, see kA below)
+      const kOn = !(shadow && t >= T_PUSH - 0.02);
+      let Z = zBase(t) * (lurch && kOn ? 1 + (MO.reduced ? 0.005 : 0.03) * MO.env('kick', t, 0.1) : 1);
       let C = [MO.keys(KX, t) + 0.015 * Math.sin(mt * 0.7) + cx, MO.keys(KY, t) + cy];
       const rise = riseAt(t);
       const faceY = rise + 0.862 * S_SCALE;
       const pk = shadow ? MO.remap(t, T_PUSH, T_END) : 0;
       const tSnap = (T_EYES - T_PUSH) / (T_END - T_PUSH);
-      const push = pk < tSnap ? 0.62 * MO.easeInOut(pk / tSnap) : 0.62 + 0.38 * MO.easeIn((pk - tSnap) / (1 - tSnap)) * 0.6 + 0.38 * 0.4 * MO.easeOut((pk - tSnap) / (1 - tSnap));
+      // (to the snap a smoothstep, not a cubic ease: it halves the peak zoom rate (0.2 -> 0.11 in log-zoom
+      // per frame), so the sun and the fine contour lines slide down and out over the beat instead of leaping)
+      const push = pk < tSnap ? 0.62 * MO.smooth(pk / tSnap) : 0.62 + 0.38 * MO.easeIn((pk - tSnap) / (1 - tSnap)) * 0.6 + 0.38 * 0.4 * MO.easeOut((pk - tSnap) / (1 - tSnap));
       Z = Z * Math.exp(Math.log(Z_FACE / Z_END) * push) * zoom;
       C = [MO.mix(C[0], 0.0, push), MO.mix(C[1], faceY, MO.smooth(MO.clamp(pk * 1.4)))];
-      const eu = t - T_EYES;
-      const eyes = !snap || eu < 0 ? 0 : MO.clamp(1.0 - Math.exp(-40 * eu) * Math.cos(30 * eu) + 0.15 * Math.exp(-8 * eu) * Math.sin(30 * eu), 0, 1.2);
-      const claps = MO.env('clap', t, 0.12);
       const tilt = -0.20 * MO.easeInOut(pk) + 0.035 * Math.sin(mt * 0.8 + 1.0) * (1 - pk) + roll;
+      return { Z, C, tilt, rise, faceY, pk };
+    };
+    // the sun (centre and radius) on screen: p = rot((w - C) * Z, -tilt), as the shader's w = rot(p, tilt) / Z + C
+    const sunOnScreen = (c) => { const dx = (0 - c.C[0]) * c.Z, dy = (0.16 - c.C[1]) * c.Z, a = -c.tilt; return [Math.cos(a) * dx - Math.sin(a) * dy, Math.sin(a) * dx + Math.cos(a) * dy, 0.24 * c.Z]; };
+    const uniforms = (t) => {
+      const mt = K.M(t);
+      const lastK = MO.last('kick', t);
+      const kt = lastK ? t - lastK.e.t : 10;
+      const hats = MO.count('closedHat', t);
+      const { Z, C, tilt, rise, faceY } = camAt(t);
+      // safety (7.3 rule 1): as the push-in on the face slides the eclipse down and out of the frame (up to
+      // ~0.15 screen units per frame), its bright corona fringe and rim fade to a soft glow, so the dark disc
+      // sweeps the dark body without lighting each pixel it passes two or three times
+      const s0 = sunOnScreen(camAt(t, false)), s1 = sunOnScreen(camAt(t - 1 / 30, false));
+      const sunV = Math.hypot(s0[0] - s1[0], s0[1] - s1[1]) + Math.abs(s0[2] - s1[2]);
+      const eu = t - T_EYES;
+      // (the snap open without the 30 s piece's after-wobble: it pulsed the bright eyes at ~5 Hz on top of the snap)
+      const eyes = !snap || eu < 0 ? 0 : MO.clamp(1.0 - Math.exp(-40 * eu) * Math.cos(30 * eu), 0, 1.2);
+      const claps = MO.env('clap', t, 0.12);
+      // safety (7.3 rule 1): from the push-in on the face the kicks no longer flare the corona, swell the
+      // sun or step the sky's contour lines (uKA 0 from a kick on: seamless, the step term restarts at 0)
+      const kA = shadow && t >= T_PUSH - 0.02 ? 0 : 1;
       const u = {
+        uSunK: 1 - 0.8 * MO.smooth((sunV - 0.025) / 0.06),
         uOpen: 0, uIgnite: 0, uLines: 0, uGlint: -1, uGold: 0, uSpin: 0, uPupil: 1, uLook: [0, 0], uAura: 0, uHi: 0, uGoldK: gold, uMoon: moon,
         uZc: Z, uCc: C, uTilt: tilt,
         uRise: rise, uSS: S_SCALE, uShA: shadow ? MO.remap(t, T_RISE - 0.2, T_RISE + 0.3) : 0,
         uEyes: eyes, uEyeGlow: snap ? (t > T_EYES ? 0.6 * claps : 0) + 1.6 * MO.easeIn(MO.remap(t, T_EYES + 0.15, T_END)) : 0,
-        uKT: kt, uKA: 1, uSunR: 0.24 * (1 + (MO.reduced ? 0.012 : 0.03) * Math.exp(-kt / 0.12)),
+        uKT: kt, uKA: kA, uSunR: 0.24 * (1 + (MO.reduced ? 0.012 : 0.03) * Math.exp(-kt / 0.12) * kA),
         uBird: birds(mt), uBirdA: MO.remap(t, A_BIRD, A_29) * ravens,
         uSpeed: (MO.reduced ? 0.4 : 1) * (1 - moon) * (MO.remap(t, T_RISE - 0.05, T_RISE + 0.2) * (0.35 + 0.65 * MO.env('closedHat', t, 0.09)) + 0.6 * MO.env('openHat', t, 0.12)),
-        uSnap: snap && t > T_EYES ? Math.exp(-(t - T_EYES) / 0.22) * (MO.reduced ? 0.4 : 1) : 0, uSnapR: 0.32 + Math.max(0, t - T_EYES) * 5.0, uEyeS: (() => { const dx = (0 - C[0]) * Z, dy = (faceY - C[1]) * Z, a = -tilt; return [Math.cos(a) * dx - Math.sin(a) * dy, Math.sin(a) * dx + Math.cos(a) * dy]; })(),
+        uSnap: snap && t > T_EYES ? Math.exp(-(t - T_EYES) / 0.22) * (MO.reduced ? 0.4 : 1) : 0, uSnapR: 0.32 + Math.max(0, t - T_EYES) * 3.2, uEyeS: (() => { const dx = (0 - C[0]) * Z, dy = (faceY - C[1]) * Z, a = -tilt; return [Math.cos(a) * dx - Math.sin(a) * dy, Math.sin(a) * dx + Math.cos(a) * dy]; })(),
         uHN: hats, uFade: MO.easeOut(MO.remap(t, T_CUT, A_265)), uFace: MO.smooth(MO.remap(t, T_PUSH - 0.2, T_PUSH + 0.4)),
       };
       if (!K.still) u.uTime = mt;

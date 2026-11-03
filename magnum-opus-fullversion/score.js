@@ -6173,29 +6173,37 @@ window.SCORE = {
   {
    "type": "shake",
    "beat": 400,
-   "amount": 0.022,
-   "decay": 0.6
+   "amount": 0.012,
+   "decay": 0.4
   }
  ],
  "warning": {
-  "flashFrom": 32,
-  "strobeFrom": 32,
+  "flashFrom": 15,
+  "strobeFrom": 29,
   "strongest": [
    [
+    30,
+    34
+   ],
+   [
     94,
-    96
+    97
    ],
    [
     110,
     114
    ],
    [
-    314,
-    322
+    256,
+    260
    ],
    [
-    326,
+    314,
     330
+   ],
+   [
+    356,
+    371
    ],
    [
     380,
@@ -7045,6 +7053,7 @@ window.SCORE = {
     "moon": 1,
     "ravens": 1,
     "zoom": 0.85,
+    "offsetBeats": 1.5,
     "frame": {
      "offset": [
       [
@@ -7181,7 +7190,7 @@ window.SCORE = {
     48
    ],
    "params": {
-    "rays": 1.2,
+    "rays": 0.8,
     "grade": {
      "saturation": [
       [
@@ -7933,33 +7942,9 @@ window.SCORE = {
    "note": "'king': the great eye in gold, a white-hot sun for a pupil, inside a blazing triangle."
   },
   {
-   "shot": "club.stage",
-   "bars": [
-    89,
-    89.5
-   ],
-   "params": {
-    "palette": "rubedo",
-    "ball": "ruby",
-    "dancer": "gold",
-    "pattern": "scissor",
-    "crowd": 1,
-    "frame": {
-     "zoom": 1.4,
-     "offset": [
-      0,
-      0.18
-     ],
-     "roll": 5
-    },
-    "beams": 6
-   },
-   "note": "Low dutch on the gold dancer."
-  },
-  {
    "shot": "nigredo.sun",
    "bars": [
-    89.5,
+    89,
     90
    ],
    "params": {
@@ -7968,9 +7953,17 @@ window.SCORE = {
     "gold": 1,
     "zoom": 2.0,
     "ravens": 1,
+    "grade": {
+     "saturation": 0.75,
+     "gain": [
+      1.0,
+      0.92,
+      0.75
+     ]
+    },
     "offsetBeats": 1.5
    },
-   "note": "'queen': the full moon over the sea, now in crimson and gold, doves crossing."
+   "note": "'queen': the full moon over the sea, now in crimson and gold, doves crossing; held for the whole bar (one cue, so the red ground cannot toggle twice inside a second). The grade (saturation 0.75, less green and blue) keeps its red below the wedding's, so the cut at 90.1 is one red step down, not a swap."
   },
   {
    "shot": "rubedo.wedding",
@@ -8025,7 +8018,7 @@ window.SCORE = {
    "params": {
     "palette": "sun",
     "light": 1.2,
-    "rays": 1.5,
+    "rays": 1.0,
     "inhale": 0
    },
    "note": "'turn my lead to gold': the push into the third eye in gold; this time the light bursts fully and holds."

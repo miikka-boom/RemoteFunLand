@@ -920,9 +920,10 @@ ${U(2, (k) => `      { vec2 v = vec2(${k ? '' : '-'}q.x, q.y) - sp;
   //   kick swells them +20-25 %, never in tunnel where they all overlap; the chase moves only the
   //   brightness); the dais neon pulses +20 % on the kick (thin lines); the crimson ground never pulses;
   //   the arms hold through clap fills instead of flickering; the wall's lines step once a bar and fade
-  //   to their average coverage, and the dais neon and frieze dim to 30 %, while the camera (the
-  //   internal push and the engine's frame knob, measured on screen) sweeps them faster than the
-  //   lib's moAntiStrobe curve allows at 1.5x (rule 1: the 15-16 push-in). Reduced mode (uReduced / MO.reduced): lasers static (no
+  //   to their average coverage, the dais neon dims to 12 % and its frieze and top glow go out, while the
+  //   camera (the internal push and the engine's frame knob, measured on screen) sweeps them faster than
+  //   the lib's moAntiStrobe curve allows at 1.5x (rule 1: the 15-16 and 39-40 push-ins; at 30 % the
+  //   three neon edges crossing a 10-degree field together still made 4 large-area flashes a second). Reduced mode (uReduced / MO.reduced): lasers static (no
   //   rotation, swing or swell), the ball, its spots and glints frozen, the truss chase at half rate, no
   //   arm pumps, kick pulses x0.3, snaps x0.4, sway and haze x0.7.
   // Couplings: the tunnel cue at bars 15-16 ends pushed into the Shadow's face (score frame zoom 2.2):
@@ -1029,7 +1030,7 @@ ${U(2, (k) => `      { vec2 v = vec2(${k ? '' : '-'}q.x, q.y) - sp;
       const perFrame = (6.5 * dz + dr) / 30 * 1.5;
       return Math.min(1 - MO.smooth(MO.remap(perFrame, 0.07, 0.25)), sweepContrast(t, 0.6, 0.2, 0.10));
     };
-    // the dais neon edges and frieze (bright lines ~0.12 apart) dim while a push sweeps them
+    // the dais neon edges, frieze and top glow (bright lines ~0.12 apart) dim while a push sweeps them
     const daisContrast = (t) => sweepContrast(t, 0, -0.2, 0.12);
     const uniforms = (t) => {
       const red = MO.reduced;
@@ -1110,7 +1111,7 @@ ${U(2, (k) => `      { vec2 v = vec2(${k ? '' : '-'}q.x, q.y) - sp;
         uClMatA0: MA.m0, uClMatA1: MA.m1, uClMatA2: MA.m2, uClMatB0: MB.m0, uClMatB1: MB.m1, uClMatB2: MB.m2,
         uClBallW: [wipe, wipeGlow, 0, 0],
         uClTruss: [red ? Math.floor(step16 / 2) : step16, red ? 0.5 : 1.1, kick * pump, 1],
-        uClDais: [(1 + 0.2 * kick * pump) * MO.mix(0.3, 1, dc), dc, 1, 0],
+        uClDais: [(1 + 0.2 * kick * pump) * MO.mix(0.12, 1, dc), dc, dc, 0],
         uClConv: pattern === 'tunnel' ? [HEAD[0], HEAD[1], 0.35 + 0.15 * snap, 0] : [0, 0, 0, 0],
         uClDan: [dOn ? 1 : 0, 0.07 * Math.sin(Math.PI * lb) * A * (red ? 0.7 : 1), -0.010 * envA(t - tk, 0.03, 0.15) * A, 0],
         uClArms: [armL, armR, 0, 0],

@@ -75,7 +75,7 @@ uniform vec4  uFig2;      // crown 0..1, crown drop (mask units), gold-edge flar
 uniform vec4  uFig3;      // aura contour spacing (body units), body y-scale (the crown's landing squash), crown dust ring 0..1 (< 0 none), hat light sweep 0..1
 uniform vec4  uFig4;      // aura travel (spacings), heart pulse 0..1 (kick), breathing scale, -
 uniform vec4  uCrack;     // crack: growth radius (mask units), fresh-crack light, kick flash; shatter spread g(tau)
-uniform vec4  uShat;      // shatter: tau (s; < 0 = whole), fall clock (s), fade (reduced), the Shadow's eyes open
+uniform vec4  uShat;      // shatter: tau (s; < 0 = whole), the shards' edge light (0.6 for the first 0.3 s, up to 1 by 0.6 s), fade (reduced), the Shadow's eyes open
 uniform vec4  uSnap;      // the eyes' snap: amount, ring radius (screen), impact frame 0/1 (the scene keeps only its lines), -
 uniform vec3  uInkA; uniform vec3 uRimA; uniform vec3 uBoneA; uniform vec3 uLeafA; uniform vec3 uGlowA; uniform vec3 uChromeA;
 uniform vec3  uInkB; uniform vec3 uRimB; uniform vec3 uBoneB; uniform vec3 uLeafB; uniform vec3 uGlowB; uniform vec3 uChromeB;
@@ -376,8 +376,9 @@ vec3 pm_rows(vec2 v, float pe) {
   }
   float mlod = hm / pmw;                                  // mask half-height in pixels
   col = hit > 0.5 ? mix(pInk * 0.45 + pBone * 0.10 * lit, mcol, smoothstep(1.5, 4.0, mlod)) : col;
-  // motion: the near rows (big on screen) fade toward their average while they step (anti-strobe, spec 7.3 rule 1)
-  col = mix(pInk * 0.6 + pBone * 0.15 * lit, col, mix(moAntiStrobe(uHall4.w), 1.0, smoothstep(Z0 + 2.0 * D, Z0 + 4.0 * D, Zs)));
+  // motion: the near rows (big on screen) fade toward their average while they step (anti-strobe, spec 7.3 rule 1);
+  // the average is measured: bone masks over violet-rimmed parapets, the same brightness as the rows at rest
+  col = mix(pInk * 0.6 + (pBone * 0.21 + pRim * 0.12) * lit, col, mix(moAntiStrobe(uHall4.w), 1.0, smoothstep(Z0 + 2.0 * D, Z0 + 4.0 * D, Zs)));
   // the nearest rows (the rush passes them fast at the frame's edges) sink into the dark
   col *= uHall4.y > 0.0 ? smoothstep(uHall3.z, uHall3.z + uHall4.y, Zs) : 1.0;
   // fog: the far rows dissolve into the dark toward the glow; behind a close-up (defocused) the hall recedes
@@ -566,7 +567,7 @@ vec3 pm_figure(vec3 col, vec2 h, float pe) {
   cm += mix(pRim, vec3(1.0, 0.95, 1.1), 0.6) * 2.5 * (0.7 + 0.7 * uCrack.y + 0.25 * uCrack.z) * crL;
   cm += pRim * 0.5 * pm_gl(crk, mpe, 3.0) * grow * (0.5 + 0.25 * uCrack.z);
   // the shards' edges
-  cm += (pChrome * 2.0 * pm_st(cedge, mpe, 0.9) + pBone * 0.6 * pm_st(fd, mpe, 0.7)) * step(0.0, uShat.x);
+  cm += (pChrome * 2.0 * pm_st(cedge, mpe, 0.9) + pBone * 0.6 * pm_st(fd, mpe, 0.7)) * step(0.0, uShat.x) * uShat.y;
 #endif
   // the crown of lead with Saturn's sign (hall)
   float mcov = fill(fd, mpe) * (1.0 - fill(ed, mpe)) * on * (1.0 - uShat.z);
@@ -708,7 +709,8 @@ void main() {
   // Modes (params.cam):
   //   hall   frontal, symmetric: the figure at about 55 % of the frame height, its mask's eyes at
   //          y = 36 % from the top (spec 6.1); the tiers march one row toward the camera on the kicks of
-  //          beats 1 and 3 (an eased 0.25 s step, integer at rest); a clap flips one tier (tiers 3-8,
+  //          beats 1 and 3 (a 0.45 s smoothstep, integer at rest; none on the cut: the hall opens still);
+  //          a clap flips one tier (tiers 3-8,
   //          clap count mod 6) to the masks' dark backs (violet veins, a gold rim; the headdresses turn
   //          with them), back on the next beat; an open hat runs a glint along
   //          one row's eye-hole rims; every fourth mask wears a trump headdress in flat Marseille
@@ -809,12 +811,14 @@ void main() {
         let ts;
         if (red()) { ts = []; for (let k = Math.ceil((cue.from - 1e-4) / (2 * BEAT)); k * 2 * BEAT < cue.to; k++) ts.push(k * 2 * BEAT); }
         else ts = (MO.events.kick || []).map((e) => e.t).filter((x) => x >= cue.from - 1e-4 && x < cue.to && Math.round(x / BEAT) % 2 === 0);
-        stepCache[key] = ts.filter((x) => !holds.some((h) => x >= h[0] && x <= h[1]));
+        // no step on the cut itself: the hall opens still and marches from the next beat 1 or 3
+        stepCache[key] = ts.filter((x) => x > cue.from + 0.06 && !holds.some((h) => x >= h[0] && x <= h[1]));
       }
       return stepCache[key];
     };
     // the march: one row per step (the kicks on beats 1 and 3: 1.13 rows/s, under spec 7.3 rule 1's 2/s),
-    // eased (integer at rest); rush: one row per beat, surging on the kick
+    // eased over 0.45 s (smoothstep: at most 0.11 rows per frame, so the anti-strobe hardly fades the near
+    // rows; integer at rest); rush: one row per beat, surging on the kick
     const travelAt = (t) => {
       if (mode === 1) return (t - cue.from) * 0.12;             // close: the defocused hall only drifts
       if (mode === 2) {
@@ -829,7 +833,7 @@ void main() {
       let nk = 0;
       while (nk < st.length && st[nk] <= t) nk++;
       if (nk <= 0) return 0;
-      return nk - 1 + MO.easeInOut((t - st[nk - 1]) / (red() ? 0.5 : 0.25));
+      return nk - 1 + MO.smooth((t - st[nk - 1]) / (red() ? 0.5 : 0.45));
     };
     const backOut = (x) => { x = MO.clamp(x); const c = 1.70158; return 1 + (c + 1) * Math.pow(x - 1, 3) + c * Math.pow(x - 1, 2); };
     // claps flip one tier (clap count mod 6), back on the next beat
@@ -953,7 +957,7 @@ void main() {
         }
         if (T_SHAT === -Infinity) {
           // shattered before the cue: the shards are gone, the Shadow's face looks out
-          out.uShat = [5, 0, 1, 1];
+          out.uShat = [5, 1, 1, 1];
           const tb = shardTable(0, 0, true);
           out.uShA = tb.A; out.uShB = tb.B;
         } else if (T_SHAT != null && t >= T_SHAT) {
@@ -963,7 +967,9 @@ void main() {
           const fall = [0, 1, 2, 3].map((r) => (fcs.length ? t - fcs[Math.min(3 - r, fcs.length - 1)] : 0));
           const te = tau - 0.2;
           const eo = te < 0 ? 0 : MO.clamp(1.0 - Math.exp(-40 * te) * Math.cos(30 * te) + 0.15 * Math.exp(-8 * te) * Math.sin(30 * te), 0, 1.2);
-          out.uShat = [tau, 0, red() ? MO.smooth(tau / 0.5) : 0, eo];
+          // the shards' chrome edges at 0.6 while they fly fastest (after the impact frame), full by 0.6 s
+          // (spec 7.4: fewer thin edges crossing a pixel by more than the flash analyser's 0.1 step)
+          out.uShat = [tau, 0.6 + 0.4 * MO.smooth((tau - 0.3) / 0.3), red() ? MO.smooth(tau / 0.5) : 0, eo];
           const tb = shardTable(tau, red() ? 0 : fall, red());
           out.uShA = tb.A; out.uShB = tb.B; out.uCrack[3] = tb.g;
           out.uSnap = [te > 0 ? Math.exp(-te / 0.22) * (red() ? 0.4 : 1) : 0, 0.25 + Math.max(0, te) * 4.5, 0, 0];

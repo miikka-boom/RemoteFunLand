@@ -344,7 +344,10 @@ button.chip:hover { border-color: var(--gold) }
   {
     const w = S.warning || {}, bt = (b) => fmt(b * MO.BEAT);
     const spans = Array.isArray(w.strongest) ? (Array.isArray(w.strongest[0]) ? w.strongest : [w.strongest]) : [];
-    const strongest = spans.map((r) => `from ${bt(r[0])} to ${bt(r[1])}`).join(' and ');
+    // "at 0:13–0:15, 0:41–0:42 … and 2:55–2:57" (one span: "from 0:13 to 0:15")
+    const rng = spans.map((r) => `${bt(r[0])}–${bt(r[1])}`);
+    const strongest = spans.length === 1 ? `from ${bt(spans[0][0])} to ${bt(spans[0][1])}`
+      : rng.length ? 'at ' + (rng.length > 1 ? rng.slice(0, -1).join(', ') + ' and ' + rng[rng.length - 1] : rng[0]) : '';
     $('warnGate').textContent = 'bright flashes and fast strobing throughout' + (strongest ? `, strongest ${strongest}.` : '.');
     if (w.flashFrom != null || w.strobeFrom != null || strongest) {
       const parts = [];

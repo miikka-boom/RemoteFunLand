@@ -559,8 +559,9 @@ void main() {
   float kenv = exp(-uKT / 0.11);
   // pull-out from the dancer to the whole mandala; a quadratic ease (not quartic) keeps the outer
   // field from scrolling past at 10+ rows/s. uPull (JS): x the start zoom, y the pull's length.
-  // Spec 7.3 rule 1: from 2.2 over 2 s (the 30 s piece: 3.6 over 1.72 s): every ring of the mandala
+  // Spec 7.3 rule 1: from 1.8 over 2.2 s (the 30 s piece: 3.6 over 1.72 s): every ring of the mandala
   // crosses the pixels it passes, so a shorter, slower pull halves the crossings in its first second
+  // (from 2.2 over 2 s the key-change drop still lit 13 % of the frame past 3 flashes a second)
   float pull = 1.0 - pow(1.0 - sat(pt / uPull.y), 2.0);
   // (reduced: a shorter pull from 1.6 and a third of the roll)
   float zoom = mix(uPull.x, 0.80, pull) * (1.0 + 0.015 * kenv * (1.0 - 0.6 * uReduced)) * uCamK.x;
@@ -597,6 +598,8 @@ uniform vec2 uMetK;          // x: how leaden it is (tarnish), y: its warmth (fl
 uniform vec3 uChkA, uChkB;   // the checkerboard's two colours (floor knob)
 uniform float uFloorInv;     // the floor's clap inversion right now (the beat-4 clap; off in reduced mode)
 uniform float uFuseAt;       // seconds from the scene start to the fusion
+uniform vec3 uRipC;          // the kick ripple's colour (JS: gold; none on the crimson floor, rule 6)
+uniform vec3 uRoP;           // the camera 1/30 s earlier (rule 1: the checker's anti-strobe)
 const vec3 RB_SC = vec3(0.0, 1.6, 0.0);
 const float RB_SR = 1.0;
 
@@ -644,18 +647,20 @@ vec3 rb_tint(vec3 n) {
   float g = smoothstep(front - 0.08, front + 0.08, n.y);
   return mix(uMetA, uMetB, g) + uMetF * rb_g((n.y - front) / 0.05) * step(0.01, uGold) * step(uGold, 0.99);
 }
-vec3 rb_floorBase(vec3 h, vec2 dx, vec2 dy) {
+// mv: the floor's travel under this pixel over the last frame (floor units): rule 1, where the tiles slide
+// past faster than ~2 a second (near the horizon under the orbiting camera) the checker fades to its average
+vec3 rb_floorBase(vec3 h, vec2 dx, vec2 dy, float mv) {
   vec2 g = h.xz * 0.85;
   vec2 w = max(abs(dx), abs(dy)) * 0.85 + 0.001;
   vec2 i = 2.0 * (abs(fract((g - 0.5 * w) * 0.5) - 0.5) - abs(fract((g + 0.5 * w) * 0.5) - 0.5)) / w;
-  float chk = 0.5 - 0.5 * i.x * i.y;
+  float chk = 0.5 - 0.5 * i.x * i.y * moAntiStrobe(mv * 0.85);
   chk = mix(chk, 1.0 - chk, uFloorInv);
   vec3 base = mix(uChkA, uChkB, chk);   // crimson: (0.004, 0, 0.008) / (0.34, 0, 0.03)
   // kick ripple: a ring of light running out across the floor from under the vessel
   float rr = length(h.xz - RB_SC.xz);
   // (on beats 1 and 3 only: at every kick it would cross each pixel of the floor 2.3 times a second)
   float rk = 1.0 + uRKT * 9.0;
-  base += vec3(2.4, 0.9, 0.2) * rb_g((rr - rk) / 0.10) * exp(-uRKT / 0.3);
+  base += uRipC * rb_g((rr - rk) / 0.10) * exp(-uRKT / 0.3);
   // contact shadow and glow under the vessel
   base *= 0.35 + 0.65 * smoothstep(0.2, 1.4, rr);
   base += vec3(1.0, 0.3, 0.05) * exp(-rr * 1.5) * 0.35 * (0.4 + uMetK.y);
@@ -743,7 +748,11 @@ void main() {
   vec2 dx = dFdx(hF.xz), dy = dFdy(hF.xz);
   float er = e1 * 18.0 * t2;
   dx = hitS ? vec2(er) : dx; dy = hitS ? vec2(er) : dy;
-  vec3 fb = rb_floorBase(hf, dx, dy);
+  // the floor point under this pixel one frame earlier (same roll): its distance is the checker's travel
+  vec3 rdP = normalize(lookAt(uRoP, uTa, 0.04 * sin(uTime * 0.9)) * vec3(uv, RB_F));
+  vec2 hP = uRoP.xz + rdP.xz * (rdP.y < 0.0 ? -uRoP.y / rdP.y : 1e4);
+  float mvF = hitS ? 0.0 : length(hP - hF.xz);
+  vec3 fb = rb_floorBase(hf, dx, dy, mvF);
   // the floor's mirror ray may see the vessel
   float ts2 = hitF ? rb_hitSphere(o2, d2, RB_SC, RB_SR) : -1.0;
   vec3 n2 = normalize(o2 + d2 * max(ts2, 0.0) - RB_SC);
@@ -762,7 +771,9 @@ void main() {
   } else if (hitF) {
     vec3 r2 = reflect(d2, n2);
     vec3 vessel = (mix(vec3(0.5, 0.05, 0.05), vec3(0.02, 0.02, 0.1), sat(r2.y * 2.0)) + vec3(1.5, 0.4, 0.1) * exp(-abs(r2.y) * 20.0)) * tint * 1.2;
-    vec3 refl = ts2 > 0.0 ? vessel : env;
+    // (rule 1: where the floor races past, near the horizon, the mirrored mandala fades to the mirrored sky:
+    // its gold linework sliding over the red floor flickered between red and gold)
+    vec3 refl = ts2 > 0.0 ? vessel : mix(rb_skyGrad(d2) * 1.15, env, moAntiStrobe(mvF * 0.85));
     float fres = 0.18 + 0.82 * pow(1.0 - abs(rd.y), 6.0);
     col = fb + refl * fres * 0.32;
     col = mix(col, vec3(0.9, 0.12, 0.06), 1.0 - exp(-tf * 0.012));
@@ -918,6 +929,7 @@ void main() {
   // ------------------------------------------------------------------ R4: full bloom, then the dive
   const R4 = `
 uniform float uZoom, uSpin, uTiltA, uBloomOpen, uAurum, uLand;
+uniform float uDiveV;   // rule 1: the dive's zoom rate above the slow push, 0..1 (JS): the rings dissolve with it
 uniform vec2 uTilt;
 void main() {
   vec2 uv = uvCentered(gl_FragCoord.xy);
@@ -954,7 +966,7 @@ void main() {
     vec2 dc = uv - c;
     float rs = length(dc);
     float keep = max(0.32, 1.15 * 0.02 * zoom);        // the heart iris is 0.02 * zoom on screen
-    float blur = 0.88 * smoothstep(keep, keep + 0.55, rs) * smoothstep(0.0, 0.15, uDive);
+    float blur = 0.88 * smoothstep(keep, keep + 0.55, rs) * max(smoothstep(0.0, 0.15, uDive), uDiveV);
     // its colour is the mandala's own average at that radius (measured), turning crimson as the
     // heart nears, to meet the coda's red ground
     vec3 glow = mix(vec3(0.68, 0.37, 0.08), mix(vec3(0.30, 0.11, 0.025), vec3(0.34, 0.02, 0.02), smoothstep(0.5, 1.0, uDive)), smoothstep(0.4, 2.0, rs));
@@ -1112,7 +1124,7 @@ void main() {
   };
 
   // R1's pull-out: start zoom and length (s of progress); reduced as the 30 s piece had it
-  const PULL = () => (MO.reduced ? [1.6, 1.72] : [2.2, 2.0]);
+  const PULL = () => (MO.reduced ? [1.6, 1.72] : [1.8, 2.2]);
 
   // natural windows (beats) and distance from the drop (beat 48)
   const NAT = { mandala: [48, 52], wedding: [52, 56], tunnel: [56, 60], bloom: [60, 64] };
@@ -1199,8 +1211,9 @@ void main() {
   // Natural length 4 beats (1 bar), "Burn me in the fire". On an impact at the cue start (the drop:
   // fx impact at beat 48) the black sun of Nigredo returns as an eclipse for the impact frames; the
   // colour lands over two frames after it. Then the Mandala of the Self around the World dancer,
-  // fully lit, with a pull-out from the dancer to the whole mandala (1.72 s), drop speed lines,
-  // a shock ring on the kicks of beats 1 and 3, kaleidoscope steps on the claps, ring A inverting
+  // fully lit, with a pull-out from the dancer to the whole mandala (from 1.8x over 2.2 s), drop speed lines,
+  // a shock ring on the kicks of beats 1 and 3 (not on a kick an impact lands on: the impact marks
+  // it), kaleidoscope steps on the claps, ring A inverting
   // on the beat-4 clap (while it covers <= 15 % of the frame), squinting eyes on the open hats (only
   // while at most 40 eyes are on screen: until the outer field comes into view). The pull-out
   // motion-blurs its linework and fades the outer field in proportion to its zoom rate, sharpening
@@ -1227,6 +1240,9 @@ void main() {
         u.uOutK = antiStrobe(dz / OW);
         u.uBlinkK = blinkK(mandalaEyes(ed, zoom, u.uRingA.concat(u.uRingB)));
         u.uInv = ringInv(t, X, ed, zoom, 1, 0);
+        // the impact already marks the kick it lands on (the drop): that kick fires no shock ring (rule 1)
+        const rk = lastIn(beatEvents().ringKicks, t);
+        if (rk && X.impacts.some((i) => Math.abs(i.t - rk.t) < 0.1)) u.uRKT = 99;
         return u;
       },
     });
@@ -1240,6 +1256,10 @@ void main() {
   // cue END they fuse into the vessel (coniunctio: starburst and shock ring), so the fusion always
   // lands on the cut. The floor (and ring A of the mandala-sun) inverts on the beat-4 clap, a ripple
   // runs out on the kicks of beats 1 and 3; no blinks (the mandala-sun shows well over 40 eyes).
+  // Safety (7.3): the checker, and the mandala mirrored in the floor, fade to their average where the floor
+  // slides past a pixel faster than ~2 tiles a second (the band under the horizon as the camera orbits;
+  // rule 1); the crimson floor has no kick ripple and never inverts (rule 6: the crimson ground never
+  // pulses with the kick).
   // Longer: the arc settles after one bar (speed: 'fit' spreads it); the orbits keep their angular
   // speed and the spiral stretches to the fusion. Shorter: the spiral is faster (or starts part-way
   // with offsetBeats). Own params:
@@ -1311,6 +1331,10 @@ void main() {
     const NF = bt(55.5) - bt(52);   // the orbit's natural span (s) to the fusion
     const xFuse = X.pc(tFuse);
     const floor = FLOORS[P.floor] || FLOORS.crimson;
+    // rule 6: the crimson ground never pulses with the kick: no ripple and no inversion on it (a dim red
+    // ripple still lit the band under the horizon past 3 red flashes a second with the orbit)
+    const crimson = floor === FLOORS.crimson;
+    const ripC = crimson ? [0, 0, 0] : [2.4, 0.9, 0.2];
     scene(X, {
       id: sceneId('rubedo-wedding', cue), fs: RB_LIB + R2,
       uniforms: (t) => {
@@ -1327,7 +1351,7 @@ void main() {
         };
         const ro = camArc(x);
         return Object.assign(common(t, X), {
-          uRo: ro, uTa: [0, 1.32, 0], uCD: norm(CD.map((v, i) => MO.mix(v, norm([0 - ro[0], 1.95 - ro[1], 0 - ro[2]])[i], 0.75))),
+          uRo: ro, uRoP: camArc(X.pc(t - 1 / 30)), uRipC: ripC, uTa: [0, 1.32, 0], uCD: norm(CD.map((v, i) => MO.mix(v, norm([0 - ro[0], 1.95 - ro[1], 0 - ro[2]])[i], 0.75))),
           uSol: orb(ang), uLuna: orb(ang + Math.PI),
           ...((m) => ({ uGold: m.g, uMetA: m.a, uMetB: m.b, uMetK: m.k, uMetF: m.f || METAL_F.gold }))(metal(t)),
           // the fusion ramps in over 5 frames instead of jumping to 0.9: with an impact on the cut and
@@ -1339,7 +1363,7 @@ void main() {
           // the beat-4 clap inverts the floor (once a bar; off in reduced mode) and ring A of the
           // mandala-sun (about 7 % of the frame: it sits far off in the sky)
           ...((c) => { const ct = c ? t - c.t : 99; return {
-            uFloorInv: MO.reduced ? 0 : MO.smooth(ct / 0.02) * Math.exp(-ct / 0.25),
+            uFloorInv: MO.reduced || crimson ? 0 : MO.smooth(ct / 0.02) * Math.exp(-ct / 0.25),
             uInv: MO.reduced || t - X.drop < 1 ? 0 : Math.exp(-ct / 0.13) }; })(lastIn(beatEvents().claps4, t)),
         });
       },
@@ -1461,8 +1485,9 @@ void main() {
   // it): the cut into coda.eye is a match cut. Safety (spec 7.3): the push and the dive motion-blur
   // the linework in proportion to the zoom rate (capped at 4 px; never the heart iris, so the last
   // frame is unchanged) and fade the outer field; outside the heart the dive dissolves into the
-  // radial glow; the god rays are steady and the kick nudges the zoom 1.5 % (no frame-wide pump);
-  // ring A inverts at half strength on the beat-4 clap; blinks only with at most 40 eyes on screen.
+  // radial glow as fast as its zoom rate rises (within ~2 frames of "whole"); the god rays are steady
+  // and the kick nudges the zoom 1.5 % (no frame-wide pump); ring A inverts at half strength on the
+  // beat-4 clap; blinks only with at most 40 eyes on screen.
   // The dive is anchored to the cue END: it starts on the word "whole" if the score sings it in the
   // cue's last 1..4 beats, else 2 beats before the end, and always ends on the iris at the cut.
   // Longer: the slow push gets the extra time, at the natural rate up to a 1.8x zoom gain, slower
@@ -1522,6 +1547,9 @@ void main() {
         u.uBlinkK = blinkK(mandalaEyes(ed, zoom, u.uRingA.concat(u.uRingB)));
         u.uInv = ringInv(t, X, ed, zoom, 0.5, dive);
         u.uOutK = antiStrobe(v / OW);
+        // the dissolve into the radial glow follows the zoom rate as the dive accelerates on "whole" (rings
+        // crossing a pixel per frame), not only the dive's progress, so the rings never rush past sharp
+        u.uDiveV = diveOn && t > tWhole ? MO.smooth((v - Vp / 30) / 0.04) : 0;
         return u;
       },
     });
