@@ -1100,9 +1100,9 @@
   }
 
   // ================================================================ interaction & pickups
-  let useTarget = null;
+  let useTarget = null, useNear = false; // useNear: within 48 u of a use target's reach (the camera starts making room for the pill)
   function updateItems() {
-    useTarget = null;
+    useTarget = null; useNear = false;
     let bestD = 1e9;
     for (let i = items.length - 1; i >= 0; i--) {
       const it = items[i];
@@ -1118,8 +1118,10 @@
         if (touch && P.bombs < 1) { P.bombs = 1; items.splice(i, 1); banner('Noise bomb: throw it to pull the horde away', 'info', 2); if (mode === 'run') SFX.pickup(); }
       } else if (it.t === 'weapon') {
         if (!P.primary && touch) { useTarget = it; doUse(); return; }
+        if (d < 64 + 48) useNear = true;
         if (d < 64 && d < bestD) { bestD = d; useTarget = it; }
       } else if (it.t === 'switch' && !it.used) {
+        if (d < 90 + 48) useNear = true;
         if (d < 90 && d < bestD) { bestD = d; useTarget = it; }
       }
     }
@@ -1657,14 +1659,15 @@
     const lift = viewH * liftFrac();
     // Near a pickup or the switch the Use pill sits 40 px under the survivor's rest spot: don't look
     // so far north that the survivor drops onto it (the second term covers the lag when walking south).
-    if (mode === 'run' && useTarget) oy = Math.max(oy, -24 / cam.zoom + Math.max(0, P.vy) / 9);
+    const pillCap = mode === 'run' && (useTarget || useNear) ? P.r - 36 / cam.zoom + Math.max(0, P.vy) / 9 : -Infinity;
+    oy = Math.max(oy, pillCap);
     // Portrait: looking south lifts the survivor toward the button row above the stick zones. Stop
     // before the row covers the survivor and whatever is within 80 u of them. That costs most of the
     // south look-ahead in portrait, where the view below the survivor is already the deep one.
     const capCam = portrait && rowBottom > 0 ? Math.max(lift, (ch / 2 - rowBottom) / cam.zoom - 80) : Infinity;
     oy = Math.min(oy, capCam - lift);
     const kl = 1 - Math.exp(-3.5 * dt);
-    cam.lx += (ox - cam.lx) * kl; cam.ly += (oy - cam.ly) * kl;
+    cam.lx += (ox - cam.lx) * kl; cam.ly += (oy - cam.ly) * (cam.ly < pillCap ? 1 - Math.exp(-14 * dt) : kl);
     const tx = P.x + cam.lx, ty = P.y + cam.ly + lift;
     const k = 1 - Math.exp(-9 * dt);
     cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
@@ -2404,6 +2407,7 @@
     setOnce('pips', pips, (v) => hud.pips.forEach((p, i) => p.classList.toggle('on', i < v)));
     let label = '';
     if (useTarget) label = useTarget.t === 'weapon' ? 'Take ' + WEAP[useTarget.w].name.toLowerCase() : 'Hold: LOUD switch';
+    if (label && hud.use.hidden && ch / 2 + (P.y - cam.y + P.r) * cam.zoom > ch / 2 - ch * liftFrac() + 38) label = '';
     setOnce('use', label, (v) => { hud.use.hidden = !v; hud.useLabel.textContent = v; });
     if (label) placeUse(); // measured and placed once the HUD shows; a no-op when nothing changed
     hud.useFill.style.transform = `scaleX(${clamp(useHoldT / 0.6, 0, 1)})`;
@@ -2483,6 +2487,7 @@
     releaseWake();
     $('#seedLine').textContent = `Map seed ${M.seed} · ${Math.floor(runTime / 60)}:${String(Math.floor(runTime % 60)).padStart(2, '0')} in`;
     show('pause');
+    $('#pauseH').focus({ preventScroll: true }); // the next Tab lands on Resume, not the gallery link
   }
   function resume() {
     if (state !== 'paused') return;
@@ -2601,6 +2606,7 @@
     $('#playBtn').addEventListener('click', startRun);
     $('#resumeBtn').addEventListener('click', resume);
     $('#resumeIcon').addEventListener('click', resume); // on the Pause button's spot: tap there again to go back
+    $('#resumeIcon').addEventListener('mousedown', (e) => e.preventDefault()); // aria-hidden: never take focus
     // A touch that lands while a screen is arming is dropped whole, so lifting it after the guard
     // ends doesn't click whatever is under it.
     for (const el of [screens.pause, screens.end]) el.addEventListener('touchstart', (e) => { if (el.classList.contains('arming') && e.cancelable) e.preventDefault(); }, { passive: false });
@@ -2633,9 +2639,12 @@
       if (!P.primary) { P.primary = { kind: 'smg', mag: 50, res: 400 }; P.cur = 'primary'; }
       cam.x = P.x; cam.y = P.y; refreshFieldP();
       for (let i = Z.length - 1; i >= 0; i--) if (Math.hypot(Z[i].x - P.x, Z[i].y - P.y) < 700) Z.splice(i, 1);
-      D.phase = 'relax'; D.relaxT = 1e9; D.pending = null; D.warn = null; // planned around the old spot
-      if (spawnQ.length) { // a horde already queued ('Horde now'): plan it again around the gate
-        const n = spawnQ.length, at = Math.min(...spawnQ.map((q) => q.at));
+      // a horde the director already announced (D.pending) or 'Horde now' queued: plan it again around the gate
+      const pend = D.pending, pendAt = pend ? gameTime + Math.max(0.5, D.mobT) : Infinity;
+      D.phase = 'relax'; D.relaxT = 1e9; D.relaxX = P.x; D.pending = null; D.warn = null;
+      if (pend) { D.mobs++; stats.mobs++; D.mobT = rand(75, 120); } // as when the director releases it
+      if (spawnQ.length || pend) {
+        const n = spawnQ.length + (pend ? pend.n : 0), at = Math.min(pendAt, ...spawnQ.map((q) => q.at));
         spawnQ.length = 0;
         const p = planMob(n, 16, 28, 0.6);
         if (p) { releaseMob(p, at); warnFrom(p, Math.max(0.5, at - gameTime)); } else D.labCue = false;

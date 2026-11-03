@@ -282,8 +282,9 @@ window.TwinStick = (function () {
 
   // A thumb that lands near the edge of the glass has less than a stick radius left to push into.
   // Past the dead zone, travel toward that edge is stretched so reaching the edge reads as (nearly)
-  // a full push. Only the strength is stretched: the direction is still where the thumb really is.
-  // s.k records the steepest stretch applied, so the fire ring can keep its feel in thumb pixels.
+  // a full push (from about 25 px in; closer than that the gain cap stops short of the fire ring).
+  // Only the strength is stretched: the direction is still where the thumb really is.
+  // s.k records the steepest stretch applied (used to hold off firing during a tap).
   function pushLen(s, dx, dy) {
     s.k = 1;
     if (!s.floating) return Math.hypot(dx, dy);
@@ -329,10 +330,17 @@ window.TwinStick = (function () {
       else if (cfg.fireMode === 'auto') s.firing = false; // the game decides (needs a target)
       else {
         // Near an edge (s.k > 1) the ring sits closer to the thumb than a tap's travel, so don't start
-        // firing while this could still be a tap-shove; and widen the release by the stretch so the
-        // ring stays as sticky in thumb pixels as anywhere else.
+        // firing while this could still be a tap-shove. Release when the thumb has come back by the
+        // hysteresis in thumb pixels, measured along its own line (so it is just as sticky at an edge,
+        // straight or diagonal, as in the middle).
         const tapping = cfg.tapShove && s.k > 1 && s.travel <= cfg.tapPx && now() - s.t0 < cfg.tapMs;
-        s.firing = s.hasDir && ((s.mag >= cfg.fireAt && !tapping) || (s.firing && s.mag >= cfg.fireAt - cfg.fireHys * s.k));
+        let keep = false;
+        if (s.firing && d > 0) {
+          const k = s.k, f = 1 + (cfg.fireHys * R) / d;
+          keep = pushLen(s, dx * f, dy * f) / R >= cfg.fireAt;
+          s.k = k;
+        }
+        s.firing = s.hasDir && ((s.mag >= cfg.fireAt && !tapping) || keep);
       }
       if (s.firing) s.fired = true;
     }
