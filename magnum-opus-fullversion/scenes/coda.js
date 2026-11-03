@@ -390,7 +390,9 @@ void main() {
   // shockwave of the final hit
   if (uRingA > 0.0) {
     float rw = abs(r - uRing) - 0.004 - 0.02 * uRing;
-    col += vec3(1.0, 0.7, 0.3) * 1.6 * exp(-max(rw, 0.0) / 0.012) * uRingA;
+    // it bursts through the gold inner iris and dies before the red crypt band and the crimson ground:
+    // passing over the saturated red it dipped and restored the red over a third of the frame (a red flash)
+    col += vec3(1.0, 0.7, 0.3) * 1.6 * exp(-max(rw, 0.0) / 0.012) * uRingA * (1.0 - smoothstep(0.42, 0.6, r / (EY_R * uZ)));
   }
   col *= mix(1.0, 0.18 + 0.82 * smoothstep(-0.8, -0.05, p.y), uLow);
   if (uTing > 0.0) col += eyHot * 2.2 * sparkle(e, vec2(0.0, 0.0), 0.32 * uTing) * uTing;
