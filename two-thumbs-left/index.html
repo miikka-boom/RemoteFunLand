@@ -171,6 +171,12 @@ body.lefty .weapon { order: -1 }
   margin-left: calc(max(10px, env(safe-area-inset-left, 0px)) - max(16px, env(safe-area-inset-left, 0px)));
 }
 .toprow .back { align-self: center }
+/* left-handed: the top bar mirrors (Pause in the top-right corner) and so does the pause card's top row */
+body.lefty .left { flex-direction: row-reverse }
+body.lefty .toprow {
+  align-self: flex-end; flex-direction: row-reverse; margin-left: 0;
+  margin-right: calc(max(10px, env(safe-area-inset-right, 0px)) - max(16px, env(safe-area-inset-right, 0px)));
+}
 .back {
   align-self: flex-start; flex: none;
   text-decoration: none; font: 600 14px/1 var(--f-cond); letter-spacing: .08em; text-transform: uppercase;
@@ -351,7 +357,8 @@ html.portrait .rotate { display: flex; gap: 8px; align-items: center; color: var
 
 <section id="pause" class="overlay dim" aria-labelledby="pauseH" hidden>
   <div class="toprow">
-    <button id="resumeIcon" class="iconbtn" type="button" aria-label="Resume">
+    <!-- a touch target on the Pause button's spot; keyboards and screen readers use the card's Resume -->
+    <button id="resumeIcon" class="iconbtn" type="button" tabindex="-1" aria-hidden="true">
       <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>
     </button>
     <a class="back" href="../">← RemoteFunLand</a>

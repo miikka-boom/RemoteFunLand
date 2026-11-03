@@ -283,12 +283,17 @@ window.TwinStick = (function () {
   // A thumb that lands near the edge of the glass has less than a stick radius left to push into.
   // Past the dead zone, travel toward that edge is stretched so reaching the edge reads as (nearly)
   // a full push. Only the strength is stretched: the direction is still where the thumb really is.
+  // s.k records the steepest stretch applied, so the fire ring can keep its feel in thumb pixels.
   function pushLen(s, dx, dy) {
+    s.k = 1;
     if (!s.floating) return Math.hypot(dx, dy);
     const dz = R * (s.role === 'aim' ? cfg.aimDead : cfg.moveDead);
     const st = (room, v) => {
       const a = Math.abs(v);
-      return room >= R || a <= dz ? a : dz + ((a - dz) * R) / Math.max(room, R * 0.4);
+      if (room >= R || a <= dz) return a;
+      const k = R / Math.max(room, R * 0.4);
+      if (k > s.k) s.k = k;
+      return dz + (a - dz) * k;
     };
     return Math.hypot(st(dx > 0 ? W - s.ox : s.ox, dx), st(dy > 0 ? H - s.oy : s.oy, dy));
   }
@@ -322,7 +327,13 @@ window.TwinStick = (function () {
       } else s.angVel = 0;
       if (cfg.fireMode === 'any') s.firing = s.hasDir;
       else if (cfg.fireMode === 'auto') s.firing = false; // the game decides (needs a target)
-      else s.firing = s.hasDir && (s.mag >= cfg.fireAt || (s.firing && s.mag >= cfg.fireAt - cfg.fireHys));
+      else {
+        // Near an edge (s.k > 1) the ring sits closer to the thumb than a tap's travel, so don't start
+        // firing while this could still be a tap-shove; and widen the release by the stretch so the
+        // ring stays as sticky in thumb pixels as anywhere else.
+        const tapping = cfg.tapShove && s.k > 1 && s.travel <= cfg.tapPx && now() - s.t0 < cfg.tapMs;
+        s.firing = s.hasDir && ((s.mag >= cfg.fireAt && !tapping) || (s.firing && s.mag >= cfg.fireAt - cfg.fireHys * s.k));
+      }
       if (s.firing) s.fired = true;
     }
   }

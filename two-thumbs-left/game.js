@@ -1652,19 +1652,23 @@
     let ox = (Math.cos(P.aim) * 120 * am + (spd > 0.05 ? (P.vx / (Math.hypot(P.vx, P.vy) || 1)) * 50 * spd : 0)) * cfg.lookAhead;
     let oy = (Math.sin(P.aim) * 120 * am + (spd > 0.05 ? (P.vy / (Math.hypot(P.vx, P.vy) || 1)) * 50 * spd : 0)) * cfg.lookAhead;
     ox = clamp(ox, -viewW * 0.15, viewW * 0.15); oy = clamp(oy, -viewH * 0.15, viewH * 0.15);
-    // portrait: looking south lifts the survivor toward the button row above the stick zones.
-    // Stop before it, or the row covers the survivor and whatever is within 80 u of them.
-    // (The view below the survivor is already the deep one in portrait.)
-    const liftF = portrait ? 0.02 : 0.05;
-    if (portrait && rowBottom > 0) oy = Math.min(oy, Math.max(0, (ch * (0.5 - liftF) - rowBottom) / cam.zoom - 80));
-    const kl = 1 - Math.exp(-3.5 * dt);
-    cam.lx += (ox - cam.lx) * kl; cam.ly += (oy - cam.ly) * kl;
     // thumbs cover the bottom of the screen: sit the survivor a little above centre
     // (portrait only a touch, so the button row above the stick zones stays clear of it)
-    const lift = viewH * liftF;
+    const lift = viewH * liftFrac();
+    // Near a pickup or the switch the Use pill sits 40 px under the survivor's rest spot: don't look
+    // so far north that the survivor drops onto it (the second term covers the lag when walking south).
+    if (mode === 'run' && useTarget) oy = Math.max(oy, -24 / cam.zoom + Math.max(0, P.vy) / 9);
+    // Portrait: looking south lifts the survivor toward the button row above the stick zones. Stop
+    // before the row covers the survivor and whatever is within 80 u of them. That costs most of the
+    // south look-ahead in portrait, where the view below the survivor is already the deep one.
+    const capCam = portrait && rowBottom > 0 ? Math.max(lift, (ch / 2 - rowBottom) / cam.zoom - 80) : Infinity;
+    oy = Math.min(oy, capCam - lift);
+    const kl = 1 - Math.exp(-3.5 * dt);
+    cam.lx += (ox - cam.lx) * kl; cam.ly += (oy - cam.ly) * kl;
     const tx = P.x + cam.lx, ty = P.y + cam.ly + lift;
     const k = 1 - Math.exp(-9 * dt);
     cam.x += (tx - cam.x) * k; cam.y += (ty - cam.y) * k;
+    if (cam.y - P.y > capCam) cam.y = P.y + capCam; // the follow lag when walking north must not lift them under it either
     cam.kx *= Math.exp(-dt * 18); cam.ky *= Math.exp(-dt * 18);
     cam.trauma = Math.max(0, cam.trauma - dt * 1.6);
     const amt = cfg.shake * (reducedMotion.matches ? 0 : 1);
@@ -1672,6 +1676,7 @@
     cam.sx = (Math.sin(gameTime * 71.3) + Math.sin(gameTime * 43.7) * 0.6) * s * 0.65;
     cam.sy = (Math.sin(gameTime * 57.1 + 1.3) + Math.sin(gameTime * 31.9) * 0.6) * s * 0.65;
   }
+  const liftFrac = () => (ch > cw ? 0.02 : 0.05); // how far above centre the camera rests the survivor
   function baseZoom() {
     // about 440 u on the short side: bodies ~23 px wide on a phone
     let s = Math.sqrt((cw * ch) / 440000);
@@ -1734,8 +1739,8 @@
     }
     return y;
   }
-  // The Use pill rides just under the survivor (camera look-ahead included), centred between the
-  // thumbs. It holds still while a finger is on it, so it never slides out from under a press.
+  // The Use pill sits just under where the camera rests the survivor, centred between the thumbs.
+  // It stays put: updateCamera keeps the survivor from looking down onto it, so it is a still target.
   const useBox = { label: null, w: 0, h: 0 };
   if (document.fonts) document.fonts.addEventListener('loadingdone', () => { useBox.w = 0; }); // the label got wider
   function placeUse() {
@@ -1746,8 +1751,8 @@
       if (!el.offsetWidth) return; // the HUD is hidden behind a screen: measure once it shows again
       useBox.label = label; useBox.w = el.offsetWidth; useBox.h = el.offsetHeight;
     }
-    const sy = ch / 2 + (P.y - cam.y) * cam.zoom; // the survivor's screen y, shake and recoil left out
-    placeEl(el, cw / 2, sy + 40 + useBox.h / 2, useBox.w, useBox.h);
+    const rest = ch / 2 - ch * liftFrac();
+    placeEl(el, cw / 2, rest + 40 + useBox.h / 2, useBox.w, useBox.h);
   }
   let rowBottom = 0; // portrait: the bottom edge of the thumb-button row (0 in landscape)
   function layoutButtons() {
@@ -2400,7 +2405,7 @@
     let label = '';
     if (useTarget) label = useTarget.t === 'weapon' ? 'Take ' + WEAP[useTarget.w].name.toLowerCase() : 'Hold: LOUD switch';
     setOnce('use', label, (v) => { hud.use.hidden = !v; hud.useLabel.textContent = v; });
-    if (label) placeUse(); // follows the survivor every frame (a no-op while held)
+    if (label) placeUse(); // measured and placed once the HUD shows; a no-op when nothing changed
     hud.useFill.style.transform = `scaleX(${clamp(useHoldT / 0.6, 0, 1)})`;
     let obj;
     if (M.gate.state === 'closed') obj = !P.primary && inRoomRect(P, M.startRoom) ? 'Grab a gun from the table' : 'Find the gate in the east wall →';
@@ -2431,7 +2436,7 @@
     set('#howShove', cfg.tapShove ? `<b>Tap</b> the ${am.toLowerCase()} side to <b>shove</b> when they get close.`
       : cfg.shoveBtn ? 'Hit the <b>Shove</b> button when they get close.'
       : cfg.flickShove ? `<b>Flick</b> the ${am.toLowerCase()} stick to <b>shove</b> when they get close.`
-      : 'No shove in this setup: <b>back off</b> and shoot.');
+      : 'No touch shove in this setup: <b>back off</b> and shoot.');
   }
 
   // ================================================================ screens
@@ -2596,6 +2601,9 @@
     $('#playBtn').addEventListener('click', startRun);
     $('#resumeBtn').addEventListener('click', resume);
     $('#resumeIcon').addEventListener('click', resume); // on the Pause button's spot: tap there again to go back
+    // A touch that lands while a screen is arming is dropped whole, so lifting it after the guard
+    // ends doesn't click whatever is under it.
+    for (const el of [screens.pause, screens.end]) el.addEventListener('touchstart', (e) => { if (el.classList.contains('arming') && e.cancelable) e.preventDefault(); }, { passive: false });
     $('#restartBtn').addEventListener('click', startRun);
     $('#againBtn').addEventListener('click', startRun);
     $('#labBtnTitle').addEventListener('click', () => openLab('title'));
@@ -2625,7 +2633,13 @@
       if (!P.primary) { P.primary = { kind: 'smg', mag: 50, res: 400 }; P.cur = 'primary'; }
       cam.x = P.x; cam.y = P.y; refreshFieldP();
       for (let i = Z.length - 1; i >= 0; i--) if (Math.hypot(Z[i].x - P.x, Z[i].y - P.y) < 700) Z.splice(i, 1);
-      D.phase = 'relax'; D.relaxT = 1e9;
+      D.phase = 'relax'; D.relaxT = 1e9; D.pending = null; D.warn = null; // planned around the old spot
+      if (spawnQ.length) { // a horde already queued ('Horde now'): plan it again around the gate
+        const n = spawnQ.length, at = Math.min(...spawnQ.map((q) => q.at));
+        spawnQ.length = 0;
+        const p = planMob(n, 16, 28, 0.6);
+        if (p) { releaseMob(p, at); warnFrom(p, Math.max(0.5, at - gameTime)); } else D.labCue = false;
+      }
       closeLab(); toast('At the gate. Hold the switch to start.');
     });
     // Sound toggle on the title and pause cards. Kept under its own key, not in the feel
