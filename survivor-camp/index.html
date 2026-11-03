@@ -268,6 +268,7 @@ body.sheet-left .bl { left: calc(var(--pad-l) + var(--sheet-w) + 8px) }
   opacity: 0; transition: opacity .2s, transform .2s; pointer-events: none; max-width: 86vw; text-align: center;
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0) }
+body.modal-open .toast { bottom: auto; top: calc(var(--top-h) + var(--safe-t) + 4px) }
 
 /* ---------- overlays (route + loadout, run, result) ---------- */
 .overlay {
@@ -408,10 +409,13 @@ details.payload .pnote { margin: 0; padding: 0 10px 8px; font-size: 11px; color:
 .hint.tap { box-shadow: inset 0 0 0 1px rgba(255,198,107,.5); color: var(--sodium) }
 
 /* ---------- cards (CL beat, person, welcome back, other tab) ---------- */
-.modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; padding: 10px var(--pad-r) var(--pad-b) var(--pad-l); background: rgba(5,7,10,.5) }
+.modal { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; padding: 10px var(--pad-r) var(--pad-b) var(--pad-l); background: rgba(5,7,10,.5) }
 .modal.top { place-items: start center; padding-top: calc(var(--top-h) + var(--safe-t) + 6px); background: rgba(5,7,10,.25) }
 .modal.top .mcard { width: min(380px, 100%); gap: 4px; padding: 10px 14px }
 .modal.top .mcard h2 { font-size: calc(var(--fs-h) + 2px) }
+.modal.top.side { place-items: start start; padding-left: var(--pad-l) }
+.btns.clrow { justify-content: space-between; align-items: center }
+.btns.clrow b { font: 800 16px/1 var(--f-cond); letter-spacing: .04em }
 .mcard {
   width: min(440px, 100%); max-height: 100%; overflow-y: auto; overscroll-behavior: contain; padding: 14px 16px 12px; border-radius: 16px;
   background: var(--panel-solid); box-shadow: 0 20px 60px rgba(0,0,0,.6), inset 0 0 0 1px var(--rule);
@@ -433,17 +437,133 @@ details.payload .pnote { margin: 0; padding: 0 10px 8px; font-size: 11px; color:
 .btn.primary { background: var(--orange); color: #1a0b03; box-shadow: 0 6px 24px rgba(255,122,47,.3) }
 .btn.go { background: var(--green); color: #06180c }
 
-/* portrait (the full fallback comes later): never scroll sideways */
-@media (orientation: portrait) and (max-width: 600px) {
+/* ---------- shop (free prototype packs, SPEC 4.11) ---------- */
+.mcard.shop { width: min(600px, 100%); gap: 8px }
+.shop .warnhead { margin: 0; font: 800 13px/1.15 var(--f-cond); letter-spacing: .18em; color: var(--c-bat) }
+.shop .desc { margin: 0 }
+.packs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px }
+.pack { display: grid; gap: 5px; justify-items: center; padding: 10px 8px 8px; border-radius: 12px; text-align: center; background: rgba(255,216,74,.06); box-shadow: inset 0 0 0 1px rgba(255,216,74,.32) }
+.pack .lbl { font: 700 10.5px/1.2 var(--f-cond); letter-spacing: .08em; text-transform: uppercase; color: var(--ink-soft) }
+.pack .sz { font: 800 15px/1 var(--f-cond); letter-spacing: .12em; text-transform: uppercase }
+.pack .amt { display: inline-flex; align-items: center; gap: 4px; font: 800 26px/1 var(--f-cond); color: var(--c-bat); font-variant-numeric: tabular-nums }
+.pack .amt svg { width: 22px; height: 22px; fill: currentColor }
+.pack .btn { width: 100%; padding: 0 8px }
+@media (max-height: 360px) { .shop .shopdesc, .shop #shopGot { display: none } }
+
+/* ---------- welcome back and end cards ---------- */
+.mcard .rows div { display: flex; align-items: center; gap: 8px }
+.mcard.welcome { display: flex; flex-direction: column; overflow: hidden }
+.mcard.welcome .rows { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y }
+.mcard.welcome > * { flex: none }
+.mcard.welcome > .rows { flex: 1 1 auto }
+.mcard .rows svg { width: 18px; height: 18px; fill: currentColor; flex: none }
+.mcard .rows .ok { color: var(--green) }
+.endgrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 18px; font: 600 13px/1.25 var(--f-cond); font-variant-numeric: tabular-nums }
+.endgrid span { display: flex; justify-content: space-between; gap: 8px; padding: 3px 0; border-bottom: 1px solid var(--rule); white-space: nowrap }
+.endgrid i { font-style: normal; color: var(--ink-soft); overflow: hidden; text-overflow: ellipsis }
+.endgrid b { font-weight: 800 }
+@media (max-height: 360px) { .mcard .enddesc { display: none } }
+@media (max-width: 420px) { .endgrid { grid-template-columns: minmax(0, 1fr) } }
+.cltrack { display: grid; grid-template-columns: repeat(9, minmax(0, 1fr)); gap: 3px }
+.cltrack span { display: grid; gap: 1px; padding: 3px 0; border-radius: 6px; background: rgba(255,198,107,.12); text-align: center; font: 700 10.5px/1.1 var(--f-cond); color: var(--ink-soft) }
+.cltrack b { color: var(--sodium); font-size: 13px }
+
+/* ---------- camp lab (styled like Two Thumbs Left's feel lab, SPEC 9) ---------- */
+.lab {
+  position: fixed; z-index: 22; top: 0; bottom: 0; right: 0; width: min(420px, 100%);
+  display: grid; grid-template-rows: auto minmax(0, 1fr); grid-template-columns: minmax(0, 1fr);
+  background: var(--panel-solid); box-shadow: -20px 0 60px rgba(0, 0, 0, .6);
+  padding: var(--safe-t) var(--safe-r) var(--safe-b) 0; touch-action: pan-y;
+}
+.lab header { display: flex; align-items: center; gap: 6px; min-width: 0; padding: 4px 8px 4px 16px; border-bottom: 1px solid var(--rule) }
+.lab header h2 { flex: none; margin: 0; font: 800 24px/1 var(--f-cond); letter-spacing: .02em; text-transform: uppercase; white-space: nowrap }
+.lab header .btn { flex: none; padding: 0 14px }
+.lab .jump { flex: 1 1 auto; min-width: 0; display: flex; gap: 0; overflow-x: auto; scrollbar-width: none; touch-action: pan-x;
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 18px), transparent); mask-image: linear-gradient(90deg, transparent, #000 10px, #000 calc(100% - 18px), transparent) }
+.lab .jump::-webkit-scrollbar { display: none }
+.lab .jump button { flex: none; height: 44px; padding: 0 9px; border: 0; background: none; font: 700 12px/1 var(--f-cond); letter-spacing: .14em; text-transform: uppercase; color: var(--ink-soft) }
+.lab .jump button:hover { color: var(--orange) }
+.lab .lbody { overflow-y: auto; padding: 0 16px 28px; scroll-padding-top: 8px; overscroll-behavior: contain; touch-action: pan-y; min-height: 0 }
+.lab h3 { margin: 18px 0 4px; font: 700 13px/1 var(--f-cond); letter-spacing: .18em; text-transform: uppercase; color: var(--orange) }
+.lab h4 { margin: 12px 0 3px; font: 700 11.5px/1 var(--f-cond); letter-spacing: .14em; text-transform: uppercase; color: var(--sodium) }
+.lab .row { padding: 6px 0; border-bottom: 1px solid var(--rule) }
+.lab .rl { display: flex; justify-content: space-between; align-items: center; gap: 10px; font: 600 14px/1.2 var(--f-cond); letter-spacing: .03em; min-height: 22px }
+.lab output, .lab .val { font: 600 14px/1 var(--f-cond); color: var(--sodium); font-variant-numeric: tabular-nums; white-space: nowrap }
+.lab input[type="range"] { display: block; width: 100%; margin: 4px 0 0; accent-color: var(--orange); height: 30px; touch-action: pan-x }
+.lab .tog { display: flex; justify-content: space-between; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font: 600 14px/1.2 var(--f-cond); letter-spacing: .03em }
+.lab .tog input { position: absolute; opacity: 0; width: 1px; height: 1px }
+.lab .tog i { flex: none; width: 46px; height: 28px; border-radius: 14px; background: rgba(236,232,223,.18); position: relative; transition: background .15s }
+.lab .tog i::after { content: ""; position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 50%; background: var(--ink); transition: transform .15s }
+.lab .tog input:checked + i { background: var(--orange) }
+.lab .tog input:checked + i::after { transform: translateX(18px) }
+.lab .tog input:focus-visible + i { outline: 2px solid var(--orange); outline-offset: 2px }
+.lab .lseg { display: flex; gap: 3px; margin-top: 4px; background: rgba(0,0,0,.35); border-radius: 10px }
+.lab .lseg.wrap { flex-wrap: wrap }
+.lab .lseg button { flex: 1 1 0; min-width: 44px; min-height: 44px; padding: 0 4px; border: 0; border-radius: 9px; background: none; font: 700 14px/1 var(--f-cond); letter-spacing: .04em; white-space: nowrap }
+.lab .lseg.wrap button { flex: 1 0 18% }
+.lab .lseg button[aria-checked="true"] { background: var(--orange); color: #1a0b03 }
+.lab .lbtns { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 6px; margin: 6px 0 2px }
+.lab .lb { min-height: 44px; padding: 0 8px; border: 0; border-radius: 10px; background: rgba(236,232,223,.08); box-shadow: inset 0 0 0 1px var(--rule); font: 700 14px/1.1 var(--f-cond); letter-spacing: .03em }
+.lab .lb:hover { box-shadow: inset 0 0 0 1px var(--orange) }
+.lab .lb.primary { background: var(--orange); color: #1a0b03; box-shadow: none }
+.lab .lb.warn { background: rgba(195,39,43,.25); box-shadow: inset 0 0 0 1px rgba(255,75,47,.6); color: #ffb3a6 }
+.lab .lb.armed { background: var(--red); color: #fff }
+.lab .lb[disabled] { opacity: .4; cursor: default }
+.lab .lnote { margin: 4px 0 0; font-size: 12.5px; line-height: 1.35; color: var(--ink-soft) }
+.lab .lnote b { color: var(--ink); font-weight: 600 }
+.lab .lbtns.five { grid-template-columns: repeat(5, minmax(0, 1fr)) }
+.lab .lbtns.two { grid-template-columns: repeat(2, minmax(0, 1fr)) }
+.lab .seedin { width: 120px; height: 44px; padding: 0 10px; border: 0; border-radius: 10px; background: rgba(0,0,0,.4); box-shadow: inset 0 0 0 1px var(--rule); color: var(--ink); font: 600 15px/1 var(--f-cond); font-variant-numeric: tabular-nums }
+.lab textarea { display: block; width: 100%; min-height: 96px; margin: 6px 0 0; padding: 8px 10px; border: 0; border-radius: 10px; resize: vertical; background: rgba(0,0,0,.42); box-shadow: inset 0 0 0 1px var(--rule); color: #cfd6c8; font: 500 11px/1.4 ui-monospace, Menlo, Consolas, monospace; -webkit-user-select: text; user-select: text }
+.lab pre { margin: 6px 0 0; max-height: 200px; overflow: auto; padding: 8px 10px; border-radius: 10px; background: rgba(0,0,0,.42); font: 500 10.5px/1.35 ui-monospace, Menlo, Consolas, monospace; color: #cfd6c8; white-space: pre; -webkit-user-select: text; user-select: text; touch-action: pan-x pan-y }
+.lab .errs { margin: 6px 0 0; padding: 0 0 0 18px; color: var(--red); font-size: 12.5px }
+.lab .okmsg { margin: 6px 0 0; color: var(--green); font-size: 12.5px }
+.lab .tw { overflow-x: auto; margin: 4px 0 0; touch-action: pan-x pan-y }
+.lab table { width: 100%; border-collapse: collapse; font: 600 12.5px/1.25 var(--f-cond); letter-spacing: .02em; font-variant-numeric: tabular-nums }
+.lab th { text-align: left; font: 700 10.5px/1.2 var(--f-cond); letter-spacing: .1em; text-transform: uppercase; color: var(--ink-soft); padding: 4px 6px 3px 0; border-bottom: 1px solid var(--rule); white-space: nowrap }
+.lab td { padding: 3px 6px 3px 0; border-bottom: 1px solid rgba(236,232,223,.06); white-space: nowrap; vertical-align: top }
+.lab td.n, .lab th.n { text-align: right }
+.lab td.wrap { white-space: normal; word-break: break-word; color: var(--ink-soft); font-weight: 500 }
+.lab .good { color: var(--green) } .lab .bad { color: var(--red) } .lab .dev { color: var(--c-bp) }
+.lab .rule-ok { color: var(--green); font: 700 13px/1.3 var(--f-cond) } .lab .rule-bad { color: var(--red); font: 700 13px/1.3 var(--f-cond) }
+
+/* ---------- portrait: rotate prompt and fallback (SPEC 8.6) ---------- */
+.rotate {
+  position: fixed; inset: 0; z-index: 60; display: grid; place-content: center; justify-items: center; gap: 14px;
+  padding: 24px max(24px, var(--safe-r)) 24px max(24px, var(--safe-l)); background: #07090d; text-align: center;
+}
+.rotate .phone { width: 92px; height: 92px; fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; animation: turn 2.6s ease-in-out infinite }
+.rotate .phone .scr { fill: rgba(255,122,47,.28); stroke: none }
+@keyframes turn { 0%, 22% { transform: rotate(0) } 50%, 78% { transform: rotate(90deg) } 100% { transform: rotate(0) } }
+.rotate h2 { margin: 0; font: 800 30px/1.02 var(--f-cond); letter-spacing: .01em; text-transform: uppercase }
+.rotate p { margin: 0; max-width: 300px; color: var(--ink-soft) }
+.rotate .btn { margin-top: 6px }
+.topbar, .bl, .play { transition: opacity .3s }
+body.beat .topbar, body.beat .bl, body.beat .play { opacity: .3 }
+
+@media (orientation: portrait) and (max-width: 599px) {
   .topbar { flex-wrap: wrap; height: auto; row-gap: 4px; padding-top: max(6px, var(--safe-t)) }
   .chip { min-width: 0 }
-  #routes { grid-template-columns: minmax(0, 1fr); overflow-y: auto }
+  .topbar .spacer { flex-basis: 100%; height: 0; order: 0 }
+  .batbtn { margin-left: auto }
+  .banners { top: calc(var(--top-h) * 2 + var(--safe-t) + 10px) }
+  .modal.top { padding-top: calc(var(--top-h) * 2 + var(--safe-t) + 10px) }
+  .sheet, .sheet.left, .sheet.right { left: var(--pad-l); right: var(--pad-r); width: auto; top: auto; bottom: var(--pad-b); max-height: 45vh; z-index: 6 }
+  body.sheet-bottom .bl, body.sheet-bottom .play { visibility: hidden }
+  #routes { grid-template-columns: minmax(0, 1fr); align-content: start; overflow-y: auto; overscroll-behavior: contain; touch-action: pan-y }
+  .rcol { grid-template-rows: 44px repeat(5, 64px) }
+  .lcol { overflow: visible; padding-bottom: calc(var(--play-h) + 20px) }
   #result { grid-template-columns: minmax(0, 1fr) }
+  .packs { grid-template-columns: minmax(0, 1fr) }
 }
-@media (prefers-reduced-motion: reduce) {
-  .chip, .toast, .hp-fill, .hp-temp { transition: none }
-  .hand svg, .play.pulse { animation: none }
-}
+
+/* ---------- reduced motion (SPEC 8.9): media query or the Lab toggle, both set body.reduced ---------- */
+body.reduced .hand svg, body.reduced .play.pulse, body.reduced .play.rise, body.reduced .chip.reveal, body.reduced .mcard,
+body.reduced .mcard .rows div, body.reduced .banner, body.reduced .ticker p, body.reduced .rotate .phone, body.reduced .shake,
+body.reduced .sheet.swap .sbody, body.reduced .sheet.swap .shead { animation: none }
+body.reduced .chip, body.reduced .toast, body.reduced .hp-fill, body.reduced .hp-temp, body.reduced .topbar, body.reduced .bl, body.reduced .play { transition: none }
+body.reduced .hand::after { content: ""; position: absolute; left: -6px; top: -8px; width: 30px; height: 30px; border-radius: 50%; box-shadow: 0 0 0 3px var(--sodium) }
+body.reduced .rotate .phone { transform: rotate(90deg) }
 </style>
 
 <body>
@@ -537,12 +657,26 @@ details.payload .pnote { margin: 0; padding: 0 10px 8px; font-size: 11px; color:
 
 <div id="modal" class="modal" hidden><div class="mcard" id="mcard" role="dialog" aria-modal="true"></div></div>
 
+<aside id="lab" class="lab" aria-labelledby="labH" hidden>
+  <header><h2 id="labH">Camp lab</h2><nav class="jump" id="labJump" aria-label="Lab sections"></nav><button class="btn" id="labClose" type="button">Done</button></header>
+  <div class="lbody" id="labBody"></div>
+</aside>
+
+<div id="rotate" class="rotate" role="dialog" aria-modal="true" aria-labelledby="rotH" hidden>
+  <svg class="phone" viewBox="0 0 48 48" aria-hidden="true"><rect x="15" y="5" width="18" height="38" rx="3.5"/><rect class="scr" x="18" y="10" width="12" height="26" rx="1"/><path d="M22 39.5h4"/></svg>
+  <h2 id="rotH">Turn sideways for the full camp</h2>
+  <p>Survivor Camp is a landscape prototype. Portrait works too: the camp on top, panels from the bottom.</p>
+  <button class="btn" id="rotContinue" type="button">Continue in portrait</button>
+</div>
+
 <canvas id="fx" aria-hidden="true"></canvas>
 
 <script src="data.js"></script>
 <script src="run.js"></script>
 <script src="engine.js"></script>
 <script src="scene.js"></script>
+<script src="sfx.js"></script>
 <script src="ui.js"></script>
+<script src="lab.js"></script>
 </body>
 </html>

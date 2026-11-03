@@ -10,9 +10,12 @@
  * "+" plots. Hotspot rectangles (screen px, at least 44 x 44) come out of the same geometry, so the UI's <button>s
  * always sit on what is drawn.
  *
- * API (SC.Scene): init(canvas), setLayout({W, H, top, bottom, safeL, safeR}), setReduced(bool), draw(state, view, now),
- *   hotspots() -> [{key, kind, id, x, y, w, h, z}], anchor(key) -> {x, y}, focus({id, side, w} | null),
- *   fx: { spring(id), squash(key), arc(id), flare(), fall(id), ghost(key) }, toScreen(wx, wy), camera().
+ * API (SC.Scene): init(canvas), setLayout({W, H, top, bottom, safeL, safeR}), setReduced(bool), setParticles(0..2),
+ *   draw(state, view, now), hotspots() -> [{key, kind, id, x, y, w, h, z}], anchor(key) -> {x, y},
+ *   focus({id, side: 'left'|'right'|'bottom', w} | null), fx: { spring(id), arc(id), spin(id, {progress, clock}),
+ *   flare(), ghost(key) }, toScreen(wx, wy), camera(), lightRadius(), dawn().
+ * Reduced motion (SPEC 8.9): camera moves become a 200 ms cross-fade cut, the light and the dawn step change at once,
+ * the build spring becomes a 250 ms brightness flash, sway is 0.3x, embers 2/s, no bobbing, no plate flip.
  */
 (function (root, f) {
   const api = f(root.SC || {});
@@ -54,13 +57,15 @@
   const JACKETS = ['#b5532c', '#3f6f8f', '#7a8a3a', '#8f3f5c', '#c08a2e', '#4f7f6a', '#6a5a9a', '#9a6a3a', '#3a7a9a', '#a04a3a', '#5a8a5a', '#8a5a7a'];
 
   let cv = null, ctx = null, lc = null, lctx = null, starCv = null, glowSpr = null;
-  let W = 568, H = 320, DPR = 1, reduced = false;
+  let W = 568, H = 320, DPR = 1, reduced = false, particles = 1;
   const LAY = { top: 44, bottom: 64, safeL: 0, safeR: 0, padL: 8, padR: 8, playW: 112, blW: 240 };
   const cam = { s: 0.68, ox: 0, oy: 0 };
   let tween = null, camKey = '', snapNext = true, lastCL = 0, focusReq = null;
   const light = { r: 70, from: 70, to: 70, t0: 0, dur: 1200 };
-  const fx = { spring: {}, arc: {}, fall: {}, flare: 0, ghosts: [] };
-  let embers = [], emberAcc = 0, lastNow = 0, flick = 1, flickT = 0, flickTo = 1;
+  const fx = { spring: {}, arc: {}, fall: {}, spin: {}, plate: {}, appear: {}, flare: 0, ghosts: [] };
+  const dawnT = { v: null, from: 0, to: 0, t0: 0 };
+  let cutCv = null, cutAt = 0;                        // reduced motion: the last frame, faded out over 200 ms after a camera cut
+  let embers = [], emberAcc = 0, lastNow = 0, flick = 1, flickT = 0, flickTo = 1, appearCL = 0;
   let hot = [], bubblePos = {}, anchors = {}, icons = {}, skyline = null;
   let mode = 0;                                       // 0 normal, 1 back row (12% darker), 2 silhouette
   const shadeMemo = {};
@@ -127,6 +132,7 @@
     starCv = null; snapNext = true; bgKey = '';
   }
   function setReduced(v) { reduced = !!v; }
+  function setParticles(v) { particles = Math.max(0, Math.min(2, +v || 0)); }
   function focus(f) { focusReq = f && f.id ? { id: f.id, side: f.side, w: f.w || 0 } : null; }
 
   function fitFor(range, cl) {
@@ -137,7 +143,7 @@
     const midY = (LAY.top + (H - LAY.bottom)) / 2;
     let ox = LAY.safeL + safeW / 2 - cx * s;
     const oy = midY - (BAND_TOP + BAND_H / 2) * s;
-    if (focusReq && PLOTS[focusReq.id]) {
+    if (focusReq && PLOTS[focusReq.id] && focusReq.side !== 'bottom') {
       const bx = PLOTS[focusReq.id].x;
       const a = focusReq.side === 'right' ? LAY.safeL : LAY.safeL + focusReq.w + 8;
       const b = focusReq.side === 'right' ? W - LAY.safeR - focusReq.w - 8 : W - LAY.safeR;
@@ -152,7 +158,10 @@
     if (snapNext || !lastCL) { Object.assign(cam, t); tween = null; snapNext = false; camKey = key; lastCL = view.cl; return; }
     if (key !== camKey) {
       const dur = view.cl !== lastCL ? 1200 : 300;
-      tween = { a: { s: cam.s, ox: cam.ox, oy: cam.oy }, b: t, t0: now, dur: reduced ? 1 : dur };
+      if (reduced) {                                  // a 200 ms cross-fade cut to the final framing
+        if (cv && cv.width) { if (!cutCv) cutCv = document.createElement('canvas'); cutCv.width = cv.width; cutCv.height = cv.height; cutCv.getContext('2d').drawImage(cv, 0, 0); cutAt = now; }
+        Object.assign(cam, t); tween = null;
+      } else tween = { a: { s: cam.s, ox: cam.ox, oy: cam.oy }, b: t, t0: now, dur };
       camKey = key; lastCL = view.cl;
     }
     if (tween) {
@@ -283,9 +292,9 @@
   }
   // Backdrop (sky, skyline, ground) and the static after-light layer (stars, far windows) are cached and rebuilt only
   // when the camera, the dawn step or the size changes.
-  let bgCv = null, afCv = null, bgKey = '';
+  let bgCv = null, afCv = null, bgKey = '', curDawn = 0;
   function ensureCaches(view, now) {
-    const key = [W, H, DPR, cam.s.toFixed(4), cam.ox.toFixed(1), cam.oy.toFixed(1), view.dawn.toFixed(3), view.campRange.join('-')].join(',');
+    const key = [W, H, DPR, cam.s.toFixed(4), cam.ox.toFixed(1), cam.oy.toFixed(1), curDawn.toFixed(3), view.campRange.join('-')].join(',');
     if (key === bgKey && bgCv) return;
     bgKey = key;
     if (!bgCv) { bgCv = document.createElement('canvas'); afCv = document.createElement('canvas'); }
@@ -293,11 +302,11 @@
     const main = ctx;
     ctx = bgCv.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, bgCv.width, bgCv.height);
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); drawSky(view.dawn, now); drawSkyline(now);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); drawSky(curDawn, now); drawSkyline(now);
     ctx.setTransform(DPR * cam.s, 0, 0, DPR * cam.s, DPR * cam.ox, DPR * cam.oy); drawGround(view);
     ctx = afCv.getContext('2d');
     ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, afCv.width, afCv.height);
-    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); drawStars(view.dawn, now); drawSkyWindows(view.dawn);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0); drawStars(curDawn, now); drawSkyWindows(curDawn);
     ctx = main;
   }
   let groundPat = null;
@@ -609,14 +618,20 @@
 
   // ------------------------------------------------------------------ embers and light
   function stepEmbers(dt, now, view, lit) {
-    const rate = !lit ? 0.6 : reduced ? 2 : 6 * (1 + (view.cl - 1) * 0.08);
+    const rate = (!lit ? 0.6 : reduced ? 2 : 6 * (1 + (view.cl - 1) * 0.08)) * (reduced ? 1 : particles);
     emberAcc += rate * dt / 1000;
     const R = Math.random;
     while (emberAcc >= 1) { emberAcc--; embers.push({ x: FIRE.x + (R() - 0.5) * 30, y: FIRE.y - 10, vx: (R() - 0.5) * 14, vy: -(28 + R() * 34), t: 0, life: 1.4 + R() * 1.2, r: 1 + R() * 1.4 }); }
-    if (fx.flare && now - fx.flare < 50 && !fx.flared) { fx.flared = true; for (let i = 0; i < 60; i++) embers.push({ x: FIRE.x + (R() - 0.5) * 40, y: FIRE.y - 20, vx: (R() - 0.5) * 90, vy: -(50 + R() * 110), t: 0, life: 1 + R() * 1.4, r: 1.2 + R() * 1.8 }); }
+    if (fx.flare && now - fx.flare < 50 && !fx.flared) { fx.flared = true; for (let i = 0, n = Math.round((reduced ? 12 : 60) * Math.max(reduced ? 1 : 0, particles)); i < n; i++) embers.push({ x: FIRE.x + (R() - 0.5) * 40, y: FIRE.y - 20, vx: (R() - 0.5) * 90, vy: -(50 + R() * 110), t: 0, life: 1 + R() * 1.4, r: 1.2 + R() * 1.8 }); }
     const s = dt / 1000;
     for (const e of embers) { e.t += s; e.x += (e.vx + Math.sin(e.t * 4 + e.r * 9) * 8) * s; e.y += e.vy * s; e.vy *= 0.995; }
     embers = embers.filter((e) => e.t < e.life);
+  }
+  function dawnAt(view, now) {
+    if (dawnT.v == null || reduced) { dawnT.v = dawnT.to = dawnT.from = view.dawn; return view.dawn; }
+    if (view.dawn !== dawnT.to) { dawnT.from = dawnT.v; dawnT.to = view.dawn; dawnT.t0 = now; }
+    dawnT.v = lerp(dawnT.from, dawnT.to, ease(clamp((now - dawnT.t0) / 1200, 0, 1)));
+    return dawnT.v;
   }
   function updateLight(view, state, now) {
     const lit = state.ftue.step > 0 || state.ftue.done;
@@ -627,7 +642,7 @@
     flick += (flickTo - flick) * 0.12;
   }
   function lightPass(view, now) {
-    const k = lc.width / W, dawn = view.dawn;
+    const k = lc.width / W, dawn = curDawn;
     lctx.setTransform(1, 0, 0, 1, 0, 0); lctx.globalCompositeOperation = 'source-over'; lctx.globalAlpha = 1;
     lctx.clearRect(0, 0, lc.width, lc.height);
     lctx.fillStyle = 'rgba(4,6,10,' + (0.82 - 0.30 * dawn).toFixed(3) + ')'; lctx.fillRect(0, 0, lc.width, lc.height);
@@ -675,6 +690,8 @@
         continue;
       }
       if (hs.state === 'available') {
+        const ap = fx.appear[id];
+        if (ap) { if (now < ap) continue; if (now - ap > 150) delete fx.appear[id]; else ctx.globalAlpha = (now - ap) / 150; }
         const ok = view.affordable[id];
         const tl = toScreen(r.x, r.y), br = toScreen(r.x + r.w, r.base);
         ctx.setLineDash([6, 5]); ctx.lineWidth = 2; ctx.strokeStyle = ok ? 'rgba(255,198,107,.85)' : 'rgba(167,169,166,.5)';
@@ -683,12 +700,15 @@
         ctx.beginPath(); ctx.arc(mid.x, mid.y, rad, 0, TAU); ctx.fillStyle = ok ? 'rgba(255,198,107,.92)' : 'rgba(30,34,40,.85)'; ctx.fill();
         if (!ok) { ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(167,169,166,.7)'; ctx.stroke(); }
         icon('plus', mid.x, mid.y, 20, ok ? '#1b1203' : '#a7a9a6');
-        if (reduced && ok) { ctx.fillStyle = '#ff7a2f'; ctx.beginPath(); ctx.arc(mid.x + 14, mid.y - 14, 6, 0, TAU); ctx.fill(); }
+        if (reduced && ok) { ctx.fillStyle = '#ff7a2f'; ctx.beginPath(); ctx.arc(mid.x + 14, mid.y - 14, 7, 0, TAU); ctx.fill(); ctx.fillStyle = '#1a0b03'; ctx.font = '800 11px "Barlow Condensed", sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('!', mid.x + 14, mid.y - 13.5); }
+        ctx.globalAlpha = 1;
         continue;
       }
       // level plate
       if (id !== 'campfire' && hs.level > 0) {
-        pill(base.x, base.y + 1, String(hs.level), 'rgba(8,10,14,.85)', '#ffc66b', '800 ' + fsz + 'px "Barlow Condensed", sans-serif', 5, fsz + 4);
+        const pf = fx.plate[id], fk = pf && !reduced ? (now - pf) / 320 : 1;       // the level plate flips after a build
+        if (fk < 1) { ctx.save(); ctx.translate(base.x, base.y + 1); ctx.scale(1, Math.max(0.05, Math.abs(Math.cos(fk * Math.PI)))); pill(0, 0, String(fk < 0.5 ? Math.max(1, hs.level - 1) : hs.level), 'rgba(8,10,14,.85)', '#ffc66b', '800 ' + fsz + 'px "Barlow Condensed", sans-serif', 5, fsz + 4); ctx.restore(); }
+        else { if (pf) delete fx.plate[id]; pill(base.x, base.y + 1, String(hs.level), 'rgba(8,10,14,.85)', '#ffc66b', '800 ' + fsz + 'px "Barlow Condensed", sans-serif', 5, fsz + 4); }
         if (hs.doneAway) { ctx.beginPath(); ctx.arc(base.x + fsz, base.y - 2, 8, 0, TAU); ctx.fillStyle = '#3bd16f'; ctx.fill(); icon('check', base.x + fsz, base.y - 2, 12, '#06180c'); }
       }
       if (hs.timer) {
@@ -700,14 +720,25 @@
         ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(255,255,255,.18)'; ctx.beginPath(); ctx.arc(rx, ty, 6, 0, TAU); ctx.stroke();
         ctx.strokeStyle = t.free ? '#06180c' : '#ffc66b'; ctx.beginPath(); ctx.arc(rx, ty, 6, -Math.PI / 2, -Math.PI / 2 + TAU * clamp(t.progress, 0, 1)); ctx.stroke();
         ctx.fillStyle = t.free ? '#06180c' : '#ece8df'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(t.free ? 'FREE' : t.clock, rx + 10, ty + 0.5);
-        const a = fx.arc[id];
-        if (a && now - a < 300) {
-          ctx.strokeStyle = 'rgba(120,255,160,' + (1 - (now - a) / 300).toFixed(2) + ')'; ctx.lineWidth = 2; ctx.beginPath();
-          const tl = toScreen(r.x, r.y), br = toScreen(r.x + r.w, r.base);
-          for (let i = 0; i <= 24; i++) { const u = i / 24, ang = u * TAU, x = (tl.x + br.x) / 2 + Math.cos(ang) * (br.x - tl.x) * 0.6 + (Math.random() - 0.5) * 6, y = (tl.y + br.y) / 2 + Math.sin(ang) * (br.y - tl.y) * 0.6 + (Math.random() - 0.5) * 6; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
-          ctx.stroke();
-        }
       }
+      // the skip beat: the timer ring spins to zero (400 ms) while a green electric arc runs round the building (300 ms)
+      const sp = fx.spin[id];
+      if (sp && !hs.timer && now - sp.t0 < 400) {
+        const k = (now - sp.t0) / 400, ty = clamp(id === 'radio' ? base.y - 30 * s : (top.y + base.y) / 2, LAY.top + 14, H - 14);
+        const fnt = '800 ' + (fsz + 1) + 'px "Barlow Condensed", sans-serif'; ctx.font = fnt;
+        const label = k > 0.7 ? '0:00' : sp.clock || '0:00', tw = ctx.measureText(label).width + 34;
+        rrect(ctx, top.x - tw / 2, ty - 11, tw, 22, 11); ctx.fillStyle = 'rgba(8,10,14,.88)'; ctx.fill();
+        const rx = top.x - tw / 2 + 12, pr = reduced ? 1 : lerp(sp.progress, 1, ease(k));
+        ctx.lineWidth = 3; ctx.strokeStyle = '#3bd16f'; ctx.beginPath(); ctx.arc(rx, ty, 6, -Math.PI / 2, -Math.PI / 2 + TAU * pr); ctx.stroke();
+        ctx.fillStyle = '#ece8df'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle'; ctx.fillText(label, rx + 10, ty + 0.5);
+      } else if (sp && now - sp.t0 >= 400) delete fx.spin[id];
+      const a = fx.arc[id];
+      if (a && now - a < 300 && !reduced) {
+        ctx.strokeStyle = 'rgba(120,255,160,' + (1 - (now - a) / 300).toFixed(2) + ')'; ctx.lineWidth = 2; ctx.beginPath();
+        const tl = toScreen(r.x, r.y), br = toScreen(r.x + r.w, r.base);
+        for (let i = 0; i <= 24; i++) { const u = i / 24, ang = u * TAU, x = (tl.x + br.x) / 2 + Math.cos(ang) * (br.x - tl.x) * 0.6 + (Math.random() - 0.5) * 6, y = (tl.y + br.y) / 2 + Math.sin(ang) * (br.y - tl.y) * 0.6 + (Math.random() - 0.5) * 6; if (i) ctx.lineTo(x, y); else ctx.moveTo(x, y); }
+        ctx.stroke();
+      } else if (a && now - a >= 300) delete fx.arc[id];
     }
     // bubbles
     for (const id of Object.keys(bubblePos)) {
@@ -750,6 +781,11 @@
     if (!ctx) return;
     opts = opts || {};
     const dt = lastNow ? Math.min(100, now - lastNow) : 16; lastNow = now;
+    if (appearCL && view.cl > appearCL && !reduced) {
+      let i = 0; for (const id of Object.keys(PLOTS)) if (DATA.BUILDINGS[id] && DATA.BUILDINGS[id].unlockCL === view.cl) fx.appear[id] = now + 500 + 150 * i++;
+    }
+    appearCL = view.cl;
+    curDawn = dawnAt(view, now);
     updateCamera(view, now); updateLight(view, state, now);
     const lit = state.ftue.step > 0 || state.ftue.done;
     stepEmbers(dt, now, view, lit);
@@ -775,21 +811,25 @@
     ctx.setTransform(DPR, 0, 0, DPR, 0, 0); drawFarFire(now);
     ctx.setTransform(DPR * cam.s, 0, 0, DPR * cam.s, DPR * cam.ox, DPR * cam.oy);
     for (const e of embers) { const a = 1 - e.t / e.life; ctx.fillStyle = 'rgba(255,' + Math.round(150 + 60 * a) + ',80,' + a.toFixed(2) + ')'; ctx.fillRect(e.x - e.r / 2, e.y - e.r / 2, e.r, e.r); }
+    const fl = reduced ? 250 : 80;                    // the white flash; under reduced motion a 250 ms brightness flash replaces the spring
     for (const id of Object.keys(fx.spring)) {
-      const t0 = fx.spring[id]; if (!t0 || now - t0 > 80 || !PLOTS[id]) continue;
-      const r = plotRect(id); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,255,255,' + (0.5 * (1 - (now - t0) / 80)).toFixed(2) + ')';
+      const t0 = fx.spring[id]; if (!t0 || now - t0 > fl || !PLOTS[id]) continue;
+      const r = plotRect(id); ctx.globalCompositeOperation = 'lighter'; ctx.fillStyle = 'rgba(255,255,255,' + ((reduced ? 0.35 : 0.5) * (1 - (now - t0) / fl)).toFixed(2) + ')';
       ctx.fillRect(r.x, r.y, r.w, r.h); ctx.globalCompositeOperation = 'source-over';
     }
     drawBadges(view, state, now);
+    if (cutCv && now - cutAt < 200) { ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalAlpha = 1 - (now - cutAt) / 200; ctx.drawImage(cutCv, 0, 0); ctx.globalAlpha = 1; }
   }
 
   return {
-    PLOTS, init, setLayout, setReduced, draw, focus, toScreen, anchor,
+    PLOTS, init, setLayout, setReduced, setParticles, draw, focus, toScreen, anchor,
     hotspots: () => hot,
-    camera: () => ({ s: cam.s, ox: cam.ox, oy: cam.oy }),
+    camera: () => ({ s: cam.s, ox: cam.ox, oy: cam.oy, tweening: !!tween }),
     lightRadius: () => light.r,
+    dawn: () => curDawn,
     fx: {
-      spring(id) { const n = typeof performance !== 'undefined' ? performance.now() : 0; fx.spring[id] = n; fx.fall[id] = n; },
+      spring(id) { const n = typeof performance !== 'undefined' ? performance.now() : 0; fx.spring[id] = n; fx.fall[id] = n; fx.plate[id] = n + 120; },
+      spin(id, snap) { fx.spin[id] = { t0: typeof performance !== 'undefined' ? performance.now() : 0, progress: snap ? snap.progress || 0 : 0, clock: snap ? snap.clock || '' : '' }; },
       arc(id) { fx.arc[id] = typeof performance !== 'undefined' ? performance.now() : 0; },
       flare() { fx.flare = typeof performance !== 'undefined' ? performance.now() : 0; fx.flared = false; },
       ghost(key) {

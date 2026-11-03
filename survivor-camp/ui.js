@@ -3,11 +3,11 @@
  * Owns: save/load (every localStorage access in try/catch), the frame loop (Engine.tick + Scene.draw), the HUD with
  * progressive reveal, hotspot <button>s, the building side sheet, the run flow (route + loadout overlay, simulated run
  * screen, result and loss cards, crate), the 6-step FTUE coach, the objective chip, cards and banners, and flyers on
- * the #fx canvas. Every state change goes through Engine.act.
+ * the #fx canvas, the free prototype shop, the welcome-back, Camp Level, end and two-tab cards, the portrait fallback,
+ * reduced motion and sound cues (SC.Sfx, created on the first tap). Every state change goes through Engine.act.
  *
- * Hooks for later stages (SC.UI.hooks): openLab(), openShop(), and sound through SC.Sfx when it exists
- * (SC.Sfx.unlock() on the first gesture, SC.Sfx.play(name, opts), SC.Sfx.setMuted(bool)). SC.UI.api exposes the
- * internals a Lab or shop panel needs (state, act, handle, cards, banners, flyers, run screen).
+ * The Camp lab lives in lab.js and plugs in through SC.UI.hooks.openLab; SC.UI.api exposes what it needs (state,
+ * act, handle, cards, banners, flyers, the run screen, resolveWith for pasted results, reset and replace).
  */
 (function (root, f) {
   const api = f(root.SC || {});
@@ -56,32 +56,55 @@
     held: { scrap: 0, food: 0, meds: 0, bat: 0 }, disp: {}, roll: {}, rev: {}, shownChips: {},
     lastInput: 0, handFor: '', handKey: '', coachAfter: 0, doneAway: new Set(), gestured: false,
     last: 0, lastSave: 0, goalAt: 0, reduced: false, payloadOpen: false, resultPayloadOpen: false, routesHtml: '',
+    external: false, portrait: false, portraitOk: false, particles: 1, spendRoll: {}, endShown: false, beatT: 0,
   };
   const hooks = {
-    openLab() { toast('The camp lab arrives in the next build'); },
-    openShop() { toast('The free test shop arrives in the next build'); },
+    openLab() { toast('The camp lab is not loaded'); },
+    openShop() { openShop(); },
   };
 
-  // ------------------------------------------------------------------ sound hooks (sfx.js comes later)
+  // ------------------------------------------------------------------ sound (sfx.js; the AudioContext is created on the first tap)
   function sfx(name, o) { try { if (SC.Sfx && SC.Sfx.play && S && !S.dev.muted) SC.Sfx.play(name, o || {}); } catch (e) { /* sound is optional */ } }
   function gesture() {
     ui.lastInput = now();
-    if (ui.gestured) return; ui.gestured = true;
-    try { if (SC.Sfx && SC.Sfx.unlock) SC.Sfx.unlock(S ? S.dev : null); } catch (e) { /* no audio */ }
+    try { if (SC.Sfx && SC.Sfx.unlock && SC.Sfx.unlock(S ? S.dev : null) && !ui.gestured) { ui.gestured = true; syncAmb(); } } catch (e) { /* no audio */ }
+  }
+  function syncAmb() {
+    try { if (SC.Sfx && SC.Sfx.ambience && S) SC.Sfx.ambience(!document.hidden && !paused && (S.ftue.step > 0 || S.ftue.done)); } catch (e) { /* optional */ }
   }
 
   // ------------------------------------------------------------------ act and events
   function act(a, o) {
     o = o || {};
+    const isSkip = a.type === 'skip' || a.type === 'finishFree';
+    const snap = isSkip && a.target ? timerFor(a.target.kind, a.target.id) : null;
     const r = E.act(S, a);
     if (!r.ok) {
       if (!o.quiet) { toast(r.err); sfx('deny'); if (r.reason === 'bat') shake($('c-bat')); }
       return r;
     }
-    handle(r.events, Object.assign({ act: a }, o));
+    const ctx = Object.assign({ act: a }, o);
+    if (isSkip) {
+      // the skip beat (SPEC 8.7): the timer ring spins to zero (400 ms), a green arc for a paid skip, the zip, then
+      // the completion beat with its banner
+      const bid = skipBuilding(a.target);
+      Scene.fx.spin(bid, snap ? { progress: snap.progress || 0, clock: snap.clock || '' } : null);
+      if (r.price > 0) Scene.fx.arc(bid);
+      sfx('zip');
+      const rest = r.events.filter((e) => e.type !== 'skipped');
+      if (ui.reduced) handle(rest, ctx);
+      else setTimeout(() => { handle(rest, ctx); ui.sheetHtml = ''; }, 420);
+    } else handle(r.events, ctx);
+    if ((r.price || 0) > 0 || a.type === 'buyCrew') { ui.spendRoll.bat = true; if (a.type !== 'skip') sfx('spend'); }
     ui.sheetHtml = ''; ui.routesHtml = '';
     save();
     return r;
+  }
+  function skipBuilding(t) {
+    if (!t) return 'campfire';
+    if (t.kind === 'job' || t.kind === 'craft') return t.id;
+    if (t.kind === 'recruit' || t.kind === 'party') return 'radio';
+    return S.lv.infirmary > 0 ? 'infirmary' : 'bunkhouse';
   }
   function handle(ev, ctx) {
     ctx = ctx || {};
@@ -90,9 +113,9 @@
       switch (e.type) {
         case 'collected': onCollected(e, ctx); break;
         case 'crateOpened': onCrate(e); break;
-        case 'jobStarted': spendFx(e.cost, e.id); sfx('spend'); break;
-        case 'craftStarted': spendFx(e.cost, e.building); sfx('spend'); break;
-        case 'recruitStarted': spendFx({ food: e.food }, 'radio'); sfx('spend'); break;
+        case 'jobStarted': spendFx(e.cost, e.id); break;
+        case 'craftStarted': spendFx(e.cost, e.building); break;
+        case 'recruitStarted': spendFx({ food: e.food }, 'radio'); break;
         case 'partySent': toast(e.name + ' heads out: ' + D.PARTIES.kinds[e.kind].name.toLowerCase() + ', back in ' + fmt.dur(e.dur / 1000)); break;
         case 'jobDone': onJobDone(e, off); break;
         case 'clUp': onClUp(e, off); break;
@@ -108,11 +131,10 @@
         }
         case 'truckOverflow': banner(e.text, 'warn'); break;
         case 'dayRollover': if (!off) toast('A new camp day: 3 daily wins are ready'); break;
-        case 'skipped': Scene.fx.arc(e.kind === 'job' ? e.id : e.kind === 'craft' ? e.id : e.kind === 'recruit' || e.kind === 'party' ? 'radio' : 'bunkhouse'); sfx('zip'); break;
         case 'weapon': banner(e.name + ' unlocked', 'done', 'Equipped for the next run'); sfx('build'); break;
         case 'crew': if (!off) banner(e.crews === 2 ? 'Second crew' : 'Third crew hired', 'done', 'Two builds at once' + (e.crews === 3 ? ', now three' : '')); break;
-        case 'fireLit': ui.coachAfter = now() + 1800; Scene.fx.flare(); sfx('whoomp'); break;
-        case 'packClaimed': fly('bat', e.bat, centre($('c-batbtn'))); break;
+        case 'fireLit': ui.coachAfter = now() + 1800; Scene.fx.flare(); sfx('whoomp'); syncAmb(); break;
+        case 'packClaimed': fly('bat', e.bat, ctx.from || centre($('c-batbtn'))); break;
         case 'ftue': if (e.step === 3) setTimeout(closeSheet, 700); break;
         case 'runResolved': ui.held.bat += e.reward.batTotal || 0; break;
         default: break;
@@ -162,24 +184,31 @@
     banner(B[e.id].name + ' Lv ' + e.lv, 'done', s.main, s.run);
     sfx('build');
   }
+  // The Camp Level beat (SPEC 8.7): the HUD dims to 30%, the fire flares, the light and the camera ease to the new
+  // radius and framing over 1.2 s (scene.js), new plots draw in, then the card. Reduced motion: instant, then the card.
+  function beat() {
+    if (ui.reduced) return;
+    document.body.classList.add('beat'); clearTimeout(ui.beatT);
+    ui.beatT = setTimeout(() => document.body.classList.remove('beat'), 1400);
+  }
   function onClUp(e, off) {
     Scene.fx.flare(); Scene.fx.spring('campfire');
     ui.held.bat += e.bat || 0;
-    if (off && ui.celebrations++ >= 3) { ui.held.bat -= e.bat || 0; banner('Camp Lv ' + e.cl, 'done', '+' + e.bat + ' batteries'); return; }
+    if (off && ui.celebrations++ >= 3) { ui.held.bat -= e.bat || 0; banner('Camp Lv ' + e.cl, 'done', '+' + e.bat + ' batteries'); if (e.final) endCard(); return; }
+    if (!off) beat();
     const news = (e.news || []).length ? 'New: ' + e.news.join(', ') : '';
     const extra = e.cl === D.CREW.freeAtCL ? 'A second build crew joins (free)' : e.crew3ForSale ? 'Build crew 3 for sale (250 batteries)' : '';
     const unl = D.ROUTES.filter((r) => r.radio && B.radio.cost[r.radio] && D.reqCL('radio', r.radio) === e.cl).map((r) => r.name);
-    queueCard({
+    const card = {
       kind: 'cl', top: true,
       html: '<p class="kick">The fire grows</p><h2 class="cl">Camp Lv ' + e.cl + '</h2>' +
-        (news ? '<p>' + esc(news) + '</p>' : '') + (extra ? '<p>' + esc(extra) + '</p>' : '') +
-        '<p>Every building to Lv ' + e.cl + (unl.length ? ' · ' + esc(unl.join(', ')) + ' with the Radio Mast' : '') + '</p>' +
-        (e.final ? '<p class="green"><b>Signal fire lit. Dawn.</b> The prototype is complete; the camp keeps running.</p>' : '') +
-        '<p class="c-bat" id="clBat"><b>+' + e.bat + ' batteries</b></p>' +
-        '<div class="btns"><button class="btn primary" type="button" data-a="good">Good</button></div>',
+        '<p>' + esc([news, extra, 'Every building to Lv ' + e.cl + (unl.length ? ', ' + unl.join(', ') + ' with the Radio Mast' : '')].filter(Boolean).join(' · ')) + '</p>' +
+        '<div class="btns clrow"><b class="c-bat" id="clBat">+' + e.bat + ' batteries</b><button class="btn primary" type="button" data-a="good">Good</button></div>',
       onClose() { const el = $('clBat'); fly('bat', e.bat, el ? centre(el) : { x: innerWidth / 2, y: 80 }, { preHeld: true }); },
-    });
+    };
+    if (off || ui.reduced) queueCard(card); else setTimeout(() => queueCard(card), 1250);   // after the 1.2 s light and camera tween
     sfx('clup');
+    if (e.final) setTimeout(endCard, off || ui.reduced ? 0 : 1300);
   }
   function onObjective(e) {
     const rw = e.reward || {}, from = $('goal').hidden ? { x: innerWidth / 2, y: innerHeight - 40 } : centre($('goal'));
@@ -207,8 +236,11 @@
     if (!(amount > 0) || !from) { if (o.preHeld) ui.held[res] = Math.max(0, ui.held[res] - (amount || 0)); return; }
     ui.rev[res] = true;
     if (!o.preHeld) ui.held[res] += amount;
-    if (ui.reduced) { ui.held[res] = Math.max(0, ui.held[res] - amount); pulse(chipEl(res)); floatText(from.x, from.y, '+' + amount, RES_COL[res]); return; }
-    const n = o.n || clamp(Math.round(Math.sqrt(amount)), 3, 12), t = now() + (o.delay || 0);
+    if (ui.reduced || !(ui.particles > 0)) {        // reduced motion: no flight; the chip pulses, the number steps, "+38" fades in place
+      ui.held[res] = Math.max(0, ui.held[res] - amount); pulse(chipEl(res)); floatText(from.x, from.y, '+' + amount, RES_COL[res], true);
+      sfx(res === 'bat' ? 'battery' : 'chunk'); return;
+    }
+    const n = clamp(Math.round((o.n || clamp(Math.round(Math.sqrt(amount)), 3, 12)) * ui.particles), 1, 30), t = now() + (o.delay || 0);
     const group = { res, total: amount, left: Math.min(n, amount) };
     let left = amount;
     for (let i = 0; i < group.left; i++) {
@@ -218,15 +250,19 @@
     }
   }
   function spendFx(cost, toKey) {
-    if (!cost || ui.reduced) return;
+    if (!cost) return;
+    sfx('spend');
+    if (ui.reduced) return;
     const to = Scene.anchor(toKey);
     for (const k of RES) {
       const c = cost[k] || 0, el = chipEl(k); if (!c || !el || el.hidden) continue;
-      const from = centre(el), n = clamp(Math.round(Math.sqrt(c) / 3), 3, 6);
+      ui.spendRoll[k] = true;                         // the chip counts down (350 ms) while 3-6 icons fly to the building
+      if (!(ui.particles > 0)) continue;
+      const from = centre(el), n = clamp(Math.round(Math.sqrt(c) / 3 * Math.min(1.5, ui.particles)), 1, 6);
       for (let i = 0; i < n; i++) flyers.push({ res: k, spend: true, x0: from.x, y0: from.y, bx: from.x, by: from.y, tx: to.x + (Math.random() - 0.5) * 20, ty: to.y, t0: now() + i * 40, dur: 350, lift: 40 + Math.random() * 40, step: i });
     }
   }
-  function floatText(x, y, text, col) { floats.push({ x, y, text, col: col || '#ece8df', t0: now() }); }
+  function floatText(x, y, text, col, still) { floats.push({ x, y, text, col: col || '#ece8df', t0: now(), still: !!still }); }
   function arrive(f) {
     ui.held[f.res] = Math.max(0, ui.held[f.res] - f.part);
     gulp(chipEl(f.res)); sfx('tick', { step: Math.min(7, f.step) });
@@ -258,7 +294,8 @@
     for (let i = floats.length - 1; i >= 0; i--) {
       const f = floats[i], k = (t - f.t0) / 700; if (k >= 1) { floats.splice(i, 1); continue; }
       fxc.globalAlpha = 1 - k; fxc.font = '800 17px "Barlow Condensed", sans-serif'; fxc.textAlign = 'center'; fxc.textBaseline = 'middle';
-      fxc.fillStyle = 'rgba(0,0,0,.6)'; fxc.fillText(f.text, f.x + 1, f.y - k * 24 + 1.5); fxc.fillStyle = f.col; fxc.fillText(f.text, f.x, f.y - k * 24); fxc.globalAlpha = 1;
+      const dy = f.still ? 0 : k * 24;
+      fxc.fillStyle = 'rgba(0,0,0,.6)'; fxc.fillText(f.text, f.x + 1, f.y - dy + 1.5); fxc.fillStyle = f.col; fxc.fillText(f.text, f.x, f.y - dy); fxc.globalAlpha = 1;
     }
   }
   function gulp(el) { if (!el) return; el.classList.add('gulp'); clearTimeout(el._g); el._g = setTimeout(() => el.classList.remove('gulp'), 120); }
@@ -270,11 +307,14 @@
   function pumpBanners(t) {
     if (t < ui.bannerUntil || !ui.bannerQ.length || ui.overlay || ui.modal) return;
     const b = ui.bannerQ.shift(), box = $('banners');
-    const sr = ui.sheet ? $('sheet').getBoundingClientRect() : null;
-    const cx = sr ? (ui.side === 'right' ? sr.left / 2 : (sr.right + innerWidth) / 2) : innerWidth / 2;
-    box.style.left = Math.round(cx) + 'px'; box.style.maxWidth = Math.round(sr ? Math.max(200, (ui.side === 'right' ? sr.left : innerWidth - sr.right) - 16) : Math.min(innerWidth * 0.92, 560)) + 'px';
+    // centred in the part of the screen no panel covers (side sheet or the Lab)
+    let a = 0, z = innerWidth;
+    if (ui.sheet && ui.side !== 'bottom') { const sr = $('sheet').getBoundingClientRect(); if (ui.side === 'right') z = Math.min(z, sr.left); else a = Math.max(a, sr.right); }
+    if (!$('lab').hidden) z = Math.min(z, $('lab').getBoundingClientRect().left);
+    if (z - a < 200) { a = 0; z = innerWidth; }
+    box.style.left = Math.round((a + z) / 2) + 'px'; box.style.maxWidth = Math.round(Math.min(560, (z - a) * 0.94)) + 'px';
     box.innerHTML = '<div class="banner ' + b.kind + '">' + esc(b.text) + (b.sub ? '<small>' + esc(b.sub) + '</small>' : '') + (b.run ? '<small class="runl">RUN · ' + esc(b.run) + '</small>' : '') + '</div>';
-    const dur = ui.bannerQ.length > 2 ? 1300 : 2300;
+    const dur = b.kind === 'warn' ? 4200 : ui.bannerQ.length > 2 ? 1300 : 2300;
     ui.bannerUntil = t + dur;
     clearTimeout(box._t); box._t = setTimeout(() => { if (now() >= ui.bannerUntil - 5) box.innerHTML = ''; }, dur);
   }
@@ -284,21 +324,28 @@
   }
 
   // ------------------------------------------------------------------ cards (CL beat, person, welcome back, other tab)
-  function queueCard(c) { ui.modalQ.push(c); pumpCards(); }
+  function queueCard(c) { if (c.front) ui.modalQ.unshift(c); else ui.modalQ.push(c); pumpCards(); }
   function pumpCards() {
     if (ui.modal || ui.overlay || !ui.modalQ.length) return;
+    if (now() < ui.cardHold) { clearTimeout(ui.cardT); ui.cardT = setTimeout(pumpCards, ui.cardHold - now() + 20); return; }
     showCard(ui.modalQ.shift());
   }
   function showCard(c) {
     ui.modal = c;
-    const m = $('modal'); m.className = 'modal' + (c.top ? ' top' : ''); $('mcard').innerHTML = c.html; m.hidden = false; arm(m);
+    const m = $('modal'), card = $('mcard'); m.className = 'modal' + (c.top ? ' top' : ''); card.className = 'mcard' + (c.cls ? ' ' + c.cls : ''); card.style.maxWidth = ''; card.innerHTML = c.html; m.hidden = false; arm(m);
+    if (c.top) {
+      // top-centre, but never over the fire: on short screens the card moves to the top-left corner beside it
+      const flame = Scene.toScreen(640, 392), bottom = card.offsetTop + card.offsetHeight;
+      if (bottom > flame.y - 4) { m.classList.add('side'); card.style.maxWidth = Math.max(220, Math.round(flame.x - 30 - card.offsetLeft)) + 'px'; }
+    }
     if (c.onShow) c.onShow();
+    document.body.classList.add('modal-open');
     E.log(S, 'screen', { name: 'card:' + c.kind });
     const b = $('mcard').querySelector('button'); if (b) setTimeout(() => { try { b.focus({ preventScroll: true }); } catch (e) { /* ignore */ } }, 260);
   }
   function closeCard() {
     const c = ui.modal; if (!c) return;
-    $('modal').hidden = true; ui.modal = null;
+    $('modal').hidden = true; ui.modal = null; document.body.classList.remove('modal-open');
     if (c.onClose) c.onClose();
     setTimeout(pumpCards, 600);
   }
@@ -316,27 +363,69 @@
   function personHtml(name, line, p) {
     return '<div class="person"><span class="av">' + esc(name[0]) + '</span><div><b>' + esc(name) + '</b><p>' + esc(line) + '</p><span class="works">' + esc(worksText(p)) + '</span></div></div>';
   }
+  // Welcome back (SPEC 4.9): one row per source, staggered 80 ms; Collect all sends every bubble's flyers. It is queued
+  // before the celebrations from the same gap, so those play after it closes, 600 ms apart.
+  const ROW_IC = { job: ['check', 'ok'], cl: ['flag', 'c-bat'], party: ['crate', ''], healed: ['surv', 'ok'], recruit: ['surv', ''], generator: ['bat', 'c-bat'], truck: ['crate', ''] };
   function welcomeCard(w) {
     if (!w || !w.rows || !w.rows.length) return;
-    const rows = w.rows.map((r, i) => '<div style="animation-delay:' + (i * 80) + 'ms">' + esc(r.text) + '</div>').join('');
+    const rows = w.rows.map((r, i) => {
+      const icn = r.kind === 'bubble' ? [r.res, 'c-' + r.res] : r.kind === 'craft' ? [r.id === 'workbench' ? 'bomb' : 'medkit', 'c-meds'] : ROW_IC[r.kind] || ['check', ''];
+      return '<div style="animation-delay:' + (i * 80) + 'ms">' + ic(icn[0], icn[1]) + '<span>' + esc(r.text) + '</span></div>';
+    }).join('');
+    const any = w.rows.some((r) => r.kind === 'bubble' || r.kind === 'generator' || r.kind === 'party' || r.kind === 'truck');
     queueCard({
-      kind: 'welcome',
+      kind: 'welcome', front: true, cls: 'welcome',
       html: '<p class="kick">While you were away · ' + esc(fmt.dur(w.ms / 1000)) + '</p><h2>Welcome back</h2><div class="rows">' + rows + '</div>' +
-        '<div class="btns"><button class="btn" type="button" data-a="good">Later</button><button class="btn primary" type="button" data-a="collectAll">Collect all</button></div>',
+        '<div class="btns"><button class="btn" type="button" data-a="good">' + (any ? 'Later' : 'Good') + '</button>' + (any ? '<button class="btn primary" type="button" data-a="collectAll">Collect all</button>' : '') + '</div>',
     });
   }
+  // End card (SPEC 8.6): Camp Lv 10 lights the signal fire; a short telemetry summary; the camp keeps running.
   function endCard() {
-    const k = E.kpis(S);
-    const cl = Object.keys(k.clTimes).map((L) => 'CL' + L + ' ' + fmt.dur(k.clTimes[L].camp / 1000)).join(' · ');
-    queueCard({ kind: 'end', html: '<p class="kick">Prototype complete</p><h2 class="cl">Signal fire lit. Dawn.</h2><p>' + esc(cl) + '</p><p>Runs ' + k.runs + ' · win rate ' + pct(k.winRate) + ' · batteries earned ' + k.batEarned + ', spent ' + k.batSpent + '</p><div class="btns"><button class="btn primary" type="button" data-a="good">Keep playing</button></div>' });
+    if (ui.endShown) return; ui.endShown = true;
+    const k = E.kpis(S), packs = Object.keys(k.packs).reduce((a, x) => a + k.packs[x], 0);
+    let track = '';
+    for (let L = 2; L <= 10; L++) { const u = k.clTimes[L]; track += '<span>CL' + L + '<b>' + (u ? esc(fmt.dur(u.camp / 1000)) : '–') + '</b></span>'; }
+    const rows = [['Camp time', fmt.dur(S.campNow / 1000)], ['Runs', k.runs + ' (' + k.wins + ' won)'], ['Win rate', pct(k.winRate)], ['Batteries earned', fmt.num(k.batEarned)],
+      ['Batteries spent', fmt.num(k.batSpent)], ['Free test packs claimed', String(packs)]];
+    queueCard({
+      kind: 'end',
+      html: '<p class="kick">Camp Lv 10 · prototype complete</p><h2 class="cl">Signal fire lit. Dawn.</h2><p class="desc enddesc">Time to each Camp Level (camp clock)</p><div class="cltrack">' + track + '</div>' +
+        '<div class="endgrid">' + rows.map((r) => '<span><i>' + esc(r[0]) + '</i><b>' + esc(r[1]) + '</b></span>').join('') + '</div>' +
+        '<div class="btns"><button class="btn" type="button" data-a="lab">Telemetry</button><button class="btn primary" type="button" data-a="good">Keep playing</button></div>',
+    });
+  }
+  // Free prototype shop (SPEC 4.11): three free test packs. No prices, no currency, no payment UI, no links.
+  function openShop() {
+    if (ui.modal && ui.modal.kind === 'shop') return;
+    const packs = ['small', 'medium', 'large'].map((k) => '<div class="pack"><span class="lbl">PROTOTYPE TEST PACK: free, no payment</span>' +
+      '<span class="amt">' + ic('bat') + '+' + String(D.PACKS[k]).replace(/\B(?=(\d{3})+(?!\d))/g, '\u00a0') + '</span><span class="sz">' + k + '</span>' +
+      '<button class="btn go" type="button" data-a="claim:' + k + '" aria-label="Claim the free ' + k + ' test pack: ' + D.PACKS[k] + ' batteries">Claim</button></div>').join('');
+    const card = {
+      kind: 'shop', cls: 'shop',
+      html: '<div class="shead" style="border:0;padding:0"><div style="min-width:0"><p class="warnhead">PROTOTYPE · FREE · NO REAL PURCHASES</p><h2>Battery test packs</h2></div>' +
+        '<button class="iconbtn x" type="button" data-a="good" aria-label="Close the shop"><svg viewBox="0 0 24 24" aria-hidden="true"><use href="#i-close"/></svg></button></div>' +
+        '<p class="desc shopdesc">Batteries for trying the speed-ups. Nothing is sold: a claim adds the batteries and is logged as a would-be purchase.</p>' +
+        '<div class="packs">' + packs + '</div><p class="desc" id="shopGot"></p>',
+      onShow() { shopGot(); },
+    };
+    if (ui.modal) { ui.modalQ.unshift(card); return; }
+    showCard(card);
+    E.log(S, 'screen', { name: 'shop' });
+  }
+  function shopGot() {
+    const el = $('shopGot'); if (!el) return;
+    const p = S.tele.packs, n = Object.keys(p).reduce((a, k) => a + p[k], 0);
+    el.textContent = n ? 'Claimed in this save: ' + ['small', 'medium', 'large'].filter((k) => p[k]).map((k) => p[k] + ' ' + k).join(', ') : '';
   }
   function modalClick(e) {
     const b = e.target.closest('[data-a]'); if (!b) return;
     gesture();
-    const a = b.dataset.a;
+    const [a, x] = b.dataset.a.split(':');
     if (a === 'good') { sfx('tap'); closeCard(); }
-    else if (a === 'collectAll') { closeCard(); act({ type: 'collectAll' }); }
+    else if (a === 'collectAll') { ui.cardHold = now() + 1400; closeCard(); act({ type: 'collectAll' }); }   // let the flyers land before the next card
     else if (a === 'useHere') useHere();
+    else if (a === 'claim') { const r = act({ type: 'claimPack', size: x }, { from: centre(b) }); if (r.ok) { shopGot(); b.textContent = 'Claimed +' + D.PACKS[x]; setTimeout(() => { b.textContent = 'Claim'; }, 1200); } }
+    else if (a === 'lab') { closeCard(); hooks.openLab('telemetry'); }
   }
 
   // ------------------------------------------------------------------ HUD
@@ -350,17 +439,19 @@
       play: done || f.step >= 3, goal: done,
     };
   }
+  // Chip numbers: jumps of 1 000 or more roll over 600 ms; a spend counts down over 350 ms; flyer arrivals step.
   function shownVal(k, target, t) {
     const d = ui.disp[k];
-    if (d == null) { ui.disp[k] = target; return target; }
-    if (Math.abs(target - d) >= 1000 && !ui.reduced) {
-      const r = ui.roll[k];
-      if (!r || r.to !== target) ui.roll[k] = { from: r ? r.cur : d, to: target, t0: t, cur: d };
-      const R = ui.roll[k], q = clamp((t - R.t0) / 600, 0, 1); R.cur = Math.round(R.from + (R.to - R.from) * q);
-      if (q >= 1) { ui.disp[k] = target; delete ui.roll[k]; }
-      return R.cur;
-    }
-    ui.disp[k] = target; delete ui.roll[k]; return target;
+    if (d == null || ui.reduced) { ui.disp[k] = target; delete ui.roll[k]; ui.spendRoll[k] = false; return target; }
+    let r = ui.roll[k];
+    if (r && r.to !== target) r = ui.roll[k] = { from: r.cur, to: target, t0: t, cur: r.cur, dur: r.dur };
+    if (!r && target !== d && (Math.abs(target - d) >= 1000 || (ui.spendRoll[k] && target < d))) r = ui.roll[k] = { from: d, to: target, t0: t, cur: d, dur: Math.abs(target - d) >= 1000 ? 600 : 350 };
+    ui.spendRoll[k] = false;
+    if (!r) { ui.disp[k] = target; return target; }
+    const q = clamp((t - r.t0) / r.dur, 0, 1); r.cur = Math.round(r.from + (r.to - r.from) * (1 - (1 - q) * (1 - q)));
+    if (q >= 1) { delete ui.roll[k]; r.cur = target; }
+    ui.disp[k] = r.cur;
+    return r.cur;
   }
   function setText(el, txt) { if (el._txt !== txt) { el.textContent = txt; el._txt = txt; } }
   function setHidden(el, hide) { if (el.hidden !== hide) el.hidden = hide; }
@@ -397,7 +488,7 @@
       const col = ui.sheet && ui.side === 'left'; if (g._col !== col) { g.classList.toggle('collapsed', col); g._col = col; }
     }
     // PLAY
-    const p = $('play'), hideP = !rv.play || (ui.sheet && ui.side === 'right') || !!ui.overlay;
+    const p = $('play'), hideP = !rv.play || (ui.sheet && ui.side !== 'left') || !!ui.overlay;
     if (p._shown === undefined) p._shown = !p.hidden;
     if (!hideP && !p._shown && rv.play) { p.classList.add('rise'); setTimeout(() => p.classList.remove('rise'), 500); }
     setHidden(p, hideP); p._shown = !hideP;
@@ -410,7 +501,7 @@
     }
   }
   function showChip(el, show, k) {
-    if (show && el.hidden) { el.hidden = false; if (ui.shownChips[k]) return; ui.shownChips[k] = true; const v = el.classList.contains('batbtn') ? $('c-bat') : el; v.classList.add('reveal'); setTimeout(() => v.classList.remove('reveal'), 500); }
+    if (show && el.hidden) { el.hidden = false; ui.needLayout = ui.portrait; if (ui.shownChips[k]) return; ui.shownChips[k] = true; const v = el.classList.contains('batbtn') ? $('c-bat') : el; v.classList.add('reveal'); setTimeout(() => v.classList.remove('reveal'), 500); }
     else if (!show && !el.hidden) el.hidden = true;
     if (show) ui.shownChips[k] = true;
   }
@@ -476,22 +567,29 @@
   // ------------------------------------------------------------------ side sheet
   function openSheet(id) {
     if (!B[id]) return;
-    const a = Scene.anchor(id), side = a.x < innerWidth / 2 ? 'right' : 'left';
     const swap = !!ui.sheet && ui.sheet !== id;
-    ui.sheet = id; ui.side = side; ui.sheetHtml = ''; ui.confirm = null;
+    ui.sheetHtml = ''; ui.confirm = null;
     ui.doneAway.delete(id);
+    const el = placeSheet(id, swap);
+    if (!swap) arm(el);
+    renderSheet(now(), true);
+    E.log(S, 'screen', { name: 'sheet:' + id });
+  }
+  // Docked opposite the building in landscape; a bottom sheet in the portrait fallback.
+  function placeSheet(id, swap) {
+    const a = Scene.anchor(id), side = ui.portrait ? 'bottom' : a.x < innerWidth / 2 ? 'right' : 'left';
+    ui.sheet = id; ui.side = side;
     const el = $('sheet'); el.className = 'sheet ' + side; el.hidden = false;
     if (swap) { void el.offsetWidth; el.classList.add('swap'); }
     document.body.classList.toggle('sheet-left', side === 'left');
-    if (!swap) arm(el);
-    Scene.focus({ id, side, w: el.getBoundingClientRect().width || 260 });
-    renderSheet(now(), true);
-    E.log(S, 'screen', { name: 'sheet:' + id });
+    document.body.classList.toggle('sheet-bottom', side === 'bottom');
+    Scene.focus({ id, side, w: side === 'bottom' ? 0 : el.getBoundingClientRect().width || 260 });
+    return el;
   }
   function closeSheet() {
     if (!ui.sheet) return;
     ui.sheet = null; $('sheet').hidden = true; Scene.focus(null); ui.confirm = null;
-    document.body.classList.remove('sheet-left');
+    document.body.classList.remove('sheet-left', 'sheet-bottom');
   }
   function jump(id) { if (id === 'play') { closeSheet(); openRoutes(); } else openSheet(id); }
   const arrow = (a, b) => (b == null || String(a) === String(b) ? esc(a) : esc(a) + ' → <em>' + esc(b) + '</em>');
@@ -722,7 +820,7 @@
   }
   function timerAction(target, t) {
     const key = target.kind + ':' + target.id;
-    if (t.free) return { label: 'FINISH FREE', cls: 'go', fn: () => { const r = act({ type: 'finishFree', target }); if (r.ok) sfx('zip'); } };
+    if (t.free) return { label: 'FINISH FREE', cls: 'go', fn: () => act({ type: 'finishFree', target }) };
     const conf = ui.confirm && ui.confirm.key === key && now() < ui.confirm.until;
     return { label: conf ? 'Confirm ' + t.price + '?' : 'SKIP · ' + t.price, cls: conf ? 'confirm' : 'bat', fn: () => skip(target, t.price) };
   }
@@ -879,7 +977,7 @@
   function startRun() {
     gesture();
     if (ui.overlay !== 'routes') return;
-    const r = act({ type: 'startRun', routeId: S.loadout.route });
+    const r = act({ type: 'startRun', routeId: S.loadout.route, external: !!ui.external });
     if (!r.ok) return;
     ui.overlay = null; $('routes').hidden = true; $('start').hidden = true;
     sfx('radio');
@@ -900,7 +998,7 @@
     E.log(S, 'screen', { name: 'run' });
     if (p.source !== 'sim') {
       run = { waiting: true };
-      $('ticker').innerHTML = '<p>Waiting for Two Thumbs Left · paste the result in the Lab</p><p><button class="mini" type="button" data-a="cancelRun">Cancel this run</button></p>';
+      $('ticker').innerHTML = '<p>Waiting for Two Thumbs Left · paste the result in the Lab</p><p><button class="mini primary" type="button" data-a="openLab">Open the Lab</button> <button class="mini" type="button" data-a="cancelRun">Cancel this run</button></p>';
       setHp(p.handoff.stats.startHp, 0, p.handoff.stats.maxHp);
       return;
     }
@@ -946,12 +1044,12 @@
     if (!run || run.waiting || ui.overlay !== 'run') return;
     const r = run.res, k = clamp((t - run.t0) / run.dur, 0, 1), tau = k * r.time;
     const ev = r.events;
-    while (run.idx < ev.length && ev[run.idx][0] <= tau && ev[run.idx][1] !== 'safe_room' && ev[run.idx][1] !== 'overrun_end') runEvent(ev[run.idx++]);
+    while (run.idx < ev.length && ev[run.idx][0] <= tau && ev[run.idx][1] !== 'safe_room' && ev[run.idx][1] !== 'overrun_end') { run.lastT = ev[run.idx][0]; runEvent(ev[run.idx++]); }
     if (r.result === 'safe_room' && run.gateAt != null && !run.gateOpen && tau >= 0.92 * r.time) { run.gateOpen = true; tick('Gate open. RUN!', 'horde'); }
     if (r.rescued && !run.rescue && tau >= r.time - 10 && run.h.route.rescue) {
       run.rescue = true; tick(run.h.route.rescue.name + ' was hiding ' + D.ROUTE_PLACE[run.h.route.id] + '. Coming with you.', 'good');
     }
-    const x = (tau / Math.max(1, r.time)) * r.progress * 100;
+    const x = ((ui.reduced && k < 1 ? run.lastT || 0 : tau) / Math.max(1, r.time)) * r.progress * 100;   // reduced motion: the dot jumps between events
     $('runDot').style.left = x.toFixed(2) + '%'; $('stripDone').style.transform = 'scaleX(' + (x / 100).toFixed(3) + ')';
     if (k >= 1 && !run.ended) {
       run.ended = true; run.endAt = t;
@@ -971,6 +1069,18 @@
     $('runscr').hidden = true; ui.overlay = null;
     if (!r.ok) { setTimeout(pumpCards, 200); return; }
     showResult(r.reward, r.result);
+  }
+  // A result from outside the sim (the Lab's paste box, or one day the real game): validated against the pending
+  // handoff by the engine and then shown exactly like a simulated run.
+  function resolveWith(result) {
+    if (!S.pending) return { ok: false, err: 'No run is waiting for a result', errors: ['No run is waiting for a result'] };
+    const r = act({ type: 'resolveRun', result }, { quiet: true });
+    if (!r.ok) return Object.assign({ errors: r.errors || [r.err] }, r);
+    if (run) run.resolved = true;
+    run = null; $('runscr').hidden = true; if (ui.overlay === 'run') ui.overlay = null;
+    sfx(r.reward && r.reward.win ? 'win' : 'loss');
+    showResult(r.reward, r.result);
+    return r;
   }
 
   // ------------------------------------------------------------------ result and loss cards
@@ -1145,10 +1255,11 @@
     ui.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || !!S.dev.reducedMotion;
     Scene.setReduced(ui.reduced);
     wire();
-    if (offlineEv.length) handle(offlineEv, { offline: true });
     if (welcome) welcomeCard(welcome);
+    if (offlineEv.length) handle(offlineEv, { offline: true });
     if (S.pending) beginRunScreen();
     save();
+    checkPortrait();
     requestAnimationFrame(frame);
   }
   function layout() {
@@ -1158,19 +1269,60 @@
     const playH = parseFloat(cs.getPropertyValue('--play-h')) || 56;
     const top = $('top').getBoundingClientRect().height || 44;
     const playW = parseFloat(cs.getPropertyValue('--play-w')) || 112, goalW = parseFloat(cs.getPropertyValue('--goal-w')) || 190;
-    Scene.setLayout({ W: innerWidth, H: innerHeight, top, bottom: playH + Math.max(8, safeB), safeL, safeR, padL: Math.max(8, safeL), padR: Math.max(8, safeR), playW, blW: 44 + 6 + goalW });
-    if (ui.sheet) Scene.focus({ id: ui.sheet, side: ui.side, w: $('sheet').getBoundingClientRect().width });
+    ui.portrait = PORTRAIT.matches;
+    ui.topH = Math.round(top);
+    // portrait fallback (SPEC 8.6): the camp fits the width in the top 55%; sheets come up from the bottom
+    const bottom = ui.portrait ? Math.max(playH + Math.max(8, safeB), Math.round(innerHeight * 0.45)) : playH + Math.max(8, safeB);
+    Scene.setLayout({ W: innerWidth, H: innerHeight, top, bottom, safeL, safeR, padL: Math.max(8, safeL), padR: Math.max(8, safeR), playW, blW: 44 + 6 + goalW });
+    if (ui.sheet) placeSheet(ui.sheet, false);
+    checkPortrait();
+  }
+  const PORTRAIT = matchMedia('(orientation: portrait) and (max-width: 599px)');
+  function checkPortrait() {
+    let ok = ui.portraitOk;
+    if (!ok) { try { ok = sessionStorage.getItem('survivor-camp.portrait') === '1'; } catch (e) { ok = false; } ui.portraitOk = ok; }
+    const show = PORTRAIT.matches && !ok && !demo;
+    const el = $('rotate');
+    if (el.hidden === show) { el.hidden = !show; if (show) { arm(el); E.log(S, 'screen', { name: 'rotate' }); } }
+  }
+  function continuePortrait() {
+    gesture(); ui.portraitOk = true;
+    try { sessionStorage.setItem('survivor-camp.portrait', '1'); } catch (e) { /* per-tab convenience only */ }
+    $('rotate').hidden = true; E.log(S, 'portrait', null);
   }
   function useHere() {
     const r = E.load(store.get(KEY), Date.now(), { tzOffsetMs: -new Date().getTimezoneOffset() * 60000 });
     if (r.status === 'ok' || r.status === 'migrated') { S = r.state; E.resume(S, Date.now()); }
-    S.tabId = myTab; paused = false;
-    $('modal').hidden = true; ui.modal = null;
+    S.tabId = myTab; paused = false; syncAmb();
+    $('modal').hidden = true; ui.modal = null; document.body.classList.remove('modal-open');
     for (const id of ['routes', 'runscr', 'result', 'start', 'resultBack']) $(id).hidden = true;
     ui.overlay = null; closeSheet(); run = null;
     V = E.view(S); G = E.goal(S);
     save();
     if (S.pending) beginRunScreen();
+  }
+  // Close every screen and forget what the HUD had revealed: after reset, import, replay FTUE or set Camp Level.
+  function resetUi() {
+    $('modal').hidden = true; ui.modal = null; document.body.classList.remove('modal-open'); ui.modalQ = []; ui.bannerQ = []; $('banners').innerHTML = '';
+    for (const id of ['routes', 'runscr', 'result', 'start', 'resultBack']) $(id).hidden = true;
+    ui.overlay = null; closeSheet(); run = null;
+    ui.rev = {}; ui.shownChips = {}; ui.disp = {}; ui.roll = {}; ui.spendRoll = {}; ui.doneAway.clear();
+    for (const k of Object.keys(ui.held)) ui.held[k] = 0;
+    flyers.length = 0; floats.length = 0; ui.endShown = false; ui.handFor = ''; ui.coachAfter = 0;
+    document.body.classList.remove('beat');
+    V = E.view(S); G = E.goal(S); ui.sheetHtml = ''; ui.routesHtml = '';
+    ui.needLayout = true;
+    syncAmb();
+    if (S.pending) beginRunScreen();
+  }
+  // Replace the whole camp (Lab import, or a fresh camp on reset). The old save is overwritten on the next save().
+  function replaceState(next) {
+    S = next; S.tabId = myTab; resetUi(); save();
+  }
+  function resetSave() {
+    const fresh = E.create({ realNow: Date.now(), tzOffsetMs: -new Date().getTimezoneOffset() * 60000, seed: (Math.random() * 4294967296) >>> 0 });
+    replaceState(fresh);
+    E.log(S, 'dev:resetSave', null, true);
   }
   function arm(el) { el.classList.add('arming'); clearTimeout(el._arm); el._arm = setTimeout(() => el.classList.remove('arming'), 250); }
   function wire() {
@@ -1186,7 +1338,13 @@
     $('routes').addEventListener('click', routesClick);
     $('start').addEventListener('click', startRun);
     $('runSkip').addEventListener('click', skipRun);
-    $('ticker').addEventListener('click', (e) => { const b = e.target.closest('[data-a="cancelRun"]'); if (b) { act({ type: 'dev', op: 'cancelRun' }); $('runscr').hidden = true; ui.overlay = null; run = null; } });
+    $('ticker').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-a]'); if (!b) return;
+      gesture();
+      if (b.dataset.a === 'openLab') hooks.openLab('payloads');
+      else if (b.dataset.a === 'cancelRun') { act({ type: 'dev', op: 'cancelRun' }); $('runscr').hidden = true; ui.overlay = null; run = null; }
+    });
+    $('rotContinue').addEventListener('click', continuePortrait);
     $('result').addEventListener('click', resultClick);
     $('resultBack').addEventListener('click', () => { gesture(); sfx('tap'); closeResult(); });
     $('modal').addEventListener('click', modalClick);
@@ -1201,11 +1359,13 @@
     addEventListener('resize', layout);
     addEventListener('orientationchange', () => setTimeout(layout, 120));
     document.addEventListener('visibilitychange', () => {
-      if (document.hidden) { save(); return; }
+      if (document.hidden) { save(); try { if (SC.Sfx) SC.Sfx.suspend(); } catch (e) { /* optional */ } return; }
       if (paused || demo) return;
       const r = E.resume(S, Date.now()); ui.last = 0; ui.celebrations = 0;
-      if (r.events.length) handle(r.events, { offline: true });
       if (r.welcome) welcomeCard(r.welcome);
+      if (r.events.length) handle(r.events, { offline: true });
+      try { if (SC.Sfx) SC.Sfx.resume(); } catch (e) { /* optional */ }
+      syncAmb();
       save();
     });
     addEventListener('pagehide', save);
@@ -1213,11 +1373,10 @@
       if (e.key !== KEY || !e.newValue || demo || paused) return;
       let other = null; try { other = JSON.parse(e.newValue).tabId; } catch (x) { return; }
       if (other && other !== myTab) {
-        paused = true;
+        paused = true; syncAmb();
         showCard({ kind: 'tab', html: '<h2>Camp open in another tab</h2><p>This tab is paused so the two tabs don\'t overwrite each other.</p><div class="btns"><button class="btn primary" type="button" data-a="useHere">Use here</button></div>' });
       }
     });
-    matchMedia('(prefers-reduced-motion: reduce)').addEventListener('change', (e) => { ui.reduced = e.matches || !!S.dev.reducedMotion; Scene.setReduced(ui.reduced); });
   }
 
   // ------------------------------------------------------------------ frame loop
@@ -1227,7 +1386,10 @@
     if (!paused) { const ev = E.tick(S, dt, Date.now()); if (ev.length) { handle(ev, { tick: true }); ui.sheetHtml = ''; } }
     V = E.view(S);
     if (!G || t - ui.goalAt > 250) { G = E.goal(S); ui.goalAt = t; }
-    const red = ui.reduced; ui.reduced = matchMedia('(prefers-reduced-motion: reduce)').matches || !!S.dev.reducedMotion; if (red !== ui.reduced) Scene.setReduced(ui.reduced);
+    const red = ui.reduced; ui.reduced = RM.matches || !!S.dev.reducedMotion;
+    if (red !== ui.reduced || ui.reducedCls !== ui.reduced) { Scene.setReduced(ui.reduced); document.body.classList.toggle('reduced', ui.reduced); ui.reducedCls = ui.reduced; }
+    if (ui.particles !== S.dev.particles) { ui.particles = S.dev.particles; Scene.setParticles(ui.particles); }
+    if (ui.needLayout) { ui.needLayout = false; layout(); }
     Scene.draw(S, V, t, { doneAway: ui.doneAway });
     syncHot();
     updateHud(t);
@@ -1242,13 +1404,15 @@
     if (t - ui.lastSave > 5000) save();
   }
 
+  const RM = matchMedia('(prefers-reduced-motion: reduce)');
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
 
   return {
     hooks,
     api: {
-      get state() { return S; }, get view() { return V; }, act, handle, save, banner, toast, queueCard, closeCard, fly, openSheet, closeSheet,
-      openRoutes, beginRunScreen, showResult, welcomeCard, store, KEY, isDemo: () => demo,
+      get state() { return S; }, get view() { return V; }, get ui() { return ui; }, act, handle, save, banner, toast, queueCard, closeCard, fly, openSheet, closeSheet,
+      openRoutes, beginRunScreen, showResult, welcomeCard, openShop, resolveWith, resetUi, replaceState, resetSave, store, KEY,
+      isDemo: () => demo, isPaused: () => paused, fxCount: () => flyers.length, gesture, sfx,
     },
   };
 });
