@@ -79,22 +79,22 @@
 
   // ------------------------------------------------------------------ 6.1 destinations and their Two Thumbs Left director
   const DESTS = [
-    { id: 'D1', n: 1, name: 'Allotments', threat: 6, tower: 1, clinic: false, fav: 'sprinter', bricks: 40, cans: 25, xp: 20, rest: 3 * MIN, rescue: 1.00, first: 2,
+    { id: 'D1', n: 1, name: 'Allotments', theName: 'the Allotments', threat: 6, tower: 1, clinic: false, fav: 'sprinter', bricks: 40, cans: 25, xp: 20, rest: 3 * MIN, rescue: 1.00, first: 2,
       dir: { W: 2, H: 1, hordeMul: 0.8, zombieCap: 35, lengthS: 210, firstHordeS: [50, 70], hordeGapS: [90, 130], gateS: 45, waveEveryS: 10 },
       supplies: { medkit: 2, pills: 3, noiseBomb: 2, ammo: 3, rifleInLot: false } },
-    { id: 'D2', n: 2, name: 'Car Wash', threat: 16, tower: 2, clinic: true, fav: 'brawler', bricks: 90, cans: 45, xp: 35, rest: 6 * MIN, rescue: 0.40, first: 4,
+    { id: 'D2', n: 2, name: 'Car Wash', theName: 'the Car Wash', threat: 16, tower: 2, clinic: true, fav: 'brawler', bricks: 90, cans: 45, xp: 35, rest: 6 * MIN, rescue: 0.40, first: 4,
       dir: { W: 3, H: 1, hordeMul: 0.9, zombieCap: 40, lengthS: 240, firstHordeS: [45, 65], hordeGapS: [85, 125], gateS: 50, waveEveryS: 10 },
       supplies: { medkit: 1, pills: 3, noiseBomb: 2, ammo: 2, rifleInLot: false } },
-    { id: 'D3', n: 3, name: 'Night Market', threat: 24, tower: 3, clinic: false, fav: 'scout', bricks: 200, cans: 80, xp: 60, rest: 12 * MIN, rescue: 0.35, first: 6,
+    { id: 'D3', n: 3, name: 'Night Market', theName: 'the Night Market', threat: 24, tower: 3, clinic: false, fav: 'scout', bricks: 200, cans: 80, xp: 60, rest: 12 * MIN, rescue: 0.35, first: 6,
       dir: { W: 3, H: 2, hordeMul: 1.0, zombieCap: 45, lengthS: 300, firstHordeS: [40, 60], hordeGapS: [75, 120], gateS: 60, waveEveryS: 10 },
       supplies: { medkit: 1, pills: 2, noiseBomb: 2, ammo: 2, rifleInLot: true } },
-    { id: 'D4', n: 4, name: 'Rail Yard', threat: 34, tower: 5, clinic: false, fav: 'marksman', bricks: 600, cans: 150, xp: 100, rest: 20 * MIN, rescue: 0.30, first: 10,
+    { id: 'D4', n: 4, name: 'Rail Yard', theName: 'the Rail Yard', threat: 34, tower: 5, clinic: false, fav: 'marksman', bricks: 600, cans: 150, xp: 100, rest: 20 * MIN, rescue: 0.30, first: 10,
       dir: { W: 4, H: 2, hordeMul: 1.2, zombieCap: 55, lengthS: 360, firstHordeS: [35, 55], hordeGapS: [70, 110], gateS: 65, waveEveryS: 9 },
       supplies: { medkit: 1, pills: 2, noiseBomb: 1, ammo: 2, rifleInLot: true } },
-    { id: 'D5', n: 5, name: 'Hospital Hill', threat: 46, tower: 7, clinic: false, fav: 'medic', bricks: 1300, cans: 260, xp: 150, rest: 35 * MIN, rescue: 0.25, first: 14,
+    { id: 'D5', n: 5, name: 'Hospital Hill', theName: 'Hospital Hill', threat: 46, tower: 7, clinic: false, fav: 'medic', bricks: 1300, cans: 260, xp: 150, rest: 35 * MIN, rescue: 0.25, first: 14,
       dir: { W: 4, H: 3, hordeMul: 1.4, zombieCap: 65, lengthS: 390, firstHordeS: [35, 50], hordeGapS: [65, 100], gateS: 70, waveEveryS: 9 },
       supplies: { medkit: 1, pills: 1, noiseBomb: 1, ammo: 1, rifleInLot: true } },
-    { id: 'D6', n: 6, name: 'Ferry Terminal', threat: 58, tower: 9, clinic: false, fav: 'sprinter', bricks: 2600, cans: 420, xp: 220, rest: 50 * MIN, rescue: 0.20, first: 18,
+    { id: 'D6', n: 6, name: 'Ferry Terminal', theName: 'the Ferry Terminal', threat: 58, tower: 9, clinic: false, fav: 'sprinter', bricks: 2600, cans: 420, xp: 220, rest: 50 * MIN, rescue: 0.20, first: 18,
       dir: { W: 5, H: 4, hordeMul: 1.7, zombieCap: 75, lengthS: 420, firstHordeS: [30, 45], hordeGapS: [60, 90], gateS: 80, waveEveryS: 8 },
       supplies: { medkit: 0, pills: 1, noiseBomb: 1, ammo: 1, rifleInLot: true } },
   ];
@@ -124,13 +124,14 @@
   };
   const TRAIT_IDS = ['tough', 'lucky', 'light_sleeper', 'quick_learner', 'steady', 'iron_stomach', 'night_owl', 'reckless', 'loud', 'heavy'];
   const NICKNAMES = {    // 4.8, checked after every run in this order
-    ghost:       { name: 'Ghost', perk: 'speed +5', speed: 5 },
-    mower:       { name: 'Mower', perk: 'damage × 1.05', damage: 1.05 },
-    elbows:      { name: 'Elbows', perk: 'shove cooldowns × 0.9', shove: 0.9 },
-    gatecrasher: { name: 'Gatecrasher', perk: 'horde warning +1 s', warn: 1, endHpMax: 10 },
-    lastbreath:  { name: 'Lastbreath', perk: 'max HP +5', maxHp: 5 },
-    comeback:    { name: 'Comeback', perk: 'stretcher +5 %', rescue: 0.05, hurtTimes: 2 },
-    oldhand:     { name: 'Old Hand', perk: 'rest × 0.75', rest: 0.75, runs: 15 },
+    // perk: the short effect; chip: the person card's nickname chip after the name; line: the result card's sentence
+    ghost:       { name: 'Ghost', perk: 'speed +5', speed: 5, chip: 'speed +5 in Two Thumbs Left', line: 'Speed +5 in Two Thumbs Left.' },
+    mower:       { name: 'Mower', perk: 'damage × 1.05', damage: 1.05, chip: 'damage × 1.05 in Two Thumbs Left', line: 'Damage × 1.05 in Two Thumbs Left.' },
+    elbows:      { name: 'Elbows', perk: 'shove cooldowns × 0.9', shove: 0.9, chip: 'shove cooldowns × 0.9 in Two Thumbs Left', line: 'Shove cooldowns × 0.9 in Two Thumbs Left.' },
+    gatecrasher: { name: 'Gatecrasher', perk: 'horde warning +1 s', warn: 1, endHpMax: 10, chip: 'horde warning +1 s in Two Thumbs Left', line: 'Horde warning +1 s in Two Thumbs Left.' },
+    lastbreath:  { name: 'Lastbreath', perk: 'max HP +5', maxHp: 5, chip: 'max HP +5', line: 'Max HP +5, here and in Two Thumbs Left.' },
+    comeback:    { name: 'Comeback', perk: 'stretcher +5 %', rescue: 0.05, hurtTimes: 2, chip: 'stretcher chance +5 %', line: 'Stretcher chance +5 %.' },
+    oldhand:     { name: 'Old Hand', perk: 'rest × 0.75', rest: 0.75, runs: 15, chip: 'rests × 0.75', line: 'Rests × 0.75.' },
   };
   const NICK_IDS = ['ghost', 'mower', 'elbows', 'gatecrasher', 'lastbreath', 'comeback', 'oldhand'];
 
@@ -197,13 +198,29 @@
     arrived: { starter: 'Night {n}. One of the first two.', inn: 'Night {n}. Walked in from the Inn.', drifter: 'Night {n}. Drifted in at the gate.',
                stranger: 'Night {n}. Found Down at the gate.', lab: 'Night {n}. Arrived from the Lab.' },
     win: 'Night {n}. {D}: home in {m}, {k} kills.', winSecondWind: 'Night {n}. {D}: home on a second wind.',
-    hurt: 'Night {n}. Overrun at the {D}. Carried home.', down: 'Night {n}. Overrun at the {D}. Down.',
+    // {D} in hurt, down and lost is the destination with its article ('the Night Market', 'Hospital Hill': DESTS[].theName)
+    hurt: 'Night {n}. Overrun at {D}. Carried home.', down: 'Night {n}. Overrun at {D}. Down.',
     revivedCans: 'Night {n}. Revived in the Clinic.', revivedSparks: 'Night {n}. Revived with sparks.',
-    nickname: 'Night {n}. Everyone calls {F} “{Nick}” now.', level: 'Night {n}. Level {L}.', lost: 'Night {n}. Lost {N} at the {D}.',
+    nickname: 'Night {n}. Everyone calls {F} “{Nick}” now.', level: 'Night {n}. Level {L}.', lost: 'Night {n}. Lost {N} at {D}.',
     levelLines: [3, 5, 7, 10],
     epitaphNick: 'Everyone called {F} “{Nick}”.', epitaphKills: 'Once cleared {k} in one night.',
     epitaphRuns0: 'Came to the gate on Night {n}.', epitaphRuns1: 'Ran one night for Bellhaven.', epitaphRunsN: 'Ran {k} nights for Bellhaven.',
     usedToBe: 'Used to be {a} {trade}.',
+    // the run flow (6.2-6.6, 8.7-8.9)
+    resultWin: 'You made it.', resultLoss: 'Overrun.', beat: 'Did {F} make it home?',
+    madeItHurt: '{F} made it home hurt. Rests {t}.', limped: '{F} limped home. Rests {t}.', rests: '{F} rests {t}',
+    deathHome: 'DEATH 0% · close to home', deathThird: 'DEATH 0% · nobody dies before your third person',
+    fallCost: 'If Down: revive {c} cans or {s} ✦', tired: '{now} now · {after} after a {t} rest',
+    fallsNone: 'No falls in {n} tries.', falls: { streets: 'Most falls happen in the streets.', hordes: 'Most falls happen in the hordes.', gate: 'Most falls happen at the gate.' },
+    lever: { medkit: 'A medkit adds +{p}%.', pills: 'Pills add +{p}%.', bomb: 'A noise bomb adds +{p}%.' },
+    kitName: { medkit: 'Medkit', pills: 'Pills', bomb: 'Noise bomb' }, kitLower: { medkit: 'medkit', pills: 'pills', bomb: 'noise bomb' },
+    overflow: 'Depot full: {x} left behind.', firstClear: 'First clear +{s} ✦', daily: 'Daily spark +{s} ✦',
+    nickNow: 'Everyone calls {F} “{Nick}” now. {line}',
+    downTitle: '{NAME} IS DOWN', foundAtGate: 'Found Down at the gate · Night {n}', downSince: 'Down since Night {n}',
+    overrunAt: { streets: 'Overrun in the streets of {D}', hordes: 'Overrun by a horde at {D}', gate: 'Overrun at the {N} gate' },   // {D} with its article, {N} the bare name
+    leftToDecide: '{t} to decide.', revivedBefore: 'Revived before: {n} (prices × {x})',
+    restsIn: 'rests {t} in the Clinic', restsFor: 'rests {t}', readyAtOnce: 'ready at once', aGrave: 'a grave in the city',
+    fellAt: 'Fell at {D}, Night {n}.', oddsWere: ' The odds were {p}.', fellOn: 'Fell on Night {n}.',
     finale: 'Bellhaven is whole. The gold bell rings for everyone who lives here, and for everyone who is remembered here.',
     deathOn: 'From now on a failed run can cost a life. The odds are always on the button.',
     explainers: [   // 13.3: every system in three short sentences or fewer

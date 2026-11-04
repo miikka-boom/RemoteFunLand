@@ -9,8 +9,10 @@
  *             weapon, shoveMul: 1 + 0.03L for a Brawler else 1, accAdd: 6 if Steady + L if Marksman }
  *     fellAt: 'streets' | 'hordes' | 'gate' | null.  log: [[f, kind, value?, kills?], ...] in model order, f = 0-1.
  *   Run.mc(dest, L, n = 400) -> { home, wins, n, refs: { dmgP10, killsP90, shovesP90 }, falls: { streets, hordes, gate } }
- *     the shown odds: simulate(dest, L, i * 7919) for i = 1..n; falls are counts; dmgP10 is -1 with no reference wins
- *     (so Ghost cannot trigger). Identical inputs give identical outputs: cache freely.
+ *     the shown odds: simulate(dest, L, i * 7919) for i = 1..n (through stats()); falls are counts; dmgP10 is -1 with
+ *     no reference wins (so Ghost cannot trigger). Identical inputs give identical outputs: cache freely.
+ *   Run.stats(dest, L, seed, out) -> out { win: 0|1, fell: 0 streets | 1 hordes | 2 gate | -1, damageTaken, kills, shoves }
+ *     the allocation-free twin of simulate() that mc() uses: the same draws and sums in the same order, no log.
  *   Run.winOnly(dest, L, seed) -> 0 | 1   the lean twin of simulate(): the same draws in the same order up to the
  *     outcome (asserted equal by tests.cjs); Run.homeOdds(dest, L, n = 400) -> wins / n with it (about 3x faster).
  *   Run.events(r, pillsTemp) -> the result's events [[t, kind, value?], ...] with t = round(f x time) (SPEC 6.9):
@@ -79,20 +81,73 @@
              fellAt: dead ? FELL[dead.k] : null, log };
   }
 
+  // The allocation-free twin of simulate() for the odds: every draw in the same order, every sum in the same order, no
+  // log. Fills out = { win: 0|1, fell: 0 streets | 1 hordes | 2 gate | -1, damageTaken, kills, shoves } (the values
+  // simulate() returns; asserted equal by tests.cjs over 10,000 random runs). About twice as fast as simulate().
+  const SF = new Float64Array(16), SK = new Int8Array(16);
+  function stats(dest, L, seed, out) {
+    let a = seed;
+    const R = () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+    const U = (lo, hi) => lo + (hi - lo) * R();
+    const LN = (s) => Math.exp(s * Math.sqrt(-2 * Math.log(R() + 1e-12)) * Math.cos(2 * Math.PI * R()) - s * s / 2);
+    let n = 0;
+    for (let i = 0; i < dest.W; i++) { SF[n] = U(0.05, 0.70); SK[n++] = 0; }
+    for (let i = 0; i < dest.H; i++) { SF[n] = U(0.20, 0.72); SK[n++] = 1; }
+    SF[n] = U(0.78, 0.92); SK[n++] = 2;
+    for (let i = 1; i < n; i++) { const f = SF[i], k = SK[i]; let j = i - 1; while (j >= 0 && SF[j] > f) { SF[j + 1] = SF[j]; SK[j + 1] = SK[j]; j--; } SF[j + 1] = f; SK[j + 1] = k; }
+    let sumW = 0; for (let i = 0; i < n; i++) sumW = sumW + WK[SK[i]];
+    const m = L.P - dest.T, hm = dest.hordeMul || 1;
+    const scale = K.D0 / sumW * Math.exp(-m / K.MS) * LN(K.NIGHT);
+    const maxHp = L.maxHp || 100, pT = L.pillsTemp || 50, heal0 = L.heal || 0.8;
+    let hp = Math.min(maxHp, L.startHp || maxHp), temp = 0, sw = L.sw == null ? 1 : L.sw, med = L.medkit | 0, pills = L.pills | 0, bomb = L.bomb | 0;
+    let dmg = 0, kills = 0, hordes = 0, dead = -1, deadF = 0;
+    for (let i = 0; i < n; i++) {
+      const k = SK[i];
+      let d = WK[k] * scale * LN(K.SIG);
+      if (bomb && k !== 0 && (k === 2 || hp + temp < 0.7 * maxHp)) { bomb = 0; d *= 0.5; }
+      d = Math.round(d);
+      const kHere = k === 0 ? U(5, 12) : k === 1 ? (U(10, 17) + hordes) * hm : 3 * U(10, 24) * hm * 0.8;
+      const ft = Math.min(temp, d); temp -= ft; hp -= d - ft; dmg += d;
+      if (hp <= 0) {
+        const over = -hp; dmg -= over; let rest = over;
+        while (hp <= 0 && sw > 0) {
+          sw--; hp = 1; temp = 0;
+          rest = Math.round(rest * U(0, K.SW_CARRY));
+          if (pills && rest > 0) { pills = 0; temp = Math.min(maxHp - hp, pT); }
+          const t2 = Math.min(temp, rest); temp -= t2; hp -= rest - t2; dmg += rest;
+        }
+        if (hp <= 0) { dmg += hp; hp = 0; kills += kHere * U(0.3, 0.7); dead = k; deadF = SF[i]; break; }
+      }
+      kills += kHere; if (k !== 0) hordes++;
+      temp = Math.max(0, temp - K.TEMP_DECAY);
+      if (k !== 2) {
+        if (pills && hp + temp < 0.5 * maxHp) { pills = 0; temp = Math.min(maxHp - hp, temp + pT); }
+        if (med && hp < 0.4 * maxHp) { med = 0; const heal = Math.round((maxHp - hp) * heal0); hp += heal; temp = Math.min(temp, maxHp - hp); }
+      }
+    }
+    const win = dead < 0;
+    const time = Math.round(win ? dest.len * U(0.9, 1.15) : dest.len * deadF * U(0.95, 1.05));
+    kills += (time / 60) * U(3, 6); kills = Math.round(kills);
+    R();                                                         // accuracy's draw
+    out.win = win ? 1 : 0; out.fell = dead; out.damageTaken = Math.round(dmg); out.kills = kills;
+    out.shoves = Math.round(kills * U(0.15, 0.30) * (L.shoveMul || 1));
+    return out;
+  }
+
   // The shown odds: n fixed seeds, so a reload never changes them. Also the nickname refs and where the falls happen.
+  const FELL_K = ['streets', 'hordes', 'gate'];
   function mc(dest, L, n) {
     n = n || MC_N;
-    let wins = 0; const dm = [], ki = [], sh = [], falls = { streets: 0, hordes: 0, gate: 0 };
+    let wins = 0; const dm = [], ki = new Float64Array(n), sh = new Float64Array(n), falls = { streets: 0, hordes: 0, gate: 0 }, o = {};
     for (let i = 1; i <= n; i++) {
-      const r = simulate(dest, L, i * SEED_STEP);
-      if (r.win) { wins++; dm.push(r.damageTaken); } else falls[r.fellAt]++;
-      ki.push(r.kills); sh.push(r.shoves);
+      stats(dest, L, i * SEED_STEP, o);
+      if (o.win) { wins++; dm.push(o.damageTaken); } else falls[FELL_K[o.fell]]++;
+      ki[i - 1] = o.kills; sh[i - 1] = o.shoves;
     }
-    const asc = (a) => a.sort((x, y) => x - y);
-    asc(dm); asc(ki); asc(sh);
+    dm.sort((x, y) => x - y); ki.sort(); sh.sort();               // typed arrays sort numerically
     const refs = { dmgP10: dm.length ? dm[Math.floor(0.1 * dm.length)] : -1,
-                   killsP90: ki[Math.min(ki.length - 1, Math.floor(0.9 * ki.length))],
-                   shovesP90: sh[Math.min(sh.length - 1, Math.floor(0.9 * sh.length))] };
+                   killsP90: ki[Math.min(n - 1, Math.floor(0.9 * n))],
+                   shovesP90: sh[Math.min(n - 1, Math.floor(0.9 * n))] };
     return { home: wins / n, wins, n, refs, falls };
   }
 
@@ -166,5 +221,5 @@
     return { luck, spare, stretcher };
   }
 
-  return { K, ACC, FELL, SEED_STEP, MC_N, mulberry32, simulate, mc, winOnly, homeOdds, events, toResult, cityRolls };
+  return { K, ACC, FELL, SEED_STEP, MC_N, mulberry32, simulate, stats, mc, winOnly, homeOdds, events, toResult, cityRolls };
 });

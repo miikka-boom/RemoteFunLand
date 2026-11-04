@@ -55,24 +55,86 @@
  *   fmt.compact(n, narrow) · fmt.num(n) · fmt.dur(sec) · fmt.clock(sec) · fmt.pct(x, 'death'?) · fmt.hoursLeft(ms) ·
  *   fmt.iso(ms)
  *
- *   STAGE 3 (people and runs) stubs, documented where they live below: odds, oddsKey, kitDeltas, restedOdds, strip and
- *   suggest (placeholders without odds today: strip orders by favoured role, Ready first, lower level, lower index),
- *   buildHandoff, runSim, validateResult, reward, and the actions startRun, resolveRun, revive, goodbye, invite (they
- *   answer err 'state' with data.todo). Ready-made helpers, exposed as Engine._internal: fall(s, p, why, ev) (Fallen,
- *   epitaph, grave on its default spot or waiting, the events), setDown(s, p), addXp(s, p, xp, ev) (level-ups, history
- *   lines), assignHouse(s, p), gain(s, res, n, src) (cut at the cap), earn(s, n, why) / spend(s, n, why) (sparks and
- *   their telemetry), history(s, p, text), epitaph(s, p), genPerson(s, { lv, how, role }), refreshInn(s, ev),
- *   warpAtGo(s, realNow) -> warpS (stamps lastSimGoRealMs) and runClockMs(s, pending, result) (5.1),
- *   restFrac / startHpFrac / restMulOf (6.2, 4.6), settle(s, ev), welcome(s, events, ms); plus Run.cityRolls(seed),
- *   Run.toResult(r, meta), Run.mc(), Run.homeOdds() and DATA.TEXT for every history and epitaph template.
  *
+ *   ---------------------------------------------------------------------------------------- people and runs (4, 6, 7)
+ *   odds(state, destId, personId, kit?, { rested?, cachedOnly? }?) -> { key, destId, personId, kit, home, death, rescue,
+ *            power, margin, startHp, maxHp, falls { streets, hordes, gate } (counts of 400), refs { dmgP10, killsP90,
+ *            shovesP90 }, n, wins, fallsHint ('Most falls happen at the gate.' | 'No falls in 400 tries.'), lever { item,
+ *            delta, text: 'A noise bomb adds +6%.' } | null (only from kit odds already computed), hint (fallsHint + lever),
+ *            safe: 'home' (the Allotments) | 'third' (before the third present person) | null, homeText 'HOME 98%',
+ *            deathText ('DEATH 1.2%' | 'DEATH 0% · close to home' | 'DEATH 0% · nobody dies before your third person'),
+ *            deathRed (> 5 %), fallCost { cans, sparks, n, text: 'If Down: revive 1,300 cans or 28 ✦' } | null (R15) }
+ *            The 400-seed model (Run.mc), about 0.5 ms uncached in node, cached in an LRU of 300 shared by every state.
+ *            kit: { medkit, pills, bomb } of 0/1 (noiseBomb also read; locked items dropped); null = autoKit.
+ *            death = (1 - home) x (1 - rescue), the Lab's death x applied to (1 - rescue).
+ *   oddsKey(state, destId, personId, kit?, { rested? }?) -> string   the cache key (destination + every model input)
+ *   oddsCached(state, destId, personId, kit?, o?) -> odds | null  never computes (for the UI's per-frame reads)
+ *   oddsTodo(state, destId?) -> [{ destId, personId, kit, key }]  what PLAY and the strip still need, Ready people first;
+ *            the UI runs odds() on these in idle frames (<= 8 ms a frame, 6.3.5). destId defaults to the last destination.
+ *   kitDeltas(state, destId, personId, kit?, o?) -> { medkit, pills, bomb (Home % with minus without; null if locked),
+ *            labels: { medkit: 'Medkit · 75 · +6%', ... }, best: { item, delta, text } | null (unpacked, >= 2 points) }
+ *   restedOdds(state, destId, personId, kit?, o?) -> null when not resting, else { home, death (after the rest), now,
+ *            nowDeath, restLeftMs, price, confirm, text: '83% now · 95% after a 6:10 rest', label: 'REST NOW · 5 ✦',
+ *            labelShort: 'REST NOW · 5 ✦ → 95%' (568) }
+ *   strip(state, destId, { compute? }?) -> [{ personId, destId, home | null, death | null, state ('ready'|'tired'|'hurt'|
+ *            'recovering'), restLeftMs, hpFrac, key, kit, badge ('good' 85+ | 'ok' 70-84 | 'low' | null), chip ('Rested',
+ *            'Tired 6:10', ...), fav, lv, index }] everyone who can go (Down, Out and Fallen are not listed), best Home %
+ *            first, ties to the lower level then the lower index. Cached odds only unless compute (null = "…", sorted after).
+ *   suggest(state, destId?, { compute? }?) -> { personId, destId, home, death, tired, state, hpFrac, kit, key, known } | null
+ *            PLAY (6.2): the Ready person with the best Home % at the last destination used, else the best of the resting.
+ *   autoKit(state, destId) -> { medkit, pills, bomb, total }   kitNorm(state, destId, kit) -> { medkit, pills, bomb }
+ *   runCard(state, destId, personId, kit?) -> the run sheet's runner card (8.7.1): { name, look, lv, xp, xpFrom, xpTo,
+ *            roleLine, ttlLine, traitChip, kit, kitTotal, odds (computed), homeText, deathText, deathRed, fallLine, rest
+ *            (restedOdds, cached only), tiredLine, hint, low (< 50 %), go { ok, err, confirm, label: 'GO · EMRE' |
+ *            'RUN IT ANYWAY?' }, toggles: [{ item, open, on, price, delta, label, canTurnOn }] }
+ *   buildHandoff(state, destId, personId, kit, seed, meta?) -> the 6.8 handoff. Before GO it previews the next night
+ *            (seed null); meta { night, runId, realNow (createdAt), source 'sim' | 'game', odds }.
+ *   runSim(state) -> the 6.9 result of state.pending (the model on the stored seed and the run input saved at GO, so a
+ *            reload replays the same night). Forced outcomes try seeds seed+1..seed+500 (6.3.3, the Lab).
+ *   validateResult(res, pending, state?) -> { ok, res (clean, the 6.9 keys in order), errors[], notes[] }: every row of
+ *            the 6.9 table; with the state also "Already applied".
+ *   reward(state, pending, res, realNow?) -> the 6.5 breakdown, computed on a copy (no mutation): { runId, personId,
+ *            destId, night, source, win, outcome 'win'|'hurt'|'down', safe (no suspense), forced, clockMs, bricks, bricksBase,
+ *            killBricks, cans, cansLoot, overflow { bricks, cans }, kit { held, packed, used, charged { medkit, pills, bomb,
+ *            total }, returned {...}, back }, xp, lvFrom, lvTo, levelUps[], xpNow, xpFrom, xpTo, sparks { firstClear, daily },
+ *            restMs, restKind, downUntilMs, rescue, nickname, nickName, rolls { luck, spare, stretcher }, arrival ('sack' |
+ *            'stretcher' (Hurt, found by the team, a Clinic built: two medics carry the runner in) | 'limp' | null),
+ *            lines { title 'You made it.' | 'Overrun.', sub 'Night 34 · Night Market · Emre', salvage 'kill salvage +29',
+ *            kit 'Used: pills −45, noise bomb −60 · Returned: medkit +75', overflow 'Depot full: 120 bricks left behind.',
+ *            firstClear 'First clear +6 ✦', daily 'Daily spark +5 ✦', nick 'Everyone calls Emre “Gatecrasher” now. Horde
+ *            warning +1 s in Two Thumbs Left.', rest 'Emre rests 16:07', beat 'Did Emre make it home?', fall 'Emre made it
+ *            home hurt. Rests 31 min.' | 'Emre limped home. Rests 9 min.' } }   (null fields when they do not apply)
+ *   offer(state, personId) -> the revive offer (6.6.2, 8.8) of a Down person: { personId, first, name, look, stranger, n,
+ *            title 'EMRE AYDIN IS DOWN', roleLine 'Scout · Lv 4 · 11 nights · 1,021 kills', where ('Overrun at the Night
+ *            Market gate · Night 35' | 'Found Down at the gate · Night 3'), leftMs, leftText '23 h left to decide.',
+ *            revive { cans, ok, need, restMs, label 'REVIVE · 850', sub 'rests 34 min in the Clinic', needText }, reviveNow
+ *            { sparks, ok, need, label 'REVIVE NOW · 24 ✦', sub, needText }, goodbye { label, sub }, revivedText }
+ *   memorial(state, graveId) -> the memorial card (8.9): { graveId, personId, gx, gy, waiting, look, first, name,
+ *            roleLine 'Scout · Lv 4 · Quick learner', usedToBe, epitaph [2], record '11 nights · 10 home · 1,021 kills ·
+ *            3 days in Bellhaven' | null, fellLine 'Fell at the Night Market, Night 35. The odds were 92%.' | 'Found Down
+ *            at the gate · Night 3' }
+ *   oddsTable(state, { cachedOnly }?) -> the Lab's table: every runner who can go x every open destination
+ *   gallery(seed, n = 12) -> n generated people (the Lab's generator gallery; pure)
+ *   oddsCacheSize() · oddsCacheClear()
+ *   Engine._internal (tests, sim-bot): settle, fall, setDown, addXp, assignHouse, gain, earn, spend, history, epitaph,
+ *            genPerson, refreshInn, warpAtGo, runClockMs, restFrac, startHpFrac, restMulOf, welcome, settleRun (6.5 steps on
+ *            a state), runInput (the model input of a person there), keyOf, pendingInput, recoverMs, nickFor, DEST, ...
  * ==================================================================================================== STATE (11.2, save v1)
  *   As 11.2, plus: ids { b, j, r, g, d } (id counters: 'b4', 'j12', ...), demo (true only for #demo), grave.houseId
  *   (the House the person slept in, for the default spot), person.kin (the buried person whose family name a traveler
- *   or drifter took, P1). Times are integer ms; bubbles are bubbleBase + bubbleSinceMs. Inn travelers are full person
- *   records (state 'ready', no House, no history until invited). Beds: living people hold their beds, even the stranger
- *   Down at the gate with no House; a newcomer while living > beds (a drifter, a Lab arrival) sleeps on the plaza bench
- *   (houseId null) until a bed frees.
+ *   or drifter took, P1), person.arrivedMs (city ms of arrival: "3 days in Bellhaven"), person.fellAt ('streets' |
+ *   'hordes' | 'gate': where the run that left the person Down ended), tel.strangerRev (0 none, 1 cans, 2 sparks),
+ *   tel.deathShown (the sum of the Death % shown at GO: the expected Downs). Times are integer ms; bubbles are bubbleBase +
+ *   bubbleSinceMs. Inn travelers are full person records (state 'ready', no House, no history until invited). Beds:
+ *   living people hold their beds, even the stranger Down at the gate with no House; a newcomer while living > beds (a
+ *   drifter, a Lab arrival) sleeps on the plaza bench (houseId null) until a bed frees.
+ *   pending (11.2, saved at GO before anything animates): { runId 'bh-000034', night, seed, destId, personId, source
+ *   'sim' | 'external' (the Lab's "wait for a real result"), kit { medkit, pills, bomb }, held (cans), handoff, refs,
+ *   falls, startedCityMs, warpS (5.1; null = no cap), L (the run model's input at GO: P, maxHp, startHp, sw, medkit,
+ *   pills, bomb, heal, pillsTemp, weapon, shoveMul, accAdd), dest { hordeMul }, force ('auto' | 'win' | 'loss' | 'down' |
+ *   'hurt': a forced first win or the Lab), forcedFirst, odds { home, death, rescue } (as shown at GO; the stretcher
+ *   uses this rescue), safe (no Down possible: the Allotments or before the third present person) }.
+ *   lastRun: { handoff, result, notes, reward } for the result card and the Lab. Night N = the N-th run ever started.
  *
  * ==================================================================================================== VIEW
  *   { v, cityMs, night, demo, today, realLast,
@@ -102,15 +164,22 @@
  *     tray: [{ type, name, decor, cost, timeS, built, allowed, max, locked (needs Tower N) | null, full, affordable, ok, err }],
  *     dests: [{ id, n, name, threat, open, lock ('Tower 5' | 'Needs the Clinic') | null, cleared, firstSparks, bricks,
  *               cans, xp, fav, kit }],
- *     goal: goal(state), play: suggest(state) | null, daily: { claimed }, deathOn,
- *     pending: { runId, personId, destId, source } | null, flags, lab: { timeScale, reducedMotion, runScreenS, force, waitReal } }
+ *     goal: goal(state), daily: { claimed }, deathOn, flags, lab: { timeScale, reducedMotion, runScreenS, force, waitReal },
+ *     play: suggest(state) (cached odds only) + { first, look, destName, label 'Emre → Night Market', homeText ('98%' |
+ *           '…' while not known), deathText, deathRed, hpText 'HP 72%' | null, dailyTag '✦5' | null } | null,
+ *     pending: { runId, night, personId, first, destId, destName, source, sim, startedCityMs, warpS, kit, held, force, odds,
+ *           handoff, title 'Night 34 · Night Market' } | null,
+ *     lastRun: state.lastRun (the result card: handoff, result, notes, reward) | null }
  *   PersonView: { id, index, first, last, name, fullName (with “nickname”), nick, nickName, age, role, roleName,
  *     trade, card ('Used to be a taxi driver. Rates every sunset out of ten.'), trait, traitName, traitLine, habit, look,
  *     lv, xp, xpFrom, xpTo, state, restKind, restLeftMs, restTotalMs, startHpFrac, downLeftMs, houseId, house (color name),
  *     where: 'walk'|'house'|'bench'|'clinic'|'gate'|'out'|'grave', pill ('Rested', 'Tired 6:10', 'Hurt 31:00',
  *     'Recovering 12:00', 'Down · 20 h', 'Out'), stranger, runs, wins, kills, bestKills, revives, history, epitaph,
  *     suggested, graveId, arrivedNight, arrivedHow ('starter'|'inn'|'drifter'|'stranger'|'lab'|'traveler'), fellNight,
- *     fellDest, fellOdds, kin, kinLine ('Says Efua Boateng was family.' | null) }
+ *     fellDest, fellOdds, kin, kinLine ('Says Efua Boateng was family.' | null), canRun (Ready or resting, no run out),
+ *     roleChip ('SCOUT · +5 at the Night Market'; a Medic adds '· medkit heals 88 %'), ttlLine ('In Two Thumbs Left:
+ *     flashlight 568 · horde warning +0.8 s'), traitChip ('QUICK LEARNER · XP × 1.25'), nickChip ('“GHOST” · speed +5 in
+ *     Two Thumbs Left' | null), hpText ('HP 72%' while resting), fellAt, arrivedMs }
  *
  * ==================================================================================================== EVENTS
  *   { type, ... }: jobStarted { jobId, kind, buildingId, toLv } · jobDone { jobId, kind, buildingId, buildingType, lv, name } ·
@@ -119,17 +188,34 @@
  *   gy } · finished { jobId, price } · rubbleCleared { rubbleId, sparks, gx, gy } · craneBought · rested { personId, early, price? } ·
  *   innRefresh { n, travelers[] } · stranger { personId } · drifter { personId } · deathOn · fell { personId, graveId,
  *   why, where } · downExpired { personId, graveId, where } · gravePlaced { graveId, personId, gx, gy } · goal { step,
- *   key, text, reward } · levelUp { personId, lv } · packClaimed { size } · offline { ms, welcome? } · dev { op }.
- *   Stage 3 adds: daily, firstClear, nickname, invited, revived (and fills the run events).
+ *   key, text, reward } · levelUp { personId, lv } · packClaimed { size } · offline { ms, welcome? } · dev { op } ·
+ *   runStarted { runId, personId, destId, night, source } · runResolved { runId, personId, destId, outcome, arrival } ·
+ *   down { personId, destId } (a run ended Down: the offer opens once) · firstClear { destId, sparks } · daily { sparks,
+ *   day } · nickname { personId, nick, name } · invited { personId, price } · revived { personId, pay, price, stranger,
+ *   restMs }. fell { why: 'goodbye' | 'expired' } is the grave (the bell tolls once).
  *
  * ==================================================================================================== ACTIONS
  *   collect { id } · place { kind, gx, gy, finishOther? } (kind: a building type or 'tree' | 'bench' | 'lamp') ·
  *   upgrade { id, finishOther? } · expand { finishOther? } · clearRubble { id } · move { target: { kind: 'building' |
  *   'grave' | 'decor', id }, gx, gy } · finish { jobId, confirm? } · restNow { personId, confirm? } · innNow { confirm? } ·
  *   buyCrane · claimPack { size: 100 | 500 | 2500 } · flag { name: 'metPeople' | 'deathCardSeen' | 'finale' } ·
- *   setLastDest { destId } · dev { op, ... } · STAGE 3: invite { travelerId } · startRun { destId, personId, kit,
- *   confirmLow? } -> data.handoff · resolveRun { result, source } -> data { reward, outcome, notes } · revive {
- *   personId, pay: 'cans' | 'sparks' } · goodbye { personId } -> data { graveId, spot }.
+ *   setLastDest { destId } · dev { op, ... } ·
+ *   invite { travelerId } -> data { personId, price }   60 + 30 x living cans, a free bed (err beds), a history line.
+ *   startRun { destId, personId, kit?, confirmLow? } -> data { runId, handoff }   GO (6.2): kit null = packed
+ *            automatically; a packed item must be unlocked (err locked, data { item }) and paid for (err cost); the kit
+ *            is held; under 50 % Home it needs confirmLow (err confirm, data { home }); one run at a time (err pending);
+ *            Down, Out and Fallen people cannot go (err state). Draws the seed (the Lab may lock it), stamps the run-warp
+ *            allowance, takes a forced first win, stores everything in pending and sets the runner Out.
+ *   resolveRun { result?, source: 'sim' | 'game' | 'paste' } -> data { reward, outcome, notes, result, offer | null }
+ *            result may be an object or a JSON string; source 'sim' without a result runs runSim(). Validated (a
+ *            rejection changes nothing: err state, data { errors, notes }), settled (6.5), lastRun written, pending
+ *            cleared; the same run twice answers "Already applied". A Down outcome returns the offer.
+ *   revive { personId, pay: 'cans' | 'sparks' } -> data { price, restMs }   cans: Recovering in the Clinic for 10 min x L x
+ *            Clinic rest; sparks: Ready at once (a sink, never a paid skip). Escalation x 2^min(n, cap), cans clamped at
+ *            80 % of the can cap; the stranger's first revive is 50 cans or 5 ✦.
+ *   goodbye { personId } -> data { graveId, spot | null }   Fallen, the epitaph and the grave on its default spot in this
+ *            one act (R13); housemates remember the fall. LAY TO REST then sends move { target: { kind: 'grave', id } }
+ *            only if the ghost was dragged.
  *   finishOther: with every crane busy, pays the skip price of the job with the least time left (no second confirm:
  *   the "Finish the Kiln now · 7 ✦" dialog is the confirmation), finishes it and starts the new job.
  *   Prices of 20 ✦ or more need confirm: true (else err 'confirm', data { price }).
@@ -144,12 +230,14 @@
  *   Grants:  grant { what: 'bricks'|'cans'|'sparks', n? (1,000 / 1,000 / 100) } · fillBubbles · finishAll (jobs, rests,
  *            the Inn; never a Down deadline) · setTower { lv } · clearRubble (all, no sparks)
  *   Runs:    force { value: 'auto'|'win'|'loss'|'down'|'hurt' } · runScreenS { value: 3|8|20 } · lockSeed { value: uint|null }
- *            · forcedWins { value: 0-2 } · waitReal { value } · (paste a result: STAGE 3 resolveRun { source: 'paste' })
+ *            · forcedWins { value: 0-2 } · waitReal { value } · paste a result: the action resolveRun { result, source:
+ *            'paste' } · the odds table: oddsTable(state)
  *   Tuning:  mul { key: cost|time|prod|loot|xp|death|revive|rest|inn, value } (costs and caps scale together; prod
  *            re-bases every bubble first; data.dataRule lists violations) · rescueBase { destId, value } · set { key:
  *            clinicRescue|tiredFloor|escalationCap|downWindowMs|freeSec|skipExp|skipK|reducedMotion, value } · resetLab
- *   People:  addPerson { seed?, lv? } (ignores beds) · kill { personId } (Down now) · reviveAll · setLevel { personId, lv }
- *            · giveXp { personId, xp } · reroll { seed? } (a new save seed, the Lab kept)
+ *   People:  addPerson { seed?, lv? } (ignores beds) · kill { personId } (Down now: then offer() opens the Down flow) ·
+ *            reviveAll · setLevel { personId, lv } · giveXp { personId, xp } · reroll { seed? } (a new save seed, the Lab
+ *            kept) · the generator gallery: gallery(seed)
  *   State:   replayOnboarding · reset { seed? } (export/import: serialize() and load())
  *   Every dev change is tagged dev: Lab sparks and packs never count as income in the telemetry.
  */
@@ -389,14 +477,14 @@
   // ------------------------------------------------------------------ people
   function takenNames(s, extra) { const t = []; for (const p of s.people) t.push(p.first); for (const p of s.inn.travelers) t.push(p.first); return extra ? t.concat(extra) : t; }
   const takenHabits = (s) => living(s).map((p) => p.habit);
-  function personRecord(g, how, night) {
+  function personRecord(g, how, night, atMs) {
     const lv = clamp(g.lv || 1, 1, 10), line = how === 'traveler' ? null : TEXT.arrived[how] || TEXT.arrived.lab;
     return { id: 'p' + g.index, index: g.index, seed: g.seed, first: g.first, last: g.last, nick: null, age: g.age, role: g.role,
       trade: g.trade, trait: g.trait, habit: g.habit, look: { skin: g.look.skin, hairStyle: g.look.hairStyle, hair: g.look.hair, jacket: g.look.jacket, acc: g.look.acc },
       lv, xp: XP_AT[lv], state: 'ready', restKind: null, restFromMs: 0, restUntilMs: 0, downUntilMs: 0, houseId: null,
       revives: 0, runs: 0, wins: 0, hurtCount: 0, kills: 0, bestKills: 0,
-      history: line ? [[night, fill(line, { n: night })]] : [], arrivedNight: night, arrivedHow: how,
-      fellNight: null, fellDest: null, fellOdds: null, epitaph: null, kin: null };
+      history: line ? [[night, fill(line, { n: night })]] : [], arrivedNight: night, arrivedHow: how, arrivedMs: Math.max(0, Math.round(fin(atMs, 0))),
+      fellNight: null, fellDest: null, fellOdds: null, fellAt: null, epitaph: null, kin: null };
   }
   // A new person from the save seed and the next index (4.2): first names unique among the living, the buried and the Inn.
   // Kin (4.11, P1): travelers and drifters may take a buried family name (the generator always draws for it, so the
@@ -409,7 +497,7 @@
     const buried = how === 'traveler' || how === 'drifter' ? s.graves.map((gr) => personById(s, gr.personId)).filter(Boolean) : [];
     const g = Names.person(seed, idx, buried.length ? Object.assign({ buried: buried.map((q) => q.last) }, opts) : opts);
     g.index = index;
-    const rec = personRecord(g, how, s.night);
+    const rec = personRecord(g, how, s.night, s.cityMs);
     if (buried.length && g.last !== Names.person(seed, idx, opts).last) { const k = buried.filter((q) => q.last === g.last).pop(); if (k) rec.kin = k.id; }
     return rec;
   }
@@ -454,6 +542,8 @@
   // Fallen at once, the epitaph written, the grave on its default spot (or waiting for a free tile): 6.6.2, 6.7.
   function fall(s, p, why, ev) {
     const houseId = p.state === 'fallen' ? null : p.houseId;
+    const D = p.fellDest ? DEST[p.fellDest] : null;            // 4.13 (P1): each housemate remembers a fall at a destination
+    if (houseId && D) for (const q of s.people) if (q !== p && q.state !== 'fallen' && q.houseId === houseId) history(s, q, fill(TEXT.lost, { n: s.night, N: p.first + ' ' + p.last, D: D.theName }));
     p.state = 'fallen'; p.restKind = null; p.restFromMs = 0; p.restUntilMs = 0; p.downUntilMs = 0;
     p.epitaph = epitaph(s, p);
     const st = graveStart(s, houseId), spot = spotFrom(s, st.gx, st.gy);
@@ -509,7 +599,7 @@
       : role === 'medic' ? 'medkit ' + Math.round(medkitHeal * 100) + ' % in ' + medkitHealS + ' s' : 'flashlight ' + flashlightR + ' · horde warning +' + r1(0.2 * L) + ' s';
     return { maxHp, startHp, startHpFrac: hpFrac, secondWind, speed, shoveCdMul, assist, flashlightR, hordeWarnS, damageMul, medkitHeal, medkitHealS,
       pillsTemp, power, rescue, restMul: restMulOf(s, p), weapon, favoured: !!fav, shoveMul: role === 'brawler' ? 1 + 0.03 * L : 1,
-      accAdd: (tr === 'steady' ? 6 : 0) + (role === 'marksman' ? L : 0), hordeMul: d.dir.hordeMul * (tr === 'loud' ? 1.15 : 1),
+      accAdd: (tr === 'steady' ? 6 : 0) + (role === 'marksman' ? L : 0), hordeMul: r2(d.dir.hordeMul * (tr === 'loud' ? DATA.TRAITS.loud.hordeMul : 1)),
       roleLine, ttlLine: 'In Two Thumbs Left: ' + ttl };
   }
 
@@ -1042,10 +1132,8 @@
     flag(s, a) { if (!UI_FLAGS.includes(a.name)) return { err: 'notFound' }; s.flags[a.name] = a.value !== false; return {}; },
     setLastDest(s, a) { if (!DEST[a.destId]) return { err: 'notFound' }; s.lastDest = a.destId; return {}; },
     dev(s, a, ev) { return devOp(s, a, ev); },
-    // ---------------------------------------------------------------- STAGE 3 (people and runs): not built yet
-    invite: stage3('invite'), startRun: stage3('startRun'), resolveRun: stage3('resolveRun'), revive: stage3('revive'), goodbye: stage3('goodbye'),
+    // invite, startRun, resolveRun, revive, goodbye: RUN_ACTIONS below (the people and runs)
   };
-  function stage3(name) { return function () { return { err: 'state', data: { todo: name + ' is part of the people-and-runs stage' } }; }; }
 
   function act(s, a, realNow) {
     if (typeof realNow === 'number' && isFinite(realNow)) s.realLast = Math.round(realNow);
@@ -1153,7 +1241,7 @@
     }
   }
 
-  // ------------------------------------------------------------------ the run-warp cap (5.1): helpers for STAGE 3
+  // ------------------------------------------------------------------ the run-warp cap (5.1): used by startRun and resolveRun
   // At GO: pending.warpS = warp x real seconds since the previous simulated GO (null = no cap), then the GO is stamped.
   function warpAtGo(s, realNow) {
     const w = s.lab.runWarp, prev = s.lastSimGoRealMs;
@@ -1168,55 +1256,599 @@
     return Math.round(SEC * (pending.warpS == null ? t : Math.min(t, pending.warpS)));
   }
 
-  // ------------------------------------------------------------------ STAGE 3 stubs (people and runs; see SPEC 6, 11.3)
-  // odds(state, destId, personId, kit?) -> { home, death, rescue, power, margin, startHp, maxHp, falls, refs, hint }; cached
-  //   by oddsKey (an LRU of 300, SPEC 6.3.5). Until it exists, view.play and goal ETAs carry no odds (null).
-  function odds() { return null; }
-  function oddsKey(s, destId, personId, kit) { return [destId, personId, kit ? [kit.medkit, kit.pills, kit.bomb].join('') : 'auto'].join('|'); }
-  function kitDeltas() { return null; }
-  function restedOdds() { return null; }
+  // ------------------------------------------------------------------ the odds (6.2, 6.3): the 400-seed model, cached
+  const KIT_ITEMS = DATA.KIT.order;                          // ['medkit', 'pills', 'bomb']
+  const kitOpen = (s, item) => (item === 'bomb' ? armoryLv(s) >= 2 : clinicLv(s) >= 1);
+  // A kit as { medkit, pills, bomb } of 0/1 with locked items dropped; null or undefined = packed automatically (6.2).
+  function kitNorm(s, destId, kit) {
+    if (kit == null || !isObj(kit)) { const a = autoKit(s, destId); return { medkit: a.medkit, pills: a.pills, bomb: a.bomb }; }
+    const o = {}; for (const k of KIT_ITEMS) o[k] = (k === 'bomb' ? kit.bomb || kit.noiseBomb : kit[k]) && kitOpen(s, k) ? 1 : 0;
+    return o;
+  }
+  function kitTotal(destId, kit) { const pr = price.kit(destId); let n = 0; for (const k of KIT_ITEMS) if (kit[k]) n += pr[k]; return n; }
+  const personOf = (s, id) => personById(s, id) || s.inn.travelers.find((t) => t.id === id) || null;
+  const canGo = (p) => p.state === 'ready' || p.state === 'rest';
+  // The run model's input for this person there with this kit (4.6, 6.3.1, 6.3.2); full = as if rested.
+  function runInput(s, p, d, kit, full) {
+    const dv = derived(s, p, d.id);
+    return { dv, dest: { T: d.threat, W: d.dir.W, H: d.dir.H, len: d.dir.lengthS, hordeMul: dv.hordeMul },
+      L: { P: dv.power, maxHp: dv.maxHp, startHp: full ? dv.maxHp : dv.startHp, sw: dv.secondWind, medkit: kit.medkit, pills: kit.pills, bomb: kit.bomb,
+        heal: dv.medkitHeal, pillsTemp: dv.pillsTemp, weapon: dv.weapon, shoveMul: dv.shoveMul, accAdd: dv.accAdd } };
+  }
+  // 6.3.5: the cache key is the destination plus every model input, so identical inputs share one entry and an entry
+  // never goes stale (the destination's threat, W, H and length are fixed tables; hordeMul carries Loud).
+  function keyOf(destId, inp) {
+    const L = inp.L;
+    return destId + '|' + inp.dest.hordeMul + '|' + L.P + '|' + L.maxHp + '|' + L.startHp + '|' + L.sw + '|' + L.medkit + L.pills + L.bomb + '|' +
+      L.heal + '|' + L.pillsTemp + '|' + L.weapon + '|' + L.shoveMul + '|' + L.accAdd;
+  }
+  const CACHE = new Map(), CACHE_MAX = 300;                  // an LRU of 300, shared by every state (results are pure)
+  function cacheGet(key) { const v = CACHE.get(key); if (v !== undefined) { CACHE.delete(key); CACHE.set(key, v); } return v; }
+  function cachePut(key, v) { CACHE.set(key, v); while (CACHE.size > CACHE_MAX) CACHE.delete(CACHE.keys().next().value); return v; }
+  function mcOf(key, inp, cachedOnly) { const m = cacheGet(key); return m !== undefined ? m : cachedOnly ? null : cachePut(key, Run.mc(inp.dest, inp.L)); }
+  const rescueEff = (s, r) => (r >= 1 ? 1 : 1 - clamp((1 - r) * s.lab.mul.death, 0, 1));   // the Lab's death x on (1 - rescue)
+  const safeKind = (s, d) => (s.lab.rescueBase[d.n - 1] >= 1 ? 'home' : !s.flags.deathOn ? 'third' : null);   // 6.3.3: Death 0 %
+  const signPct = (x) => (x < 0 ? '−' : '+') + Math.round(Math.abs(x) * 100) + '%';
+  function fallCostOf(s, p) { const fc = price.revive(s, p.id); return fc ? { cans: fc.cans, sparks: fc.sparks, n: fc.n, text: fill(TEXT.fallCost, { c: fmtNum(fc.cans), s: fc.sparks }) } : null; }
+  function oddsOut(s, p, d, kit, inp, m, key) {
+    const dv = inp.dv, rescue = rescueEff(s, dv.rescue), death = (1 - m.home) * (1 - rescue), safe = safeKind(s, d);
+    const tot = m.falls.streets + m.falls.hordes + m.falls.gate;
+    let top = 'streets'; for (const k of ['hordes', 'gate']) if (m.falls[k] > m.falls[top]) top = k;
+    const fallsHint = tot ? TEXT.falls[top] : fill(TEXT.fallsNone, { n: m.n });
+    let lever = null;                                         // the best kit item not packed, from odds already computed (6.2)
+    for (const item of KIT_ITEMS) {
+      if (kit[item] || !kitOpen(s, item)) continue;
+      const w = CACHE.get(keyOf(d.id, { dest: inp.dest, L: Object.assign({}, inp.L, { [item]: 1 }) }));
+      if (w) { const dl = w.home - m.home; if (dl >= 0.02 - 1e-9 && (!lever || dl > lever.delta)) lever = { item, delta: dl, text: fill(TEXT.lever[item], { p: Math.round(dl * 100) }) }; }
+    }
+    return { key, destId: d.id, personId: p.id, kit: Object.assign({}, kit), home: m.home, death, rescue, power: dv.power, margin: dv.power - d.threat,
+      startHp: inp.L.startHp, maxHp: dv.maxHp, falls: Object.assign({}, m.falls), refs: Object.assign({}, m.refs), n: m.n, wins: m.wins,
+      fallsHint, lever, hint: fallsHint + (lever ? ' ' + lever.text : ''), safe,
+      homeText: 'HOME ' + fmtPct(m.home), deathText: safe === 'home' ? TEXT.deathHome : safe === 'third' ? TEXT.deathThird : 'DEATH ' + fmtPct(death, 'death'),
+      deathRed: death > 0.05, fallCost: death > 0 && personById(s, p.id) ? fallCostOf(s, p) : null };
+  }
+  // odds(state, destId, personId, kit?, { rested, cachedOnly }?): computes (about 0.5 ms in node) and caches.
+  function odds(s, destId, personId, kit, o) {
+    const d = DEST[destId], p = personOf(s, personId); if (!d || !p) return null;
+    const k = kitNorm(s, d.id, kit), inp = runInput(s, p, d, k, !!(o && o.rested)), key = keyOf(d.id, inp);
+    const m = mcOf(key, inp, !!(o && o.cachedOnly)); if (!m) return null;
+    return oddsOut(s, p, d, k, inp, m, key);
+  }
+  const oddsCached = (s, destId, personId, kit, o) => odds(s, destId, personId, kit, Object.assign({}, o, { cachedOnly: true }));
+  function oddsKey(s, destId, personId, kit, o) {
+    const d = DEST[destId], p = personOf(s, personId); if (!d || !p) return null;
+    return keyOf(d.id, runInput(s, p, d, kitNorm(s, d.id, kit), !!(o && o.rested)));
+  }
+  // Each unlocked item's live effect: Home % with it minus without it, for this kit (6.2's toggles and hint).
+  function kitDeltas(s, destId, personId, kit, o) {
+    const d = DEST[destId], p = personOf(s, personId); if (!d || !p) return null;
+    const k = kitNorm(s, d.id, kit), pr = price.kit(d.id), out = { medkit: null, pills: null, bomb: null, labels: { medkit: null, pills: null, bomb: null }, best: null };
+    for (const item of KIT_ITEMS) {
+      if (!kitOpen(s, item)) continue;
+      const a = odds(s, d.id, p.id, Object.assign({}, k, { [item]: 1 }), o), b = odds(s, d.id, p.id, Object.assign({}, k, { [item]: 0 }), o);
+      if (!a || !b) continue;
+      const dl = a.home - b.home;
+      out[item] = dl; out.labels[item] = TEXT.kitName[item] + ' · ' + pr[item] + ' · ' + signPct(dl);
+      if (!k[item] && dl >= 0.02 - 1e-9 && (!out.best || dl > out.best.delta)) out.best = { item, delta: dl, text: fill(TEXT.lever[item], { p: Math.round(dl * 100) }) };
+    }
+    return out;
+  }
+  // A tired runner: the odds now, the odds after the rest, the rest left and the REST NOW price (6.2). null if rested.
+  function restedOdds(s, destId, personId, kit, o) {
+    const d = DEST[destId], p = personById(s, personId); if (!d || !p || p.state !== 'rest') return null;
+    const now = odds(s, d.id, p.id, kit, o), full = odds(s, d.id, p.id, kit, Object.assign({}, o, { rested: true }));
+    if (!now || !full) return null;
+    const left = Math.max(0, p.restUntilMs - s.cityMs), pr = skipPrice(left / SEC, s), lbl = pr ? 'REST NOW · ' + pr + ' ✦' : 'REST NOW · FREE';
+    return { home: full.home, death: full.death, now: now.home, nowDeath: now.death, restLeftMs: left, price: pr, confirm: pr >= DATA.SKIP.confirmAt,
+      text: fill(TEXT.tired, { now: fmtPct(now.home), after: fmtPct(full.home), t: fmtClock(left / SEC) }), label: lbl, labelShort: lbl + ' → ' + fmtPct(full.home) };
+  }
+  function pillOf(s, p) {
+    const restLeft = p.state === 'rest' ? Math.max(0, p.restUntilMs - s.cityMs) : 0, downLeft = p.state === 'down' ? Math.max(0, p.downUntilMs - s.cityMs) : 0;
+    return p.state === 'ready' ? 'Rested' : p.state === 'out' ? 'Out' : p.state === 'fallen' ? 'Fallen'
+      : p.state === 'down' ? 'Down · ' + Math.floor(downLeft / HOUR) + ' h'
+      : (p.restKind === 'hurt' ? 'Hurt ' : p.restKind === 'recovering' ? 'Recovering ' : 'Tired ') + fmtClock(restLeft / SEC);
+  }
+  // The runner strip (6.2): everyone who can go (Ready, Resting, Hurt, Recovering), best Home % first, ties to the lower
+  // level, then the lower index. Odds come from the cache only, unless { compute: true }: a runner without cached odds
+  // has home null (the badge shows "…") and sorts after the known ones (favoured role, Ready, level, index). The UI
+  // fills the cache in idle frames (oddsTodo) so a frame never pays for 9 runners at once.
+  function strip(s, destId, o) {
+    const d = DEST[destId] || DEST[s.lastDest] || DATA.DESTS[0], kit = kitNorm(s, d.id, null), cachedOnly = !(o && o.compute), rows = [];
+    for (const p of s.people) {
+      if (!canGo(p)) continue;
+      const inp = runInput(s, p, d, kit, false), key = keyOf(d.id, inp), m = mcOf(key, inp, cachedOnly);
+      const home = m ? m.home : null, death = m ? (1 - m.home) * (1 - rescueEff(s, inp.dv.rescue)) : null;
+      rows.push({ personId: p.id, destId: d.id, home, death, state: p.state === 'rest' ? p.restKind || 'tired' : 'ready',
+        restLeftMs: p.state === 'rest' ? Math.max(0, p.restUntilMs - s.cityMs) : 0, hpFrac: startHpFrac(s, p), key, kit,
+        badge: home == null ? null : home >= 0.85 ? 'good' : home >= 0.7 ? 'ok' : 'low', chip: pillOf(s, p), fav: inp.dv.favoured, lv: p.lv, index: p.index });
+    }
+    const rdy = (r) => (r.state === 'ready' ? 0 : 1);
+    rows.sort((x, y) => ((x.home == null) - (y.home == null)) || (x.home != null ? y.home - x.home : (y.fav - x.fav) || rdy(x) - rdy(y)) || x.lv - y.lv || x.index - y.index);
+    return rows;
+  }
+  // PLAY's suggestion for the last destination used (6.2): the Ready person with the best Home %; if nobody is Ready,
+  // the best among Resting, Hurt and Recovering. known = false while some of those odds are still being computed.
+  // The last destination used, or the Allotments if the Lab has locked it since (PLAY never points at a locked place).
+  const playDest = (s) => (DEST[s.lastDest] && destOpen(s, DEST[s.lastDest]) ? s.lastDest : 'D1');
+  function suggest(s, destId, o) {
+    const id = DEST[destId] ? destId : playDest(s), rows = strip(s, id, o);
+    if (!rows.length) return null;
+    const ready = rows.filter((r) => r.state === 'ready'), pool = ready.length ? ready : rows, b = pool[0];
+    return { personId: b.personId, destId: id, home: b.home, death: b.death, tired: b.state !== 'ready', state: b.state, hpFrac: b.hpFrac, kit: b.kit, key: b.key,
+      known: pool.every((r) => r.home != null) };
+  }
   function oddsHint(s, destId) { const sg = suggest(s, destId); return sg && sg.home != null ? sg : null; }
-  // strip(state, destId) -> runners who can go (Ready, Resting, Hurt, Recovering), best Home % first. Placeholder order
-  // until odds exist: favoured role, then Ready before resting, lower level, lower index (6.2's tie rules).
-  function strip(s, destId) {
-    const d = DEST[destId] || DEST[s.lastDest];
-    return s.people.filter((p) => p.state === 'ready' || p.state === 'rest').map((p) => ({ p, fav: DATA.ROLE_STATS[p.role].fav.includes(d.id) }))
-      .sort((x, y) => (y.fav - x.fav) || ((x.p.state === 'ready' ? 0 : 1) - (y.p.state === 'ready' ? 0 : 1)) || x.p.lv - y.p.lv || x.p.index - y.p.index)
-      .map(({ p }) => ({ personId: p.id, home: null, death: null, state: p.state === 'rest' ? p.restKind : 'ready', restLeftMs: p.state === 'rest' ? Math.max(0, p.restUntilMs - s.cityMs) : 0 }));
+  // What PLAY and the strip still need (uncached), Ready people first: the UI computes these with odds() in idle frames.
+  function oddsTodo(s, destId) {
+    const d = DEST[destId] || DEST[playDest(s)];
+    return strip(s, d.id).filter((r) => r.home == null).sort((a, b) => (a.state === 'ready' ? 0 : 1) - (b.state === 'ready' ? 0 : 1))
+      .map((r) => ({ destId: d.id, personId: r.personId, kit: r.kit, key: r.key }));
   }
-  // suggest(state) -> PLAY's suggestion for the last destination used: { personId, destId, home, death, tired }.
-  function suggest(s, destId) {
-    const id = destId || s.lastDest, st = strip(s, id)[0];
-    return st ? { personId: st.personId, destId: id, home: st.home, death: st.death, tired: st.state !== 'ready' } : null;
+  // The Lab's odds table (9): every runner who can go x every open destination (cachedOnly: skip the uncomputed ones).
+  function oddsTable(s, o) {
+    const rows = [];
+    for (const d of DATA.DESTS) {
+      if (!destOpen(s, d)) continue;
+      for (const p of s.people) {
+        if (!canGo(p)) continue;
+        const x = odds(s, d.id, p.id, null, o);
+        rows.push({ destId: d.id, personId: p.id, first: p.first, lv: p.lv, state: p.state === 'rest' ? p.restKind : p.state, computed: !!x,
+          home: x ? x.home : null, death: x ? x.death : null, rescue: x ? x.rescue : null, power: x ? x.power : null, margin: x ? x.margin : null,
+          refs: x ? x.refs : null, falls: x ? x.falls : null, kit: x ? x.kit : null });
+      }
+    }
+    return rows;
   }
-  function buildHandoff() { return null; }                     // 6.8
-  function runSim() { return null; }                           // 6.9 for state.pending (Run.simulate + Run.toResult)
-  function validateResult(res) { return { ok: false, res, errors: ['not built yet'], notes: [] }; }   // 6.9 table
-  function reward() { return null; }                           // 6.5 breakdown, no mutation
+
+  // ------------------------------------------------------------------ the handoff (6.8)
+  const runIdOf = (night) => 'bh-' + String(night).padStart(6, '0');
+  const r4 = (x) => Math.round(x * 10000) / 10000;
+  // buildHandoff(state, destId, personId, kit, seed, meta?) -> the city -> game JSON. Before GO (the run sheet's
+  // "Sent to the game ›") it previews the next night with seed null; startRun builds the real one with the drawn seed.
+  // meta: { night, runId, realNow (createdAt), source ('sim' | 'game'), odds }.
+  function buildHandoff(s, destId, personId, kit, seed, meta) {
+    meta = meta || {};
+    const d = DEST[destId], p = personOf(s, personId); if (!d || !p) return null;
+    const k = kitNorm(s, d.id, kit), dv = derived(s, p, d.id), o = meta.odds || odds(s, d.id, p.id, k);
+    const night = meta.night != null ? meta.night : s.night + 1, nk = p.nick && DATA.NICKNAMES[p.nick] ? DATA.NICKNAMES[p.nick].name : null, dr = d.dir, sp = d.supplies;
+    return {
+      v: 1, kind: 'bellhaven.handoff', game: 'two-thumbs-left',
+      runId: meta.runId || runIdOf(night), night, seed: seed == null ? null : seed >>> 0, createdAt: fmtIso(meta.realNow != null ? meta.realNow : s.realLast),
+      source: meta.source || (s.lab.waitReal ? 'game' : 'sim'),
+      destination: { id: d.id, name: d.name, threat: d.threat, lengthS: dr.lengthS },
+      director: { wanderers: dr.W, hordes: dr.H, hordeMul: dv.hordeMul, zombieCap: dr.zombieCap, firstHordeS: dr.firstHordeS.slice(), hordeGapS: dr.hordeGapS.slice(),
+        gateS: dr.gateS, waveEveryS: dr.waveEveryS },
+      mapSupplies: { medkit: sp.medkit, pills: sp.pills, noiseBomb: sp.noiseBomb, ammo: sp.ammo, rifleInLot: sp.rifleInLot },
+      runner: { id: p.id, name: p.first + ' ' + p.last, nickname: nk, role: p.role, trait: p.trait, level: p.lv,
+        look: { skin: p.look.skin, hairStyle: p.look.hairStyle, hair: p.look.hair, jacket: p.look.jacket, acc: p.look.acc } },
+      player: { maxHp: dv.maxHp, startHp: dv.startHp, secondWind: dv.secondWind, speed: dv.speed, shoveCdMul: dv.shoveCdMul, assist: dv.assist,
+        flashlightR: dv.flashlightR, hordeWarnS: dv.hordeWarnS },
+      startRoom: { primary: dv.weapon, damageMul: dv.damageMul, medkit: k.medkit, pills: k.pills, noiseBomb: k.bomb },
+      items: { medkitHeal: dv.medkitHeal, medkitHealS: dv.medkitHealS, pillsTemp: dv.pillsTemp, bombLifeS: DATA.KIT.bombLifeS },
+      odds: { home: r4(o.home), death: r4(o.death), rescue: r4(o.rescue) },
+    };
+  }
+
+  // ------------------------------------------------------------------ the simulated run (6.3.2, 6.4)
+  // The model input saved at GO (pending.L, pending.hordeMul), checked; rebuilt from the person and the handoff's start
+  // HP if a damaged save lost it. The destination's threat, wanderers, hordes and length always come from the tables.
+  function pendingInput(s, pe) {
+    const d = DEST[pe.destId], L = isObj(pe.L) ? pe.L : null, ok = (v, lo, hi) => typeof v === 'number' && isFinite(v) && v >= lo && v <= hi;
+    const hm = isObj(pe.dest) && ok(pe.dest.hordeMul, 0.1, 5) ? pe.dest.hordeMul : d.dir.hordeMul;
+    const dest = { T: d.threat, W: d.dir.W, H: d.dir.H, len: d.dir.lengthS, hordeMul: hm };
+    if (L && ok(L.P, -1000, 1000) && ok(L.maxHp, 1, 1000) && ok(L.startHp, 1, L.maxHp) && ok(L.sw, 0, 5) && ok(L.heal, 0, 1) && ok(L.pillsTemp, 0, 500) &&
+      ok(L.shoveMul, 0.1, 5) && ok(L.accAdd, -100, 100)) {
+      return { dest, L: { P: L.P, maxHp: L.maxHp, startHp: L.startHp, sw: Math.round(L.sw), medkit: L.medkit ? 1 : 0, pills: L.pills ? 1 : 0, bomb: L.bomb ? 1 : 0,
+        heal: L.heal, pillsTemp: L.pillsTemp, weapon: Run.ACC[L.weapon] ? L.weapon : 'pistol', shoveMul: L.shoveMul, accAdd: L.accAdd } };
+    }
+    const p = personById(s, pe.personId), inp = runInput(s, p, d, kitNorm(s, d.id, pe.kit || {}), true), h = pe.handoff && pe.handoff.player;
+    if (h && ok(h.startHp, 1, inp.L.maxHp)) inp.L.startHp = h.startHp;
+    inp.dest = dest;
+    return inp;
+  }
+  // runSim(state) -> the 6.9 result for state.pending: the model on the stored seed, so a reload replays the same night.
+  // A forced outcome (the first two runs, or the Lab) tries seeds seed+1 ... seed+500; if none of them gives it, the
+  // runner's power is shifted in steps of 10 until it does (dev only: the Lab can force a loss on anyone).
+  function runSim(s) {
+    const pe = s.pending; if (!pe || !DEST[pe.destId] || !personById(s, pe.personId)) return null;
+    const inp = pendingInput(s, pe), seed = uint(pe.seed, 0), mode = ['win', 'loss', 'down', 'hurt'].includes(pe.force) ? pe.force : 'auto';
+    let r = Run.simulate(inp.dest, inp.L, seed);
+    if (mode !== 'auto') {
+      const want = mode === 'win';
+      for (let k = 1; r.win !== want && k <= 500; k++) r = Run.simulate(inp.dest, inp.L, (seed + k) >>> 0);
+      for (let dp = 10; r.win !== want && dp <= 1000; dp += 10) r = Run.simulate(inp.dest, Object.assign({}, inp.L, { P: inp.L.P + (want ? dp : -dp) }), seed);
+    }
+    return Run.toResult(r, { runId: pe.runId, seed, source: 'sim', pillsTemp: inp.L.pillsTemp });
+  }
+
+  // ------------------------------------------------------------------ the result (6.9): validateResult
+  const SOURCES = ['sim', 'game', 'paste'], FELL_AT = ['streets', 'hordes', 'gate'];
+  // validateResult(res, pending, state?) -> { ok, res, errors[], notes[] }: every row of the 6.9 table, the same for every
+  // source. With the state it also refuses a run that was already applied (idempotent). res comes back clean: the 6.9
+  // keys in order, numbers fixed or clamped (each fix noted), events kept for the log (at most 200).
+  function validateResult(res, pe, s) {
+    const notes = [], no = (m) => ({ ok: false, res: null, errors: [m], notes });
+    if (!isObj(res) || res.v !== 1 || res.kind !== 'bellhaven.result') return no('Unknown result format');
+    if (s && Array.isArray(s.appliedRunIds) && s.appliedRunIds.includes(res.runId)) return no('Already applied');
+    if (!pe || res.runId !== pe.runId) return no('This result is from a different run');
+    if (res.result !== 'safe_room' && res.result !== 'overrun') return no('Unknown outcome');
+    const h = isObj(pe.handoff) ? pe.handoff : {}, pl = isObj(h.player) ? h.player : {}, sr = isObj(h.startRoom) ? h.startRoom : {}, dr = isObj(h.director) ? h.director : {};
+    const win = res.result === 'safe_room', maxHp = Math.max(1, Math.round(fin(pl.maxHp, 100)));
+    const source = SOURCES.includes(res.source) ? res.source : 'paste';
+    if (source !== res.source) notes.push('unknown source, read as paste');
+    const seed = uint(pe.seed, 0);
+    if (source === 'sim' && res.seed !== seed) notes.push('seed ignored');
+    const num = (k, lo, hi) => {                              // clamp and note
+      const v0 = res[k], v = typeof v0 === 'number' && isFinite(v0) ? v0 : NaN;
+      if (isNaN(v)) { notes.push(k + ' missing, set to ' + lo); return lo; }
+      const r = Math.round(clamp(v, lo, hi));
+      if (r !== v) notes.push(k + (v < lo || v > hi ? ' clamped to ' + r : ' rounded to ' + r));
+      return r;
+    };
+    let progress, fellAt, endHp;
+    if (win) {
+      if (res.progress !== 1) notes.push('progress set to 1');
+      progress = 1;
+      if (res.fellAt != null) notes.push('fellAt cleared');
+      fellAt = null;
+      endHp = num('endHp', 1, maxHp);
+    } else {
+      if (res.endHp !== 0) notes.push('endHp set to 0');
+      endHp = 0;
+      const pv = typeof res.progress === 'number' && isFinite(res.progress) ? res.progress : NaN;
+      progress = isNaN(pv) ? 0 : clamp(pv, 0, 0.99);
+      if (progress !== pv) notes.push('progress ' + (isNaN(pv) ? 'missing, set to 0' : 'clamped to ' + progress));
+      if (FELL_AT.includes(res.fellAt)) fellAt = res.fellAt;
+      else { fellAt = progress < 0.35 ? 'streets' : progress < 0.78 ? 'hordes' : 'gate'; notes.push('fellAt derived: ' + fellAt); }
+    }
+    const time = num('time', 0, 1800), kills = num('kills', 0, 2000), accuracy = num('accuracy', 0, 100), shoves = num('shoves', 0, 2000);
+    const damageTaken = num('damageTaken', 0, 5000);
+    const hordes = num('hordes', 0, Math.max(0, Math.round(fin(dr.hordes, 0))) + 1), secondWindUsed = num('secondWindUsed', 0, Math.max(0, Math.round(fin(pl.secondWind, 1))));
+    const u = isObj(res.used) ? res.used : {}, used = {};
+    for (const [k, kk] of [['medkit', 'medkit'], ['pills', 'pills'], ['noiseBomb', 'noiseBomb']]) {
+      const packed = sr[kk] ? 1 : 0, v = u[k] ? 1 : 0;
+      used[k] = Math.min(v, packed);
+      if (used[k] !== v || (u[k] != null && u[k] !== 0 && u[k] !== 1)) notes.push('used.' + k + ' clamped to ' + used[k] + (packed ? '' : ' (not packed)'));
+    }
+    if (win && damageTaken < fin(pl.startHp, maxHp) - endHp) notes.push('damageTaken looks low for the health lost');
+    const events = Array.isArray(res.events) ? res.events.filter((e) => Array.isArray(e)).slice(0, 200).map((e) => e.slice(0, 3)) : [];
+    if (Array.isArray(res.events) && res.events.length > 200) notes.push('events cut to 200');
+    const out = { v: 1, kind: 'bellhaven.result', runId: pe.runId, seed: source === 'sim' || res.seed == null || !isFinite(res.seed) ? seed : uint(res.seed, seed),
+      source, result: res.result, fellAt, progress, time, kills, accuracy, shoves, damageTaken, endHp, hordes, secondWindUsed, used, events };
+    return { ok: true, res: out, errors: [], notes };
+  }
+
+  // ------------------------------------------------------------------ settlement (6.5): reward and the fall
+  function nickFor(p, res, refs, outcome) {                  // 4.8, checked in this order; the first that triggers
+    const win = res.result === 'safe_room';
+    if (win && refs && res.damageTaken <= refs.dmgP10) return 'ghost';
+    if (refs && res.kills >= refs.killsP90) return 'mower';
+    if (refs && res.shoves >= refs.shovesP90) return 'elbows';
+    if (win && res.endHp <= DATA.NICKNAMES.gatecrasher.endHpMax) return 'gatecrasher';
+    if (win && res.secondWindUsed >= 1) return 'lastbreath';
+    if (outcome === 'hurt' && p.hurtCount >= DATA.NICKNAMES.comeback.hurtTimes) return 'comeback';
+    if (p.runs >= DATA.NICKNAMES.oldhand.runs) return 'oldhand';
+    return null;
+  }
+  function refsOf(s, pe) {
+    const r = pe.refs;
+    if (isObj(r) && [r.dmgP10, r.killsP90, r.shovesP90].every((v) => typeof v === 'number' && isFinite(v))) return r;
+    const inp = pendingInput(s, pe), key = keyOf(pe.destId, inp);
+    return mcOf(key, inp, false).refs;
+  }
+  // Steps 1-7 of 6.5 on s (the real state from resolveRun, or a copy from reward()). res must be validated.
+  function settleRun(s, pe, res, ev, realNow) {
+    const d = DEST[pe.destId], p = personById(s, pe.personId), win = res.result === 'safe_room';
+    const h = isObj(pe.handoff) ? pe.handoff : {}, pl = isObj(h.player) ? h.player : {}, night = clampInt(pe.night, 0, BIG, s.night);
+    const sh = isObj(pe.odds) ? pe.odds : {}, shownHome = clamp(fin(sh.home, 0), 0, 1);
+    // 1. the clock: a simulated run moves it by min(result.time, the run-warp allowance) (5.1)
+    const clockMs = runClockMs(s, pe, res);
+    if (clockMs > 0) for (const e of advance(s, clockMs, { source: 'run' })) ev.push(e);
+    const rolls = Run.cityRolls(uint(pe.seed, 0));
+    // 2. the kit: every packed item not used comes back, before loot and never cut by the cap
+    const pr = price.kit(d.id), packed = isObj(pe.kit) ? pe.kit : {}, held = Math.max(0, Math.round(fin(pe.held, 0)));
+    const usedK = { medkit: res.used.medkit, pills: res.used.pills, bomb: res.used.noiseBomb }, charged = { total: 0 }, returned = { total: 0 };
+    for (const k of KIT_ITEMS) {
+      const on = packed[k] ? 1 : 0, c = on && usedK[k] ? pr[k] : 0, r = on && !usedK[k] ? pr[k] : 0;
+      charged[k] = c; returned[k] = r; charged.total += c; returned.total += r;
+    }
+    const back = clamp(held - charged.total, 0, held);
+    s.res.cans += back; s.tel.kitSpent += held - back;
+    // 3. loot: the win table, 30 % x progress on a loss, plus a quarter brick per kill always; cut at the cap
+    const lm = (p && p.trait === 'loud' ? DATA.TRAITS.loud.loot : 1) * s.lab.mul.loot, base = win ? 1 : RULES.lossLoot * res.progress;
+    const bricksBase = Math.round(d.bricks * rolls.luck * lm * base), killBricks = Math.round(RULES.killBricks * res.kills), cansLoot = Math.round(d.cans * rolls.luck * lm * base);
+    const gb = gain(s, 'bricks', bricksBase + killBricks, 'run'), gc = gain(s, 'cans', cansLoot, 'run');
+    const br = { runId: pe.runId, personId: pe.personId, destId: d.id, night, source: res.source, win, outcome: win ? 'win' : 'hurt', safe: false, forced: pe.force || 'auto',
+      clockMs, bricks: gb, bricksBase, killBricks, cans: gc, cansLoot, overflow: { bricks: bricksBase + killBricks - gb, cans: cansLoot - gc },
+      kit: { held, packed: { medkit: packed.medkit ? 1 : 0, pills: packed.pills ? 1 : 0, bomb: packed.bomb ? 1 : 0 }, used: usedK, charged, returned, back },
+      xp: 0, lvFrom: p ? p.lv : 1, lvTo: p ? p.lv : 1, levelUps: [], xpNow: 0, xpFrom: 0, xpTo: 0, sparks: { firstClear: 0, daily: 0 },
+      restMs: 0, restKind: null, downUntilMs: null, rescue: null, nickname: null, nickName: null, rolls, arrival: null, lines: {} };
+    if (!p) return br;
+    const F = p.first, Dn = d.name, Dt = d.theName;
+    p.kills += res.kills; if (res.kills > p.bestKills) p.bestKills = res.kills;
+    const rm = restMulOf(s, p), maxHp = Math.max(1, Math.round(fin(pl.maxHp, 100)));
+    let rescue = clamp(fin(sh.rescue, 1), 0, 1), safe = !!pe.safe;
+    if (win) {
+      // 5. a win: the first clear, the daily spark, a rest that grows with the damage taken
+      s.tel.wins++; p.wins++;
+      if (!s.dest[d.id].cleared) { s.dest[d.id].cleared = true; br.sparks.firstClear = earn(s, d.first, 'firstClear'); ev.push({ type: 'firstClear', destId: d.id, sparks: br.sparks.firstClear }); }
+      const day = dayOf(s, typeof realNow === 'number' && isFinite(realNow) ? realNow : s.realLast);
+      if (s.daily.lastDay !== day) { s.daily.lastDay = day; br.sparks.daily = earn(s, RULES.daily, 'daily'); ev.push({ type: 'daily', sparks: br.sparks.daily, day }); }
+      const rest = Math.round(d.rest * SEC * (0.5 + res.damageTaken / maxHp) * rm);
+      p.state = 'rest'; p.restKind = 'tired'; p.restFromMs = s.cityMs; p.restUntilMs = s.cityMs + rest; br.restMs = rest; br.restKind = 'tired';
+      history(s, p, res.secondWindUsed >= 1 ? fill(TEXT.winSecondWind, { n: night, D: Dn }) : fill(TEXT.win, { n: night, D: Dn, m: fmtClock(res.time), k: fmtNum(res.kills) }));
+      br.arrival = 'sack';
+    } else {
+      // 6. a loss: the stretcher roll (always found at the Allotments and before the third present person)
+      s.tel.losses++;
+      const mode = pe.force;
+      const hurt = mode === 'down' ? false : mode === 'hurt' ? true : safe || rolls.stretcher < rescue;
+      if (mode === 'down' || mode === 'hurt') safe = false;
+      br.rescue = rescue; br.safe = safe;
+      if (hurt) {
+        const rest = Math.round(d.rest * SEC * RULES.hurtMul * rm);
+        p.state = 'rest'; p.restKind = 'hurt'; p.restFromMs = s.cityMs; p.restUntilMs = s.cityMs + rest; p.hurtCount++;
+        br.outcome = 'hurt'; br.restMs = rest; br.restKind = 'hurt';
+        if (!safe) s.tel.rescues++;
+        history(s, p, fill(TEXT.hurt, { n: night, D: Dt }));
+        br.arrival = !safe && clinicLv(s) >= 1 ? 'stretcher' : 'limp';   // P1: two medics carry the runner in (with a Clinic)
+      } else {
+        setDown(s, p); p.fellNight = night; p.fellDest = d.id; p.fellOdds = shownHome; p.fellAt = res.fellAt;
+        br.outcome = 'down'; br.downUntilMs = p.downUntilMs;
+        s.tel.downs++; s.tel.downsByDest[d.id] = (s.tel.downsByDest[d.id] || 0) + 1; s.tel.downsByLv[p.lv] = (s.tel.downsByLv[p.lv] || 0) + 1;
+        if (s.tel.firstDownMs == null) s.tel.firstDownMs = s.cityMs;
+        history(s, p, fill(TEXT.down, { n: night, D: Dt }));
+        ev.push({ type: 'down', personId: p.id, destId: d.id });
+      }
+    }
+    // 4. XP and level-ups (after the run line, so the history reads in order)
+    const xp = Math.round(d.xp * (win ? 1 : RULES.lossXp * res.progress) * (p.trait === 'quick_learner' ? DATA.TRAITS.quick_learner.xp : 1) * s.lab.mul.xp);
+    br.xp = xp; addXp(s, p, xp, ev);
+    for (let L = br.lvFrom + 1; L <= p.lv; L++) br.levelUps.push(L);
+    br.lvTo = p.lv; br.xpNow = p.xp; br.xpFrom = XP_AT[p.lv]; br.xpTo = p.lv < 10 ? XP_AT[p.lv + 1] : XP_AT[10];
+    // 7. the nickname (4.8): the first that triggers, kept for good; telemetry
+    if (!p.nick) {
+      const n = nickFor(p, res, refsOf(s, pe), br.outcome);
+      if (n) {
+        p.nick = n; s.tel.nicknames++; const N = DATA.NICKNAMES[n];
+        history(s, p, fill(TEXT.nickname, { n: night, F, Nick: N.name }));
+        br.nickname = n; br.nickName = N.name;
+        ev.push({ type: 'nickname', personId: p.id, nick: n, name: N.name });
+      }
+    }
+    if (pe.source === 'sim' && res.source === 'sim' && (pe.force || 'auto') === 'auto') {   // calibration (9, P10): natural sim runs only
+      const b = Math.min(9, Math.floor(shownHome * 10)); s.tel.calib[b][0]++; s.tel.calib[b][1] += shownHome; if (win) s.tel.calib[b][2]++;
+    }
+    // the result card's lines (8.7.3, 6.6.1)
+    const kitParts = (o, sign) => KIT_ITEMS.filter((k) => o[k]).map((k) => TEXT.kitLower[k] + ' ' + sign + o[k]);
+    const used = kitParts(charged, '−'), ret = kitParts(returned, '+');
+    const over = [br.overflow.bricks ? fmtNum(br.overflow.bricks) + ' bricks' : '', br.overflow.cans ? fmtNum(br.overflow.cans) + ' cans' : ''].filter(Boolean);
+    const t = fmtDur(br.restMs / SEC);
+    br.lines = { title: win ? TEXT.resultWin : TEXT.resultLoss, sub: 'Night ' + night + ' · ' + Dn + ' · ' + F,
+      salvage: 'kill salvage +' + killBricks,
+      kit: used.length || ret.length ? [used.length ? 'Used: ' + used.join(', ') : '', ret.length ? 'Returned: ' + ret.join(', ') : ''].filter(Boolean).join(' · ') : null,
+      overflow: over.length ? fill(TEXT.overflow, { x: over.join(' and ') }) : null,
+      firstClear: br.sparks.firstClear ? fill(TEXT.firstClear, { s: br.sparks.firstClear }) : null, daily: br.sparks.daily ? fill(TEXT.daily, { s: br.sparks.daily }) : null,
+      nick: br.nickname ? fill(TEXT.nickNow, { F, Nick: br.nickName, line: DATA.NICKNAMES[br.nickname].line }) : null,
+      rest: win ? fill(TEXT.rests, { F, t: fmtClock(br.restMs / SEC) }) : null,
+      beat: !win && !br.safe ? fill(TEXT.beat, { F }) : null,
+      fall: br.outcome === 'hurt' ? fill(br.safe ? TEXT.limped : TEXT.madeItHurt, { F, t }) : null };
+    return br;
+  }
+  // reward(state, pending, res) -> the settlement breakdown of 6.5 without touching the state (it settles a copy).
+  function reward(s, pe, res, realNow) {
+    pe = pe || s.pending; if (!pe) return null;
+    const v = validateResult(res, pe, null); if (!v.ok) return null;
+    const c = clone(s); c.pending = clone(pe);
+    return settleRun(c, c.pending, v.res, [], realNow == null ? s.realLast : realNow);
+  }
+
+  // ------------------------------------------------------------------ the revive offer, the memorial, the runner card
+  const recoverMs = (s, p) => Math.round(RULES.recoverPerLvS * SEC * p.lv * B.clinic.restMul[clinicLv(s)] * s.lab.mul.rest);   // 10 min x L x Clinic rest
+  const nightsText = (n) => fmtNum(n) + (n === 1 ? ' night' : ' nights');
+  const fullName = (p) => { const nk = p.nick && DATA.NICKNAMES[p.nick] ? DATA.NICKNAMES[p.nick].name : null; return nk ? p.first + ' “' + nk + '” ' + p.last : p.first + ' ' + p.last; };
+  function overrunLine(p) { const D = p.fellDest ? DEST[p.fellDest] : null; return D ? fill(TEXT.overrunAt[p.fellAt] || 'Overrun at {D}', { D: D.theName, N: D.name }) : null; }
+  // offer(state, personId) -> the revive offer of 6.6.2 and 8.8 (prices, the recovery time, the time left to decide, every label).
+  function offer(s, personId) {
+    const p = personById(s, personId); if (!p || p.state !== 'down') return null;
+    const pr = price.revive(s, p.id), ms = recoverMs(s, p), left = Math.max(0, p.downUntilMs - s.cityMs), ol = overrunLine(p);
+    const where = p.runs === 0 && p.arrivedHow === 'stranger' ? fill(TEXT.foundAtGate, { n: p.arrivedNight }) : ol ? ol + ' · Night ' + p.fellNight
+      : fill(TEXT.downSince, { n: p.fellNight != null ? p.fellNight : s.night });
+    const needC = Math.max(0, pr.cans - s.res.cans), needS = Math.max(0, pr.sparks - s.res.sparks);
+    return { personId: p.id, first: p.first, name: fullName(p), look: p.look, stranger: pr.stranger, n: pr.n,
+      title: fill(TEXT.downTitle, { NAME: (p.first + ' ' + p.last).toUpperCase() }),
+      roleLine: DATA.ROLE_STATS[p.role].name + ' · Lv ' + p.lv + (p.runs ? ' · ' + nightsText(p.runs) + ' · ' + fmtNum(p.kills) + ' kills' : ''),
+      where, leftMs: left, leftText: fill(TEXT.leftToDecide, { t: fmtHoursLeft(left) }),
+      revive: { cans: pr.cans, ok: !needC, need: needC, restMs: ms, label: 'REVIVE · ' + fmtNum(pr.cans),
+        sub: fill(clinicLv(s) >= 1 ? TEXT.restsIn : TEXT.restsFor, { t: fmtDur(ms / SEC) }), needText: needC ? 'Need ' + fmtNum(needC) + ' more cans' : null },
+      reviveNow: { sparks: pr.sparks, ok: !needS, need: needS, label: 'REVIVE NOW · ' + pr.sparks + ' ✦', sub: TEXT.readyAtOnce, needText: needS ? 'Need ' + needS + ' more ✦' : null },
+      goodbye: { label: 'SAY GOODBYE', sub: TEXT.aGrave },
+      revivedText: p.revives && !pr.stranger ? fill(TEXT.revivedBefore, { n: p.revives, x: Math.pow(2, Math.min(p.revives, s.lab.escalationCap)) }) : null };
+  }
+  // memorial(state, graveId) -> the memorial card of 8.9.
+  function memorial(s, graveId) {
+    const g = s.graves.find((x) => x.id === graveId), p = g ? personById(s, g.personId) : null; if (!p) return null;
+    const tr = DATA.TRAITS[p.trait] || {}, D = p.fellDest ? DEST[p.fellDest] : null, found = p.runs === 0 && p.arrivedHow === 'stranger';
+    const days = Math.floor(Math.max(0, fin(g.placedMs, s.cityMs) - fin(p.arrivedMs, 0)) / DAY);
+    const daysText = days < 1 ? 'less than a day in Bellhaven' : days === 1 ? '1 day in Bellhaven' : days + ' days in Bellhaven';
+    const fellLine = found ? fill(TEXT.foundAtGate, { n: p.arrivedNight })
+      : D ? fill(TEXT.fellAt, { D: D.theName, n: p.fellNight }) + (p.fellOdds != null ? fill(TEXT.oddsWere, { p: fmtPct(p.fellOdds) }) : '')
+      : p.fellNight != null ? fill(TEXT.fellOn, { n: p.fellNight }) : null;
+    return { graveId: g.id, personId: p.id, gx: g.gx, gy: g.gy, waiting: g.gx == null, look: p.look, first: p.first, name: fullName(p),
+      roleLine: DATA.ROLE_STATS[p.role].name + ' · Lv ' + p.lv + ' · ' + (tr.name || p.trait), usedToBe: Names.usedToBe(p.trade), epitaph: p.epitaph || epitaph(s, p),
+      record: p.runs ? nightsText(p.runs) + ' · ' + fmtNum(p.wins) + ' home · ' + fmtNum(p.kills) + ' kills · ' + daysText : null, fellLine };
+  }
+  // runCard(state, destId, personId, kit?) -> the run sheet's runner card (6.2, 8.7.1): this runner's odds (computed),
+  // the toggles with their live effects and the tired line (from the cache: null until kitDeltas / restedOdds ran).
+  function runCard(s, destId, personId, kit) {
+    const d = DEST[destId], p = personById(s, personId); if (!d || !p) return null;
+    const k = kitNorm(s, d.id, kit), o = odds(s, d.id, p.id, k), dv = derived(s, p, d.id), pr = price.kit(d.id), total = kitTotal(d.id, k), tr = DATA.TRAITS[p.trait] || {};
+    const dl = kitDeltas(s, d.id, p.id, k, { cachedOnly: true }), rest = restedOdds(s, d.id, p.id, k, { cachedOnly: true });
+    const err = s.pending ? 'pending' : !destOpen(s, d) ? 'locked' : !canGo(p) ? 'state' : total > s.res.cans ? 'cost' : null;
+    return { personId: p.id, destId: d.id, name: fullName(p), first: p.first, look: p.look, lv: p.lv, xp: p.xp, xpFrom: XP_AT[p.lv], xpTo: p.lv < 10 ? XP_AT[p.lv + 1] : XP_AT[10],
+      roleLine: dv.roleLine, ttlLine: dv.ttlLine, traitChip: (tr.name || p.trait).toUpperCase() + ' · ' + (tr.effect || ''),
+      kit: k, kitTotal: total, odds: o, homeText: o.homeText, deathText: o.deathText, deathRed: o.deathRed, fallLine: o.fallCost ? o.fallCost.text : null,
+      rest, tiredLine: rest ? rest.text : null, hint: dl && dl.best ? o.fallsHint + ' ' + dl.best.text : o.hint, low: o.home < 0.5,
+      go: { ok: !err, err, confirm: o.home < 0.5, label: o.home < 0.5 ? 'RUN IT ANYWAY?' : 'GO · ' + p.first.toUpperCase() },
+      toggles: KIT_ITEMS.map((item) => ({ item, open: kitOpen(s, item), on: !!k[item], price: pr[item], delta: dl ? dl[item] : null,
+        label: dl && dl.labels[item] ? dl.labels[item] : TEXT.kitName[item] + ' · ' + pr[item], canTurnOn: !k[item] && kitOpen(s, item) && total + pr[item] <= s.res.cans })) };
+  }
+  // The Lab's generator gallery (9): n people from a seed, first names unique among them. Pure.
+  function gallery(seed, n) {
+    const out = [], taken = [];
+    for (let i = 0; i < (n || 12); i++) { const g = Names.person(uint(seed, 0), i, { taken }); taken.push(g.first); out.push(g); }
+    return out;
+  }
+
+  // ------------------------------------------------------------------ actions: people and runs (6, 7.1, 7.3)
+  const RUN_ACTIONS = {
+    // 3.4.7: a traveler moves in for 60 + 30 x living cans, if a bed is free.
+    invite(s, a, ev) {
+      const inn = innB(s); if (!inn || inn.lv < 1) return { err: 'notFound' };
+      const i = s.inn.travelers.findIndex((t) => t.id === a.travelerId); if (i < 0) return { err: 'notFound' };
+      if (living(s).length >= bedsOf(s)) return { err: 'beds' };
+      const pr = price.invite(s); if (s.res.cans < pr) return { err: 'cost', data: { res: 'cans', need: pr - s.res.cans } };
+      if (pr > RULES.reviveCapShare * capOf(s, 'cans')) s.tel.priceViolations++;
+      s.res.cans -= pr;
+      const t = s.inn.travelers.splice(i, 1)[0];
+      t.state = 'ready'; t.arrivedHow = 'inn'; t.arrivedNight = s.night; t.arrivedMs = s.cityMs; t.history = [[s.night, fill(TEXT.arrived.inn, { n: s.night })]];
+      s.people.push(t); assignHouse(s, t); s.tel.invites++;
+      ev.push({ type: 'invited', personId: t.id, price: pr });
+      return { data: { personId: t.id, price: pr } };
+    },
+    // 6.2: GO. Draws the seed, builds and stores the handoff, the 400-run refs, the held kit and the run-warp allowance in
+    // state.pending, before anything animates (the UI saves after every act). Tired runners may go; kit toggles are
+    // opt-outs (a packed item must be unlocked and paid for); under 50 % Home it needs confirmLow.
+    startRun(s, a, ev, realNow) {
+      if (s.pending) return { err: 'pending' };
+      const d = DEST[a.destId], p = personById(s, a.personId);
+      if (!d || !p) return { err: 'notFound' };
+      if (!destOpen(s, d)) return { err: 'locked', data: { lock: destLock(s, d), needTower: towerLv(s) < d.tower ? d.tower : null } };
+      if (!canGo(p)) return { err: 'state' };
+      if (isObj(a.kit)) for (const k of KIT_ITEMS) if ((k === 'bomb' ? a.kit.bomb || a.kit.noiseBomb : a.kit[k]) && !kitOpen(s, k)) return { err: 'locked', data: { item: k } };
+      const kit = kitNorm(s, d.id, a.kit), held = kitTotal(d.id, kit);
+      if (held > s.res.cans) return { err: 'cost', data: { res: 'cans', need: held - s.res.cans } };
+      const o = odds(s, d.id, p.id, kit);
+      if (o.home < 0.5 && !a.confirmLow) return { err: 'confirm', data: { home: o.home } };
+      const now = typeof realNow === 'number' && isFinite(realNow) ? Math.round(realNow) : s.realLast;
+      const inp = runInput(s, p, d, kit, false), sim = !s.lab.waitReal;
+      let seed = Math.floor(rand(s) * 4294967296) >>> 0;   // drawn even when the Lab locks it, so the stream never shifts
+      if (s.lab.lockSeed != null) seed = s.lab.lockSeed >>> 0;
+      let force = sim ? s.lab.force : 'auto', forcedFirst = false;
+      if (force === 'auto' && sim && s.forcedWins > 0) { force = 'win'; forcedFirst = true; s.forcedWins--; }
+      const night = s.night + 1, runId = runIdOf(night);
+      const handoff = buildHandoff(s, d.id, p.id, kit, seed, { night, runId, realNow: now, source: sim ? 'sim' : 'game', odds: o });
+      if (held > RULES.reviveCapShare * capOf(s, 'cans')) s.tel.priceViolations++;
+      s.night = night; s.res.cans -= held; s.lastDest = d.id;
+      const warpS = sim ? warpAtGo(s, now) : null;
+      p.state = 'out'; p.restKind = null; p.restFromMs = 0; p.restUntilMs = 0; p.runs++; s.tel.runs++; s.tel.deathShown += o.death;
+      s.pending = { runId, night, seed, destId: d.id, personId: p.id, source: sim ? 'sim' : 'external', kit: Object.assign({}, kit), held, handoff,
+        refs: Object.assign({}, o.refs), falls: Object.assign({}, o.falls), startedCityMs: s.cityMs, warpS,
+        L: inp.L, dest: { hordeMul: inp.dest.hordeMul }, force, forcedFirst, odds: { home: o.home, death: o.death, rescue: o.rescue }, safe: !!o.safe };
+      ev.push({ type: 'runStarted', runId, personId: p.id, destId: d.id, night, source: s.pending.source });
+      return { data: { runId, handoff } };
+    },
+    // 6.9 + 6.5: validate the result (any source), settle it, write lastRun. source 'sim' with no result runs runSim().
+    // A rejected result changes nothing (data { errors, notes }); applying the same run twice answers "Already applied".
+    resolveRun(s, a, ev, realNow) {
+      const pe = s.pending, src = SOURCES.includes(a.source) ? a.source : null;
+      let res = a.result;
+      if (typeof res === 'string') { try { res = JSON.parse(res); } catch (e) { return { err: 'state', data: { errors: ['Unknown result format'], notes: [] } }; } }
+      if (res == null && !pe) return { err: 'state', data: { errors: ['No run is out'], notes: [] } };
+      if (res == null && (src || 'sim') === 'sim') res = runSim(s);
+      if (isObj(res) && src) res = Object.assign({}, res, { source: src });
+      const v = validateResult(res, pe, s);
+      if (!v.ok) return { err: 'state', data: { errors: v.errors, notes: v.notes } };
+      const br = settleRun(s, pe, v.res, ev, realNow);
+      s.pending = null;
+      s.appliedRunIds.push(pe.runId); while (s.appliedRunIds.length > 100) s.appliedRunIds.shift();
+      s.lastRun = { handoff: pe.handoff, result: v.res, notes: v.notes, reward: br };
+      ev.push({ type: 'runResolved', runId: pe.runId, personId: pe.personId, destId: pe.destId, outcome: br.outcome, arrival: br.arrival });
+      return { data: { reward: br, outcome: br.outcome, notes: v.notes, result: v.res, offer: br.outcome === 'down' ? offer(s, pe.personId) : null } };
+    },
+    // 6.6.2: REVIVE (cans: Recovering in the Clinic for 10 min x L x Clinic rest) or REVIVE NOW (sparks: Ready at once).
+    // The price escalates x2 per earlier revive up to the Lab cap and the cans are clamped at 80 % of the can cap. A
+    // sparks revive is a sink but never a "paid skip" (7.2 step 14).
+    revive(s, a, ev) {
+      const p = personById(s, a.personId); if (!p) return { err: 'notFound' };
+      if (p.state !== 'down') return { err: 'state' };
+      if (a.pay !== 'cans' && a.pay !== 'sparks') return { err: 'notFound' };
+      const pr = price.revive(s, p.id);
+      let paid, restMs = 0;
+      if (a.pay === 'cans') {
+        if (s.res.cans < pr.cans) return { err: 'cost', data: { res: 'cans', need: pr.cans - s.res.cans } };
+        s.res.cans -= pr.cans; paid = pr.cans; restMs = recoverMs(s, p);
+        p.state = 'rest'; p.restKind = 'recovering'; p.restFromMs = s.cityMs; p.restUntilMs = s.cityMs + restMs;
+        history(s, p, fill(TEXT.revivedCans, { n: s.night }));
+      } else {
+        if (s.res.sparks < pr.sparks) return { err: 'cost', data: { res: 'sparks', need: pr.sparks - s.res.sparks } };
+        spend(s, pr.sparks, 'revive'); paid = pr.sparks;
+        p.state = 'ready'; p.restKind = null; p.restFromMs = 0; p.restUntilMs = 0;
+        history(s, p, fill(TEXT.revivedSparks, { n: s.night }));
+      }
+      p.downUntilMs = 0; p.revives++;
+      if (pr.stranger) s.tel.strangerRev = a.pay === 'cans' ? 1 : 2; else if (a.pay === 'cans') s.tel.revivesCans++; else s.tel.revivesSparks++;
+      if (p.houseId == null) assignHouse(s, p);
+      ev.push({ type: 'revived', personId: p.id, pay: a.pay, price: paid, stranger: pr.stranger, restMs });
+      return { data: { price: paid, restMs } };
+    },
+    // 6.7, R13: SAY GOODBYE makes the person Fallen, writes the epitaph and puts the grave on its default spot in this one
+    // act (saved with it); LAY TO REST later only sends move { target: { kind: 'grave', id } } if the ghost was dragged.
+    goodbye(s, a, ev) {
+      const p = personById(s, a.personId); if (!p) return { err: 'notFound' };
+      if (p.state !== 'down') return { err: 'state' };
+      const g = fall(s, p, 'goodbye', ev);
+      return { data: { graveId: g.id, spot: g.gx == null ? null : { gx: g.gx, gy: g.gy } } };
+    },
+  };
+
+  Object.assign(ACTIONS, RUN_ACTIONS);
 
   // ------------------------------------------------------------------ view (read-only, derived)
   const ROSTER = { down: 0, ready: 1, tired: 2, hurt: 3, recovering: 4, out: 5 };
   function kinLine(s, p) { const k = p.kin ? personById(s, p.kin) : null; return k ? 'Says ' + k.first + ' ' + k.last + ' was family.' : null; }
+  // The person card's role chip (4.4, 8.6): what changes the odds here ("SCOUT · +5 at the Night Market"; a Medic adds the heal).
+  function roleChip(p) {
+    const rs = DATA.ROLE_STATS[p.role]; if (!rs) return '';
+    const t = rs.name.toUpperCase() + ' · +5 at ' + joinNames(rs.fav.map((id) => DEST[id].theName));
+    return p.role === 'medic' ? t + ' · medkit heals ' + Math.round((0.8 + 0.02 * p.lv) * 100) + ' %' : t;
+  }
   function personView(s, p, suggestedId) {
     const restLeft = p.state === 'rest' ? Math.max(0, p.restUntilMs - s.cityMs) : 0, downLeft = p.state === 'down' ? Math.max(0, p.downUntilMs - s.cityMs) : 0;
     const clinic = clinicLv(s) >= 1, stranger = p.arrivedHow === 'stranger' && p.revives === 0 && p.houseId == null;
     const where = p.state === 'ready' ? 'walk' : p.state === 'out' ? 'out' : p.state === 'fallen' ? 'grave'
       : p.state === 'down' ? (stranger ? 'gate' : clinic ? 'clinic' : 'house')
       : p.restKind === 'recovering' && clinic ? 'clinic' : p.houseId ? 'house' : 'bench';
-    const pill = p.state === 'ready' ? 'Rested' : p.state === 'out' ? 'Out' : p.state === 'fallen' ? 'Fallen'
-      : p.state === 'down' ? 'Down · ' + Math.floor(downLeft / HOUR) + ' h'
-      : (p.restKind === 'hurt' ? 'Hurt ' : p.restKind === 'recovering' ? 'Recovering ' : 'Tired ') + fmtClock(restLeft / SEC);
+    const pill = pillOf(s, p), hpFrac = startHpFrac(s, p);
     const nk = p.nick && DATA.NICKNAMES[p.nick] ? DATA.NICKNAMES[p.nick].name : null, tr = DATA.TRAITS[p.trait] || {};
-    const g = p.state === 'fallen' ? s.graves.find((x) => x.personId === p.id) : null;
+    const g = p.state === 'fallen' ? s.graves.find((x) => x.personId === p.id) : null, dv = derived(s, p, s.lastDest);
     return { id: p.id, index: p.index, first: p.first, last: p.last, name: p.first + ' ' + p.last, fullName: nk ? p.first + ' “' + nk + '” ' + p.last : p.first + ' ' + p.last,
+      canRun: canGo(p) && !s.pending && p.arrivedHow !== 'traveler', roleChip: roleChip(p), ttlLine: dv ? dv.ttlLine : '', traitChip: (tr.name || p.trait).toUpperCase() + ' · ' + (tr.effect || ''),
+      nickChip: nk ? '“' + nk.toUpperCase() + '” · ' + DATA.NICKNAMES[p.nick].chip : null, hpText: p.state === 'rest' ? 'HP ' + Math.round(hpFrac * 100) + '%' : null,
+      fellAt: p.fellAt, arrivedMs: p.arrivedMs,
       nick: p.nick, nickName: nk, age: p.age, role: p.role, roleName: DATA.ROLE_STATS[p.role] ? DATA.ROLE_STATS[p.role].name : p.role, trade: p.trade,
       card: Names.cardLine(p), trait: p.trait, traitName: tr.name || p.trait, traitLine: tr.line || '', habit: p.habit, look: p.look,
       lv: p.lv, xp: p.xp, xpFrom: XP_AT[p.lv], xpTo: p.lv < 10 ? XP_AT[p.lv + 1] : XP_AT[10], state: p.state, restKind: p.restKind,
-      restLeftMs: restLeft, restTotalMs: p.state === 'rest' ? Math.max(0, p.restUntilMs - p.restFromMs) : 0, startHpFrac: startHpFrac(s, p),
+      restLeftMs: restLeft, restTotalMs: p.state === 'rest' ? Math.max(0, p.restUntilMs - p.restFromMs) : 0, startHpFrac: hpFrac,
       downLeftMs: downLeft, houseId: p.houseId, house: houseName(s, p.houseId), where, pill, stranger, runs: p.runs, wins: p.wins,
       kills: p.kills, bestKills: p.bestKills, revives: p.revives, history: p.history, epitaph: p.epitaph, suggested: p.id === suggestedId,
       graveId: g ? g.id : null, arrivedNight: p.arrivedNight, arrivedHow: p.arrivedHow, fellNight: p.fellNight, fellDest: p.fellDest, fellOdds: p.fellOdds,
       kin: p.kin, kinLine: kinLine(s, p) };
+  }
+  // PLAY (8.3): the suggestion with its labels. home is null (shown "…") until the UI has computed those odds.
+  function playView(s, sug, claimed) {
+    if (!sug) return null;
+    const p = personById(s, sug.personId), d = DEST[sug.destId];
+    return Object.assign({}, sug, { first: p.first, look: p.look, destName: d.name, label: p.first + ' → ' + d.name,
+      homeText: sug.home == null ? '…' : fmtPct(sug.home), deathText: sug.death == null ? null : fmtPct(sug.death, 'death'), deathRed: sug.death > 0.05,
+      hpText: sug.tired ? 'HP ' + Math.round(sug.hpFrac * 100) + '%' : null, dailyTag: claimed ? null : '✦' + RULES.daily });
+  }
+  function pendingView(s) {
+    const pe = s.pending; if (!pe) return null;
+    const p = personById(s, pe.personId), d = DEST[pe.destId];
+    return { runId: pe.runId, night: pe.night, personId: pe.personId, first: p ? p.first : '', destId: pe.destId, destName: d ? d.name : '', source: pe.source,
+      sim: pe.source === 'sim', startedCityMs: pe.startedCityMs, warpS: pe.warpS, kit: pe.kit, held: pe.held, force: pe.force || 'auto', odds: pe.odds || null,
+      handoff: pe.handoff, title: 'Night ' + pe.night + ' · ' + (d ? d.name : '') };
   }
   function nextUp(s, b) {
     const T = towerLv(s);
@@ -1305,8 +1937,8 @@
       tray,
       dests: DATA.DESTS.map((d) => ({ id: d.id, n: d.n, name: d.name, threat: d.threat, open: destOpen(s, d), lock: destLock(s, d), cleared: s.dest[d.id].cleared,
         firstSparks: d.first, bricks: d.bricks, cans: d.cans, xp: d.xp, fav: d.fav, kit: price.kit(d.id) })),
-      goal: goal(s), play: sug, daily: { claimed: s.daily.lastDay === today }, deathOn: s.flags.deathOn,
-      pending: s.pending ? { runId: s.pending.runId, personId: s.pending.personId, destId: s.pending.destId, source: s.pending.source } : null,
+      goal: goal(s), play: playView(s, sug, s.daily.lastDay === today), daily: { claimed: s.daily.lastDay === today }, deathOn: s.flags.deathOn,
+      pending: pendingView(s), lastRun: s.lastRun,
       flags: Object.assign({}, s.flags), lab: { timeScale: s.lab.timeScale, reducedMotion: s.lab.reducedMotion, runScreenS: s.lab.runScreenS, force: s.lab.force, waitReal: s.lab.waitReal },
     };
   }
@@ -1337,7 +1969,7 @@
     const perWeek = (n) => (days > 0 ? n * 7 / days : 0), earned = sum(t.sparksIn), spent = sum(t.sparksOut);
     const k = { cityMs: s.cityMs, days, runs: t.runs, wins: t.wins, losses: t.losses, winRate: t.runs ? t.wins / t.runs : null,
       runsPerHour: hours > 0 ? t.runs / hours : 0, runsPerDay: days > 0 ? t.runs / days : 0, downs: t.downs, rescues: t.rescues,
-      revivesCans: t.revivesCans, revivesSparks: t.revivesSparks, goodbyes: t.goodbyes, expired: t.expired, graves: t.graves,
+      revivesCans: t.revivesCans, revivesSparks: t.revivesSparks, goodbyes: t.goodbyes, expired: t.expired, graves: t.graves, expectedDowns: t.deathShown, strangerRevive: ['none', 'cans', 'sparks'][t.strangerRev] || 'none',
       drifters: t.drifters, invites: t.invites, nicknames: t.nicknames, downsByDest: t.downsByDest, downsByLv: t.downsByLv,
       firstDownMs: t.firstDownMs, firstGraveMs: t.firstGraveMs, strangerAtMs: t.strangerAtMs, sparksIn: t.sparksIn, sparksOut: t.sparksOut,
       sparksEarned: earned, sparksSpent: spent, devSparks: t.devSparks, packs: t.packs,
@@ -1369,7 +2001,7 @@
       sparksIn: {}, sparksOut: {}, devSparks: 0, packs: 0, craneMs: 0, craneBusyMs: 0, idleOnMs: 0, idleOffMs: 0, idleGatedMs: 0,
       overflowBricks: 0, overflowCans: 0, onlineMs: 0, nothingMs: 0, towerAtMs: [null, 0, null, null, null, null, null, null, null, null, null],
       bricksRun: 0, bricksProd: 0, bricksGoal: 0, cansRun: 0, cansProd: 0, kitSpent: 0, priceViolations: 0, jobsStarted: 0, jobsDone: 0, levelUps: 0,
-      calib: Array.from({ length: 10 }, () => [0, 0, 0]) };
+      calib: Array.from({ length: 10 }, () => [0, 0, 0]), strangerRev: 0, deathShown: 0 };
   }
   function create(o) {
     o = o || {};
@@ -1418,9 +2050,9 @@
       revives: clampInt(p.revives, 0, BIG, 0), runs: clampInt(p.runs, 0, BIG, 0), wins: clampInt(p.wins, 0, BIG, 0), hurtCount: clampInt(p.hurtCount, 0, BIG, 0),
       kills: clampInt(p.kills, 0, BIG, 0), bestKills: clampInt(p.bestKills, 0, BIG, 0),
       history: (Array.isArray(p.history) ? p.history : []).filter((h) => Array.isArray(h) && typeof h[1] === 'string').map((h) => [clampInt(h[0], 0, BIG, 0), h[1].slice(0, 120)]).slice(-RULES.maxHistory),
-      arrivedNight: clampInt(p.arrivedNight, 0, BIG, 0), arrivedHow: HOWS.includes(p.arrivedHow) ? p.arrivedHow : 'lab',
+      arrivedNight: clampInt(p.arrivedNight, 0, BIG, 0), arrivedHow: HOWS.includes(p.arrivedHow) ? p.arrivedHow : 'lab', arrivedMs: clampInt(p.arrivedMs, 0, BIG, 0),
       fellNight: p.fellNight == null ? null : clampInt(p.fellNight, 0, BIG, 0), fellDest: DEST[p.fellDest] ? p.fellDest : null,
-      fellOdds: p.fellOdds == null ? null : clamp(fin(p.fellOdds, 0), 0, 1),
+      fellOdds: p.fellOdds == null ? null : clamp(fin(p.fellOdds, 0), 0, 1), fellAt: ['streets', 'hordes', 'gate'].includes(p.fellAt) ? p.fellAt : null,
       epitaph: Array.isArray(p.epitaph) && p.epitaph.length === 2 && p.epitaph.every((x) => typeof x === 'string') ? p.epitaph.slice() : null,
       kin: typeof p.kin === 'string' && /^p\d+$/.test(p.kin) ? p.kin : null };
     if (q.wins > q.runs) q.wins = q.runs;
@@ -1541,7 +2173,8 @@
     s.lastDest = DEST[o.lastDest] ? o.lastDest : 'D1';
     s.dest = {}; const od = isObj(o.dest) ? o.dest : {};
     for (const id of DATA.DEST_IDS) s.dest[id] = { cleared: isObj(od[id]) && od[id].cleared === true };
-    // pending (stage 3 owns its fields): a broken one is dropped and the runner comes home
+    // pending: a broken one is dropped and the runner comes home; its other keys (L, dest, force, odds, ...) are kept
+    // as they are and checked where they are used (pendingInput, refsOf, settleRun)
     s.pending = null;
     const pe = o.pending;
     if (isObj(pe)) {
@@ -1631,7 +2264,7 @@
     const k2 = add('kiln', 2, 6, 12, { bubbleBase: 0, bubbleSinceMs: 0 });
     const cn = add('cannery', 2, 15, 7, { bubbleBase: 0, bubbleSinceMs: 0 });
     add('depot', 2, 15, 10); add('armory', 2, 7, 14); add('clinic', 1, 11, 12);
-    add('house', 1, 12, 15, { houseIdx: 1 }); const inn = add('inn', 1, 15, 14);
+    add('house', 2, 12, 15, { houseIdx: 1 }); const inn = add('inn', 1, 15, 14);
     rebase(s, k1, s.cityMs, 0.4 * holdLv(s, 'kiln', 3)); rebase(s, k2, s.cityMs, 0.2 * holdLv(s, 'kiln', 2)); rebase(s, cn, s.cityMs, holdLv(s, 'cannery', 2));
     s.rubble = [{ id: 'r1', gx: 17, gy: 6, ring: 2, glint: true }, { id: 'r2', gx: 6, gy: 17, ring: 2, glint: false }, { id: 'r3', gx: 17, gy: 17, ring: 2, glint: false }];
     s.ids.r = 3;
@@ -1639,23 +2272,36 @@
     s.ids.d = 4;
     s.jobs = [{ id: 'j1', kind: 'upgrade', target: k2.id, toLv: 3, startMs: s.cityMs - 48 * SEC, endMs: s.cityMs + 252 * SEC }];
     s.ids.j = 1;
-    // people: the two starters plus three more from the same generator; the sixth fell at the Night Market
+    // people in every state the city shows (4.9): Ready walkers, a tired and a Hurt runner in the blue House ("z 2"), one
+    // Recovering in the Clinic ("+1"), one Down (the Clinic's red pill, a lantern in the green House) and one grave
     const [efua, ngozi] = s.people;
     efua.lv = 3; efua.xp = 230; efua.runs = 7; efua.wins = 7; efua.kills = 610; efua.bestKills = 121; efua.nick = 'mower';
+    efua.history.push([4, 'Night 4. Everyone calls Efua “Mower” now.'], [6, 'Night 6. Level 3.'], [13, 'Night 13. Night Market: home in 5:12, 121 kills.']);
     ngozi.lv = 2; ngozi.xp = 120; ngozi.runs = 4; ngozi.wins = 4; ngozi.kills = 300; ngozi.bestKills = 98;
+    ngozi.history.push([12, 'Night 12. Car Wash: home in 4:05, 82 kills.']);
     const more = [];
-    for (let i = 0; i < 4; i++) { const p = genPerson(s, { lv: 1, how: i === 0 ? 'stranger' : 'inn' }); s.people.push(p); more.push(p); }
-    const [burak, thiago, petros, joy] = more;
-    burak.lv = 2; burak.xp = 90; burak.runs = 2; burak.wins = 2; burak.revives = 1; burak.history.push([3, 'Night 3. Revived in the Clinic.']);
+    for (let i = 0; i < 5; i++) { const p = genPerson(s, { lv: i === 0 ? 2 : 1, how: i === 0 ? 'stranger' : 'inn' }); s.people.push(p); more.push(p); }
+    const [burak, thiago, petros, joy, down] = more;
+    for (const p of more) { p.arrivedMs = 6 * MIN; p.arrivedNight = 3; p.history = [[3, p.history[0][1].replace(/^Night \d+/, 'Night 3')]]; }
+    burak.xp = 90; burak.runs = 2; burak.wins = 1; burak.revives = 1; burak.hurtCount = 1; burak.kills = 150; burak.bestKills = 86;
+    burak.history.push([3, 'Night 3. Revived in the Clinic.'], [10, 'Night 10. Overrun at the Car Wash. Carried home.']);
+    const h2 = s.buildings.find((b) => b.type === 'house' && b.houseIdx === 1);
     for (const p of [efua, ngozi, burak]) p.houseId = h1.id;
-    for (const p of [thiago, petros]) p.houseId = s.buildings.find((b) => b.type === 'house' && b.houseIdx === 1).id;
+    for (const p of [thiago, petros, down]) p.houseId = h2.id;
     ngozi.state = 'rest'; ngozi.restKind = 'tired'; ngozi.restFromMs = s.cityMs - 4 * MIN; ngozi.restUntilMs = s.cityMs + 6 * MIN;
-    burak.state = 'rest'; burak.restKind = 'tired'; burak.restFromMs = s.cityMs - 2 * MIN; burak.restUntilMs = s.cityMs + 9 * MIN;
-    petros.runs = 1; petros.wins = 1;
-    joy.runs = 2; joy.wins = 1; joy.fellNight = 11; joy.fellDest = 'D3'; joy.fellOdds = 0.86; joy.houseId = null;
+    burak.state = 'rest'; burak.restKind = 'hurt'; burak.restFromMs = s.cityMs - 9 * MIN; burak.restUntilMs = s.cityMs + 9 * MIN;
+    thiago.runs = 1; thiago.wins = 1; thiago.kills = 52; thiago.bestKills = 52; thiago.history.push([8, 'Night 8. Allotments: home in 3:40, 52 kills.']);
+    petros.runs = 2; petros.wins = 1; petros.revives = 1; petros.kills = 120; petros.bestKills = 71; petros.state = 'rest'; petros.restKind = 'recovering';
+    petros.restFromMs = s.cityMs - 3 * MIN; petros.restUntilMs = s.cityMs + 6 * MIN;
+    petros.history.push([12, 'Night 12. Overrun at the Night Market. Down.'], [12, 'Night 12. Revived in the Clinic.']);
+    down.runs = 3; down.wins = 2; down.kills = 260; down.bestKills = 104; down.fellNight = 14; down.fellDest = 'D3'; down.fellOdds = 0.88; down.fellAt = 'gate';
+    down.state = 'down'; down.downUntilMs = s.cityMs + 20 * HOUR; down.history.push([14, 'Night 14. Overrun at the Night Market. Down.']);
+    joy.runs = 2; joy.wins = 1; joy.kills = 140; joy.bestKills = 80; joy.fellNight = 11; joy.fellDest = 'D3'; joy.fellOdds = 0.86; joy.fellAt = 'hordes'; joy.houseId = null;
+    joy.history.push([5, 'Night 5. Allotments: home in 3:31, 61 kills.'], [11, 'Night 11. Overrun at the Night Market. Down.']);
     joy.state = 'fallen'; joy.epitaph = epitaph(s, joy);
     s.graves = [{ id: 'g1', personId: joy.id, gx: 7, gy: 17, placedMs: 50 * MIN, houseId: null }]; s.ids.g = 1;
-    s.tel.graves = 1; s.tel.goodbyes = 1; s.tel.runs = 14; s.tel.wins = 12; s.tel.losses = 2; s.tel.downs = 1; s.tel.firstGraveMs = 50 * MIN; s.tel.firstDownMs = 48 * MIN;
+    s.tel.downs = 3; s.tel.rescues = 1; s.tel.revivesCans = 1; s.tel.strangerRev = 1; s.tel.kitSpent = 420; s.tel.nicknames = 1;
+    s.tel.graves = 1; s.tel.goodbyes = 1; s.tel.runs = 14; s.tel.wins = 11; s.tel.losses = 3; s.tel.firstGraveMs = 50 * MIN; s.tel.firstDownMs = 48 * MIN;
     s.tel.towerAtMs = [null, 0, 1.5 * MIN, 4 * MIN, 55 * MIN, null, null, null, null, null, null];
     s.tel.sparksIn = { tower: 16, goals: 5, firstClear: 12, daily: 5, rubble: 9 }; s.tel.sparksOut = { finish: 4 };
     inn.lv = 1; refreshInn(s, []); s.inn.nextRefreshMs = s.cityMs + 38 * MIN;
@@ -1665,12 +2311,14 @@
   return {
     V, SEC, MIN, HOUR, DAY, DATA_RULE,
     create, load, serialize, migrate, sanitize, tick, resume, advance, act, view, goal, info, derived, kpis, demo,
-    odds, oddsKey, kitDeltas, restedOdds, strip, suggest, autoKit, buildHandoff, runSim, validateResult, reward,
-    price, canPlace, suggestSpot, graveSpot, towerOpens, fmt,
+    odds, oddsKey, oddsCached, oddsTodo, oddsTable, kitDeltas, restedOdds, strip, suggest, autoKit, kitNorm, buildHandoff, runSim, validateResult, reward,
+    offer, memorial, runCard, gallery, price, canPlace, suggestSpot, graveSpot, towerOpens, fmt,
+    oddsCacheSize: () => CACHE.size, oddsCacheClear: () => CACHE.clear(),
     cost: (s, t, lv) => costOf(s, t, lv), jobMs, caps: (s) => ({ bricks: capOf(s, 'bricks'), cans: capOf(s, 'cans') }),
     rates: (s) => ({ bricks: rateOf(s, 'bricks'), cans: rateOf(s, 'cans') }), cranes: (s) => ({ total: cranesTotal(s), free: cranesFree(s) }),
     beds: bedsOf, bubble: (s, id) => { const b = byId(s, id); return b ? bubbleView(s, b) : null; },
     _internal: { settle, fall, addXp, assignHouse, gain, earn, spend, history, epitaph, genPerson, setDown, warpAtGo, runClockMs,
-      restFrac, startHpFrac, restMulOf, welcome, refreshInn, completeJob, living, present, towerLv, capOf, rateOf, destOpen, DEST },
+      restFrac, startHpFrac, restMulOf, welcome, refreshInn, completeJob, living, present, towerLv, capOf, rateOf, destOpen, DEST,
+      settleRun, runInput, keyOf, pendingInput, recoverMs, nickFor },
   };
 });

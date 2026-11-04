@@ -1,9 +1,9 @@
 // Bellhaven node tests: SPEC section 12.A. Run from any folder:   node bellhaven/tests.cjs   (exit code 1 on any failure)
 //
-// Built so far (engine core, SPEC 13.1 steps 1-2): tests 1-8, 11-13, 19, 21, plus X1-X5 (goals, arrivals, view and
-// demo, the Lab's dev ops, the clock's frame rules). The people-and-runs stage replaces the todo() placeholders for
-// tests 9, 10, 14-18 and 20 with real tests (search for "todo(") and extends test 5's run-warp part with the full
-// startRun -> resolveRun flow and test 19 with revives.
+// Every test of 12.A (1-21) plus X1-X7: goals, arrivals, view and #demo, the Lab's dev ops, the clock's frame rules, a
+// random-play and damaged-save soak, and the odds cache with the UI hooks (oddsKey, oddsCached, oddsTodo, strip,
+// suggest, view.play / pending / lastRun) and the speed of an uncached odds() call. About 7 s (test 15 plays 50 seeds x
+// 3,000 random legal actions).
 'use strict';
 const path = require('path'), fs = require('fs'), vm = require('vm');
 const DIR = __dirname;
@@ -289,6 +289,36 @@ test('5 offline: 10 h credit, a 25 h gap, the 7-day cap, rollback, welcome rows;
   eq([W.runClockMs(w, { source: 'external', warpS: null }, { time: 300, source: 'game' }), W.runClockMs(w, sim(null), { time: 300, source: 'paste' })], [0, 0], 'results from the game or a Lab paste advance nothing');
   must(w, { type: 'dev', op: 'runsAdvanceClock', value: false });
   eq(W.runClockMs(w, sim(null), { time: 300 }), 0, '"Runs advance the clock" off');
+  // ... and the full flow: GO (startRun) -> the simulated result -> resolveRun moves the city clock by the capped time
+  const F = city({ goalsDone: true }); F.flags.strangerDone = true;
+  const run = (goAt, o) => {
+    o = o || {};
+    must(F, { type: 'startRun', destId: 'D1', personId: 'p0', kit: {}, confirmLow: true }, goAt);
+    const raw = o.reload ? E.serialize(F) : null;
+    const S = raw ? E.load(raw, goAt + 1000).state : F;
+    const res = E.runSim(S), c0 = S.cityMs;
+    if (o.source) must(S, { type: 'resolveRun', result: Object.assign({}, res, { source: o.source }), source: o.source }, goAt + 8000);
+    else must(S, { type: 'resolveRun', result: res, source: 'sim' }, goAt + 8000);
+    if (S !== F) { for (const k of Object.keys(F)) delete F[k]; Object.assign(F, S); }
+    return { time: res.time, moved: (F.cityMs - c0) / SEC, warpS: F.lastRun.reward.clockMs };
+  };
+  let g = run(T0);
+  eq(g.moved, g.time, 'the first simulated GO of a save advances the full result.time (' + g.time + ' s)');
+  g = run(T0 + 10 * SEC); eq(g.moved, Math.min(g.time, 60), 'a GO 10 s after the previous one advances min(result.time, 60 s)');
+  g = run(T0 + 70 * SEC); eq(g.moved, Math.min(g.time, 360), 'a GO 60 s after advances min(result.time, 360 s)');
+  g = run(T0 + 80 * SEC, { reload: true }); eq(g.moved, Math.min(g.time, 60), 'a reload during the run keeps the cap (60 s)');
+  const keep = E.serialize(F); const F2 = E.load(keep, T0 + 85 * SEC).state; eq(F2.lastSimGoRealMs, T0 + 80 * SEC, 'the last simulated GO is saved');
+  must(F, { type: 'dev', op: 'runWarp', value: 0 }, T0 + 85 * SEC);
+  g = run(T0 + 90 * SEC); eq(g.moved, g.time, 'runWarp 0 removes the cap (10 s after the previous GO, the full ' + g.time + ' s)');
+  must(F, { type: 'dev', op: 'runWarp', value: 6 }, T0 + 95 * SEC);
+  g = run(T0 + 100 * SEC, { source: 'paste' }); eq(g.moved, 0, 'a Lab paste advances nothing');
+  must(F, { type: 'dev', op: 'waitReal', value: true }, T0 + 105 * SEC);
+  must(F, { type: 'startRun', destId: 'D1', personId: 'p0', kit: {}, confirmLow: true }, T0 + 110 * SEC);
+  eq([F.pending.source, F.pending.warpS, F.pending.handoff.source], ['external', null, 'game'], 'waiting for a real result: an external run with no warp allowance');
+  const c1 = F.cityMs; E.tick(F, 500, T0 + 110 * SEC + 500); eq(F.cityMs - c1, 500, 'the clock runs while the real game plays');
+  const real = Object.assign(E.runSim(F), { source: 'game' }), c2 = F.cityMs;
+  must(F, { type: 'resolveRun', result: real, source: 'game' }, T0 + 400 * SEC);
+  eq(F.cityMs - c2, 0, 'a result from the game advances nothing (real time already passed)');
 });
 
 // ================================================================== 6
@@ -335,6 +365,22 @@ test('6 determinism: same seed + same 200 actions -> identical serialize(); crea
     ok(okActs >= 40, 'seed ' + seed + ': enough of the random actions succeeded (' + okActs + ')');
     ok(E.serialize(A) === E.serialize(B), 'seed ' + seed + ': identical serialize()');
   }
+  // runs, revives and goodbyes are deterministic too, and the odds cache (warm or cold) never changes the state
+  const runSeq = (cold) => {
+    if (cold) E.oddsCacheClear();
+    const c = E.create({ realNow: T0, tzOffsetMin: 60, seed: 4242 }), R = N.mulberry32(5);
+    c.buildings[0].lv = 3; c.flags.deathOn = true; c.forcedWins = 0; c.res.cans = 600; c.res.sparks = 200;
+    for (let i = 0; i < 80; i++) {
+      const now = c.realLast + 1000 + Math.floor(R() * 60000), going = c.people.filter((q) => q.state === 'ready' || q.state === 'rest'), down = c.people.filter((q) => q.state === 'down');
+      if (c.pending) E.act(c, { type: 'resolveRun', source: 'sim' }, now);
+      else if (down.length && R() < 0.5) E.act(c, R() < 0.5 ? { type: 'revive', personId: down[0].id, pay: R() < 0.5 ? 'cans' : 'sparks' } : { type: 'goodbye', personId: down[0].id }, now);
+      else if (going.length) E.act(c, { type: 'startRun', destId: ['D1', 'D3'][Math.floor(R() * 2)], personId: going[Math.floor(R() * going.length)].id, confirmLow: true }, now);
+      E.tick(c, 16, now + 16);
+    }
+    return E.serialize(c);
+  };
+  const cold = runSeq(true), warm = runSeq(false);
+  ok(cold === warm && JSON.parse(cold).night > 20, 'the same runs give the same city, with a cold or a warm odds cache (' + JSON.parse(cold).night + ' nights)');
   const s = E.create({ realNow: T0, tzOffsetMin: 120, seed: 20261104 });
   const pick = (p) => [p.seed, p.first, p.last, p.age, p.role, p.trade, p.trait, p.habit, p.look, p.lv, p.xp, p.state, p.houseId, p.history];
   eq(pick(s.people[0]), [2763498110, 'Efua', 'Boateng', 37, 'sprinter', 'PE teacher', 'heavy', 19, { skin: '#7a4a33', hairStyle: 'curls', hair: '#7a4b2a', jacket: '#c9503c', acc: 'headband' }, 1, 0, 'ready', 'b3', [[0, 'Night 0. One of the first two.']]], 'Efua Boateng');
@@ -463,10 +509,187 @@ test('8 run model: 6.3.4 fixtures, margin curve, 6.9 JSON byte for byte, city ro
   }
   eq(after, 0, 'no pills or medkit event follows the gate in 10,000 random runs');
   eq(mismatch, 0, 'lean twin = full model in 10,000 random runs');
+  // the allocation-free twin that mc() uses: win, the fall, damage, kills and shoves equal simulate()'s, Loud and Brawler included
+  const R2 = N.mulberry32(88), FI = { streets: 0, hordes: 1, gate: 2 }; let twin = 0;
+  for (let i = 0; i < 10000; i++) {
+    const d0 = DEST[D.DEST_IDS[Math.floor(R2() * 6)]], d = Object.assign({}, d0, { hordeMul: R2() < 0.3 ? Math.round(d0.hordeMul * 115) / 100 : d0.hordeMul });
+    const maxHp = [100, 105, 110, 115, 120][Math.floor(R2() * 5)];
+    const L = { P: Math.floor(R2() * 90), maxHp, startHp: Math.round(maxHp * (0.6 + 0.02 * Math.floor(R2() * 21))), sw: 1 + Math.floor(R2() * 2), heal: 0.8 + 0.02 * Math.floor(R2() * 11),
+      pillsTemp: R2() < 0.5 ? 50 : 70, medkit: R2() < 0.6 ? 1 : 0, pills: R2() < 0.6 ? 1 : 0, bomb: R2() < 0.5 ? 1 : 0, weapon: 'smg', shoveMul: R2() < 0.3 ? 1.09 : 1, accAdd: 0 };
+    const seed = Math.floor(R2() * 4294967296) >>> 0, x = Run.simulate(d, L, seed), o = Run.stats(d, L, seed, {});
+    if (o.win !== (x.win ? 1 : 0) || o.fell !== (x.fellAt ? FI[x.fellAt] : -1) || o.damageTaken !== x.damageTaken || o.kills !== x.kills || o.shoves !== x.shoves) twin++;
+  }
+  eq(twin, 0, 'Run.stats() = Run.simulate() on win, fall, damage, kills and shoves in 10,000 random runs');
 });
 
-todo('9 the run responds to the character and the city', 'people-and-runs stage: odds(), the responsiveness fixtures of 6.3.4');
-todo('10 death rules', 'people-and-runs stage: rescue, the third present person, forced wins, Lab force options');
+// ================================================================== people-and-runs fixtures
+// A city where p0 is the runner of a 6.3.4 row: Tower 9 (every place open), land ring 2, 600 cans, death unlocked.
+function fixture(o) {
+  const s = city({ seed: o.seed || 1, tower: o.tower || 9, ring: 2, goalsDone: true, noRubble: true, res: { bricks: 900, cans: 600, sparks: 100 } });
+  s.flags.deathOn = o.deathOn !== false; s.flags.strangerDone = true;
+  if (o.armory) addB(s, 'armory', o.armory, 6, 6);
+  if (o.clinic) addB(s, 'clinic', o.clinic, 6, 9);
+  const p = s.people[0];
+  p.role = o.role || 'sprinter'; p.trait = o.trait || 'quick_learner'; p.lv = o.lv || 1; p.xp = D.XP_AT[p.lv]; p.nick = o.nick || null;
+  if (o.tired) tire(s, p, 10 * MIN);
+  return { s, p };
+}
+function tire(s, p, ms, kind) { p.state = 'rest'; p.restKind = kind || 'tired'; p.restFromMs = s.cityMs; p.restUntilMs = s.cityMs + ms; }
+const kitOf = (k) => ({ medkit: k.includes('m') ? 1 : 0, pills: k.includes('p') ? 1 : 0, bomb: k.includes('b') ? 1 : 0 });
+// the 6.3.4 rows through the engine: [name, dest, role, trait, level, Armory, Clinic, kit, Home, rescue, Death, start HP 60, one level up]
+const ROWS_634 = [
+  ['A', 'D1', 'sprinter', null, 1, 0, 0, '', 81.5, 100, 0.0, 61.8, 86.5],
+  ['B', 'D2', 'brawler', null, 1, 1, 1, 'mp', 91.8, 43, 4.7, 84.5, 95.5],
+  ['C', 'D2', 'sprinter', null, 2, 1, 1, 'mp', 90.8, 43, 5.3],
+  ['D', 'D3', 'sprinter', null, 3, 2, 1, 'mpb', 92.3, 38, 4.8, 85.5, 96.5],
+  ["D'", 'D3', 'sprinter', null, 3, 2, 1, 'mp', 86.3, 38, 8.5],
+  ["D''", 'D3', 'sprinter', null, 3, 2, 1, '', 65.0, 38, 21.7],
+  ['E', 'D3', 'scout', 'night_owl', 4, 2, 2, 'mpb', 99.0, 41, 0.6],
+  ['F', 'D4', 'sprinter', null, 5, 4, 3, 'mpb', 94.3, 39, 3.5, 90.5, 97.5],
+  ["F'", 'D4', 'marksman', null, 5, 4, 3, 'mpb', 97.5, 39, 1.5],
+  ['G', 'D5', 'sprinter', null, 7, 6, 4, 'mpb', 96.5, 37, 2.2, 89.8, 98.0],
+  ['H', 'D6', 'sprinter', null, 9, 8, 6, 'mpb', 97.5, 38, 1.6],
+  ['I', 'D3', 'sprinter', 'reckless', 2, 1, 1, 'mp', 78.0, 23, 16.9],
+  ['J', 'D3', 'sprinter', 'lucky', 2, 1, 1, 'mp', 74.3, 53, 12.1]];
+const rowFixture = (r) => fixture({ role: r[2], trait: r[3] || 'quick_learner', lv: r[4], armory: r[5], clinic: r[6] });
+// GO -> the simulated result -> resolveRun, with the Lab's seed lock and force when given; returns the act's data.
+function playRun(s, destId, personId, o) {
+  o = o || {};
+  if (o.seed != null) must(s, { type: 'dev', op: 'lockSeed', value: o.seed });
+  if (o.force) must(s, { type: 'dev', op: 'force', value: o.force });
+  must(s, { type: 'startRun', destId, personId, kit: o.kit, confirmLow: true }, o.at);
+  const res = o.result ? o.result(E.runSim(s), s.pending) : E.runSim(s);
+  const r = must(s, { type: 'resolveRun', result: res, source: o.source || 'sim' }, o.at == null ? null : o.at + 8000);
+  if (o.seed != null) must(s, { type: 'dev', op: 'lockSeed', value: null });
+  if (o.force) must(s, { type: 'dev', op: 'force', value: 'auto' });
+  return r.data;
+}
+// the first seed (from 1) whose city roll puts the stretcher on the wanted side of a rescue chance
+function seedWhere(fn) { for (let k = 1; k < 100000; k++) if (fn(Run.cityRolls(k))) return k; throw new Error('no seed'); }
+
+// ================================================================== 9
+test('9 the run responds to the character and the city: 6.3.4 through odds(), responsiveness, kit, roles, Armory, Clinic, traits', () => {
+  for (const r of ROWS_634) {
+    const [n, di, , , lv, , , kit, home, resc, death, tired, up] = r, { s, p } = rowFixture(r);
+    const o = E.odds(s, di, p.id, kitOf(kit));
+    near(100 * o.home, home, 0.1, n + ' Home %'); eq(Math.round(100 * o.rescue), resc, n + ' rescue'); near(100 * o.death, death, 0.1, n + ' Death %');
+    near(o.death, (1 - o.home) * (1 - o.rescue), 1e-12, n + ' Death = (1 - Home) x (1 - rescue)');
+    eq([o.startHp, o.maxHp, o.margin], [100, 100, o.power - D.DESTS.find((d) => d.id === di).threat], n + ' rested, 100 HP');
+    if (tired != null) {
+      tire(s, p, 10 * MIN); const t = E.odds(s, di, p.id, kitOf(kit));
+      near(100 * t.home, tired, 0.1, n + ' start HP 60'); eq(t.startHp, 60, n + ' a 60 % start'); ok(home - tired >= 3.8 - 0.05 && home - tired <= 19.7 + 0.05, n + ' a 60 % start lowers Home by 3.8-19.7 points');
+      const ro = E.restedOdds(s, di, p.id, kitOf(kit)); near(100 * ro.home, home, 0.1, n + ' restedOdds: the Home % after the rest');
+      eq(ro.text, E.fmt.pct(t.home) + ' now · ' + E.fmt.pct(o.home) + ' after a 10:00 rest', n + ' the tired line'); eq([ro.restLeftMs, ro.price], [10 * MIN, 7], n + ' REST NOW · 7 ✦');
+      p.state = 'ready'; p.restKind = null; p.lv = lv + 1; p.xp = D.XP_AT[lv + 1];
+      const u = E.odds(s, di, p.id, kitOf(kit)); near(100 * u.home, up, 0.1, n + ' one level higher'); ok(up - home >= 1.5 - 0.05 && up - home <= 5.0 + 0.05, n + ' one more level raises Home by 1.5-5.0');
+      eq(u.power - o.power, 4, n + ' +4 power a level');
+    }
+  }
+  // kit deltas (Home % with minus without): B without the medkit 88.0, without pills 85.0; D 86.8 / 87.3 / 86.3
+  for (const [n, want] of [['B', { medkit: 91.8 - 88.0, pills: 91.8 - 85.0 }], ['D', { medkit: 92.3 - 86.8, pills: 92.3 - 87.3, bomb: 92.3 - 86.3 }]]) {
+    const r = ROWS_634.find((x) => x[0] === n), { s, p } = rowFixture(r), kd = E.kitDeltas(s, r[1], p.id, kitOf(r[7]));
+    for (const k of Object.keys(want)) { near(100 * kd[k], want[k], 0.1, n + ' kit delta ' + k); ok(100 * kd[k] >= 3.8 - 0.1 && 100 * kd[k] <= 6.8 + 0.1, n + ' each kit item adds 3.8-6.8 points (' + 100 * kd[k] + ')'); }
+    if (n === 'B') eq([kd.bomb, kd.labels.medkit, kd.labels.bomb], [null, 'Medkit · 50 · +4%', null], 'B: the noise bomb is locked at Armory 1; the toggle label');
+  }
+  // the hint: where the falls happen, plus the best unpacked kit item once its odds are known
+  const rD = ROWS_634.find((x) => x[0] === 'D'), fD = rowFixture(rD), noBomb = kitOf('mp');
+  eq(E.odds(fD.s, 'D3', 'p0', noBomb).fallsHint, 'Most falls happen at the gate.', "D': most falls at the gate (0 / 13 / 87 %)");
+  E.kitDeltas(fD.s, 'D3', 'p0', noBomb);
+  eq(E.odds(fD.s, 'D3', 'p0', noBomb).hint, 'Most falls happen at the gate. A noise bomb adds +6%.', "D': the noise bomb is the lever (+6 points)");
+  const fE = rowFixture(ROWS_634.find((x) => x[0] === 'E')); eq(E.odds(fE.s, 'D3', 'p0', kitOf('mpb')).fallsHint, 'Most falls happen at the gate.', 'E: falls 0 / 0 / 100 %');
+  const strong = fixture({ lv: 10, armory: 8, clinic: 6 }); eq(E.odds(strong.s, 'D1', 'p0', kitOf('mpb')).hint, 'No falls in 400 tries.', 'no reference falls');
+  // a favoured role (F -> F') and a higher Armory raise Home %
+  const oF = E.odds(rowFixture(ROWS_634.find((x) => x[0] === 'F')).s, 'D4', 'p0', kitOf('mpb')), oF2 = E.odds(rowFixture(ROWS_634.find((x) => x[0] === "F'")).s, 'D4', 'p0', kitOf('mpb'));
+  ok(oF2.home > oF.home && oF2.power - oF.power === 5, "F -> F': the Marksman is favoured at the Rail Yard (+5 power)");
+  const a3 = fixture({ lv: 3, armory: 3, clinic: 1 }), oA3 = E.odds(a3.s, 'D3', 'p0', kitOf('mpb'));
+  ok(oA3.home > 0.923 && oA3.power === 30, 'Armory 3 beats Armory 2 for D (' + oA3.home + ')');
+  // Death falls with the Clinic level and Lucky, rises with Reckless
+  const c1 = E.odds(fixture({ lv: 3, armory: 2, clinic: 1 }).s, 'D3', 'p0', kitOf('mpb')), c2 = fixture({ lv: 3, armory: 2, clinic: 2 }), oC2 = E.odds(c2.s, 'D3', 'p0', kitOf('mpb'));
+  ok(oC2.home === c1.home && oC2.death < c1.death && Math.round(100 * oC2.rescue) === 41, 'Clinic 2: the same Home %, rescue 41 %, less Death');
+  const neutral = E.odds(fixture({ lv: 2, armory: 1, clinic: 1 }).s, 'D3', 'p0', kitOf('mp'));
+  const oI = E.odds(rowFixture(ROWS_634.find((x) => x[0] === 'I')).s, 'D3', 'p0', kitOf('mp')), oJ = E.odds(rowFixture(ROWS_634.find((x) => x[0] === 'J')).s, 'D3', 'p0', kitOf('mp'));
+  near(100 * neutral.death, 15.9, 0.1, 'a neutral L2 at the Night Market: Death 15.9 %');
+  ok(oJ.death < neutral.death && oI.death > neutral.death, 'Lucky (J) lowers Death, Reckless (I) raises it');
+  // tired runners: start HP in 5 % steps of the rest done, the Lab's tired floor
+  const tf = fixture({ lv: 3, armory: 2, clinic: 1 }); tire(tf.s, tf.p, 100 * SEC); E.advance(tf.s, 49 * SEC);
+  eq([E._internal.restFrac(tf.s, tf.p), E.odds(tf.s, 'D3', 'p0').startHp], [0.45, Math.round(100 * (0.6 + 0.4 * 0.45))], 'q = floor(done x 20) / 20');
+  must(tf.s, { type: 'dev', op: 'set', key: 'tiredFloor', value: 1 }); eq(E.odds(tf.s, 'D3', 'p0').startHp, 100, 'tired floor 1.0: no penalty');
+  // the Medic's heal and the nickname perks that change the model (Lastbreath max HP +5, Comeback stretcher +5 %)
+  const med = fixture({ role: 'medic', lv: 5, armory: 4, clinic: 3 }), oM = E.odds(med.s, 'D5', 'p0', kitOf('mpb'));
+  eq(E._internal.runInput(med.s, med.p, E._internal.DEST.D5, kitOf('mpb')).L.heal, 0.9, 'a Medic L5 heals 90 %');
+  ok(oM.power === 8 + 20 + 12 + 5, 'the Medic is favoured at Hospital Hill');
+  med.p.nick = 'lastbreath'; eq(E.odds(med.s, 'D5', 'p0', kitOf('mpb')).maxHp, 105, 'Lastbreath: max HP +5 in the model');
+  med.p.nick = 'comeback'; near(E.odds(med.s, 'D5', 'p0', kitOf('mpb')).rescue - oM.rescue, 0.05, 1e-9, 'Comeback: stretcher +5 %');
+});
+
+// ================================================================== 10
+test('10 death rules: rescue, the third present person, the drifter while Out, the stretcher, forced wins, the Lab force options', () => {
+  // the rescue formula of 4.6: base + 0.03 x Clinic + 0.15 Lucky - 0.15 Reckless + 0.05 Comeback, clamped 0-0.95
+  const f = fixture({ lv: 2, armory: 1, clinic: 6, trait: 'lucky', nick: 'comeback' });
+  near(E.odds(f.s, 'D2', 'p0').rescue, 0.40 + 0.18 + 0.15 + 0.05, 1e-9, 'D2, Clinic 6, Lucky, Comeback: 78 %');
+  must(f.s, { type: 'dev', op: 'set', key: 'clinicRescue', value: 0.1 }); eq(E.odds(f.s, 'D2', 'p0').rescue, 0.95, 'clamped at 95 %');
+  const g = fixture({ lv: 9, trait: 'reckless' }); must(g.s, { type: 'dev', op: 'rescueBase', destId: 'D6', value: 0 });
+  eq(E.odds(g.s, 'D6', 'p0').rescue, 0, 'clamped at 0');
+  const lab = fixture({ lv: 3, armory: 2, clinic: 1 }), o1 = E.odds(lab.s, 'D3', 'p0');
+  must(lab.s, { type: 'dev', op: 'mul', key: 'death', value: 1.5 }); near(E.odds(lab.s, 'D3', 'p0').death, 1.5 * o1.death, 1e-12, "the Lab's death x 1.5 multiplies (1 - rescue)");
+  must(lab.s, { type: 'dev', op: 'mul', key: 'death', value: 3 }); eq(E.odds(lab.s, 'D3', 'p0').rescue, 0, 'death x 3: (1 - rescue) capped at 1, nobody is found');
+  must(lab.s, { type: 'dev', op: 'mul', key: 'death', value: 0 }); eq([E.odds(lab.s, 'D3', 'p0').death, E.odds(lab.s, 'D3', 'p0').rescue], [0, 1], 'death x 0: nobody dies');
+  // 0 at the Allotments, even with death unlocked
+  const al = fixture({ lv: 1 }), oa = E.odds(al.s, 'D1', 'p0');
+  eq([oa.death, oa.rescue, oa.safe, oa.deathText, oa.fallCost], [0, 1, 'home', 'DEATH 0% · close to home', null], 'the Allotments: DEATH 0% · close to home');
+  // 0 while the city has never had three present people: two starters plus the stranger Down at the gate
+  const s = city({ tower: 2, goalsDone: true, res: { bricks: 900, cans: 600, sparks: 50 } });
+  addB(s, 'clinic', 1, 13, 13); addB(s, 'armory', 1, 13, 11);
+  const o2 = E.odds(s, 'D2', 'p1');
+  eq([o2.death, o2.safe, o2.deathText], [0, 'third', 'DEATH 0% · nobody dies before your third person'], 'two people: Death 0 % at the Car Wash');
+  s.buildings[0].lv = 3; addB(s, 'house', 1, 11, 13); E.advance(s, 0);
+  const st = s.people[2]; eq([st.arrivedHow, st.state, s.flags.deathOn, E.odds(s, 'D3', 'p0').death], ['stranger', 'down', false, 0], 'the Down stranger does not count: Death stays 0 %');
+  const s2 = clone(s);
+  must(s2, { type: 'goodbye', personId: st.id }); eq([s2.flags.deathOn, E.odds(s2, 'D3', 'p0').death, s2.people.length], [false, 0, 3], 'saying goodbye to the stranger keeps Death at 0 %, and no second stranger comes');
+  E.advance(s2, H); eq(s2.people.length, 3, 'the stranger comes once per save');
+  const rv = must(s, { type: 'revive', personId: st.id, pay: 'cans' });
+  eq([s.flags.deathOn, rv.events.filter((e) => e.type === 'deathOn').length, s.res.cans], [true, 1, 550], 'reviving the stranger (50 cans) makes three present people: death unlocks, once');
+  ok(E.odds(s, 'D3', 'p0').death > 0, 'Death is above 0 now');
+  must(s, { type: 'dev', op: 'kill', personId: 'p1' }); must(s, { type: 'dev', op: 'kill', personId: st.id });
+  ok(s.flags.deathOn && E.odds(s, 'D3', 'p0').death > 0, 'it stays on even if the city shrinks');
+  // no drifter while a runner is Out; one walks in when the last present person goes Down
+  const d = city({ goalsDone: true }); must(d, { type: 'dev', op: 'kill', personId: 'p1' });
+  must(d, { type: 'dev', op: 'force', value: 'down' });
+  must(d, { type: 'startRun', destId: 'D1', personId: 'p0', kit: {} }); E.advance(d, H);
+  eq([d.people.length, d.tel.drifters], [2, 0], 'no drifter while the only present person is Out');
+  const dr = must(d, { type: 'resolveRun', source: 'sim' });
+  eq([dr.data.outcome, dr.events.some((e) => e.type === 'drifter'), d.people.length, d.people[2].arrivedHow, d.people[2].state], ['down', true, 3, 'drifter', 'ready'], 'the runner goes Down (forced): a drifter walks in at once');
+  // the stretcher: roll < rescue -> Hurt, else Down; always Hurt at the Allotments and before the third person
+  const lo = seedWhere((c) => c.stretcher < 0.2), hi = seedWhere((c) => c.stretcher > 0.9);
+  const sx = () => fixture({ lv: 3, armory: 2, clinic: 1 });
+  let x = sx(); let r = playRun(x.s, 'D3', 'p0', { seed: lo, force: 'loss', kit: kitOf('mpb') });
+  eq([r.outcome, r.reward.rescue, r.reward.rolls.stretcher < 0.38, x.p.state, x.p.restKind], ['hurt', 0.38, true, 'rest', 'hurt'], 'a low stretcher roll: carried home Hurt');
+  x = sx(); r = playRun(x.s, 'D3', 'p0', { seed: hi, force: 'loss', kit: kitOf('mpb') });
+  eq([r.outcome, x.p.state, x.p.downUntilMs - x.s.cityMs], ['down', 'down', DAY], 'a high stretcher roll: Down for 24 h');
+  x = sx(); r = playRun(x.s, 'D1', 'p0', { seed: hi, force: 'loss', kit: {} }); eq([r.outcome, r.reward.safe, r.reward.restMs, r.reward.lines.fall], ['hurt', true, Math.round(3 * MIN * 3 * 0.92), x.p.first + ' limped home. Rests 8 min.'], 'the Allotments: always found ("limped home", 3 min x 3 x Clinic 1)');
+  x = sx(); x.s.flags.deathOn = false; r = playRun(x.s, 'D3', 'p0', { seed: hi, force: 'loss', kit: kitOf('mpb') }); eq([r.outcome, r.reward.safe, r.reward.lines.beat], ['hurt', true, null], 'before the third person: always found, no suspense');
+  // the first two runs of a save are wins; the third follows the model
+  const fw = city({ goalsDone: true }); fw.flags.strangerDone = true;
+  let bad = null;
+  for (let k = 1; bad == null; k++) { const t = clone(fw); t.forcedWins = 0; t.lab.lockSeed = k; must(t, { type: 'startRun', destId: 'D1', personId: 'p1', kit: {}, confirmLow: true }); if (E.runSim(t).result === 'overrun') bad = k; }
+  for (let i = 0; i < 3; i++) {
+    const out = playRun(fw, 'D1', 'p1', { seed: bad, kit: {} });
+    eq(out.outcome === 'win', i < 2, 'run ' + (i + 1) + ' on a losing seed: ' + (i < 2 ? 'a forced win' : 'the model decides (a loss)'));
+    const q = fw.people[1]; q.state = 'ready'; q.restKind = null; q.nick = null;      // the same model input next time
+  }
+  eq([fw.forcedWins, fw.lastRun.reward.forced], [0, 'auto'], 'both forced wins used');
+  ok(fw.tel.calib.reduce((a, b) => a + b[0], 0) === 1, 'calibration leaves the forced wins out');
+  // the Lab force options on a fresh 2-person save
+  for (const [force, want] of [['win', 'win'], ['loss', 'hurt'], ['down', 'down'], ['hurt', 'hurt']]) {
+    const t = city({ goalsDone: true }); t.forcedWins = 0;
+    const out = playRun(t, 'D1', 'p1', { force, kit: {} });
+    eq(out.outcome, want, 'force ' + force + ' at the Allotments on a 2-person save: ' + want);
+  }
+  const hopeless = fixture({ lv: 1 }); hopeless.s.forcedWins = 0;
+  eq(playRun(hopeless.s, 'D6', 'p0', { force: 'win', kit: {} }).outcome, 'win', 'force win on a hopeless runner (L1 at the Ferry Terminal)');
+  const sure = fixture({ lv: 10, armory: 8, clinic: 6 }); sure.s.forcedWins = 0;
+  eq(playRun(sure.s, 'D1', 'p0', { force: 'down', kit: kitOf('mpb') }).outcome, 'down', 'force Down on a runner who never loses there');
+});
 
 // ================================================================== 11
 test('11 generator: 4.7 fixtures, unique names, trait shares, no pronouns, epitaph run lines', () => {
@@ -519,6 +742,36 @@ test('11 generator: 4.7 fixtures, unique names, trait shares, no pronouns, epita
   const st = steppingCity().s, rr = E.resume(st, T0 + 6 * H); strs.push(...rr.welcome.rows.map((x) => x.text), rr.welcome.title);
   const gs = city({ tower: 3 }); for (let g = 0; g <= D.GOALS.length; g++) { gs.goal = g; const go = E.goal(gs); strs.push(go.text, go.eta, go.side ? go.side.text : ''); }
   const fc = city(); must(fc, { type: 'upgrade', id: 'b1' }); const nc = act(fc, { type: 'place', kind: 'cannery', gx: 13, gy: 13 }); strs.push(nc.data.label);
+  // the people-and-runs strings: run cards, odds, kit labels, tired lines, result lines, offers, memorials, nicknames, notes
+  for (const k of D.NICK_IDS) strs.push(D.NICKNAMES[k].chip, D.NICKNAMES[k].line);
+  for (const k of Object.keys(T)) if (typeof T[k] === 'string') strs.push(T[k]); else if (T[k] && typeof T[k] === 'object' && !Array.isArray(T[k])) strs.push(...Object.values(T[k]));
+  const PR = N.mulberry32(11);
+  for (let i = 0; i < 6; i++) {
+    const f = fixture({ seed: 50 + i, lv: 1 + i, role: N.ROLES[i % 5], trait: D.TRAIT_IDS[(3 * i) % 10], armory: 2 + i, clinic: 1 + (i % 5) });
+    for (const [x, y] of [[13, 13], [15, 6], [15, 13]]) addB(f.s, 'depot', 6, x, y);
+    f.s.res.cans = 20000; f.s.res.sparks = 900; f.s.forcedWins = 0;
+    for (let r = 0; r < 14; r++) {
+      const runners = f.s.people.filter((q) => q.state === 'ready' || q.state === 'rest'); if (!runners.length) break;
+      const q = runners[Math.floor(PR() * runners.length)], di = D.DEST_IDS[Math.floor(PR() * 6)];
+      const card = E.runCard(f.s, di, q.id); E.kitDeltas(f.s, di, q.id); const ro = E.restedOdds(f.s, di, q.id);
+      strs.push(card.roleLine, card.ttlLine, card.traitChip, card.homeText, card.deathText, card.fallLine || '', card.hint, card.go.label, ...card.toggles.map((t) => t.label));
+      if (ro) strs.push(ro.text, ro.label, ro.labelShort);
+      const out = playRun(f.s, di, q.id, { force: ['auto', 'win', 'loss', 'down', 'hurt'][Math.floor(PR() * 5)] });
+      strs.push(...Object.values(out.reward.lines).filter(Boolean), ...out.notes);
+      if (out.offer) {
+        const of = out.offer; strs.push(of.title, of.roleLine, of.where, of.leftText, of.revive.label, of.revive.sub, of.reviveNow.label, of.reviveNow.sub, of.goodbye.label, of.goodbye.sub, of.revivedText || '');
+        const pick = PR(); must(f.s, pick < 0.4 ? { type: 'revive', personId: q.id, pay: 'cans' } : pick < 0.7 ? { type: 'revive', personId: q.id, pay: 'sparks' } : { type: 'goodbye', personId: q.id });
+      }
+    }
+    const v = E.view(f.s);
+    for (const pv of v.people.concat(v.remembered)) strs.push(pv.roleChip, pv.ttlLine, pv.traitChip, pv.nickChip || '', pv.hpText || '', pv.pill, ...pv.history.map((h) => h[1]), ...(pv.epitaph || []));
+    for (const g of v.graves) { const m = E.memorial(f.s, g.id); strs.push(m.name, m.roleLine, m.usedToBe, m.record || '', m.fellLine || '', ...m.epitaph); }
+    if (v.play) strs.push(v.play.label, v.play.homeText);
+  }
+  const notes = E.validateResult({ v: 1, kind: 'bellhaven.result', runId: 'bh-000001', result: 'overrun', source: 'x', events: Array(300).fill([1, 'streets']) },
+    { runId: 'bh-000001', seed: 1, handoff: { player: { maxHp: 100, secondWind: 1 }, director: { hordes: 1 }, startRoom: {} } }).notes;
+  strs.push(...notes);
+  ok(notes.length >= 8, 'validation notes collected: ' + notes.length);
   const bad = strs.filter((x) => PRONOUN.test(x));
   eq(bad.slice(0, 5), [], 'no pronoun in ' + strs.length + ' generated strings');
 });
@@ -641,11 +894,287 @@ test('13 cranes: one job each, noCrane, finishOther, the 4th crane', () => {
   c.buildings[0].lv = 6; eq(E.cranes(c).total, 4, '4 cranes at Tower 6');
 });
 
-todo('14 death -> revive -> grave', 'people-and-runs stage: the offer, prices, REVIVE / REVIVE NOW / SAY GOODBYE, the stranger flow');
-todo('15 no soft-lock', 'people-and-runs stage: everyone Down, 50 seeds x 3,000 random legal actions, goal() never empty');
-todo('16 kit', 'people-and-runs stage: auto-pack, held at GO, returned before loot, never cut by the cap');
-todo('17 validation', 'people-and-runs stage: every row of the 6.9 table, idempotent apply, reload replay');
-todo('18 nicknames', 'people-and-runs stage: relative triggers from refs, perks in the handoff');
+// ================================================================== 14
+test('14 death -> revive -> grave: the offer, prices, REVIVE / REVIVE NOW / SAY GOODBYE, the stranger, the fall cost', () => {
+  // a forced Down opens the offer (data.offer, saved before anything draws)
+  const { s, p } = fixture({ lv: 5, armory: 4, clinic: 1 });
+  for (const [x, y] of [[13, 13], [15, 6], [15, 13]]) addB(s, 'depot', 8, x, y);              // a can cap far above the price
+  const hi = seedWhere((c) => c.stretcher > 0.9);
+  let r = playRun(s, 'D3', 'p0', { seed: hi, force: 'loss', kit: kitOf('mpb') });
+  eq([r.outcome, p.state, !!r.offer, r.offer.personId, r.reward.lines.beat], ['down', 'down', true, 'p0', 'Did ' + p.first + ' make it home?'], 'a Down: the offer comes with the result, after the beat');
+  const raw = E.serialize(s), back = E.load(raw, s.realLast + H).state;
+  eq([back.people[0].state, back.people[0].downUntilMs], ['down', p.downUntilMs], 'Down and its deadline are saved with the result (closing the page = decide later)');
+  // prices: 6.6.2, escalation x1, x2, x4, x4 (the cap n = 2), here with a big can cap
+  const big = fixture({ lv: 5, armory: 4, clinic: 1, tower: 9 }); for (const [x, y] of [[13, 13], [15, 6], [15, 13]]) addB(big.s, 'depot', 8, x, y);
+  for (let n = 0; n < 4; n++) { big.p.revives = n; const pr = E.price.revive(big.s, 'p0'); eq([pr.cans, pr.sparks, pr.n], [[1300, 2600, 5200, 5200][n], [28, 56, 112, 112][n], n], 'L5, revived ' + n + ' times before'); }
+  must(big.s, { type: 'dev', op: 'set', key: 'escalationCap', value: 3 }); big.p.revives = 3; eq(E.price.revive(big.s, 'p0').sparks, 224, 'the Lab escalation cap 3: x8');
+  // the clamp: Tower 3 with one Depot L1 (can cap 1,300) shows 1,040 for an L5
+  const t3 = city({ tower: 3, goalsDone: true }); addB(t3, 'depot', 1, 13, 13); t3.people[0].lv = 5; t3.flags.deathOn = true;
+  eq([E.caps(t3).cans, E.price.revive(t3, 'p0').cans, E.price.revive(t3, 'p0').sparks], [1300, 1040, 28], 'the 80 %-of-cap clamp: 1,040 cans (sparks unclamped)');
+  // the runner card's fall cost is price.revive, escalation and clamp included (R15)
+  t3.people[0].revives = 2; addB(t3, 'clinic', 1, 11, 13); addB(t3, 'armory', 2, 13, 11);
+  const card = E.runCard(t3, 'D3', 'p0'), prc = E.price.revive(t3, 'p0');
+  eq([card.fallLine, card.odds.fallCost.cans, card.odds.fallCost.sparks], ['If Down: revive 1,040 cans or 112 ✦', prc.cans, prc.sparks], 'the fall cost shown before GO');
+  eq(E.runCard(t3, 'D1', 'p0').fallLine, null, 'no fall cost when Death is 0 %');
+  // the offer's lines (8.8)
+  const of = E.offer(s, 'p0');
+  eq([of.title, of.roleLine, of.where, of.leftText, of.revive.label, of.revive.sub, of.reviveNow.label, of.revivedText],
+    [(p.first + ' ' + p.last).toUpperCase() + ' IS DOWN', 'Sprinter · Lv ' + p.lv + ' · 1 night · ' + p.kills + ' kills', E._internal.DEST.D3 && of.where, '24 h left to decide.', 'REVIVE · 1,300', 'rests 46 min in the Clinic', 'REVIVE NOW · 28 ✦', null], 'the offer at L5, Clinic 1');
+  ok(/^Overrun (in the streets of|by a horde at|at) the Night Market( gate)? · Night 1$/.test(of.where), 'where it happened: ' + of.where);
+  s.res.cans = 1000; eq([E.offer(s, 'p0').revive.ok, E.offer(s, 'p0').revive.needText], [false, 'Need 300 more cans'], 'a short balance disables REVIVE with what is missing');
+  eq(act(s, { type: 'revive', personId: 'p0', pay: 'cans' }).data, { res: 'cans', need: 300 }, 'and the action refuses');
+  // REVIVE (cans): Recovering in the Clinic for 10 min x L x Clinic rest (L5 at Clinic 1: 46 min); prices x2 afterwards
+  s.res.cans = 1500; r = must(s, { type: 'revive', personId: 'p0', pay: 'cans' });
+  eq([p.state, p.restKind, p.restUntilMs - s.cityMs, r.data.restMs, s.res.cans, p.revives, p.history[p.history.length - 1][1]],
+    ['rest', 'recovering', 46 * MIN, 46 * MIN, 200, 1, 'Night 1. Revived in the Clinic.'], 'REVIVE: Recovering 46 min, 1,300 cans');
+  eq([E.view(s).people.find((q) => q.id === 'p0').where, E.view(s).buildings.find((b) => b.type === 'clinic').clinic.recovering], ['clinic', ['p0']], 'recovering in the Clinic ("+1")');
+  eq(E.price.revive(s, 'p0'), { cans: 2600, sparks: 56, n: 1, stranger: false }, 'the next revive costs x2');
+  // REVIVE NOW (sparks): Ready at once
+  r = playRun(s, 'D3', 'p0', { seed: hi, force: 'down', kit: {} });
+  s.res.sparks = 100; must(s, { type: 'revive', personId: 'p0', pay: 'sparks' });
+  eq([p.state, s.res.sparks, p.revives, s.flags.paidSkip, p.history[p.history.length - 1][1]], ['ready', 44, 2, false, 'Night 2. Revived with sparks.'], 'REVIVE NOW: Ready, 56 ✦');
+  // SAY GOODBYE: Fallen and the grave on the 6.7 default spot in the same act; a later move relocates it
+  r = playRun(s, 'D3', 'p0', { seed: hi, force: 'down', kit: {} });
+  const spot = E.graveSpot(s, 'p0'), gb = must(s, { type: 'goodbye', personId: 'p0' });
+  const gr = s.graves.find((x) => x.personId === 'p0');
+  eq([p.state, gb.data.graveId, gb.data.spot, [gr.gx, gr.gy], p.houseId], ['fallen', gr.id, spot, [spot.gx, spot.gy], null], 'goodbye: Fallen, the grave on its default spot at once');
+  eq(spot, { gx: 9, gy: 15 }, 'the default spot: the tile in front of the House');
+  const ep1 = p.nick ? 'Everyone called ' + p.first + ' “' + D.NICKNAMES[p.nick].name + '”.' : p.bestKills >= 120 ? 'Once cleared ' + p.bestKills + ' in one night.' : 'Ran 3 nights for Bellhaven.';
+  eq([gb.events.map((e) => e.type), p.epitaph[0], p.epitaph[1]], [['fell', 'gravePlaced'], ep1, N.habitPast(p.habit)], 'the events and the epitaph');
+  ok(s.people[1].history.slice(-1)[0][1] === 'Night 3. Lost ' + p.first + ' ' + p.last + ' at the Night Market.', 'the housemate remembers (4.13, P1)');
+  const after = E.load(E.serialize(s), s.realLast + 10 * SEC).state, g2 = after.graves.find((x) => x.personId === 'p0');
+  eq([g2.gx, g2.gy, after.people[0].state], [9, 15, 'fallen'], 'goodbye, then reload: the grave stands on its default spot');
+  must(s, { type: 'move', target: { kind: 'grave', id: gr.id }, gx: 12, gy: 15 }); eq([gr.gx, gr.gy], [12, 15], 'LAY TO REST after a drag: one move');
+  eq([act(s, { type: 'goodbye', personId: 'p0' }).err, act(s, { type: 'revive', personId: 'p0', pay: 'cans' }).err], ['state', 'state'], 'the Fallen cannot be revived or buried twice');
+  const mem = E.memorial(s, gr.id);
+  eq([mem.name, mem.epitaph, /^Fell at the Night Market, Night 3\. The odds were \d+%\.$/.test(mem.fellLine), mem.record.startsWith('3 nights · 0 home · '), mem.roleLine], [E.view(s).remembered[0].fullName, p.epitaph, true, true, 'Sprinter · Lv 5 · Quick learner'], 'the memorial card: ' + mem.fellLine + ' / ' + mem.record);
+  // an expired window places the grave by itself (6.6.3)
+  const ex = fixture({ lv: 2, armory: 1, clinic: 1 });
+  playRun(ex.s, 'D2', 'p0', { seed: hi, force: 'down', kit: {} });
+  const ev = E.advance(ex.s, DAY);
+  const eg = ex.s.graves[0];
+  eq([ex.p.state, ev.filter((e) => e.type === 'downExpired').length, eg && [eg.gx, eg.gy]], ['fallen', 1, [9, 15]], 'after 24 h: Fallen, the grave on its default spot');
+  // the stranger: once, at Tower 3 with a free bed, 50 cans or 5 ✦, "Found Down at the gate"
+  const sg = city({ tower: 2, goalsDone: true, res: { bricks: 900, cans: 400, sparks: 20 } });
+  must(sg, { type: 'upgrade', id: 'b3' }); E.advance(sg, 10 * MIN); must(sg, { type: 'upgrade', id: 'b1' }); E.advance(sg, 60 * SEC);
+  const stg = sg.people[2], so = E.offer(sg, stg.id);
+  eq([so.stranger, so.revive.cans, so.reviveNow.sparks, so.roleLine, so.where], [true, 50, 5, D.ROLE_STATS[stg.role].name + ' · Lv 2', 'Found Down at the gate · Night 0'], "the stranger's offer");
+  eq(E.view(sg).people.find((q) => q.id === stg.id).where, 'gate', 'lying at the gate');
+  const sg2 = clone(sg), sp0 = sg2.res.sparks;
+  must(sg2, { type: 'revive', personId: stg.id, pay: 'sparks' });
+  eq([stg.state, sg2.people[2].state, sp0 - sg2.res.sparks, sg2.people[2].houseId, sg2.flags.deathOn, sg2.tel.strangerRev, E.price.revive(sg2, stg.id).cans], ['down', 'ready', 5, 'b3', true, 2, 480],
+    'REVIVE NOW · 5 ✦: the stranger takes the free bed; three present people unlock death; the special price was once (next: L2 x 2 = 500, clamped to 480 under a 600 cap)');
+  must(sg, { type: 'goodbye', personId: stg.id });
+  const sgr = sg.graves[0], sm = E.memorial(sg, sgr.id);
+  eq([[sgr.gx, sgr.gy], sm.fellLine, sm.record, sm.epitaph[0], sg.flags.deathOn], [[9, 8], 'Found Down at the gate · Night 0', null, 'Came to the gate on Night 0.', false], 'goodbye to the stranger: the first grave in the quiet corner ((8, 8) is rubble: the next tile)');
+  E.advance(sg, 2 * H); eq([sg.people.length, sg.flags.strangerDone], [3, true], 'the stranger appears once');
+  // the death-unlock card's flag is set once and never resets
+  const du = city({ tower: 3, goalsDone: true }); addB(du, 'inn', 1, 13, 13); addB(du, 'house', 1, 11, 13); du.flags.strangerDone = true; E._internal.refreshInn(du, []); du.res.cans = 500;
+  const inv = must(du, { type: 'invite', travelerId: du.inn.travelers[0].id });
+  eq([inv.events.filter((e) => e.type === 'deathOn').length, du.flags.deathOn], [1, true], 'the third present person (an invite): deathOn once');
+  must(du, { type: 'dev', op: 'kill', personId: 'p0' }); must(du, { type: 'dev', op: 'kill', personId: 'p1' }); must(du, { type: 'goodbye', personId: 'p0' });
+  E.advance(du, H); eq(du.flags.deathOn, true, 'the flag never resets');
+  must(du, { type: 'flag', name: 'deathCardSeen' }); eq(du.flags.deathCardSeen, true, 'the UI marks the one-time card seen');
+});
+
+// ================================================================== 15
+test('15 no soft-lock: everyone Down with nothing left, 50 seeds x 3,000 random legal actions, goal() never empty', () => {
+  // everyone Down, 0 cans, 0 sparks, every bed held -> a drifter at once (ignoring beds), an Allotments run at Death 0 %
+  const s = city({ tower: 3, goalsDone: true }); s.flags.deathOn = true; s.flags.strangerDone = true;
+  s.res = { bricks: 0, cans: 0, sparks: 0 }; s.buildings[1].bubbleBase = 0;
+  must(s, { type: 'dev', op: 'kill', personId: 'p0' });
+  const k = must(s, { type: 'dev', op: 'kill', personId: 'p1' });
+  const dr = s.people[2];
+  eq([k.events.some((e) => e.type === 'drifter'), dr.arrivedHow, dr.houseId, E._internal.living(s).length, E.beds(s)], [true, 'drifter', null, 3, 2], 'a drifter walks in at once, over the bed cap (the plaza bench)');
+  const sug = E.suggest(s, 'D1', { compute: true }), o = E.odds(s, 'D1', dr.id, {});
+  eq([sug.personId, o.death, o.deathText], [dr.id, 0, 'DEATH 0% · close to home'], 'an Allotments run is offered at Death 0 %');
+  const go = must(s, { type: 'startRun', destId: 'D1', personId: dr.id, confirmLow: true });
+  eq([go.data.handoff.startRoom.medkit, s.res.cans, s.pending.held], [0, 0, 0], 'with nothing to pack and nothing held');
+  must(s, { type: 'resolveRun', source: 'sim' }); ok(s.res.cans > 0 && s.res.bricks > 0, 'the run earns cans and bricks: ' + JSON.stringify(s.res));
+  // random legal play never ends with nothing to do
+  const t0 = Date.now(); let runs = 0, downs = 0, graves = 0, stuck = 0;
+  for (let seed = 1; seed <= 50; seed++) {
+    const R = N.mulberry32(seed * 977), pick = (a) => a[Math.floor(R() * a.length)];
+    const c = E.create({ realNow: T0, tzOffsetMin: 0, seed: seed + 1000 });
+    c.forcedWins = 0;
+    for (let i = 0; i < 3000; i++) {
+      const now = c.realLast + 500 + Math.floor(R() * 20000), x = R();
+      const going = c.people.filter((q) => q.state === 'ready' || q.state === 'rest'), downP = c.people.filter((q) => q.state === 'down');
+      if (c.pending) { if (x < 0.8) { const r2 = E.act(c, { type: 'resolveRun', source: 'sim' }, now); if (r2.ok && r2.data.outcome === 'down') downs++; } else E.tick(c, 16, now); }
+      else if (x < 0.05 && going.length) {
+        const dests = D.DESTS.filter((d) => E._internal.destOpen(c, d)).map((d) => d.id), q = pick(going);
+        const kit = R() < 0.6 ? undefined : { medkit: R() < 0.5, pills: R() < 0.5, bomb: R() < 0.5 };
+        if (E.act(c, { type: 'startRun', destId: pick(dests), personId: q.id, kit, confirmLow: R() < 0.9 }, now).ok) runs++;
+      }
+      else if (x < 0.08 && downP.length) { const q = pick(downP); if (R() < 0.5) E.act(c, { type: 'revive', personId: q.id, pay: R() < 0.7 ? 'cans' : 'sparks' }, now); else if (E.act(c, { type: 'goodbye', personId: q.id }, now).ok) graves++; }
+      else if (x < 0.10 && c.inn.travelers.length) E.act(c, { type: 'invite', travelerId: pick(c.inn.travelers).id }, now);
+      else if (x < 0.30) { const b = pick(c.buildings); E.act(c, { type: 'collect', id: b.id }, now); }
+      else if (x < 0.42) { const ty = pick(D.TYPES), sp = E.suggestSpot(c, ty, 6 + R() * 12, 6 + R() * 12); if (sp) E.act(c, { type: 'place', kind: ty, gx: sp.gx, gy: sp.gy, finishOther: R() < 0.3 }, now); }
+      else if (x < 0.55) E.act(c, { type: 'upgrade', id: pick(c.buildings).id, finishOther: R() < 0.3 }, now);
+      else if (x < 0.60) { if (c.jobs.length) E.act(c, { type: 'finish', jobId: pick(c.jobs).id, confirm: R() < 0.5 }, now); }
+      else if (x < 0.63) E.act(c, { type: 'restNow', personId: pick(c.people).id, confirm: R() < 0.5 }, now);
+      else if (x < 0.65) E.act(c, { type: 'expand', finishOther: R() < 0.3 }, now);
+      else if (x < 0.67) { if (c.rubble.length) E.act(c, { type: 'clearRubble', id: pick(c.rubble).id }, now); }
+      else if (x < 0.68) E.act(c, { type: 'dev', op: 'kill', personId: pick(c.people).id }, now);
+      else if (x < 0.69) E.act(c, { type: 'innNow', confirm: true }, now);
+      else if (x < 0.95) E.tick(c, 16, now);
+      else E.resume(c, c.realLast + Math.floor(R() * (R() < 0.1 ? 2 * DAY : 3 * H)));
+      const can = !!c.pending || c.people.some((q) => q.state === 'ready' || q.state === 'rest');
+      if (!can) stuck++;
+      if (i % 500 === 499) {
+        const gl = E.goal(c); ok(gl.text && gl.eta, 'seed ' + seed + ': goal text');
+        for (const kk of ['bricks', 'cans', 'sparks']) ok(Number.isInteger(c.res[kk]) && c.res[kk] >= 0, 'seed ' + seed + ': ' + kk + ' ' + c.res[kk]);
+        if (!c.pending) { const t = clone(c), q = t.people.find((z) => z.state === 'ready' || z.state === 'rest'); ok(q && E.act(t, { type: 'startRun', destId: 'D1', personId: q.id, kit: {}, confirmLow: true }, t.realLast).ok, 'seed ' + seed + ' #' + i + ': an Allotments run can start'); }
+      }
+    }
+  }
+  eq(stuck, 0, 'never a moment with no run available (50 x 3,000 actions, ' + runs + ' runs, ' + downs + ' Downs, ' + graves + ' graves, ' + (Date.now() - t0) + ' ms)');
+  ok(runs > 2000 && downs > 50 && graves > 20, 'the soak exercised runs, Downs and graves');
+});
+
+// ================================================================== 16
+test('16 kit: auto-pack order and affordability, held at GO, unused items back before loot and never cut by the cap', () => {
+  const { s, p } = fixture({ lv: 3, armory: 2, clinic: 1 });
+  const pk = (cans, dest) => { s.res.cans = cans; const k = E.autoKit(s, dest || 'D3'); return [k.medkit, k.pills, k.bomb, k.total]; };
+  eq([pk(600), pk(180), pk(179), pk(120), pk(100), pk(60), pk(44)], [[1, 1, 1, 180], [1, 1, 1, 180], [1, 1, 0, 120], [1, 1, 0, 120], [1, 0, 0, 75], [0, 1, 0, 45], [0, 0, 0, 0]],
+    'packed in the order medkit, pills, noise bomb while the total fits the cans held (D3: 75 / 45 / 60)');
+  eq(pk(600, 'D6'), [1, 1, 1, 360], 'the Ferry Terminal: 150 / 90 / 120');
+  const noClinic = fixture({ lv: 3, armory: 2 }); eq([E.autoKit(noClinic.s, 'D3').medkit, E.autoKit(noClinic.s, 'D3').bomb], [0, 1], 'no Clinic: no medkit or pills; Armory 2: the noise bomb');
+  const a1 = fixture({ lv: 3, armory: 1, clinic: 1 }); eq(E.autoKit(a1.s, 'D3').bomb, 0, 'Armory 1: no noise bomb');
+  // toggles are opt-outs; turning one back on needs the cans; a locked item cannot be packed
+  s.res.cans = 100;
+  eq([E.runCard(s, 'D3', 'p0').kit, E.runCard(s, 'D3', 'p0').toggles.map((t) => t.canTurnOn)], [{ medkit: 1, pills: 0, bomb: 0 }, [false, false, false]], '100 cans: the medkit; nothing else fits');
+  eq(act(s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: { medkit: 1, pills: 1 }, confirmLow: true }).data, { res: 'cans', need: 20 }, 'turning pills back on needs 20 more cans');
+  eq(act(a1.s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: { bomb: 1 }, confirmLow: true }).data, { item: 'bomb' }, 'a locked item: err locked');
+  // held at GO
+  s.res.cans = 600; must(s, { type: 'startRun', destId: 'D3', personId: 'p0', confirmLow: true });
+  eq([s.res.cans, s.pending.held, s.pending.kit, s.pending.handoff.startRoom.noiseBomb], [420, 180, { medkit: 1, pills: 1, bomb: 1 }, 1], 'the whole kit (180) is held at GO');
+  // a result that used only the pills: the medkit (75) and the bomb (60) come back before loot, above the cap if need be
+  s.res.cans = 590;
+  const res = Object.assign(E.runSim(s), { result: 'safe_room', progress: 1, fellAt: null, endHp: 40, used: { medkit: 0, pills: 1, noiseBomb: 0 } });
+  const rw = E.reward(s, s.pending, res);
+  const r = must(s, { type: 'resolveRun', result: res, source: 'sim' });
+  eq([r.data.reward.kit.charged, r.data.reward.kit.returned, r.data.reward.kit.back], [{ total: 45, medkit: 0, pills: 45, bomb: 0 }, { total: 135, medkit: 75, pills: 0, bomb: 60 }, 135], 'charged 45 for the pills, 135 returned');
+  eq([s.res.cans, r.data.reward.cans, r.data.reward.overflow.cans > 0, E.caps(s).cans], [725, 0, true, 600], 'the refund is never cut: 725 cans above a 600 cap; the loot adds none');
+  eq(rw, r.data.reward, 'reward() previewed exactly what resolveRun applied');
+  const ov = r.data.reward.overflow;
+  eq([r.data.reward.lines.kit, r.data.reward.lines.overflow], ['Used: pills −45 · Returned: medkit +75, noise bomb +60', 'Depot full: ' + (ov.bricks ? ov.bricks + ' bricks and ' : '') + ov.cans + ' cans left behind.'], 'the kit and Depot lines');
+  const cn = addB(s, 'cannery', 1, 13, 13, { bubbleBase: 100, bubbleSinceMs: s.cityMs });
+  const col = must(s, { type: 'collect', id: cn.id }); eq([col.data.n, s.res.cans], [0, 725], 'collecting adds no cans while above the cap');
+  eq(s.tel.kitSpent, 45, 'only the used kit is spent');
+  // the balance never goes negative: held <= cans at GO, everything back on a run that used nothing
+  const z = fixture({ lv: 3, armory: 2, clinic: 1 }); z.s.res.cans = 180;
+  must(z.s, { type: 'startRun', destId: 'D3', personId: 'p0', confirmLow: true }); eq(z.s.res.cans, 0, 'all 180 held');
+  must(z.s, { type: 'resolveRun', result: Object.assign(E.runSim(z.s), { used: { medkit: 0, pills: 0, noiseBomb: 0 } }), source: 'sim' });
+  ok(z.s.res.cans >= 180, 'nothing used: every can back (plus loot): ' + z.s.res.cans);
+});
+
+// ================================================================== 17
+test('17 validation: every row of the 6.9 table, idempotent apply, a reload replays the same night', () => {
+  const { s } = fixture({ lv: 3, armory: 2, clinic: 1 });
+  must(s, { type: 'dev', op: 'lockSeed', value: 2318841977 });
+  must(s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: kitOf('mp'), confirmLow: true });
+  const pe = s.pending, base = E.runSim(s), V = (x) => E.validateResult(x, pe, s), w = (o) => Object.assign(clone(base), o);
+  eq(base.seed, 2318841977, 'the Lab-locked seed is the run seed');
+  for (const [bad, msg] of [[w({ v: 2 }), 'Unknown result format'], [w({ kind: 'x' }), 'Unknown result format'], [null, 'Unknown result format'], ['{', 'Unknown result format'],
+    [w({ runId: 'bh-999999' }), 'This result is from a different run'], [w({ result: 'won' }), 'Unknown outcome']]) eq([V(bad).ok, V(bad).errors], [false, [msg]], 'reject: ' + msg);
+  eq(V(base), { ok: true, res: base, errors: [], notes: [] }, 'a simulated result passes untouched');
+  let v = V(w({ seed: 1 })); eq([v.res.seed, v.notes], [2318841977, ['seed ignored']], 'a sim result must carry the handoff seed');
+  const win = { result: 'safe_room', fellAt: 'gate', progress: 0.5, endHp: 0 };
+  v = V(w(win)); eq([v.res.progress, v.res.fellAt, v.res.endHp, v.notes.slice(0, 3)], [1, null, 1, ['progress set to 1', 'fellAt cleared', 'endHp clamped to 1']], 'a win: progress 1, no fellAt, endHp 1-maxHp');
+  v = V(w({ result: 'safe_room', progress: 1, fellAt: null, endHp: 500 })); eq(v.res.endHp, 100, 'endHp clamped to maxHp');
+  for (const [pg, where] of [[0.2, 'streets'], [0.5, 'hordes'], [0.9, 'gate']]) {
+    v = V(w({ result: 'overrun', endHp: 30, progress: pg, fellAt: undefined }));
+    eq([v.res.endHp, v.res.fellAt, v.notes.includes('endHp set to 0'), v.notes.includes('fellAt derived: ' + where)], [0, where, true, true], 'a loss at ' + pg + ': endHp 0, fellAt derived ' + where);
+  }
+  v = V(w({ result: 'overrun', endHp: 0, progress: 1.2, fellAt: 'hordes' })); eq([v.res.progress, v.res.fellAt], [0.99, 'hordes'], 'a loss has progress < 1');
+  v = V(w({ time: 99999, kills: -5, accuracy: 150, shoves: 5000, damageTaken: 9999 }));
+  eq([v.res.time, v.res.kills, v.res.accuracy, v.res.shoves, v.res.damageTaken], [1800, 0, 100, 2000, 5000], 'time, kills, accuracy, shoves, damage clamped');
+  eq(v.notes.filter((n) => /clamped/.test(n)).length, 5, 'each clamp noted');
+  v = V(w({ hordes: 99, secondWindUsed: 5 })); eq([v.res.hordes, v.res.secondWindUsed], [3, 1], 'hordes <= director.hordes + 1, secondWindUsed <= player.secondWind');
+  v = V(w({ used: { medkit: 1, pills: 1, noiseBomb: 1 } })); eq([v.res.used, v.notes], [{ medkit: 1, pills: 1, noiseBomb: 0 }, ['used.noiseBomb clamped to 0 (not packed)']], 'used <= packed (map pickups never count)');
+  v = V(w({ result: 'safe_room', progress: 1, fellAt: null, endHp: 90, damageTaken: 2 })); eq([v.ok, v.res.damageTaken, v.notes], [true, 2, ['damageTaken looks low for the health lost']], 'a win with too little damage: a note only');
+  v = V(w({ junk: 1, events: Array.from({ length: 250 }, (_, i) => [i, 'streets', 1]) })); eq([v.ok, 'junk' in v.res, v.res.events.length], [true, false, 200], 'unknown fields ignored, events kept for the log (200)');
+  v = V(w({ time: 12.6 })); eq([v.res.time, v.notes], [13, ['time rounded to 13']], 'numbers become integers');
+  // applied once, idempotent after; a rejected result changes nothing
+  const before = E.serialize(s);
+  eq(act(s, { type: 'resolveRun', result: w({ v: 9 }), source: 'paste' }).data.errors, ['Unknown result format'], 'a bad paste is refused');
+  ok(E.serialize(s) === before, 'and changes nothing');
+  const sc = clone(s);
+  const r1 = must(s, { type: 'resolveRun', result: base, source: 'sim' }), once = E.serialize(s);
+  const r2 = act(s, { type: 'resolveRun', result: base, source: 'sim' });
+  eq([r2.ok, r2.data.errors, s.appliedRunIds], [false, ['Already applied'], ['bh-000001']], 'applying it again: "Already applied"');
+  ok(E.serialize(s) === once, 'the second apply changed nothing');
+  eq([s.lastRun.result, s.lastRun.handoff.runId, s.lastRun.reward.outcome], [base, 'bh-000001', r1.data.outcome], 'lastRun keeps both JSON blocks for the result card');
+  // a reload during the pending run replays the same night (same result, same settlement)
+  const re = E.load(E.serialize(sc), sc.realLast + 30 * SEC).state;
+  eq(E.runSim(re), base, 'the reloaded run simulates the same result');
+  must(re, { type: 'resolveRun', source: 'sim' }, s.realLast);
+  re.realLast = s.realLast; re.lastRun = s.lastRun;
+  ok(E.serialize(re) === E.serialize(s), 'and settles to the same city');
+  // a paste applies a real result through the same function (no clock move)
+  must(s, { type: 'startRun', destId: 'D1', personId: 'p1', kit: {}, confirmLow: true });
+  const pasted = JSON.stringify(Object.assign(E.runSim(s), { source: 'game', kills: 77, junk: true }));
+  const c0 = s.cityMs, rp = must(s, { type: 'resolveRun', result: pasted, source: 'paste' });
+  eq([rp.data.result.source, rp.data.result.kills, s.cityMs - c0], ['paste', 77, 0], 'a pasted JSON string: validated and applied, the clock untouched');
+});
+
+// ================================================================== 18
+test('18 nicknames: relative triggers from refs in table order, the first one sticks, perks in the handoff', () => {
+  // each trigger on a fresh runner (pasted results, so the numbers are exact)
+  const trial = (o, tweak) => {
+    const f = fixture(Object.assign({ lv: 3, armory: 2, clinic: 1 }, o));
+    if (o.runs) f.p.runs = o.runs;
+    if (o.hurt) f.p.hurtCount = o.hurt;
+    must(f.s, { type: 'startRun', destId: o.dest || 'D3', personId: 'p0', kit: kitOf('mpb'), confirmLow: true });
+    const pe = f.s.pending, rf = pe.refs, base = E.runSim(f.s), tw = tweak(rf), win = tw.result === 'safe_room';
+    const res = Object.assign(base, { kills: rf.killsP90 - 1, shoves: rf.shovesP90 - 1, secondWindUsed: 0 },
+      win ? { progress: 1, fellAt: null, endHp: 50, damageTaken: rf.dmgP10 + 1 } : { endHp: 0, progress: 0.5, fellAt: 'hordes' }, tw);
+    if (o.force) f.s.pending.force = o.force;
+    const r = must(f.s, { type: 'resolveRun', result: res, source: 'paste' });
+    return { f, r, nick: f.p.nick, refs: rf };
+  };
+  const winT = (x) => Object.assign({ result: 'safe_room', endHp: 50 }, x);
+  let t = trial({}, (rf) => winT({ damageTaken: rf.dmgP10, kills: rf.killsP90 }));
+  eq(t.nick, 'ghost', 'Ghost: a win with damageTaken <= refs.dmgP10 (first, even with Mower kills)');
+  eq([t.r.data.reward.nickname, t.r.data.reward.lines.nick, t.f.p.history.slice(-1)[0][1]], ['ghost', 'Everyone calls ' + t.f.p.first + ' “Ghost” now. Speed +5 in Two Thumbs Left.', 'Night 1. Everyone calls ' + t.f.p.first + ' “Ghost” now.'], 'the result line and the history line');
+  eq(trial({}, (rf) => winT({ damageTaken: rf.dmgP10 + 1 })).nick, null, 'Ghost needs the lowest 10 % of damage');
+  eq(trial({}, (rf) => ({ result: 'overrun', kills: rf.killsP90 })).nick, 'mower', 'Mower: kills >= refs.killsP90, on any run');
+  eq(trial({}, (rf) => ({ result: 'overrun', shoves: rf.shovesP90 })).nick, 'elbows', 'Elbows: shoves >= refs.shovesP90');
+  eq(trial({}, () => winT({ endHp: 10, secondWindUsed: 1 })).nick, 'gatecrasher', 'Gatecrasher: a win with endHp <= 10 (before Lastbreath)');
+  eq(trial({}, () => winT({ endHp: 11, secondWindUsed: 1 })).nick, 'lastbreath', 'endHp 11 is no Gatecrasher; Lastbreath: a win on a second wind');
+  eq(trial({ hurt: 1, force: 'hurt' }, () => ({ result: 'overrun' })).nick, 'comeback', 'Comeback: brought home Hurt the second time');
+  eq(trial({ hurt: 0, force: 'hurt' }, () => ({ result: 'overrun' })).nick, null, 'not the first time');
+  eq(trial({ runs: 14 }, () => winT({})).nick, 'oldhand', "Old Hand: this person's 15th run");
+  eq(trial({ runs: 13 }, () => winT({})).nick, null, 'not the 14th');
+  // the first one sticks
+  t = trial({}, (rf) => winT({ damageTaken: rf.dmgP10 }));
+  must(t.f.s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: kitOf('mpb'), confirmLow: true });
+  const rr = must(t.f.s, { type: 'resolveRun', result: Object.assign(E.runSim(t.f.s), { kills: 1999 }), source: 'paste' });
+  eq([t.f.p.nick, rr.data.reward.nickname, t.f.s.tel.nicknames], ['ghost', null, 1], 'one nickname for good');
+  // the reference rates hold over the fixtures' 400 reference runs (4.8: Gatecrasher 1-14 % of wins, Lastbreath 0.3-8 %)
+  for (const r of ROWS_634.filter((x) => 'BDEFGH'.includes(x[0]) && x[0].length === 1)) {
+    const f = rowFixture(r), inp = E._internal.runInput(f.s, f.p, E._internal.DEST[r[1]], kitOf(r[7]));
+    let wins = 0, gc = 0, lb = 0;
+    for (let i = 1; i <= 400; i++) { const x = Run.simulate(inp.dest, inp.L, i * 7919); if (x.win) { wins++; if (x.endHp <= 10) gc++; else if (x.secondWindUsed) lb++; } }
+    ok(gc / wins >= 0.01 - 1e-9 && gc / wins <= 0.14 + 1e-9 && lb / wins <= 0.08 + 1e-9, r[0] + ': Gatecrasher ' + (100 * gc / wins).toFixed(1) + ' %, Lastbreath ' + (100 * lb / wins).toFixed(1) + ' % of wins');
+  }
+  // perks change the handoff (and the model where 4.4 says so)
+  const ho = (nick, o) => { const f = fixture(Object.assign({ lv: 3, armory: 2, clinic: 1, nick }, o || {})); return { h: E.buildHandoff(f.s, (o && o.dest) || 'D3', 'p0', kitOf('mpb'), 1), f }; };
+  const plain = ho(null).h;
+  eq(ho('ghost').h.player.speed - plain.player.speed, 5, 'Ghost: speed +5');
+  eq([plain.startRoom.damageMul, ho('mower').h.startRoom.damageMul], [1.03, 1.08], 'Mower: damage x 1.05 (1.03 -> 1.08)');
+  eq([ho(null, { role: 'brawler' }).h.player.shoveCdMul, ho('elbows', { role: 'brawler' }).h.player.shoveCdMul, ho('elbows').h.player.shoveCdMul], [0.91, 0.82, 0.9], 'Elbows: shove cooldowns x 0.9');
+  eq([plain.player.hordeWarnS, ho('gatecrasher').h.player.hordeWarnS, ho('gatecrasher', { role: 'scout', lv: 10, tower: 10 }).h.player.hordeWarnS], [5.7, 6.7, 8], 'Gatecrasher: horde warning +1 s, capped at 8');
+  eq([plain.player.maxHp, ho('lastbreath').h.player.maxHp, ho('lastbreath', { trait: 'tough' }).h.player.maxHp], [100, 105, 120], 'Lastbreath: max HP +5 (120 at most)');
+  near(ho('comeback').h.odds.rescue - plain.odds.rescue, 0.05, 1e-9, 'Comeback: stretcher +5 %');
+  const oh = ho('oldhand').f, base2 = ho(null).f;
+  near(E.derived(oh.s, 'p0', 'D3').restMul / E.derived(base2.s, 'p0', 'D3').restMul, 0.75, 1e-12, 'Old Hand: rest x 0.75');
+  must(oh.s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: kitOf('mpb'), confirmLow: true });
+  const ores = Object.assign(E.runSim(oh.s), { result: 'safe_room', progress: 1, fellAt: null, endHp: 60, damageTaken: 40 });
+  const orr = must(oh.s, { type: 'resolveRun', result: ores, source: 'paste' });
+  eq(orr.data.reward.restMs, Math.round(12 * MIN * (0.5 + 40 / 100) * 0.92 * 0.75), 'the rest after a win uses it');
+});
 
 // ================================================================== 19
 test('19 sparks never buy resources: the sinks, paidSkip', () => {
@@ -692,12 +1221,90 @@ test('19 sparks never buy resources: the sinks, paidSkip', () => {
   const g = city({ tower: 3, res: { bricks: 900, sparks: 50 } }); g.goal = 13; must(g, { type: 'upgrade', id: 'b1' });
   eq(E.goal(g).eta, 'ready now', 'step 14 is ready while a timer over 60 s runs');
   must(g, { type: 'finish', jobId: g.jobs[0].id }); eq(g.goal >= 14, true, 'step 14 completed by a paid finish');
-  // revive with sparks: added by the people-and-runs stage (must not set paidSkip)
-  const rv = act(city(), { type: 'revive', personId: 'p1', pay: 'sparks' });
-  if (rv.data && rv.data.todo) todo('19b a sparks revive does not set paidSkip', 'people-and-runs stage');
+  // revive with sparks: a sink (revive), never a paid skip; a cans revive spends no sparks
+  const rv = city({ goalsDone: true, res: { sparks: 50 } }); must(rv, { type: 'dev', op: 'kill', personId: 'p1' });
+  must(rv, { type: 'revive', personId: 'p1', pay: 'sparks' });
+  eq([rv.flags.paidSkip, rv.res.sparks, rv.tel.sparksOut, rv.people[1].state], [false, 38, { revive: 12 }, 'ready'], 'REVIVE NOW (12 ✦) does not set paidSkip');
+  must(rv, { type: 'dev', op: 'kill', personId: 'p1' }); rv.res.cans = 300; must(rv, { type: 'revive', personId: 'p1', pay: 'cans' });
+  eq([rv.res.sparks, rv.res.cans, rv.flags.paidSkip], [38, 100, false], 'a cans revive (L1, n = 1: 200 cans) spends no sparks');
 });
 
-todo('20 handoff', 'people-and-runs stage: every 6.8 field for 3 fixture states');
+// ================================================================== 20
+test('20 handoff: every 6.8 field for three fixture states (the spec example exactly, the caps, a Medic on a second wind)', () => {
+  // fixture 1: the 6.8 example. Emre Aydın, Scout L4, Quick learner, at the Night Market; Tower 4, Armory 2, Clinic 2, full kit, rested
+  const s = city({ tower: 4, ring: 2, goalsDone: true, noRubble: true, res: { cans: 600 } }); s.flags.deathOn = true; s.flags.strangerDone = true;
+  addB(s, 'armory', 2, 6, 6); addB(s, 'clinic', 2, 6, 9);
+  const p = s.people[0];
+  Object.assign(p, { id: 'p11', index: 11, first: 'Emre', last: 'Aydın', role: 'scout', trait: 'quick_learner', lv: 4, xp: 380,
+    look: { skin: '#e0b392', hairStyle: 'ponytail', hair: '#1d1a1a', jacket: '#8a8f98', acc: 'none' } });
+  const spec = `{
+    "v": 1, "kind": "bellhaven.handoff", "game": "two-thumbs-left",
+    "runId": "bh-000034", "night": 34, "seed": 2318841977, "createdAt": "2026-11-04T18:22:05.000Z", "source": "sim",
+    "destination": { "id": "D3", "name": "Night Market", "threat": 24, "lengthS": 300 },
+    "director": { "wanderers": 3, "hordes": 2, "hordeMul": 1.0, "zombieCap": 45, "firstHordeS": [40, 60],
+                  "hordeGapS": [75, 120], "gateS": 60, "waveEveryS": 10 },
+    "mapSupplies": { "medkit": 1, "pills": 2, "noiseBomb": 2, "ammo": 2, "rifleInLot": true },
+    "runner": { "id": "p11", "name": "Emre Aydın", "nickname": null, "role": "scout", "trait": "quick_learner", "level": 4,
+                "look": { "skin": "#e0b392", "hairStyle": "ponytail", "hair": "#1d1a1a", "jacket": "#8a8f98", "acc": "none" } },
+    "player": { "maxHp": 100, "startHp": 100, "secondWind": 1, "speed": 200, "shoveCdMul": 1.0, "assist": 0.5,
+                "flashlightR": 568, "hordeWarnS": 5.0 },
+    "startRoom": { "primary": "smg", "damageMul": 1.03, "medkit": 1, "pills": 1, "noiseBomb": 1 },
+    "items": { "medkitHeal": 0.8, "medkitHealS": 3, "pillsTemp": 50, "bombLifeS": 6 },
+    "odds": { "home": 0.98, "death": 0.0118, "rescue": 0.41 }
+  }`;
+  const when = Date.UTC(2026, 10, 4, 18, 22, 5);
+  const h1 = E.buildHandoff(s, 'D3', 'p11', kitOf('mpb'), 2318841977, { night: 34, realNow: when });
+  ok(JSON.stringify(h1) === JSON.stringify(JSON.parse(spec)), 'the 6.8 example byte for byte: ' + JSON.stringify(h1));
+  // ... and the same one from GO (night 34, the seed locked, the wall clock at 18:22:05)
+  s.night = 33; must(s, { type: 'dev', op: 'lockSeed', value: 2318841977 });
+  const go = must(s, { type: 'startRun', destId: 'D3', personId: 'p11', confirmLow: true }, when);
+  ok(JSON.stringify(go.data.handoff) === JSON.stringify(h1) && JSON.stringify(s.pending.handoff) === JSON.stringify(h1), 'startRun stores the same handoff in pending');
+  eq([s.pending.runId, s.pending.night, s.pending.seed, s.pending.refs, s.pending.held], ['bh-000034', 34, 2318841977, { dmgP10: 14, killsP90: 133, shovesP90: 34 }, 180], 'pending: run id, night, seed, the refs of 6.9 (14 / 133 / 34), the held kit');
+  // ... which settles as 6.9 says: luck 1.0011 -> +229 bricks (200 + 29 kill salvage), +80 cans, pills and noise bomb charged, the medkit back,
+  // +75 XP (60 x 1.25), rest 12 x (0.5 + 108/100) x 0.85 = 16:07, and the nickname Gatecrasher
+  const res = E.runSim(s);
+  eq([res.result, res.time, res.kills, res.damageTaken, res.endHp, res.used], ['safe_room', 330, 114, 108, 1, { medkit: 0, pills: 1, noiseBomb: 1 }], 'the 6.9 result');
+  s.res.bricks = 0; s.forcedWins = 0;
+  const rw = must(s, { type: 'resolveRun', result: res, source: 'sim' }, when + 8000).data.reward;
+  eq([rw.bricksBase, rw.killBricks, rw.bricks, rw.cans, rw.kit.charged.total, rw.kit.returned.total, rw.xp, rw.restMs, E.fmt.clock(rw.restMs / 1000), rw.nickname, rw.rolls.luck.toFixed(4)],
+    [200, 29, 229, 80, 105, 75, 75, 966960, '16:07', 'gatecrasher', '1.0011'], 'settled exactly as in 6.9');
+  eq([p.xp, p.lv, p.nick, rw.lines.rest], [455, 4, 'gatecrasher', 'Emre rests 16:07'], 'Emre: 455 XP, Gatecrasher');
+  // 6.9's loss: L3 not favoured, tired (start HP 64), medkit + pills, seed 1003 -> overrun at the gate, progress 0.9, 280 s,
+  // 91 kills, both items used before the gate; luck 0.9474, stretcher 0.4401 >= rescue 0.38 -> Down; loot 74 bricks, 20 cans
+  const lf = fixture({ lv: 3, armory: 2, clinic: 1 }); lf.s.forcedWins = 0; tire(lf.s, lf.p, 100 * SEC); E.advance(lf.s, 10 * SEC);
+  must(lf.s, { type: 'dev', op: 'lockSeed', value: 1003 }); lf.s.res.bricks = 0;
+  const lgo = must(lf.s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: kitOf('mp'), confirmLow: true });
+  eq([lgo.data.handoff.player.startHp, lgo.data.handoff.odds.rescue], [64, 0.38], 'start HP 64, rescue 0.38');
+  const lres = E.runSim(lf.s);
+  eq([lres.result, lres.fellAt, lres.progress, lres.time, lres.kills, lres.used], ['overrun', 'gate', 0.9, 280, 91, { medkit: 1, pills: 1, noiseBomb: 0 }], 'the 6.9 loss');
+  const lrw = must(lf.s, { type: 'resolveRun', result: lres, source: 'sim' }).data.reward;
+  eq([lrw.outcome, lrw.rolls.luck.toFixed(4), lrw.rolls.stretcher.toFixed(4), lrw.bricks, lrw.cans, lrw.kit.charged.total, lrw.kit.returned.total, lrw.xp, lf.p.fellAt],
+    ['down', '0.9474', '0.4401', 74, 20, 120, 0, Math.round(60 * 0.4 * 0.9 * 1.25), 'gate'], 'settled as in 6.9: Down, 74 bricks, 20 cans, both items charged');
+  // fixture 2: the caps (horde warning 8 s; aim assist min(1, ...)), a Loud runner's hordes, the Lab's death x in the odds
+  const c = city({ tower: 10, ring: 2, goalsDone: true, noRubble: true, res: { cans: 600 } }); c.flags.deathOn = true; c.flags.strangerDone = true;
+  addB(c, 'armory', 8, 6, 6); addB(c, 'clinic', 6, 6, 9);
+  Object.assign(c.people[0], { role: 'scout', trait: 'loud', lv: 10, xp: 5000, nick: 'gatecrasher' });
+  Object.assign(c.people[1], { role: 'marksman', trait: 'steady', lv: 10, xp: 5000, nick: 'mower' });
+  const h2 = E.buildHandoff(c, 'D6', 'p0', null, 7), h3 = E.buildHandoff(c, 'D4', 'p1', null, 7);
+  eq([h2.player.hordeWarnS, h2.director.hordeMul, h2.player.flashlightR, h2.runner.nickname, h2.startRoom.primary, h2.player.secondWind], [8, 1.95, 640, 'Gatecrasher', 'rifle', 2],
+    'a Scout L10 Gatecrasher at Tower 10: 3 + 3 + 2 + 1 = 9 s capped at 8; Loud hordes x 1.15 (1.7 -> 1.955, 2 decimals)');
+  eq([h3.player.assist, h3.startRoom.damageMul, h3.player.speed, h3.runner.nickname], [0.9, 1.4, 200, 'Mower'], 'a Marksman L10 Steady: assist 0.5 + 0.3 + 0.1 = 0.9 (min 1); damage 1.21 x 1.10 x 1.05 = 1.40');
+  eq([h2.odds.rescue, h3.odds.rescue], [0.38, 0.48], 'rescue in the odds (D6 0.20 + 0.18; D4 0.30 + 0.18)');
+  // fixture 3: a tired Medic L6, Tough, Iron stomach is not this one: Tough with Lastbreath, Clinic 5 (two second winds), at Hospital Hill
+  const m = city({ tower: 7, ring: 2, goalsDone: true, noRubble: true, res: { cans: 600 } }); m.flags.deathOn = true; m.flags.strangerDone = true;
+  addB(m, 'armory', 6, 6, 6); addB(m, 'clinic', 5, 6, 9);
+  const q = m.people[1]; Object.assign(q, { role: 'medic', trait: 'tough', lv: 6, xp: 1100, nick: 'lastbreath' }); tire(m, q, 20 * MIN, 'hurt'); E.advance(m, 5 * MIN);
+  const h4 = E.buildHandoff(m, 'D5', q.id, { medkit: 1, pills: 0, bomb: 1 }, 99);
+  eq([h4.player.maxHp, h4.player.startHp, h4.player.secondWind, h4.items.medkitHeal, h4.items.medkitHealS, h4.items.pillsTemp, h4.startRoom.primary, h4.startRoom.damageMul, h4.startRoom.pills, h4.director.hordeMul],
+    [120, Math.round(120 * (0.6 + 0.4 * 0.25)), 2, 0.92, 2.4, 50, 'rifle', 1.15, 0, 1.4], 'a Medic L6 (heal 0.92 in 2.4 s), Tough + Lastbreath (120), a quarter rested, two second winds');
+  // every field present, for all of them
+  const shape = (o) => Object.keys(o).map((k) => k + (o[k] && typeof o[k] === 'object' && !Array.isArray(o[k]) ? '{' + shape(o[k]) + '}' : '')).join(',');
+  for (const h of [h2, h3, h4]) eq(shape(h), shape(h1), 'every 6.8 field for ' + h.runner.name);
+  ok([h1, h2, h3, h4].every((h) => JSON.stringify(h).indexOf('null') < 0 || h.runner.nickname === null), 'no missing values');
+  // the preview before GO: the next night, no seed yet
+  const pv = E.buildHandoff(m, 'D5', q.id, null, null);
+  eq([pv.night, pv.runId, pv.seed, pv.source], [m.night + 1, 'bh-' + String(m.night + 1).padStart(6, '0'), null, 'sim'], 'the run sheet preview ("Sent to the game ›")');
+});
 
 // ================================================================== 21
 test('21 engine source hygiene: no DOM, clock, storage or unseeded randomness; loads as classic scripts', () => {
@@ -730,7 +1337,10 @@ test('X1 goals: the 7.2 chain, state-based steps, C1 (harder wins count), C2 (ne
   eq([E.goal(s).eta, E.goal(s).target.kind], ['in 0:10', 'building'], 'step 1 while the crane works');
   const ev = E.advance(s, 10 * SEC).filter((e) => e.type === 'goal');
   eq([ev.length, ev[0].step, ev[0].reward, s.res.cans, s.goal], [1, 1, { cans: 30 }, 180, 1], 'step 1 pays 30 cans at once');
-  eq([E.goal(s).text, E.goal(s).eta, E.goal(s).target], ['Make it home from the Allotments', '1 run', { kind: 'dest', destId: 'D1' }], 'step 2');
+  E.oddsCacheClear();
+  eq([E.goal(s).text, E.goal(s).eta, E.goal(s).target], ['Make it home from the Allotments', '1 run', { kind: 'dest', destId: 'D1' }], 'step 2 (odds not computed yet)');
+  const sg2 = E.suggest(s, 'D1', { compute: true });
+  eq(E.goal(s).eta, '1 run · HOME ' + E.fmt.pct(sg2.home), 'step 2 with the odds of the suggested runner (7.2: "1 run · HOME 86%")');
   // C1: a win at a harder place completes the run steps (state-based: one already satisfied pays when reached)
   s.dest.D2.cleared = true; E.advance(s, 0);
   eq([s.goal, s.res.bricks], [2, 220 + 50], 'step 2 completes on the Car Wash win and pays 50 bricks');
@@ -978,15 +1588,83 @@ test('X6 invariants under random play and random save damage (a regression net)'
   const junk = () => pk([null, NaN, -1, 1e12, 'x', {}, [], true, 0.5, 'b1', 'p0', [1, 2], { a: 1 }]);
   const mutate = (o, d) => { if (!o || typeof o !== 'object') return; const ks = Object.keys(o); if (!ks.length) return;
     for (let n = 0; n < 1 + Math.floor(RR() * 3); n++) { const k = pk(ks), r = RR(); if (r < 0.25) o[k] = junk(); else if (r < 0.35) delete o[k]; else if (d < 4) mutate(o[k], d + 1); } };
-  const bases = [E.serialize(city()), E.serialize(E.demo({ realNow: T0 }))];
+  const out = fixture({ lv: 3, armory: 2, clinic: 1 }); must(out.s, { type: 'startRun', destId: 'D3', personId: 'p0', confirmLow: true });
+  const bases = [E.serialize(city()), E.serialize(E.demo({ realNow: T0 })), E.serialize(out.s)];
   for (let i = 0; i < 400; i++) {
-    const o = JSON.parse(pk(bases)); mutate(o, 0);
+    const o = JSON.parse(pk(bases)); mutate(o, 0); if (o && o.pending && RR() < 0.5) mutate(o.pending, 1);
     const s = E.load(JSON.stringify(o), T0).state;
-    inv(s, 'damaged save ' + i); E.view(s); E.advance(s, H); E.act(s, { type: 'upgrade', id: s.buildings[0].id }, T0);
+    inv(s, 'damaged save ' + i); E.view(s);
+    if (s.pending) { const sim = E.runSim(s); ok(sim && sim.kind === 'bellhaven.result', 'damaged save ' + i + ': a pending run still simulates'); ok(E.act(s, { type: 'resolveRun', source: 'sim' }, T0).ok, 'damaged save ' + i + ': and resolves'); inv(s, 'damaged save ' + i + ' after the run'); }
+    E.advance(s, H); E.act(s, { type: 'upgrade', id: s.buildings[0].id }, T0);
     const raw = E.serialize(s); ok(E.serialize(E.load(raw, T0).state) === raw, 'damaged save ' + i + ': stable after repair');
   }
 });
 
+test('X7 the odds cache and the UI hooks: oddsKey, oddsCached, oddsTodo, strip, suggest, view.play / pending / lastRun, speed', () => {
+  E.oddsCacheClear();
+  const f = fixture({ lv: 3, armory: 2, clinic: 1 }), s = f.s;
+  // before anything is computed: nothing cached, PLAY shows "…", the queue lists the strip with Ready people first
+  tire(s, s.people[1], 20 * MIN); must(s, { type: 'setLastDest', destId: 'D3' });
+  eq([E.oddsCached(s, 'D3', 'p0'), E.oddsCacheSize()], [null, 0], 'cachedOnly never computes');
+  let v = E.view(s);
+  eq([v.play.known, v.play.homeText, v.play.personId, E.oddsCacheSize()], [false, '…', 'p0', 0], 'view() never computes odds: PLAY is a placeholder until the UI fills the cache');
+  eq(E.oddsTodo(s, 'D3').map((t) => [t.personId, t.key === E.oddsKey(s, 'D3', t.personId)]), [['p0', true], ['p1', true]], 'the queue: Ready first, keyed by oddsKey');
+  for (const t of E.oddsTodo(s, 'D3')) E.odds(s, t.destId, t.personId, t.kit);
+  v = E.view(s);
+  eq([E.oddsTodo(s, 'D3'), v.play.known, v.play.homeText === E.fmt.pct(E.odds(s, 'D3', 'p0').home), E.oddsCacheSize()], [[], true, true, 2], 'after the idle frames: PLAY knows its odds');
+  // the key: identical inputs share an entry; every input that changes the model changes the key, nothing else does
+  const k0 = E.oddsKey(s, 'D3', 'p0'); s.res.bricks = 1; s.cityMs += 1;
+  eq(E.oddsKey(s, 'D3', 'p0'), k0, 'bricks or the clock do not change the key');
+  const keyAfter = (fn) => { const c = clone(s); fn(c); return E.oddsKey(c, 'D3', 'p0'); };
+  for (const [what, fn] of [['level', (c) => { c.people[0].lv = 4; }], ['Armory', (c) => { c.buildings.find((b) => b.type === 'armory').lv = 3; }],
+    ['Clinic 5', (c) => { c.buildings.find((b) => b.type === 'clinic').lv = 5; }], ['rest step', (c) => tire(c, c.people[0], 10 * MIN)], ['trait', (c) => { c.people[0].trait = 'tough'; }],
+    ['nickname', (c) => { c.people[0].nick = 'lastbreath'; }], ['role', (c) => { c.people[0].role = 'medic'; }], ['kit', (c) => { c.res.cans = 100; }]]) ok(keyAfter(fn) !== k0, what + ' changes the key');
+  eq(keyAfter((c) => { c.people[0].nick = 'ghost'; }), k0, 'a perk that only goes to the game does not');
+  // an LRU of 300 entries
+  const L0 = E.oddsCacheSize(), big = fixture({ lv: 1, armory: 1, clinic: 1 });
+  for (let i = 0; i < 330; i++) { big.p.lv = 1 + (i % 10); big.p.trait = D.TRAIT_IDS[Math.floor(i / 10) % 10]; tire(big.s, big.p, 10 * MIN); big.s.cityMs += 0; E.odds(big.s, D.DEST_IDS[Math.floor(i / 100) % 6], 'p0', { medkit: i % 2, pills: (i >> 1) % 2, bomb: 0 }); }
+  ok(E.oddsCacheSize() <= 300 && L0 >= 0, 'the cache keeps at most 300 entries (' + E.oddsCacheSize() + ')');
+  // the strip and PLAY's rule: the best Home % among the Ready, before anyone resting
+  E.oddsCacheClear();
+  const st = fixture({ lv: 1, armory: 2, clinic: 1 }); st.s.people[1].lv = 6; st.s.people[1].xp = D.XP_AT[6]; tire(st.s, st.s.people[1], 10 * MIN);
+  const rows = E.strip(st.s, 'D3', { compute: true });
+  eq(rows.map((r) => [r.personId, r.state, r.chip]), [['p1', 'tired', 'Tired 10:00'], ['p0', 'ready', 'Rested']], 'the strip: best Home % first (a tired L6 beats a rested L1)');
+  ok(rows.every((r) => r.badge === (r.home >= 0.85 ? 'good' : r.home >= 0.7 ? 'ok' : 'low')), 'odds badges');
+  eq([E.suggest(st.s, 'D3').personId, E.suggest(st.s, 'D3').tired], ['p0', false], 'PLAY suggests the Ready person even with lower odds');
+  st.s.people[0].state = 'rest'; st.s.people[0].restKind = 'hurt'; st.s.people[0].restFromMs = st.s.cityMs; st.s.people[0].restUntilMs = st.s.cityMs + H;
+  E.strip(st.s, 'D3', { compute: true });
+  const sg = E.suggest(st.s, 'D3'); eq([sg.personId, sg.tired, E.view(st.s).play.hpText], ['p1', true, 'HP 60%'], 'nobody Ready: the best Home % among the resting, with its HP');
+  // ties: the lower level, then the lower index
+  const tie = city({ goalsDone: true }); tie.people[1].role = 'sprinter'; tie.people[1].trait = tie.people[0].trait;
+  eq(E.strip(tie, 'D1', { compute: true }).map((r) => r.personId), ['p0', 'p1'], 'equal odds: the lower index first');
+  tie.people[0].lv = 2; tie.people[0].xp = 60; eq(E.strip(tie, 'D1', { compute: true })[0].personId, 'p0', 'a higher level has better odds here anyway');
+  // view.pending while a run is out, a save with a pending run round-trips byte for byte, view.lastRun after
+  const r = fixture({ lv: 3, armory: 2, clinic: 1 });
+  must(r.s, { type: 'startRun', destId: 'D3', personId: 'p0', confirmLow: true });
+  v = E.view(r.s);
+  eq([v.pending.title, v.pending.sim, v.pending.first, v.people.find((q) => q.id === 'p0').where, v.people.find((q) => q.id === 'p0').canRun, v.play.personId], ['Night 1 · Night Market', true, r.p.first, 'out', false, 'p1'], 'view.pending; the runner is Out');
+  const raw = E.serialize(r.s), back = E.load(raw, r.s.realLast + 5000);
+  eq([back.status, E.serialize(back.state) === raw], ['ok', true], 'a save with a pending run round-trips byte for byte');
+  eq(act(r.s, { type: 'startRun', destId: 'D1', personId: 'p1', kit: {} }).err, 'pending', 'one run at a time');
+  const rr = must(r.s, { type: 'resolveRun', source: 'sim' });
+  const rv = rr.events.find((e) => e.type === 'runResolved');
+  eq([rv.outcome, rv.arrival, E.view(r.s).lastRun.reward.runId, E.view(r.s).pending], [rr.data.outcome, rr.data.reward.arrival, 'bh-000001', null], 'runResolved carries how the runner comes home (sack, stretcher, limp)');
+  // the demo shows people in every state and one grave
+  const dv = E.view(E.demo({ realNow: T0, tzOffsetMin: 0 }));
+  eq(dv.people.map((q) => (q.state === 'rest' ? q.restKind : q.state)).sort(), ['down', 'hurt', 'ready', 'ready', 'recovering', 'tired'], '#demo: Ready, tired, Hurt, Recovering and Down');
+  eq([dv.remembered.length, dv.graves.length, dv.chips.people], [1, 1, { living: 6, beds: 6, down: true }], '#demo: one grave, 6 / 6 beds, a red dot');
+  eq([dv.buildings.find((b) => b.type === 'clinic').clinic.down.length, dv.buildings.find((b) => b.type === 'clinic').clinic.recovering.length, dv.buildings.find((b) => b.house && b.house.idx === 1).house.lantern], [1, 1, true], "#demo: the Clinic's red pill and \"+1\", the lantern in the green House");
+  // speed: one uncached odds() (400 simulated runs) per call, in node
+  E.oddsCacheClear();
+  const sp = fixture({ lv: 1, armory: 2, clinic: 1 }); let n = 0; const t0 = process.hrtime.bigint();
+  for (const di of D.DEST_IDS) for (let lv = 1; lv <= 10; lv++) for (const k of ['', 'mpb']) { sp.p.lv = lv; E.odds(sp.s, di, 'p0', kitOf(k)); n++; }
+  const per = Number(process.hrtime.bigint() - t0) / 1e6 / n;
+  console.log('      odds(): ' + per.toFixed(2) + ' ms per uncached call (' + n + ' calls, 400 runs each); cached: ' + (() => { const t1 = process.hrtime.bigint(); for (let i = 0; i < 1000; i++) E.odds(sp.s, 'D3', 'p0', kitOf('mpb')); return (Number(process.hrtime.bigint() - t1) / 1e6 / 1000).toFixed(3); })() + ' ms');
+  ok(per < 3, 'an uncached odds() fits a time-sliced frame: ' + per.toFixed(2) + ' ms');
+  const tv = process.hrtime.bigint(); for (let i = 0; i < 200; i++) E.view(f.s); const vms = Number(process.hrtime.bigint() - tv) / 1e6 / 200;
+  ok(vms < 2, 'view() with PLAY and the people stays cheap: ' + vms.toFixed(3) + ' ms');
+});
+
 // ------------------------------------------------------------------ summary
-console.log('\n' + pass + ' checks passed, ' + fail + ' failed, ' + todos + ' to do (people-and-runs stage)');
+console.log('\n' + pass + ' checks passed, ' + fail + ' failed' + (todos ? ', ' + todos + ' to do' : ''));
 if (fail) { console.log(failures.map((f) => '  - ' + f).join('\n')); process.exitCode = 1; }
