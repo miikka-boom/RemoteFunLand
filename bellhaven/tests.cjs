@@ -1506,6 +1506,8 @@ test('X4 the Lab: every dev op that changes state', () => {
   const n0 = s.people.length; must(s, { type: 'dev', op: 'addPerson', seed: 99, lv: 3 });
   const q = s.people[n0]; eq([q.lv, q.xp, q.arrivedHow, q.houseId, q.seed], [3, 180, 'lab', 'b3', N.hash(99, 0)], 'generate one from a seed: the free third bed');
   must(s, { type: 'dev', op: 'addPerson' }); eq([s.people.length, s.people[n0 + 1].houseId], [n0 + 2, null], 'ignores beds: a fourth sleeps on the plaza bench');
+  { const g = E.gallery(777, 12)[5], r = must(s, { type: 'dev', op: 'addPerson', seed: 777, index: 5 }), p = s.people.find((x) => x.id === r.data.personId);
+    eq([p.seed, p.first, p.role, p.trait], [g.seed, g.first, g.role, g.trait], 'the Lab gallery: seed and index add that face'); s.people.splice(s.people.indexOf(p), 1); }
   must(s, { type: 'dev', op: 'kill', personId: q.id }); eq([q.state, q.downUntilMs - s.cityMs], ['down', 86400000], 'kill: Down for the deadline');
   must(s, { type: 'dev', op: 'reviveAll' }); eq(q.state, 'ready', 'revive all');
   must(s, { type: 'dev', op: 'setLevel', personId: q.id, lv: 6 }); eq([q.lv, q.xp], [6, 1100], 'set level');

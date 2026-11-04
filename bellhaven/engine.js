@@ -237,7 +237,8 @@
  *   Tuning:  mul { key: cost|time|prod|loot|xp|death|revive|rest|inn, value } (costs and caps scale together; prod
  *            re-bases every bubble first; data.dataRule lists violations) · rescueBase { destId, value } · set { key:
  *            clinicRescue|tiredFloor|escalationCap|downWindowMs|freeSec|skipExp|skipK|reducedMotion, value } · resetLab
- *   People:  addPerson { seed?, lv? } (ignores beds) · kill { personId } (Down now: then offer() opens the Down flow) ·
+ *   People:  addPerson { seed?, index?, lv? } (ignores beds; seed and index draw the person of gallery(seed)[index], a
+ *            first name already in the city re-drawn) · kill { personId } (Down now: then offer() opens the Down flow) ·
  *            reviveAll · setLevel { personId, lv } · giveXp { personId, xp } · reroll { seed? } (a new save seed, the Lab
  *            kept) · the generator gallery: gallery(seed)
  *   State:   replayOnboarding · reset { seed? } (export/import: serialize() and load())
@@ -494,7 +495,7 @@
   function genPerson(s, o) {
     o = o || {};
     const index = s.nextIndex++, how = o.how || 'lab';
-    const seed = o.seed != null ? o.seed >>> 0 : s.saveSeed, idx = o.seed != null ? 0 : index;
+    const seed = o.seed != null ? o.seed >>> 0 : s.saveSeed, idx = o.seed != null ? (o.idx > 0 ? o.idx : 0) : index;   // o.idx: the Lab gallery's portrait
     const opts = { taken: takenNames(s, o.extraTaken), takenHabits: takenHabits(s), role: o.role || null, lv: o.lv || 1 };
     const buried = how === 'traveler' || how === 'drifter' ? s.graves.map((gr) => personById(s, gr.personId)).filter(Boolean) : [];
     const g = Names.person(seed, idx, buried.length ? Object.assign({ buried: buried.map((q) => q.last) }, opts) : opts);
@@ -1212,7 +1213,7 @@
       }
       case 'resetLab': { const keep = { timeScale: L.timeScale }; s.lab = clone(DATA.LAB_DEFAULT); s.lab.timeScale = keep.timeScale; for (const b of s.buildings) if (PRODUCERS[b.type] && b.lv >= 1) rebase(s, b, s.cityMs); return {}; }
       case 'addPerson': {
-        const p = genPerson(s, { seed: a.seed != null ? uint(a.seed, 0) : null, lv: clampInt(a.lv, 1, 10, 1), how: 'lab' });
+        const p = genPerson(s, { seed: a.seed != null ? uint(a.seed, 0) : null, idx: a.index != null ? clampInt(a.index, 0, 4095, 0) : 0, lv: clampInt(a.lv, 1, 10, 1), how: 'lab' });
         s.people.push(p); assignHouse(s, p);
         return { data: { personId: p.id } };
       }
