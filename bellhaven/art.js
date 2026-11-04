@@ -122,7 +122,8 @@
  * Art.grave(g, x, y, z, o)   a 1 x 1 grave at its footprint anchor: soil mound #8b7356 (grassed over after a day),
  *     rounded headstone with the carved initial (Barlow Condensed 700), a ribbon in the jacket colour, flowers (2
  *     from day 3, 4 from day 7, colours from the seed), a candle with a warm glow for the first 24 h (flickers unless
- *     reduced). o: { initial: 'E', ribbon: jacket hex, ageDays: city days since placement, seed: person seed, t }
+ *     reduced). o: { initial: 'E', ribbon: jacket hex, ageDays: city days since placement, seed: person seed,
+ *     flowerColors: [4 hex] (the engine's view.graves[].flowerColors; overrides the seed), t }
  * Art.decor(g, kind, x, y, z, o)   P1 decorations, 1 x 1: 'tree' (o.size) | 'bench' | 'lamp'.
  *
  * ---------------------------------------------------------------------------------------------------------- overlays
@@ -934,7 +935,7 @@
     if (nF) {
       const h = hash32(o.seed || 7), spots = [[-12, 3], [9, 4], [-8, 6], [12, 1]];
       for (let i = 0; i < nF; i++) {
-        const c = FLOWERS[(h >>> (i * 3)) % 4], [dx, dy] = spots[i];
+        const c = o.flowerColors && o.flowerColors.length ? o.flowerColors[i % o.flowerColors.length] : FLOWERS[(h >>> (i * 3)) % 4], [dx, dy] = spots[i];
         g.fillStyle = C.stem; g.fillRect(dx - 0.5, dy - 5, 1, 5); disc(dx, dy - 6, 2.2, c); disc(dx, dy - 6, 0.8, '#f8e7a8');
       }
     }
@@ -1256,7 +1257,7 @@
     if (RECIPES[type]) { building(ctx, type, lv, x, y, z, Object.assign({}, o, { alpha: 0.7, shadow: false, smoke: false, travelers: null })); return; }
     const rho = rhoFor(z * devScale(ctx));
     const b = { x0: -48, y0: -80, x1: 48, y1: 40 };
-    const s = scratchSprite(type + '|' + rho + '|' + JSON.stringify([o.initial, o.ribbon, o.ageDays >= 7 ? 7 : o.ageDays >= 3 ? 3 : o.ageDays >= 1 ? 1 : 0, o.seed]), b, rho,
+    const s = scratchSprite(type + '|' + rho + '|' + JSON.stringify([o.initial, o.ribbon, o.ageDays >= 7 ? 7 : o.ageDays >= 3 ? 3 : o.ageDays >= 1 ? 1 : 0, o.seed, o.flowerColors, o.size]), b, rho,
       () => (type === 'grave' ? graveBody(Object.assign({}, o, { reduced: true })) : decorBody(type, o)));
     if (!s) return;
     ctx.save(); ctx.globalAlpha *= 0.7; ctx.drawImage(s.cv, x + s.ox * z, y + s.oy * z, s.w * z, s.h * z); ctx.restore();
