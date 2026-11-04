@@ -53,7 +53,7 @@
     ['collect', 'GLINT · SPARKS', { res: 'sparks', step: 4 }], ['place', 'PLACE'], ['whirr', 'WHIRR'], ['finish', 'FINISH'], ['bell', 'BELL ×1', { times: 1 }],
     ['bell', 'BELL ×2 · HOME', { times: 2 }], ['bell', 'BELL ×3 · TOWER', { times: 3 }], ['bell', 'TOLL · LOW', { times: 1, low: true }], ['heartbeat', 'HEARTBEAT'],
     ['horde', 'HORDE!'], ['horde', 'GATE CRESCENDO', { gate: true }], ['fallBeat', 'FALL BEAT'],
-    // P1 "more sound": sfx.js has them, ui.js does not call them yet
+    // P1 "more sound": ui.js plays these on sparks, level-ups, nicknames, revives, invites, the fence, rubble and refused taps
     ['levelUp', 'LEVEL UP', null, 1], ['nickname', 'NICKNAME', null, 1], ['revive', 'REVIVE', null, 1], ['invite', 'INVITE', null, 1],
     ['expand', 'EXPAND', null, 1], ['rubble', 'RUBBLE', null, 1], ['spark', 'SPARKS', null, 1], ['deny', 'DENY', null, 1]];
   // Section 10 (sim/ref.cjs, 20 seeds). tw: the Tower level at 15 min / 1 h / 1 day [median, lo, hi]; t10: the day of
@@ -331,7 +331,7 @@
     let so = row('Sound', 'Saved with the game, like SOUND in the City sheet', defTog('sound', () => !!(A.sound && A.sound.get()), (v) => A.sound.set(v), 'Sound')) +
       head('The cues of 8.16') + '<div class="bhl-btns">';
     CUE_TESTS.forEach((c, i) => { if (!c[3]) so += b('cue', c[1], { x: i }); });
-    so += b('drone', 'DRONE LOOP') + b('heart', 'HEARTBEAT LOOP') + '</div>' + head('More sound (P1, not called by the page yet)') + '<div class="bhl-btns">';
+    so += b('drone', 'DRONE LOOP') + b('heart', 'HEARTBEAT LOOP') + '</div>' + head('More sound (P1)') + '<div class="bhl-btns">';
     CUE_TESTS.forEach((c, i) => { if (c[3]) so += b('cue', c[1], { x: i }); });
     so += '</div>' + note('', 'sfx');
     B.sound = so;

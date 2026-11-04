@@ -155,7 +155,9 @@
  *             (park: a free land tile beside the Tower, idle cranes first; never inside a building or on a gate tile)
  *     rubble: [{ id, gx, gy, ring, glint, cost: { res, n }, ok }],
  *     graves: [{ id, personId, gx, gy, waiting, placedMs, ageMs, first, name, initial, ribbon, grassed, flowers, houseId,
- *                flowerColors[4], candle, epitaph }],
+ *                flowerColors[4], candle, epitaph, matesFlowers }],   flowers: 0-4 = the 6.7 age rule (2 from day 3, 4
+ *                from day 7), raised from the first day on to the number of housemates at home (P1: housemates leave
+ *                flowers); matesFlowers: how many of them the housemates brought
  *     decor: [{ id, type, gx, gy }],
  *     people: [PersonView] living, roster order (Down, Ready, Resting, Hurt, Recovering, Out),
  *     remembered: [PersonView] the Fallen (with graveId),
@@ -1907,9 +1909,12 @@
     const remembered = s.people.filter((p) => p.state === 'fallen').map((p) => personView(s, p, null));
     const graves = s.graves.map((g) => {
       const p = personById(s, g.personId), age = g.gx == null ? 0 : Math.max(0, s.cityMs - g.placedMs), r = Names.mulberry32(((p ? p.seed : 0) ^ 0x0f10e2) >>> 0);
+      // 6.7 flowers by age (2 from day 3, 4 from day 7); P1: from the first day on, every housemate at home has left one
+      const mates = g.houseId && age >= DATA.GRAVE.candleMs ? s.people.filter((q) => q.houseId === g.houseId && q.state !== 'fallen' && q.state !== 'down').length : 0;
+      const byAge = age >= DATA.GRAVE.flowers4Ms ? 4 : age >= DATA.GRAVE.flowers2Ms ? 2 : 0;
       return { id: g.id, personId: g.personId, gx: g.gx, gy: g.gy, waiting: g.gx == null, placedMs: g.placedMs, ageMs: age, first: p ? p.first : '', name: p ? p.first + ' ' + p.last : '',
         initial: p ? p.first.charAt(0) : '', ribbon: p ? p.look.jacket : '#8a8f98', grassed: age >= DATA.GRAVE.grassMs,
-        flowers: age >= DATA.GRAVE.flowers4Ms ? 4 : age >= DATA.GRAVE.flowers2Ms ? 2 : 0, flowerColors: [0, 1, 2, 3].map(() => DATA.FLOWERS[Math.floor(r() * 4)]),
+        flowers: Math.min(4, Math.max(byAge, mates)), matesFlowers: mates > byAge ? Math.min(4, mates) - byAge : 0, flowerColors: [0, 1, 2, 3].map(() => DATA.FLOWERS[Math.floor(r() * 4)]),
         candle: g.gx != null && age < DATA.GRAVE.candleMs, epitaph: p ? p.epitaph : null, houseId: g.houseId || null };
     });
     const caps = { bricks: capOf(s, 'bricks'), cans: capOf(s, 'cans') }, inn = innB(s);

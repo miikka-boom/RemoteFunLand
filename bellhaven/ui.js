@@ -47,6 +47,11 @@
  * Events: Engine events go through handle(events, ctx): flyers, sounds, toasts and cards for the city events below,
  *   then every listener added with UI.onEvent(type, fn(e, ctx)) (here: stranger -> the camera finds the stranger and
  *   the offer opens once; dev op kill -> the offer). ctx: { act, offline, tick, at }.
+ *   Cards and toasts: a card that opens clears the toasts raised before it (they sat on its title; the storage notices
+ *   are kept), and city news raised while a card is up (a run goal reached as the result shows, a job done under the
+ *   Tower card, a revive's confirmation) waits for the last card to close: cityFx(fn, holds) / runLater(); the chips
+ *   hold the old numbers meanwhile. Under any card the bottom bar steps back (.ov-open), and under the night screens
+ *   (the run sheet, the run screen, the result) the top bar too (.ov-dark).
  * Modes: ui.mode = null | { kind: 'place', type, cost } | { kind: 'move', target, labels?, onDone? } (8.5). PLAY
  *   becomes ✓ PLACE / BLOCKED / ✓ DONE, BUILD becomes ✕ CANCEL. Grave placement after SAY GOODBYE is 'move' with the
  *   labels { ok: 'LAY TO REST', cancel: null, hint: 'Drag to choose a place' } (no ✕; Esc does nothing).
@@ -101,9 +106,10 @@
  *   by Engine.load; replaces the city), setTimeScale(x), reducedMotion: { get() -> true|false|null, set(v),
  *   effective() -> bool }, sound: { get() -> bool, set(on) }, skipAhead(ms) (through the offline path: shows the
  *   welcome card), showWelcome(w), replayOnboarding(), openDemo(), resolveResult(json) (paste a result: the run
- *   flow's hook), kpis(), toast(text), close(), isDemo(), layout() -> { W, H, k, ... }, perf() -> { frames, avg, max, p95 } (ms of script
- *   per frame, the last 120 frames), on(name, fn): 'tick' (once
- *   a second while open), 'events' (every batch of engine events), 'close' }.
+ *   flow's hook), openOffer(personId) (the revive offer; a second call for the same person is skipped), kpis(),
+ *   toast(text), close(), isDemo(), layout() -> { W, H, k, ... }, perf() -> { frames, avg, max, p95 } (ms of script
+ *   per frame, the last 120 frames), on(name, fn): 'tick' (once a second while open), 'events' (every batch of engine
+ *   events), 'close' }.
  *   The Lab may also call UI.hooks: openOffer(personId) (a dev kill opens it by itself), openPerson(id),
  *   openMemorial(graveId), openRun({ destId, personId }), openRunScreen(), openRoster(), resolveResult(json).
  * Tests and the Lab: UI.oddsStats() -> { computed, totalMs, avgMs, p95Ms, maxMs, maxFrameMs, framesWithWork,
@@ -117,6 +123,9 @@
  * the result card's BACK TO TOWN sits at PLAY's rect below a centred card (the 330 px card and a 60 px button cannot
  * both fit 390 px), the person card's CARD | HISTORY tabs sit in its footer, the run screen's kill counter is
  * interpolated (the result lists the total only), a run's loot lands in the chips when the card closes.
+ * Integration: the result card puts the sparks (first clear / daily) on the loot row and a win's rest line as a plain
+ * row, so the usual card fits 330 px at 844 and the 568 screen without scrolling; after a loss the card scrolls the
+ * fall line into view. The camera returns, behind the night screens, to where it was before following the runner out.
  */
 (function (root, f) { const api = f(root.BH || {}); if (typeof module === 'object' && module.exports) module.exports = api; else (root.BH = root.BH || {}).UI = api; })(typeof self !== 'undefined' ? self : this, function (BH) {
   'use strict';
@@ -156,6 +165,7 @@
       (o.icon ? ic(o.icon, o.iconColor) : '') + (o.sub ? '<span>' + o.label + '</span><span class="sub">' + o.sub + '</span>' : (o.label || '')) + '</button>';
   }
   const pill = (text, cls) => '<span class="pill' + (cls ? ' ' + cls : '') + '">' + esc(text) + '</span>';
+  const escNb = (t) => esc(t).replace(/\b(Night|Lv|Tower) (\d+)/g, '$1&nbsp;$2');   // "Night 15" never breaks across lines
   function num(n) { return fmt.compact(n, ui.narrow); }
   function costChip(c, have) {
     if (!c) return '';
@@ -211,7 +221,7 @@
     get(k) { try { return window.localStorage.getItem(k); } catch (e) { store.fail(); return null; } },
     set(k, v) { try { window.localStorage.setItem(k, v); return true; } catch (e) { store.fail(); return false; } },
     del(k) { try { window.localStorage.removeItem(k); } catch (e) { store.fail(); } },
-    fail() { store.ok = false; if (!store.warned) { store.warned = true; setTimeout(() => toast('Progress won’t be saved in this browser.'), 600); } },
+    fail() { store.ok = false; if (!store.warned) { store.warned = true; setTimeout(() => toast('Progress won’t be saved in this browser.', { keep: true, ms: 4000 }), 600); } },
   };
 
   // ---------------------------------------------------------------------------------------------- page state
@@ -224,7 +234,7 @@
     confirm: null, disp: { bricks: 0, cans: 0, sparks: 0 }, inflight: { bricks: 0, cans: 0, sparks: 0 }, dispInit: false,
     lastTs: 0, lastView: 0, lastHud: 0, lastPanel: 0, lastSave: 0, lastCoach: 0, lastLabTick: 0,
     dirty: true, hudDirty: true, panelDirty: true, coach: null, goalPulse: null, streak: { n: 0, at: 0 },
-    gestured: false, insetKey: '', meetTimer: null, booted: false,
+    gestured: false, insetKey: '', meetTimer: null, booted: false, later: [],
   };
   const SHEETS = {}, OVERLAYS = {}, LISTENERS = {}, DO = {};
   const labSubs = { tick: [], events: [], close: [] };
@@ -390,7 +400,7 @@
     placed(e) { sfx('place'); if (e.decorId) toast(nameOf(e.buildingType) + ' placed.'); },
     jobDone(e, ctx) {
       if (e.buildingType === 'tower' || e.kind === 'expand') return;
-      if (!ctx.offline) { sfx('finish'); toast(e.kind === 'build' ? e.name + ' built.' : e.name + ' is level ' + e.lv + '.', { icon: 'check', kind: 'good' }); }
+      if (!ctx.offline) { sfx('finish'); cityFx(() => toast(e.kind === 'build' ? e.name + ' built.' : e.name + ' is level ' + e.lv + '.', { icon: 'check', kind: 'good' })); }
     },
     towerUp(e, ctx) {
       if (ctx.offline) return;                                  // the welcome card lists it (5.5)
@@ -399,17 +409,20 @@
       queueOverlay('tower', { lv: e.lv, opens: e.opens || [], sparks: e.sparks || 0 });
     },
     finale() { queueOverlay('finale', {}); },
-    expanded(e, ctx) { if (!ctx.offline) { sfx('expand'); toast('The fence moves out: land ' + e.side + ' × ' + e.side + '.', { icon: 'check', kind: 'good' }); } },
-    rested(e, ctx) { if (!ctx.offline && !e.early && ctx.tick) toast(nameFor(e.personId) + ' is rested.', { icon: 'people' }); },
-    innRefresh(e, ctx) { if (!ctx.offline && ctx.tick) toast(e.n + ' new traveler' + (e.n === 1 ? '' : 's') + ' at the Inn.', { icon: 'house' }); },
-    stranger(e) { toast('Someone lies Down at the gate.', { icon: 'heart', kind: 'bad', ms: 4000 }); },
-    drifter(e) { toast(nameFor(e.personId) + ' drifted in at the gate.', { icon: 'people' }); },
+    expanded(e, ctx) { if (!ctx.offline) { sfx('expand'); cityFx(() => toast('The fence moves out: land ' + e.side + ' × ' + e.side + '.', { icon: 'check', kind: 'good' })); } },
+    rested(e, ctx) { if (!ctx.offline && !e.early && ctx.tick) cityFx(() => toast(nameFor(e.personId) + ' is rested.', { icon: 'people' })); },
+    innRefresh(e, ctx) { if (!ctx.offline && ctx.tick) cityFx(() => toast(e.n + ' new traveler' + (e.n === 1 ? '' : 's') + ' at the Inn.', { icon: 'house' })); },
+    stranger(e) { cityFx(() => toast('Someone lies Down at the gate.', { icon: 'heart', kind: 'bad', ms: 4000 })); },
+    drifter(e) { cityFx(() => toast(nameFor(e.personId) + ' drifted in at the gate.', { icon: 'people' })); },
     deathOn() { if (S && !S.flags.deathCardSeen) queueOverlay('death', {}); },
-    downExpired(e, ctx) { if (!ctx.offline) { sfx('bell', { times: 1, low: true }); if (iso) iso.ringBell(1, { low: true }); toast(nameFor(e.personId) + '’s day ran out. ' + (e.where || ''), { icon: 'grave', ms: 4500 }); } },
-    goal(e, ctx) {
-      const rw = e.reward || {}, from = ctx.offline ? null : goalRect();
-      toast('✓ ' + e.text + rewardText(rw), { kind: 'good' });
-      for (const k of RES) if (rw[k] > 0) fly(k, rw[k], from);
+    downExpired(e, ctx) { if (!ctx.offline) { sfx('bell', { times: 1, low: true }); if (iso) iso.ringBell(1, { low: true }); cityFx(() => toast(nameFor(e.personId) + '’s day ran out. ' + (e.where || ''), { icon: 'grave', ms: 4500 })); } },
+    goal(e, ctx) {                                              // a run goal lands while the result card is up: after it
+      const rw = e.reward || {};
+      cityFx((held) => {
+        toast('✓ ' + e.text + rewardText(rw), { kind: 'good' });
+        const from = ctx.offline ? null : goalRect();
+        for (const k of RES) if (rw[k] > 0) fly(k, rw[k], from, held);
+      }, rw);
     },
     packClaimed(e, ctx) { fly('sparks', e.size, ctx.at || null); toast('+' + fmt.num(e.size) + ' ✦ · a free test pack', { icon: 'spark' }); },
     rubbleCleared(e) {
@@ -418,14 +431,28 @@
     },
     craneBought() { sfx('finish'); toast('A 4th crane joins Bellhaven.', { icon: 'crane', kind: 'good' }); },
     offline(e) { if (e.welcome) queueOverlay('welcome', e.welcome); },
-    invited(e) { toast(nameFor(e.personId) + ' moves in.', { icon: 'people', kind: 'good' }); },
+    invited(e) { cityFx(() => toast(nameFor(e.personId) + ' moves in.', { icon: 'people', kind: 'good' })); },
   };
+  // City news raised while a card is open (a run goal reached as the result shows, a job done under the Tower card)
+  // waits for the card to close: its toast would sit on the card's title and its flyer would cross the card. The chips
+  // hold the old numbers meanwhile (holds: the amounts the deferred flyers will bring).
+  function cityFx(fn, holds) {
+    if (!ui.overlay) { fn(false); return; }
+    if (holds) for (const k of RES) if (holds[k] > 0) ui.inflight[k] += holds[k];
+    ui.later.push(fn);
+  }
+  function runLater() {
+    if (ui.overlay || !ui.later.length) return;
+    const q = ui.later; ui.later = [];
+    q.forEach((fn, i) => setTimeout(() => { if (ui.overlay) { ui.later.push(fn); return; } try { fn(true); } catch (e) { console.error(e); } }, 350 + i * 450));
+  }
   function rewardText(rw) { const p = []; for (const k of RES) if (rw[k] > 0) p.push('+' + fmt.num(rw[k]) + ' ' + RES_WORD[k]); return p.length ? ' · ' + p.join(' ') : ''; }
 
   // ---------------------------------------------------------------------------------------------- juice (8.16): flyers, chips, toasts
   function chipOf(res) { return res === 'bricks' ? $('cBricks') : res === 'cans' ? $('cCans') : $('cSparks'); }
-  function fly(res, n, from) {
+  function fly(res, n, from, held) {
     const chip = chipOf(res);
+    if (held && n > 0) ui.inflight[res] = Math.max(0, ui.inflight[res] - n);   // a deferred reward: counted again below
     if (!chip || !(n > 0)) return;
     if (ui.reduced || !from || document.hidden) { flash(res); return; }
     const r = chip.getBoundingClientRect(), k = ui.layout.k || 1;
@@ -483,13 +510,16 @@
     const box = $('toasts'); if (!box) return;
     for (const c of box.children) if (c.__text === text && !c.classList.contains('out')) { clearTimeout(c.__t); c.__t = setTimeout(() => dropToast(c), o.ms || 2500); return; }
     const el = document.createElement('div');
-    el.className = 'toast' + (o.kind ? ' ' + o.kind : ''); el.__text = text;
+    el.className = 'toast' + (o.kind ? ' ' + o.kind : ''); el.__text = text; el.__keep = !!o.keep;
     el.innerHTML = (o.icon ? ic(o.icon) : '') + '<span>' + esc(text) + '</span>';
     box.appendChild(el);
     while (box.children.length > 3) box.removeChild(box.firstChild);
     el.__t = setTimeout(() => dropToast(el), o.ms || 2500);
   }
   function dropToast(el) { el.classList.add('out'); setTimeout(() => el.remove(), ui.reduced ? 0 : 320); }
+  // a card that opens takes the screen: the toasts about what happened before it go (they sit over the card's title
+  // otherwise); the storage notices stay (keep). Toasts raised while the card is up show as usual.
+  function clearToasts() { const box = $('toasts'); if (box) for (const c of Array.prototype.slice.call(box.children)) if (!c.__keep && !c.classList.contains('out')) { clearTimeout(c.__t); dropToast(c); } }
   let hintT = null;
   function hint(text, ms) {
     const el = $('hint'); el.textContent = text; el.hidden = false; setClass('has-hint', true);
@@ -659,6 +689,11 @@
       label = p.first.toUpperCase() + ' · LV ' + p.lv; sub = p.roleName + ' · ' + p.pill;
       buttons += rb({ do: 'info', icon: 'info', label: 'CARD', aria: 'Person card' });
       if (p.canRun) buttons += rb({ do: 'send', data: { id: p.id }, icon: 'flag', cls: 'go', label: 'SEND', aria: 'Send tonight' });
+      if (p.state === 'rest') {                                   // REST NOW (5.6) one tap away, like a building's FINISH: the goal
+        const pr = E.price.skip(p.restLeftMs / 1000, S), k = 'rest:' + p.id, conf = skipConfirming(k);   // chip's "Finish something with sparks" lands here
+        buttons += rb({ do: 'restNow', data: { id: p.id }, icon: 'finish', iconColor: pr === 0 ? '#12161c' : null, cls: pr === 0 ? 'free' : conf ? 'confirm' : 'spk',
+          label: pr === 0 ? 'FREE' : pr + ' ✦' + (conf ? '?' : ''), aria: pr === 0 ? 'Rest now, free' : 'Rest now for ' + pr + ' sparks', pulse: c.abar === 'rest' && c.sel === p.id });
+      }
       if (p.state === 'down') buttons += rb({ do: 'decide', data: { id: p.id }, icon: 'heart', cls: 'go', label: 'DECIDE', aria: 'Decide' });
     }
     morph(el, '<div class="al"><b>' + esc(label) + '</b><span>' + esc(sub) + '</span></div>' + buttons);
@@ -735,9 +770,10 @@
     if (ui.mode && o.kind !== 'crane') cancelMode();
     if (ui.tray) closeTray(true);
     ui.overlay = o;
+    clearToasts();
     const def = OVERLAYS[o.kind], el = $('overlay');
     el.__html = null; el.className = def.dark ? 'dark' : '';
-    setClass('ov-open', true);
+    setClass('ov-open', true); setClass('ov-dark', !!def.dark);
     if (iso) iso.setInteractive(false);
     if (def.onOpen) { try { def.onOpen(o.args); } catch (e) { console.error(e); } }
     renderOverlay();
@@ -750,9 +786,10 @@
     if (ui.overlay) return;                                 // onClose opened the next one
     const next = ui.queue.shift();
     if (next) { showOverlayNow(next); return; }
-    morph($('overlay'), ''); setClass('ov-open', false);
+    morph($('overlay'), ''); setClass('ov-open', false); setClass('ov-dark', false);
     if (iso) iso.setInteractive(true);
     renderHud();
+    runLater();
   }
   function renderOverlay() {
     if (!ui.overlay || !V) return;
@@ -918,7 +955,7 @@
   };
   // ---------------------------------------------------------------------------------------------- the jobs list (cranes chip)
   SHEETS.jobs = {
-    head(v) { return '<div class="sh-title">CRANES · ' + v.cranes.free + '/' + v.cranes.total + ' FREE<small>' + esc(EXPL[0]) + '</small></div>'; },
+    head(v) { return '<div class="sh-title">CRANES · ' + v.cranes.free + '/' + v.cranes.total + ' FREE<small>One job each, no queue</small></div>'; },
     body(v) {
       let s = '';
       for (const j of v.jobs) {
@@ -933,7 +970,7 @@
         s += '<div class="sec">The 4th crane</div>' + line(ic('crane', '#4fd8ff'), 'Bought once, for good', buy.err === 'locked' ? 'From Tower ' + D.RULES.crane4Tower : 'One more job at a time',
           buy.err === 'locked' ? '' : btn({ do: 'buyCrane', cls: 'spark' + (conf ? ' confirm' : ''), off: !buy.ok, why: buy.err === 'cost' ? 'Need ' + (buy.price - v.res.sparks) + ' more ✦' : 'Not possible right now', label: conf ? 'BUY · ' + buy.price + ' ✦?' : 'BUY · ' + buy.price + ' ✦' }));
       }
-      return s;
+      return s + '<p class="expl">' + esc(EXPL[0]) + '</p>';
     },
   };
   // ---------------------------------------------------------------------------------------------- where bricks and cans come from (the chips)
@@ -962,7 +999,8 @@
   function rosterRow(p) {
     const down = p.state === 'down';
     return '<div class="prow" data-k="' + p.id + '"><button class="pm" data-do="person" data-id="' + p.id + '" aria-label="' + esc(p.fullName + ', level ' + p.lv + ' ' + p.roleName + ', ' + p.pill) + '">' + portrait(p.look, 44, down) +
-      '<span class="pt"><b>' + esc(p.fullName) + '</b><span>' + (down ? pill(p.pill, 'red') : '') + '<em>Lv ' + p.lv + ' · ' + esc(p.roleName) + '</em>' + pill(p.traitName.toUpperCase(), 'warm') + '</span></span></button>' +
+      '<span class="pt"><b>' + esc(p.fullName) + '</b>' + (down ? '<span>' + pill(p.pill, 'red') + '</span><span><em>Lv ' + p.lv + ' · ' + esc(p.roleName) + '</em></span>'
+        : '<span><em>Lv ' + p.lv + ' · ' + esc(p.roleName) + '</em>' + pill(p.traitName.toUpperCase(), 'warm') + '</span>') + '</span></button>' +
       (down ? btn({ do: 'decide', data: { id: p.id }, cls: 'primary', label: 'DECIDE', aria: 'Decide about ' + p.first }) : '<span class="st">' + pill(p.pill, stateCls(p)) + '</span>') + '</div>';
   }
   function travelerRow(t) {
@@ -977,7 +1015,7 @@
       '<span class="pt"><b>' + esc(p.fullName) + '</b><span><em>' + esc(g && g.waiting ? 'Waiting for a place' : ep) + '</em></span></span></button></div>';
   }
   SHEETS.people = {
-    head(v) { return '<div class="sh-title">PEOPLE · ' + v.chips.people.living + '/' + v.chips.people.beds + ' BEDS<small>' + esc(EXPL[3]) + '</small></div>'; },
+    head(v) { return '<div class="sh-title">PEOPLE · ' + v.chips.people.living + '/' + v.chips.people.beds + ' BEDS<small>Tap a name for the card and the history</small></div>'; },
     body(v) {
       let s = '';
       for (const p of v.people) s += rosterRow(p);
@@ -989,7 +1027,7 @@
         if (!v.inn.travelers.length) s += '<p class="empty">Nobody is staying right now' + (v.inn.leftMs != null ? ': new travelers in ' + fmt.clock(v.inn.leftMs / 1000) : '') + '.</p>';
       }
       if (v.remembered.length) { s += '<div class="sec">Remembered (' + v.remembered.length + ')</div>'; for (const p of v.remembered) s += rememberedRow(p); }
-      return s + '<p class="expl">' + esc(EXPL[4]) + '</p>';
+      return s + '<p class="expl">' + esc(EXPL[3]) + '</p><p class="expl">' + esc(EXPL[4]) + '</p>';
     },
   };
 
@@ -1255,7 +1293,15 @@
       const toll = () => { if (!ui.overlay || ui.overlay.kind !== 'finale' || i >= n) return; i++; sfx('bell', { times: 1, low: i > S.people.filter((p) => p.state !== 'fallen').length }); if (iso) iso.ringBell(1); setTimeout(toll, 1400); };
       toll();
     },
-    onClose() { if (iso && iso.gather) iso.gather(false); doAct({ type: 'flag', name: 'finale' }, { quiet: true }); },
+    onClose() {
+      // the card covers the plaza: the gathering stays for 20 s after it closes, with the Tower in view, then everyone
+      // goes back to their day
+      if (iso && iso.gather) {
+        try { if (V && V.tower) iso.setCamera({ tx: V.tower.gx + 1.5, ty: V.tower.gy + 2, z: Math.max(iso.getCamera().z, 1.1) }, { ease: true }); } catch (e) { /* the Tower is always there */ }
+        clearTimeout(ui.gatherT); ui.gatherT = setTimeout(() => { if (iso && iso.gather) iso.gather(false); }, 20000);
+      }
+      doAct({ type: 'flag', name: 'finale' }, { quiet: true });
+    },
   };
   OVERLAYS.crane = {
     render(v, a) {
@@ -1417,7 +1463,7 @@
     if (c.tiredLine) lines.push(['tired', c.tiredLine]);
     else if (p.state === 'rest') lines.push(['tired', (p.hpText || '') + ' now · the rested odds are on the way']);
     lines.push(['hint', c.hint]);
-    const one = c.fallLine ? 'cost' : 'hint';                             // 568: one 13 px line (8.7.1)
+    const one = c.fallLine ? 'cost' : q ? 'q' : 'hint';                   // 568: one 13 px line (8.7.1); "close to home" in full
     for (const l of lines) s += '<div class="rc-l ' + l[0] + (l[0] === one ? ' one' : '') + '">' + esc(l[1]) + '</div>';
     return s + '</div></div>';
   }
@@ -1498,7 +1544,7 @@
   function goFlow(pid, data) {
     closeOverlay('run');
     if (iso) iso.holdArrivals(true);
-    flow = { personId: pid, runId: data.runId, opened: false };
+    flow = { personId: pid, runId: data.runId, opened: false, cam: iso ? iso.getCamera() : null };   // the view before the camera followed the runner out
     const f = flow, toNight = () => { if (flow !== f || f.opened) return; openRunScreen(); };
     try { if (iso) iso.walkOut(pid, { follow: true, onGate: () => setTimeout(toNight, ui.reduced ? 120 : 420) }); } catch (e) { console.error(e); }
     setTimeout(toNight, ui.reduced ? 600 : 2600);                // a fallback when the walk is cut short or off screen
@@ -1688,13 +1734,16 @@
     const rw = data.reward, gains = {};
     for (const k of RES) { const g = S.res[k] - before[k]; if (g > 0) { gains[k] = g; ui.inflight[k] += g; } }
     const a = { rw, notes: data.notes || [], result: data.result, handoff: S.lastRun ? S.lastRun.handoff : null, gains, phase: null, timers: [], started: false, offerShown: false };
+    // behind the night screens the camera goes back to where the player had it before following the runner out onto the
+    // road (else the city stays shoved into a corner); the homecoming then only nudges it to keep the gate in view
+    if (flow && flow.cam && iso) { try { iso.setCamera(flow.cam, { ease: false }); } catch (e) { /* the camera clamps it */ } }
     rsc = null; if (flow) flow.opened = true;
     if (iso) iso.holdArrivals(true);
     if (isOv('runscreen')) swapOverlay('result', a); else openOverlay('result', a);
   }
   OVERLAYS.result = {
     dark: true,
-    onOpen(a) { if (!a.started) { a.started = true; resultStart(a); } },
+    onOpen(a) { if (!a.started) { a.started = true; resultStart(a); } else if (!a.rw.win && a.phase === 'done') setTimeout(resultReveal, 0); },   // back from the offer: the outcome line in view
     onClose(a) { resultClosed(a); },
     render(v, a) { return resultHtml(v, a); },
     esc(a) { if (a.phase === 'done') closeOverlay('result'); },
@@ -1707,14 +1756,22 @@
     else {
       a.phase = 'stats';
       later(() => {
-        a.phase = 'beat'; sfx('fallBeat'); if (isOv('result')) renderOverlay();
-        later(() => { a.phase = 'done'; if (isOv('result')) renderOverlay(); if (rw.outcome === 'down') resultOffer(a); }, 1500);
+        a.phase = 'beat'; sfx('fallBeat'); if (isOv('result')) { renderOverlay(); resultReveal(); }
+        later(() => { a.phase = 'done'; if (isOv('result')) { renderOverlay(); resultReveal(); } if (rw.outcome === 'down') resultOffer(a); }, 1500);
       }, 1100);
     }
+    if (!rw.win && a.phase === 'done') later(resultReveal, 30);
     if (rw.sparks && (rw.sparks.firstClear || rw.sparks.daily)) later(() => sfx('spark'), 450);
     if (rw.levelUps && rw.levelUps.length) later(() => sfx('levelUp'), 700);
     if (rw.nickname) later(() => sfx('nickname'), 1000);
     requestAnimationFrame(countUp);
+  }
+  // At 568 the card scrolls (8.7.3): after a loss, keep the fall line (the beat, then the outcome) in view
+  function resultReveal() {
+    const f = $('overlay').querySelector('.res-body .fall'), body = f ? f.closest('.res-body') : null;
+    if (!body || body.scrollHeight <= body.clientHeight + 1) return;
+    const fb = f.getBoundingClientRect(), bb = body.getBoundingClientRect();
+    if (fb.bottom > bb.bottom - 4) body.scrollTop += fb.bottom - bb.bottom + 8;
   }
   function resultOffer(a) {
     if (a.offerShown) return;
@@ -1741,12 +1798,12 @@
     s += '<dl class="stats">' + stats.map((x) => '<div><dt>' + x[0] + '</dt><dd>' + x[1] + '</dd></div>').join('') + '</dl><div class="loot">';
     const cnt = (n) => '<b>+<span data-count="' + n + '">' + fmt.num(n) + '</span></b>';
     s += '<div class="lr"><span class="amt">' + ic('brick') + cnt(rw.bricks) + '</span>' + (rw.killBricks ? '<span class="soft">' + esc(L.salvage) + '</span>' : '') +
-      '<span class="amt">' + ic('can') + cnt(rw.cans) + '</span>' + (rw.sparks.firstClear || rw.sparks.daily ? '<span class="amt spark-t">' + ic('spark') + '<b>+' + (rw.sparks.firstClear + rw.sparks.daily) + '</b></span>' : '') + '</div>';
+      '<span class="amt">' + ic('can') + cnt(rw.cans) + '</span>' + (rw.sparks.firstClear || rw.sparks.daily ? '<span class="amt spark-t">' + ic('spark') + '<b>+' + (rw.sparks.firstClear + rw.sparks.daily) + '</b></span>' +
+        // the sparks row of 8.7.3 rides on the loot row: the card fits 330 px (and 568) without scrolling more often
+        '<span class="soft spark-t">' + [rw.sparks.firstClear ? 'first clear' : '', rw.sparks.daily ? 'daily spark' : ''].filter(Boolean).join(' · ') + '</span>' : '') + '</div>';
     const f = lvFrac(rw.lvTo, rw.xpNow, rw.xpFrom, rw.xpTo), up = rw.levelUps && rw.levelUps.length;
     s += '<div class="lr xp"><span class="amt">' + cnt(rw.xp) + '<b>XP</b></span><span class="lvbar grow"><i style="width:' + (f * 100).toFixed(1) + '%"></i></span><span class="soft">Lv ' + rw.lvTo +
       (rw.lvTo < 10 ? ' · ' + fmt.num(rw.xpNow) + ' / ' + fmt.num(rw.xpTo) : '') + '</span>' + (up ? '<span class="lvpop">LV ' + rw.lvTo + '</span>' : '') + '</div>';
-    const sp = [L.firstClear, L.daily].filter(Boolean);
-    if (sp.length) s += '<div class="lr spark-t">' + ic('spark') + esc(sp.join(' · ')) + '</div>';
     if (L.nick) s += '<div class="nickc">' + esc(L.nick).replace('“' + esc(rw.nickName) + '”', '<b>“' + esc(rw.nickName) + '”</b>') + '</div>';
     if (L.kit) s += '<div class="lr soft">' + esc(L.kit) + '</div>';
     if (L.overflow) s += '<div class="lr" style="color:var(--timer)">' + esc(L.overflow) + '</div>';
@@ -1758,7 +1815,7 @@
   }
   function resultFall(a, p, first) {
     const rw = a.rw, L = rw.lines || {};
-    if (rw.win) return L.rest ? '<div class="fall">' + ic('house') + '<span class="grow">' + esc(L.rest) + '</span></div>' : '';
+    if (rw.win) return L.rest ? '<div class="lr rest">' + ic('house') + '<span class="grow">' + esc(L.rest) + '</span></div>' : '';
     if (a.phase === 'stats') return '';
     if (a.phase === 'beat') return '<div class="fall beat"><i></i><span class="grow">' + esc(L.beat) + '</span></div>';
     if (rw.outcome === 'hurt') return '<div class="fall">' + ic('heart', '#ff8f7a') + '<span class="grow">' + esc(L.fall) + '</span></div>';
@@ -1807,7 +1864,7 @@
     const o = E.offer(S, a.personId); if (!o) return null;
     const wide = wideL();
     let s = '<div class="offer" role="document"><button class="xbtn x" data-do="offerLater" aria-label="Decide later">' + ic('close') + '</button>';
-    s += '<div class="of-who">' + pp(o.look, wide ? 96 : 80, true) + '<h2>' + esc(o.title) + '</h2><p>' + esc(o.roleLine) + '</p><p class="w">' + esc(o.where) + '</p>' + (o.revivedText ? '<p>' + esc(o.revivedText) + '</p>' : '') + '</div>';
+    s += '<div class="of-who">' + pp(o.look, wide ? 96 : 80, true) + '<h2>' + esc(o.title) + '</h2><p>' + escNb(o.roleLine) + '</p><p class="w">' + escNb(o.where) + '</p>' + (o.revivedText ? '<p>' + esc(o.revivedText) + '</p>' : '') + '</div>';
     s += '<div class="of-btns">' +
       btn({ do: 'revive', data: { id: o.personId, pay: 'cans' }, cls: o.revive.ok ? 'primary' : '', off: !o.revive.ok, why: o.revive.needText, label: esc(o.revive.label) + ic('can'), sub: esc(o.revive.ok ? o.revive.sub : o.revive.needText), aria: 'Revive with ' + o.revive.cans + ' cans, ' + o.revive.sub }) +
       btn({ do: 'revive', data: { id: o.personId, pay: 'sparks' }, cls: 'spark', off: !o.reviveNow.ok, why: o.reviveNow.needText, label: esc(o.reviveNow.label), sub: esc(o.reviveNow.ok ? o.reviveNow.sub : o.reviveNow.needText), aria: 'Revive now with ' + o.reviveNow.sparks + ' sparks, ready at once' }) +
@@ -1822,7 +1879,7 @@
       const o = ui.overlay; if (!o || o.kind !== 'offer') return;
       const p = personV(o.args.personId);
       closeOverlay('offer');
-      if (p && p.state === 'down') toast(p.first + ' waits ' + whereDown(p) + ' · ' + fmt.hoursLeft(p.downLeftMs) + ' to decide.', { icon: 'heart' });
+      if (p && p.state === 'down') cityFx(() => toast(p.first + ' waits ' + whereDown(p) + ' · ' + fmt.hoursLeft(p.downLeftMs) + ' to decide.', { icon: 'heart' }));
     },
     revive(el) {
       const id = el.dataset.id, pay = el.dataset.pay;
@@ -1830,8 +1887,8 @@
       if (!r.ok) { explain(r); return; }
       if (isOv('offer')) closeOverlay('offer');
       const p = personV(id), first = p ? p.first : 'Someone';
-      sfx('revive');
-      toast(pay === 'cans' ? first + ' rests ' + fmt.dur(r.data.restMs / 1000) + (bLv('clinic') >= 1 ? ' in the Clinic.' : '.') : first + ' is up and Ready.', { icon: 'heart', kind: 'good' });
+      sfx('revive');                                              // the card behind the offer (the result, the death card) first
+      cityFx(() => toast(pay === 'cans' ? first + ' rests ' + fmt.dur(r.data.restMs / 1000) + (bLv('clinic') >= 1 ? ' in the Clinic.' : '.') : first + ' is up and Ready.', { icon: 'heart', kind: 'good' }));
     },
     goodbye(el) {
       const id = el.dataset.id, p0 = personV(id), first = p0 ? p0.first : 'Someone';
@@ -1860,7 +1917,7 @@
         '<div class="who">' + esc(m.name) + '</div><p class="mut">' + esc(m.roleLine) + '</p><p class="mut">' + esc(m.usedToBe) + '</p></div></div>' +
         '<p class="epi">' + m.epitaph.map(esc).join('<br>') + '</p>';
       if (m.record) s += '<p class="soft" style="font-size:13px;margin:4px 0">' + esc(m.record) + '</p>';
-      if (m.fellLine) s += '<p class="soft" style="font-size:13px;margin:4px 0">' + esc(m.fellLine) + '</p>';
+      if (m.fellLine) s += '<p class="soft" style="font-size:13px;margin:4px 0">' + escNb(m.fellLine) + '</p>';
       if (m.waiting) s += '<p class="soft" style="font-size:13px;margin:4px 0">Waiting for a place: the grave stands as soon as a tile frees.</p>';
       return s + '</div><div class="cf">' + btn({ do: 'memorialMove', data: { id: m.graveId }, cls: 'ghost', label: 'MOVE', off: m.waiting, why: m.waiting ? 'Waiting for a place' : null }) +
         btn({ do: 'closeOverlay', cls: 'primary', label: 'CLOSE', primary: true }) + '</div></div>';
@@ -1995,6 +2052,7 @@
     if (ui.sheet) closeSheet();
     if (ui.mode) cancelMode();
     if (ui.tray) closeTray(true);
+    deselect();                                                 // the action bar would sit half under the panel
     if (!BH.Lab || !BH.Lab.open) { toast('The Lab is not part of this build yet.', { icon: 'flask' }); return; }
     let el = $('lab');
     if (!el) { el = document.createElement('aside'); el.id = 'lab'; el.setAttribute('aria-label', 'The Lab'); document.body.appendChild(el); }
@@ -2010,12 +2068,12 @@
     applyInsets(); refresh();
   }
   function replaceState(next, status) {
-    S = next; ui.status = status || 'ok'; ui.dispInit = false; ui.inflight = { bricks: 0, cans: 0, sparks: 0 };
+    S = next; ui.status = status || 'ok'; ui.dispInit = false; ui.inflight = { bricks: 0, cans: 0, sparks: 0 }; ui.later = [];
     ui.sel = null; ui.mode = null; ui.queue = []; ui.bellFor = null;
     if (ui.overlay && ui.overlay.args && ui.overlay.args.timers) for (const t of ui.overlay.args.timers) clearTimeout(t);
     rsc = null; flow = null;                                    // the run flow of the old city ends with it
-    if (iso) { iso.ghostEnd(); iso.select(null); iso.holdArrivals(false); }
-    if (ui.overlay) { ui.overlay = null; morph($('overlay'), ''); setClass('ov-open', false); if (iso) iso.setInteractive(true); }
+    if (iso) { iso.ghostEnd(); iso.select(null); iso.holdArrivals(false); clearTimeout(ui.gatherT); if (iso.gather) iso.gather(false); }
+    if (ui.overlay) { ui.overlay = null; morph($('overlay'), ''); setClass('ov-open', false); setClass('ov-dark', false); if (iso) iso.setInteractive(true); }
     applyReduced(); refresh(); save();
     if (iso) iso.fit({ ease: false });
   }
@@ -2045,6 +2103,7 @@
     replayOnboarding() { doAct({ type: 'dev', op: 'replayOnboarding' }); closeLab(); maybeMeet(0); },
     openDemo() { try { location.hash = 'demo'; location.reload(); } catch (e) { /* no navigation */ } },
     resolveResult: (json) => hooks.resolveResult(json),
+    openOffer: (personId) => hooks.openOffer(personId),         // the Lab's KILL (hooks.openOffer skips a duplicate)
     kpis: () => E.kpis(S),
     toast: (t, o) => toast(t, o),
     close: () => closeLab(),
@@ -2230,8 +2289,8 @@
       const raw = store.get(KEY);
       const r = E.load(raw, real, { tzOffsetMin: tz, seed: Q.seed });
       S = r.state; ui.status = r.status; ui.notes = r.notes || [];
-      if (r.status === 'corrupt-reset') { store.set(KEY_BAD, raw); setTimeout(() => toast('The old save could not be read. It was kept aside and a new city begins.', { ms: 5000 }), 800); }
-      if (r.status === 'future-version') { ui.noSave = true; setTimeout(() => toast('This save is from a newer version. Playing without saving.', { ms: 5000 }), 800); }
+      if (r.status === 'corrupt-reset') { store.set(KEY_BAD, raw); setTimeout(() => toast('The old save could not be read. It was kept aside and a new city begins.', { ms: 5000, keep: true }), 800); }
+      if (r.status === 'future-version') { ui.noSave = true; setTimeout(() => toast('This save is from a newer version. Playing without saving.', { ms: 5000, keep: true }), 800); }
     }
     applyReduced();
     layout();

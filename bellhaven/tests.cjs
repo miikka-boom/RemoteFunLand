@@ -1465,6 +1465,17 @@ test('X3 view and #demo: everything the renderer and the HUD read', () => {
   ok(dv.buildings.find((b) => b.type === 'cannery').bubble.full, 'a full Cannery bubble');
   eq(dv.buildings.find((b) => b.type === 'house' && b.house.idx === 0).house.resting, 2, '"z 2" on the blue House');
   eq(dv.graves[0].candle && !dv.graves[0].grassed && dv.graves[0].flowers === 0, true, 'a new grave: candle lit, soil, no flowers yet');
+  {                                                           // 6.7 flowers by age; P1: housemates at home add theirs after the first day
+    const g = E.load(E.serialize(d), T0).state, gr = g.graves[0], DAY = 86400000;
+    gr.houseId = g.buildings.find((b) => b.type === 'house' && b.houseIdx === 0).id;   // Joy slept in the blue House
+    const mates = (st) => st.people.filter((p) => p.houseId === gr.houseId && p.state !== 'fallen' && p.state !== 'down').length;
+    const at = (ms, st) => { gr.placedMs = (st || g).cityMs - ms; return E.view(st || g).graves[0]; };
+    const n = mates(g);
+    ok(n >= 1, 'the grave stands by a House with ' + n + ' housemates at home');
+    eq([at(0).flowers, at(DAY).flowers, at(DAY).matesFlowers, at(3 * DAY).flowers, at(7 * DAY).flowers], [0, Math.min(4, n), Math.min(4, n), Math.max(2, Math.min(4, n)), 4], 'flowers: none the first day, then one per housemate, never fewer than the age rule');
+    for (const p of g.people) if (p.houseId === gr.houseId) p.houseId = null;
+    eq([at(DAY).flowers, at(3 * DAY).flowers, at(7 * DAY).flowers, at(3 * DAY).matesFlowers], [0, 2, 4, 0], 'with nobody left in that House: only the age rule (2 from day 3, 4 from day 7)');
+  }
   for (const b of d.buildings) ok(E.canPlace(d, b.type, b.gx, b.gy, b.id).ok, 'demo ' + b.type + ' placed validly');
   ok(E.load(E.serialize(d), T0).state.demo === true, 'the demo flag survives (the UI never saves it)');
   // speed: view() is cheap enough for every frame

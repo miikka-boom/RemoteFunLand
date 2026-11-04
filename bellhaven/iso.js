@@ -125,7 +125,8 @@
  *                                stops being 'out', unless holdArrivals(true).
  *   holdArrivals(on)             while on (the result card is up), homecomings and new arrivals queue; off plays the queue
  *   gather(on)                   the Tower 10 finale (P1): every walker heads for the plaza and stands facing the Tower
- *                                (12 s stops) until gather(false)
+ *                                (12 s stops), and the people resting in a House or the Clinic come out for it; until
+ *                                gather(false), when those still resting walk back in
  *   figures() -> [{ id, x, y, kind ('walker'|'trip'|'static'|'hidden'), visible, pose, facing, trip, style, carry,
  *                                limp, pill, alpha }]   where people are drawn (x, y in fractional tiles)
  *   extras() -> [{ kind: 'stretcher', x, y }]   medics carrying an empty stretcher back to the Clinic
@@ -597,7 +598,10 @@
     function nextStop(f, fromTile) {
       const from = fromTile || tileOf(f); bfsFrom(from[0], from[1]);
       if (gathering) {                               // the Tower 10 gathering: everyone to the plaza, facing the Tower
-        const pl = stopCandidates(f, 'plaza').filter((c) => bfsDist[c.tile[1] * G + c.tile[0]] >= 0);
+        let pl = stopCandidates(f, 'plaza').filter((c) => bfsDist[c.tile[1] * G + c.tile[0]] >= 0);
+        const taken = new Set();                     // one person a tile, so nobody stands hidden inside another
+        for (const o of figs.values()) if (o !== f && o.visible) { const t = o.stop && o.stop.tile ? o.stop.tile : tileOf(o); taken.add(t[0] + ',' + t[1]); }
+        const free = pl.filter((c) => !taken.has(c.tile[0] + ',' + c.tile[1])); if (free.length) pl = free;
         if (pl.length) { const c = pl[Math.floor(f.rng() * pl.length)], tw = view.tower; return { cat: 'plaza', tile: c.tile, face: tw ? Art.facingOf(tw.gx + 1.5 - c.tile[0] - 0.5, tw.gy + 1.5 - c.tile[1] - 0.5) : 1, gather: true }; }
       }
       let cat = LEG[f.leg % LEG.length]; f.leg++;
@@ -679,6 +683,7 @@
       if (f.trip && (f.trip.kind === 'in' || f.trip.kind === 'arrive' || f.trip.kind === 'enter') && f.mode === 'trip') return;
       // a runner left Down never walks home: inside the Clinic (or the House, with no Clinic yet) with the red pill
       if (pp.where === 'out') { if (p.state === 'down') { applyStatic(f, p); return; } queueTrip(f, { kind: 'in', p, style: null }); return; }
+      if (p.where === 'walk' && f.gatherGuest) { f.gatherGuest = false; f.state = 'ready'; f.restKind = null; return; }   // rested during the gathering: already out
       if (p.where === 'walk') {
         if (pp.where === 'gate') { f.mode = 'walker'; f.pose = 'stand'; f.pill = null; f.idle = 0.6; f.state = 'ready'; return; }   // the stranger gets up
         if (pp.where === 'bench') { f.mode = 'walker'; f.pose = 'stand'; f.idle = 0.4; f.state = 'ready'; return; }
@@ -701,6 +706,20 @@
       else { const t = nearestWalkable(Math.floor((lo + hi) / 2), Math.floor((lo + hi) / 2)); if (t) setPos(f, t[0] + 0.5, t[1] + 0.5); }
       fadeIn(f);
       if (reduced) { f.path = null; if (d && d.tile) setPos(f, d.tile[0] + 0.5, d.tile[1] + 0.5); }
+    }
+    // The Tower 10 gathering (P1, 4.12 "everyone gathers on the plaza"): the walkers head for the plaza, and the people
+    // resting in a House or the Clinic come out for it (guests); when it ends the guests still resting walk back in.
+    // Down, Out and Fallen people do not come.
+    function gather(v) {
+      gathering = !!v;
+      for (const f of figs.values()) if (f.mode === 'walker' && !f.path) f.idle = Math.min(f.idle, gathering ? 0.2 + f.rng() * 0.8 : f.idle);
+      for (const f of figs.values()) {
+        const p = pById.get(f.id); if (!p) continue;
+        const inside = (p.where === 'house' || p.where === 'clinic') && p.state === 'rest';
+        const b = p.where === 'clinic' ? buildingOf('clinic') : p.houseId ? bById.get(p.houseId) : null;
+        if (gathering && inside && f.mode === 'hidden' && !f.trip) { emerge(f, p, b); f.gatherGuest = true; f.idle = Math.min(f.idle, 0.3 + f.rng() * 0.6); }
+        else if (!gathering && f.gatherGuest) { f.gatherGuest = false; if (inside && f.mode === 'walker' && f.visible) goInside(f, p, b); }
+      }
     }
     function goInside(f, p, b) {
       const d = b ? doorOf(b) : null;
@@ -1077,7 +1096,7 @@
         if (gr.gx == null || gr.id === movingId) continue;
         const pos = placedPos(gr), [x, y] = toScreen(pos.gx, pos.gy, 0), ef = fxOf(gr.id), isSel = sel && sel.kind === 'grave' && sel.id === gr.id;
         const isHover = !isSel && hover && hover.kind === 'grave' && hover.id === gr.id;
-        const o = { initial: gr.initial, ribbon: gr.ribbon, ageDays: gr.ageMs / 86400000, flowerColors: gr.flowerColors, t: tSec };
+        const o = { initial: gr.initial, ribbon: gr.ribbon, ageDays: gr.ageMs / 86400000, flowerColors: gr.flowerColors, flowers: gr.flowers, t: tSec };
         add({ kind: 'grave', id: gr.id, key: pos.gx + pos.gy + 2, k2: pos.gx + 1, x0: pos.gx, y0: pos.gy, x1: pos.gx + 1, y1: pos.gy + 1, sb: smallBox('grave', x, y),
           draw: () => { if (isSel || isHover) selDiamond(x, y, isSel); Art.grave(g, x, y - ef.lift - liftOf('grave', gr.id), z, o); }, hit: smallHit('grave', x, y) });
       }
@@ -1504,7 +1523,7 @@
       if (o.mode === 'move' && id) {
         const b = bById.get(id), gr = gById.get(id), dc = dById.get(id);
         if (b) { kind = b.type; lv = Math.max(1, b.lv); targetKind = 'building'; if (b.house) { art.roof = b.house.idx % 3; art.lit = b.house.lit; art.lantern = b.house.lantern; } if (b.type === 'tower') art.bell = 0; }
-        else if (gr) { kind = 'grave'; targetKind = 'grave'; Object.assign(art, { initial: gr.initial, ribbon: gr.ribbon, ageDays: gr.ageMs / 86400000, flowerColors: gr.flowerColors }); }
+        else if (gr) { kind = 'grave'; targetKind = 'grave'; Object.assign(art, { initial: gr.initial, ribbon: gr.ribbon, ageDays: gr.ageMs / 86400000, flowerColors: gr.flowerColors, flowers: gr.flowers }); }
         else if (dc) { kind = dc.type; targetKind = 'decor'; if (dc.type === 'tree') art.size = 0.75 + (hashStr(dc.id) % 26) / 100; }
         else return null;
       }
@@ -1768,7 +1787,7 @@
       ghostStart, ghostMove, ghost: ghostCopy, ghostEnd, ghostValid: (gx, gy) => (ghost ? validAt(ghost.kind, gx, gy, ghost.id) : { ok: false, reason: 'bad' }),
       validAt, suggestSpot,
       walkOut, walkIn, holdArrivals,
-      gather: (v) => { gathering = !!v; for (const f of figs.values()) if (f.mode === 'walker' && !f.path) f.idle = Math.min(f.idle, gathering ? 0.2 + f.rng() * 0.8 : f.idle); },
+      gather,
       figures: () => Array.from(figs.values()).map((f) => ({ id: f.id, x: f.x, y: f.y, kind: f.mode, visible: f.visible && f.alpha > 0.01, pose: f.pose, facing: f.facing,
         trip: f.trip ? f.trip.kind : null, style: f.trip && f.trip.style ? f.trip.style : null, carry: f.carry, limp: f.limp, pill: f.pill ? f.pill.text : null, alpha: f.alpha })),
       extras: () => extraFigs.map((e) => ({ kind: e.kind, x: e.x, y: e.y, done: e.done })),

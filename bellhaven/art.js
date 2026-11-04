@@ -123,7 +123,8 @@
  *     rounded headstone with the carved initial (Barlow Condensed 700), a ribbon in the jacket colour, flowers (2
  *     from day 3, 4 from day 7, colours from the seed), a candle with a warm glow for the first 24 h (flickers unless
  *     reduced). o: { initial: 'E', ribbon: jacket hex, ageDays: city days since placement, seed: person seed,
- *     flowerColors: [4 hex] (the engine's view.graves[].flowerColors; overrides the seed), t }
+ *     flowerColors: [4 hex] (the engine's view.graves[].flowerColors; overrides the seed), flowers: 0-4 (the view's count,
+ *     housemates' flowers included; overrides the age rule), t }
  * Art.decor(g, kind, x, y, z, o)   P1 decorations, 1 x 1: 'tree' (o.size) | 'bench' | 'lamp'.
  *
  * ---------------------------------------------------------------------------------------------------------- overlays
@@ -930,8 +931,9 @@
     const rib = o.ribbon || '#8a8f98';
     g.beginPath(); g.moveTo(-11, -20.4); g.lineTo(-3, -16.8); g.lineTo(-3, -14.6); g.lineTo(-11, -18.2); g.closePath(); fillC(rib);
     g.beginPath(); g.moveTo(-3.6, -16.2); g.lineTo(-1.2, -10.5); g.lineTo(-2.8, -10.8); g.lineTo(-4.6, -15); g.closePath(); fillC(shade(rib, -0.15));
-    // flowers: 2 from day 3, 4 from day 7, colours from the person seed
-    const nF = age >= 7 ? 4 : age >= 3 ? 2 : 0;
+    // flowers: 2 from day 3, 4 from day 7, colours from the person seed; o.flowers (0-4) overrides the count (the
+    // engine's view.graves[].flowers, where housemates add theirs)
+    const nF = o.flowers != null ? Math.max(0, Math.min(4, o.flowers | 0)) : age >= 7 ? 4 : age >= 3 ? 2 : 0;
     if (nF) {
       const h = hash32(o.seed || 7), spots = [[-12, 3], [9, 4], [-8, 6], [12, 1]];
       for (let i = 0; i < nF; i++) {
@@ -1257,7 +1259,7 @@
     if (RECIPES[type]) { building(ctx, type, lv, x, y, z, Object.assign({}, o, { alpha: 0.7, shadow: false, smoke: false, travelers: null })); return; }
     const rho = rhoFor(z * devScale(ctx));
     const b = { x0: -48, y0: -80, x1: 48, y1: 40 };
-    const s = scratchSprite(type + '|' + rho + '|' + JSON.stringify([o.initial, o.ribbon, o.ageDays >= 7 ? 7 : o.ageDays >= 3 ? 3 : o.ageDays >= 1 ? 1 : 0, o.seed, o.flowerColors, o.size]), b, rho,
+    const s = scratchSprite(type + '|' + rho + '|' + JSON.stringify([o.initial, o.ribbon, o.ageDays >= 7 ? 7 : o.ageDays >= 3 ? 3 : o.ageDays >= 1 ? 1 : 0, o.seed, o.flowerColors, o.size, o.flowers]), b, rho,
       () => (type === 'grave' ? graveBody(Object.assign({}, o, { reduced: true })) : decorBody(type, o)));
     if (!s) return;
     ctx.save(); ctx.globalAlpha *= 0.7; ctx.drawImage(s.cv, x + s.ox * z, y + s.oy * z, s.w * z, s.h * z); ctx.restore();

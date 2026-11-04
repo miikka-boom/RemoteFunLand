@@ -22,8 +22,8 @@
  *       drone { on } (a low drone), heartbeat (one lub-dub; { on: true } repeats it every 0.86 s until { on: false },
  *       for HP under 30 %), horde (the "HORDE!" sting: an arrow swoop, then a stab; { gate: true }: the gate
  *       crescendo, a rising cluster that pulses faster), fallBeat (two heartbeats, 1.5 s). Unknown cues are ignored.
- *       P1 "more sound" (13.1), ready for the UI to call: levelUp · nickname · revive · invite · expand (the fence
- *       slides out) · rubble (cleared) · spark (sparks earned) · deny (a tap on something disabled).
+ *       P1 "more sound" (13.1), played by ui.js: levelUp · nickname · revive · invite · expand (the fence slides
+ *       out) · rubble (cleared) · spark (sparks earned) · deny (a tap on something disabled).
  */
 (function (root, f) { const api = f(root.BH || {}); if (typeof module === 'object' && module.exports) module.exports = api; else (root.BH = root.BH || {}).Sfx = api; })(typeof self !== 'undefined' ? self : this, function (BH) {
   'use strict';
