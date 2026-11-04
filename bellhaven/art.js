@@ -82,9 +82,17 @@
  *     into a cleared, transparent canvas: the haze uses source-atop so it only tints what is drawn.
  * Art.fence(g, ox, oy, z, world, 'back' | 'front')   pickets every 0.5 tile and a rail; 'front' (after the objects)
  *     has the gate posts. The back part is inside ground().
- * Art.ruins(g, ox, oy, z, world, 'front')   the ruins in front of the land, cut to 38 % and faded by the haze.
+ * Art.ruins(g, ox, oy, z, world, 'front')   the ruins in front of the land (cut to 38 %) and the Ferry Terminal
+ *     landmark, faded by the haze; draw after the front fence.
  * Art.ruinList(world) -> [{ gx, gy, w, d, h, front, kind: 'ruin' | 'car' }]   the cosmetic layout (fixed seed; ruins
  *     within a tile of the land vanish as it grows; nothing stands on the road).
+ * world.landmarks = { D1: 'locked' | 'open' | 'cleared', ... D6 } (P1, SPEC 6.1) adds the six destination landmarks:
+ *     Allotments (back-left), Car Wash (right), Night Market (left), Rail Yard (back), Hospital Hill (back-right),
+ *     Ferry Terminal (front-left); greyed while locked, muted when open, full colour with a warm lamp once cleared.
+ *     Ruins step aside for them. Re-render the ground cache when a destination opens or is first cleared.
+ * Art.landmarkList(world) -> [{ id, name, gx, gy, w, d, h, front, state }]   for picking (tap opens the run sheet on
+ *     it; the box is the footprint diamond extruded to h). Art.landmark(g, id, x, y, z, state) draws one at its
+ *     footprint anchor (Art.LANDMARKS holds the spots).
  * Art.sky(g, w, h)   the sky gradient over a w x h screen.
  * Art.rubble(g, x, y, z, o)   a 1 x 1 rubble pile at its footprint anchor. o: { glint: true (pays sparks), star:
  *     false (leave the twinkling star out, e.g. to cache the pile and draw Art.glint on top), t, reduced }.
@@ -1301,6 +1309,7 @@
       const onRoad = r.gx + r.w > w.x1 && r.gy < w.g1 + 0.5 && r.gy + r.d > w.g0 - 0.5;
       if (onRoad && !r.road) continue;
       if (r.road && r.gx < w.x1 + 1.5) continue;
+      if (W.landmarks && Object.keys(LANDMARKS).some((id) => { const L = LANDMARKS[id]; return r.gx < L.gx + L.w + 0.3 && r.gx + r.w > L.gx - 0.3 && r.gy < L.gy + L.d + 0.3 && r.gy + r.d > L.gy - 0.3; })) continue;
       const front = (r.gx >= w.x1 && r.gy + r.d > w.y0) || (r.gy >= w.y1 && r.gx + r.w > w.x0);
       out.push(Object.assign({ front }, r));
     }
@@ -1338,6 +1347,127 @@
       for (let k = 0; k < nr; k++) winR(u, v, w, d, (k + 0.3) / nr, h * 0.38, Math.min(0.17, d / nr * 0.45), wh, col('#858c90'));
     }
   }
+  // ---- destination landmarks (P1, SPEC 6.1): ruined silhouettes outside the fence, one per destination, in its own
+  // direction; greyed while locked, muted when open, full colour with a warm lamp once cleared. All sit in the outer
+  // 3-tile band, so they never meet the land (16 x 16 at most) or the road.
+  const LANDMARKS = {
+    D1: { name: 'Allotments', gx: 0.35, gy: 8.6, w: 2.4, d: 2.8, h: 26 },       // back-left: sheds and bean poles
+    D2: { name: 'Car Wash', gx: 20.9, gy: 0.5, w: 2.7, d: 2.0, h: 35 },         // right: a long low canopy, two brush rollers
+    D3: { name: 'Night Market', gx: 0.5, gy: 20.9, w: 2.0, d: 2.7, h: 26 },     // left: a row of stall awnings
+    D4: { name: 'Rail Yard', gx: 0.3, gy: 0.4, w: 2.8, d: 2.2, h: 22 },         // back: three freight cars
+    D5: { name: 'Hospital Hill', gx: 9.4, gy: 0.4, w: 2.6, d: 2.4, h: 74 },     // back-right: a tall block, a roof helipad
+    D6: { name: 'Ferry Terminal', gx: 8.6, gy: 21.2, w: 2.8, d: 2.4, h: 36 },   // front-left: a terminal shed, a gangway crane
+  };
+  let LC = IDC;                                      // colour filter of the landmark being drawn (state and haze)
+  const lb = (u, v, w, d, h0, h1, c) => box(u, v, w, d, h0, h1, [LC(c), LC(shade(c, -0.14)), LC(shade(c, -0.28))]);
+  function lamp(u, v) {                              // the warm lamp of a cleared landmark
+    g.beginPath(); mv(u, v, 0); ln(u, v, 26); strokeC('#3f4851', 1.6 * K);
+    const x = SX(u, v), y = SY(u, v, 28);
+    g.globalAlpha = 0.28; disc(x, y, 13 * K, PAL.lantern); g.globalAlpha = 0.5; disc(x, y, 6.5 * K, PAL.lantern); g.globalAlpha = 1;
+    disc(x, y, 2.6 * K, '#fff3d6');
+  }
+  const LM_BODY = {
+    D1(st) {
+      lb(0.2, 0.25, 0.8, 0.7, 0, 16, '#8f6e4c');
+      quad(0.12, 0.17, 21, 1.08, 0.17, 21, 1.08, 1.03, 15, 0.12, 1.03, 15, LC('#6f5a44'));
+      for (let i = 0; i < 3; i++) { const v = 0.3 + i * 0.85; lb(1.25, v, 0.95, 0.55, 0, 3, '#7a5a3e'); for (let k = 0; k < 2; k++) quad(1.32, v + 0.12 + k * 0.22, 3.2, 2.13, v + 0.12 + k * 0.22, 3.2, 2.13, v + 0.2 + k * 0.22, 3.2, 1.32, v + 0.2 + k * 0.22, 3.2, LC('#6f9a4f')); }
+      g.beginPath(); for (let j = 0; j < 2; j++) { const v = 1.45 + j * 0.65; for (const [a, b] of [[0.3, v - 0.12], [0.62, v - 0.12], [0.46, v + 0.16]]) { mv(a, b, 0); ln(0.46, v, 24); } } strokeC(LC('#8a6a3a'), 1.2 * K);
+      if (st === 'cleared') lamp(0.12, 2.6);
+    },
+    D2(st) {
+      quad(0.05, 0.1, 0.3, 2.65, 0.1, 0.3, 2.65, 1.9, 0.3, 0.05, 1.9, 0.3, LC('#c2c8ca'));
+      // the canopy stands high enough that the two brush rollers at its open front show under it
+      g.beginPath(); for (const [a, b] of [[0.15, 0.2], [2.5, 0.2], [0.15, 1.75], [2.5, 1.75]]) { mv(a, b, 0); ln(a, b, 30); } strokeC(LC('#7d8387'), 2 * K);
+      box(0.05, 0.1, 2.6, 1.8, 30, 34, [LC('#e3e6e2'), LC('#c9cec9'), LC('#b3b8b3')]);
+      faceL(0.05, 2.65, 1.9, 30.5, 33.5, LC('#3f6fb5')); faceR(2.65, 1.9, 0.1, 30.5, 33.5, LC('#2f5690'));
+      g.beginPath(); mv(0.7, 1.72, 26); ln(2.0, 1.72, 26); strokeC(LC('#5f6b78'), 1.6 * K);
+      cyl(0.95, 1.72, 0.15, 3, 22, [LC('#7fa2d6'), LC('#3f6fb5'), LC('#2f5690')]); cyl(1.75, 1.72, 0.15, 3, 22, [LC('#8fd0d6'), LC('#4fa3c7'), LC('#3a7f9c')]);
+      if (st === 'cleared') lamp(2.62, 1.92);
+    },
+    D3(st) {
+      const cols = ['#e5534b', '#d9a441', '#2f8f8f'];
+      for (let j = 0; j < 3; j++) {
+        const v0 = 0.2 + j * 0.85;
+        lb(0.3, v0, 1.2, 0.55, 0, 9, '#9a7350');
+        g.beginPath(); mv(0.3, v0 + 0.62, 0); ln(0.3, v0 + 0.62, 19); mv(1.5, v0 + 0.62, 0); ln(1.5, v0 + 0.62, 19); strokeC(LC('#5a3a26'), 1.2 * K);
+        for (let k = 0; k < 4; k++) { const a = 0.22 + k * 0.34; quad(a, v0 - 0.05, 24, a + 0.34, v0 - 0.05, 24, a + 0.34, v0 + 0.7, 18, a, v0 + 0.7, 18, LC(k % 2 ? '#f6eedf' : cols[j])); }
+      }
+      if (st === 'cleared') {
+        g.beginPath(); mv(1.62, 0.15, 21); for (let k = 1; k <= 8; k++) ln(1.62, 0.15 + k * 0.3, 21 - (k % 2 ? 2.5 : 0)); strokeC('#5a3a26', 0.8 * K);
+        for (let k = 0; k < 4; k++) disc(SX(1.62, 0.45 + k * 0.6), SY(1.62, 0.45 + k * 0.6, 18.3), 1.8 * K, PAL.windowLit);
+        lamp(1.85, 2.55);
+      }
+    },
+    D4(st) {
+      g.beginPath(); for (const v of [1.08, 1.42]) { mv(0, v, 0.5); ln(2.8, v, 0.5); } for (let k = 0; k <= 11; k++) { mv(0.1 + k * 0.24, 1.0, 0.4); ln(0.1 + k * 0.24, 1.5, 0.4); } strokeC(LC('#6b6f73'), 1.1 * K);
+      const cars = ['#9c4a36', '#b8893e', '#3f7672'];
+      for (let i = 0; i < 3; i++) {
+        const u0 = 0.05 + i * 0.92;
+        disc(SX(u0 + 0.18, 1.55), SY(u0 + 0.18, 1.55, 2.5), 2.4 * K, LC('#3a3f45')); disc(SX(u0 + 0.66, 1.55), SY(u0 + 0.66, 1.55, 2.5), 2.4 * K, LC('#3a3f45'));
+        lb(u0, 0.95, 0.85, 0.6, 3.5, i === 1 ? 17 : 20, cars[i]);
+        faceL(u0 + 0.3, u0 + 0.55, 1.55, 6, 15, LC(shade(cars[i], -0.35)));
+      }
+      if (st === 'cleared') lamp(2.68, 2.05);
+    },
+    D5(st) {
+      lb(0.3, 0.3, 2.0, 1.8, 0, 72, '#e4e6e2');
+      tri(1.55, 2.1, 72, 2.3, 2.1, 72, 2.3, 1.35, 72, LC('#c9cdc9'));          // the broken corner
+      faceL(1.7, 2.3, 2.1, 64, 72, LC('#d8dbd7'));
+      for (let r = 0; r < 5; r++) for (let k = 0; k < 4; k++) {
+        const lit = st === 'cleared' && r === 1 && k === 2;
+        winL(0.3, 0.3, 2.0, 1.8, 0.08 + k * 0.23, 8 + r * 12.5, 0.16, 7, lit ? PAL.windowLit : LC(r === 3 && k === 1 ? '#4a525a' : '#7d8a96'));
+        if (k < 3) winR(0.3, 0.3, 2.0, 1.8, 0.1 + k * 0.3, 8 + r * 12.5, 0.17, 7, LC('#6c7884'));
+      }
+      quad(0.75, 0.65, 72.2, 1.85, 0.65, 72.2, 1.85, 1.75, 72.2, 0.75, 1.75, 72.2, LC('#7d8387'));
+      const x = SX(1.3, 1.2), y = SY(1.3, 1.2, 72.4);
+      g.beginPath(); g.ellipse(x, y, 13 * K, 6.5 * K, 0, 0, TAU); strokeC(LC('#f3efe6'), 1.4 * K);
+      g.fillStyle = LC('#f3efe6'); g.fillRect(x - 4.5 * K, y - 3.4 * K, 1.8 * K, 6.8 * K); g.fillRect(x + 2.7 * K, y - 3.4 * K, 1.8 * K, 6.8 * K); g.fillRect(x - 4.5 * K, y - 0.8 * K, 9 * K, 1.6 * K);
+      if (st === 'cleared') lamp(2.42, 2.25);
+    },
+    D6(st) {
+      lb(0.2, 0.3, 1.7, 1.2, 0, 18, '#9fb2c2');
+      gableX(0.2, 0.3, 1.7, 1.2, 18, 6, [LC('#c7d2da'), LC('#a8b6c1')], 0.06);
+      faceL(0.3, 1.8, 1.5, 9, 13, LC('#5d7286'));
+      g.beginPath(); mv(2.1, 0.6, 0); ln(2.35, 0.6, 34); ln(2.6, 0.6, 0); mv(2.35, 0.6, 34); ln(2.35, 2.05, 30); mv(2.35, 1.5, 30); ln(2.35, 1.5, 22); strokeC(LC('#c8a24a'), 2 * K);
+      quad(2.22, 1.5, 22, 2.48, 1.5, 22, 2.48, 2.25, 4, 2.22, 2.25, 4, LC('#9aa0a8'));
+      if (st === 'cleared') lamp(0.12, 2.2);
+    },
+  };
+  function landmarkList(W) {
+    if (!W || !W.landmarks) return [];
+    const w = worldOf(W), out = [];
+    for (const id of Object.keys(LANDMARKS)) {
+      const st = W.landmarks[id]; if (!st) continue;
+      const L = LANDMARKS[id], front = (L.gx >= w.x1 && L.gy + L.d > w.y0) || (L.gy >= w.y1 && L.gx + L.w > w.x0);
+      out.push({ kind: 'landmark', id, name: L.name, gx: L.gx, gy: L.gy, w: L.w, d: L.d, h: L.h, front, state: st });
+    }
+    return out;
+  }
+  function landmarkBody(id, st, fade) {
+    const f = fade || 0, H = '#d6dedc';
+    const base = st === 'locked' ? (c) => mix(grey(c), '#c9cfd1', 0.35) : st === 'open' ? (c) => mix(c, grey(c), 0.4) : IDC;
+    const plc = LC; LC = f > 0 ? (c) => mix(base(c), H, f) : base;
+    try { LM_BODY[id](st); } finally { LC = plc; }
+  }
+  function landmark(ctx, id, x, y, z, state, o) { if (LM_BODY[id]) withAt(ctx, x, y, z, () => landmarkBody(id, state || 'open', (o && o.fade) || 0)); }
+  // ruins, cars and landmarks of one layer in depth order, each faded by the haze at its place
+  const DEAD = new Map();                            // the layer's items and haze per world layout (front runs every frame)
+  function deadCity(W, front) {
+    const w = worldOf(W), lm = W.landmarks || {};
+    const key = [w.N, w.x0, w.y0, w.x1, w.y1, w.g0, w.g1, lm.D1, lm.D2, lm.D3, lm.D4, lm.D5, lm.D6, W.landmarks ? 1 : 0, front ? 1 : 0].join();
+    let items = DEAD.get(key);
+    if (!items) {
+      items = ruinList(W).filter((r) => r.front === front).concat(landmarkList(W).filter((l) => l.front === front));
+      items.sort((a, b) => (a.gx + a.w + a.gy + a.d) - (b.gx + b.w + b.gy + b.d));
+      for (const r of items) r.hf = Math.round(hazeAt(w, SX(r.gx + r.w / 2, r.gy + r.d / 2), SY(r.gx + r.w / 2, r.gy + r.d / 2, (r.h || 20) * 0.3)) * 50) / 50;
+      if (DEAD.size > 24) DEAD.clear();
+      DEAD.set(key, items);
+    }
+    for (const r of items) {
+      if (r.kind === 'landmark') { g.save(); g.translate(SX(r.gx, r.gy), SY(r.gx, r.gy, 0)); landmarkBody(r.id, r.state, r.hf * 0.35); g.restore(); }
+      else ruinBody(r, front ? 0.38 : 0, r.hf);
+    }
+  }
   function cracksOf(N) {
     const r = mulberry32(0xc4ac + N), out = [];
     for (let i = 0; i < N * 2; i++) { const a = r() * N, b = r() * N, l = 0.8 + r() * 1.6, an = r() * TAU; out.push([a, b, a + Math.cos(an) * l, b + Math.sin(an) * l, (r() - 0.5) * 0.6]); }
@@ -1363,10 +1493,8 @@
       g.beginPath(); mv(w.x1, w.g0, 0); ln(N, w.g0, 0); mv(w.x1, w.g1, 0); ln(N, w.g1, 0); strokeC('#c4c9cb', 1.5);
       for (let x = w.x1 + 0.6; x + 0.5 <= N; x += 1.1) quad(x, gm - 0.15, 0, x + 0.5, gm - 0.15, 0, x + 0.5, gm + 0.15, 0, x, gm + 0.15, 0, PAL.roadStripe);
     }
-    // the ruins behind the land
-    for (const r of ruinList(W)) if (!r.front) ruinBody(r, 0, 0);
-    // the haze (world space, centred on the land): only over what is drawn (source-atop in a transparent cache) and
-    // inside the world block, so it never paints a box over the sky when the whole world is in view
+    // the haze (world space, centred on the land) over the asphalt: only over what is drawn (source-atop in a
+    // transparent cache) and inside the world block, so it never paints a box over the sky when the world is in view
     {
       const cx = SX((w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2), cy = SY((w.x0 + w.x1) / 2, (w.y0 + w.y1) / 2, 0) + 14, r0 = (w.x1 - w.x0) * 32 * 0.86;
       const hz = g.createRadialGradient(cx, cy, r0, cx, cy, r0 + 600); hz.addColorStop(0, 'rgba(214,222,220,0)'); hz.addColorStop(1, 'rgba(214,222,220,.72)');
@@ -1374,6 +1502,8 @@
       g.globalCompositeOperation = 'source-atop'; g.fillStyle = hz; const b = groundBounds(W); g.fillRect(b.x0, b.y0, b.x1 - b.x0, b.y1 - b.y0);
       g.restore();
     }
+    // the ruins and landmarks behind the land, each faded by the haze at its place (landmarks less, so they read)
+    deadCity(W, false);
     // the land: a 7 px soil slab, grass checker, plaza, gate paving, grid
     quad(w.x0, w.y1, 0, w.x1, w.y1, 0, w.x1, w.y1, -7, w.x0, w.y1, -7, PAL.soilLeft);
     quad(w.x1, w.y1, 0, w.x1, w.y0, 0, w.x1, w.y0, -7, w.x1, w.y1, -7, PAL.soilRight);
@@ -1416,16 +1546,7 @@
     if (part !== 'back') for (const y of [w.g0, w.g1]) box(w.x1 - 0.12, y - 0.12, 0.24, 0.24, 0, 16, [PAL.gatePost, '#e9e1d2', '#d3c9b8']);
   }
   function fence(ctx, ox, oy, z, W, part) { withAt(ctx, ox, oy, z, () => fenceDraw(W || {}, part || 'front')); }
-  function ruins(ctx, ox, oy, z, W, part) {
-    const w = worldOf(W || {}), front = part !== 'back';
-    withAt(ctx, ox, oy, z, () => {
-      for (const r of ruinList(W || {})) {
-        if (r.front !== front) continue;
-        const f = front ? hazeAt(w, SX(r.gx + r.w / 2, r.gy + r.d / 2), SY(r.gx + r.w / 2, r.gy + r.d / 2, r.h * 0.2)) : 0;
-        ruinBody(r, front ? 0.38 : 0, f);
-      }
-    });
-  }
+  function ruins(ctx, ox, oy, z, W, part) { withAt(ctx, ox, oy, z, () => deadCity(W || {}, part !== 'back')); }
   let SKY = null, SKYH = 0;
   function sky(ctx, w, h) {
     if (!SKY || SKYH !== h) { SKY = ctx.createLinearGradient(0, 0, 0, h); SKY.addColorStop(0, PAL.skyTop); SKY.addColorStop(1, PAL.skyBot); SKYH = h; }
@@ -1537,7 +1658,7 @@
   return {
     PAL, CSS, C, TYPES, FOOT, MAX_LV, HOUSE_ROOFS, FLOWERS, ICONS, PERSON_SCALE: PK, MOCK_ZOOM: 0.68,
     frame, P, iso, tile, info, silhouette, bounds, building, site, scaffold, crane, thumb, thumbURL, ghost, footprint, select,
-    groundBounds, ground, fence, ruins, ruinList, sky, rubble, glint, grave, decor,
+    groundBounds, ground, fence, ruins, ruinList, landmarkList, landmark, LANDMARKS, sky, rubble, glint, grave, decor,
     person, stretcher, personBox, facingOf, portrait, portraitCanvas, portraitURL,
     bubble, bubbleBox, timerPill, pill, ring, label, puff, colors, icon, iconSVG,
     shade, mix, grey, rgba, accent, cache,
