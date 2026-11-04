@@ -234,7 +234,7 @@
     confirm: null, disp: { bricks: 0, cans: 0, sparks: 0 }, inflight: { bricks: 0, cans: 0, sparks: 0 }, dispInit: false,
     lastTs: 0, lastView: 0, lastHud: 0, lastPanel: 0, lastSave: 0, lastCoach: 0, lastLabTick: 0,
     dirty: true, hudDirty: true, panelDirty: true, coach: null, goalPulse: null, streak: { n: 0, at: 0 },
-    gestured: false, insetKey: '', meetTimer: null, booted: false, later: [],
+    gestured: false, insetKey: '', meetTimer: null, booted: false, later: [], calmUntil: 0, acts: 0,
   };
   const SHEETS = {}, OVERLAYS = {}, LISTENERS = {}, DO = {};
   const labSubs = { tick: [], events: [], close: [] };
@@ -341,9 +341,10 @@
   function doAct(a, ctx) {
     ctx = ctx || {};
     if (!S) return { ok: false, err: 'state', events: [] };
+    if (storeMoved()) { location.reload(); return { ok: false, err: 'state', events: [] }; }   // another tab saved a newer city
     const before = { bricks: S.res.bricks, cans: S.res.cans, sparks: S.res.sparks };
     const r = E.act(S, a, Date.now());
-    if (r.ok) save();
+    if (r.ok) { save(); ui.acts++; }
     handle(r.events, Object.assign({ act: a }, ctx));
     if (r.ok) for (const k of RES) { const d = before[k] - S.res[k]; if (d > 0 && !ctx.noMinus) minus(k, d); }
     if (!r.ok && !ctx.quiet) explain(r);
@@ -714,7 +715,7 @@
     const r = doAct(Object.assign({}, action, conf ? { confirm: true } : {}), { quiet: true });
     if (r.ok) { ui.confirm = null; return r; }
     if (r.err === 'confirm') {
-      ui.confirm = { key, until: Date.now() + 3000 }; sfx('tick');
+      ui.confirm = { key, until: Date.now() + 3000 }; sfx('tick'); calm();   // the confirming tap is a new tap, not a double tap
       ui.panelDirty = true; renderPanels(); renderAbar();
       setTimeout(() => { ui.panelDirty = true; ui.hudDirty = true; }, 3050);
       return r;
@@ -767,6 +768,7 @@
     else ui.queue.push({ kind, args: args || {} });
   }
   function showOverlayNow(o) {
+    calm();
     if (ui.mode && o.kind !== 'crane') cancelMode();
     if (ui.tray) closeTray(true);
     ui.overlay = o;
@@ -780,6 +782,7 @@
   }
   function closeOverlay(kind) {                                // kind: close only if that overlay is the one showing
     const o = ui.overlay; if (!o || (typeof kind === 'string' && o.kind !== kind)) return;
+    calm();
     const def = OVERLAYS[o.kind];
     ui.overlay = null;
     if (def && def.onClose) { try { def.onClose(o.args); } catch (e) { console.error(e); } }
@@ -1131,7 +1134,7 @@
     endMode();
     if (m.onCancel) m.onCancel();
   }
-  function endMode() { ui.mode = null; hideHint(); applyInsets(); renderHud(); }
+  function endMode() { ui.mode = null; hideHint(); applyInsets(); renderHud(); calm(); }
   // 3.5: every crane busy -> "Finish the Kiln now · 7 ✦" or WAIT
   function craneConfirm(d, onFinish, onWait) { openOverlay('crane', { label: d && d.label ? d.label : 'Finish a job now', price: d ? d.price : 0, jobId: d ? d.jobId : null, onFinish, onWait }); }
   function deselect(keep) { ui.sel = null; if (iso && !keep) iso.select(null); setClass('sel', false); renderAbar(); }
@@ -1210,7 +1213,7 @@
     innNow() { skipAct('inn', { type: 'innNow' }); },
     clear(el) { const r = doAct({ type: 'clearRubble', id: el.dataset.id }); if (r.ok) deselect(); },
     buyCrane() {
-      if (!skipConfirming('crane4')) { ui.confirm = { key: 'crane4', until: Date.now() + 3000 }; ui.panelDirty = true; renderPanels(); setTimeout(() => { ui.panelDirty = true; }, 3050); sfx('tick'); return; }
+      if (!skipConfirming('crane4')) { ui.confirm = { key: 'crane4', until: Date.now() + 3000 }; ui.panelDirty = true; renderPanels(); setTimeout(() => { ui.panelDirty = true; }, 3050); sfx('tick'); calm(); return; }
       ui.confirm = null; doAct({ type: 'buyCrane' });
     },
     claimPack(el) { const r = el.getBoundingClientRect(); doAct({ type: 'claimPack', size: +el.dataset.size }, { at: { x: r.left + r.width / 2, y: r.top + r.height / 2 } }); },
@@ -1520,7 +1523,7 @@
       const sel = rsSel(), c = rsCard(sel); if (!sel) return;
       if (!c) { toast('One moment: working out the odds'); return; }
       if (c.low && Date.now() >= rs.lowUntil) {                   // "Run it anyway?": a second tap within 3 s
-        rs.lowUntil = Date.now() + 3000; renderOverlay();
+        rs.lowUntil = Date.now() + 3000; renderOverlay(); calm();   // a double tap only arms it
         setTimeout(() => { if (isOv('run')) { ui.panelDirty = true; renderOverlay(); } }, 3050);
         return;
       }
@@ -2141,13 +2144,22 @@
   }
 
   // ---------------------------------------------------------------------------------------------- save (11.2)
+  // One city in several tabs: lastIO is the save string this tab last loaded or wrote. When the stored string differs,
+  // another tab has saved since: this tab never writes over that newer city, and reloads to continue from it when it is
+  // shown again or before its next action (a stale tab cannot undo progress or a Down). No 'storage' listener: two
+  // open tabs would adopt each other's saves back and forth.
+  let lastIO = null;
+  function storeMoved() { if (lastIO == null || ui.noSave || !S || S.demo) return false; const cur = store.get(KEY); return cur != null && cur !== lastIO; }
   function save() {
     if (!S || ui.noSave || S.demo) return;
     ui.lastSave = Date.now();
-    store.set(KEY, E.serialize(S));
+    if (storeMoved()) return;
+    const str = E.serialize(S);
+    if (store.set(KEY, str)) lastIO = str;
   }
   function resumeNow() {
     if (!S || ui.demo) { if (S) S.realLast = Date.now(); return; }
+    if (storeMoved()) { location.reload(); return; }
     const r = E.resume(S, Date.now());
     handle(r.events, { offline: true });
     if (r.welcome) queueOverlay('welcome', r.welcome);
@@ -2182,14 +2194,20 @@
   }
 
   // ---------------------------------------------------------------------------------------------- input (8.2: the DOM side)
+  // A tap within 450 ms of a change under the finger (a card or the run sheet opening or closing, a mode ending, a tap
+  // that acted) is the rest of a double tap or a mash, not a choice: it is ignored, and a burst of taps keeps it quiet
+  // until the finger pauses. So a double tap never pays twice, never sends a runner nobody chose (GO sits at PLAY's
+  // rect) and never answers a revive offer that opened under the finger. Taps on the city canvas do not come through here.
+  function calm() { ui.calmUntil = Math.max(ui.calmUntil, now() + 450); }
   function onClick(e) {
     const el = e.target && e.target.closest ? e.target.closest('[data-do]') : null;
     if (!el) return;
     const fn = DO[el.dataset.do]; if (!fn) return;
     e.preventDefault();
+    if (now() < ui.calmUntil) { calm(); return; }              // a stray tap: see calm()
     if (el.getAttribute('aria-disabled') === 'true') { const why = el.dataset.why; if (why) toast(why); sfx('deny'); return; }
     if (el.dataset.do !== 'collect' && el.dataset.do !== 'play') sfx('tick');
-    fn(el, e);
+    const n = ui.acts; fn(el, e); if (ui.acts !== n) calm();
   }
   function onKey(e) {
     unlockAudio();
@@ -2286,7 +2304,7 @@
     ui.upright = store.get(KEY_UPRIGHT) === '1';
     if (ui.demo) { S = E.demo({ realNow: real, tzOffsetMin: tz }); ui.noSave = true; ui.status = 'demo'; }
     else {
-      const raw = store.get(KEY);
+      const raw = store.get(KEY); lastIO = raw;
       const r = E.load(raw, real, { tzOffsetMin: tz, seed: Q.seed });
       S = r.state; ui.status = r.status; ui.notes = r.notes || [];
       if (r.status === 'corrupt-reset') { store.set(KEY_BAD, raw); setTimeout(() => toast('The old save could not be read. It was kept aside and a new city begins.', { ms: 5000, keep: true }), 800); }
