@@ -677,7 +677,8 @@
       if (p.where === 'out') { if (!f.trip || f.trip.kind !== 'out') startOut(f, p, {}); return; }
       // a homecoming, an arrival or a walk inside is under way: it ends by reading the person's state at that moment
       if (f.trip && (f.trip.kind === 'in' || f.trip.kind === 'arrive' || f.trip.kind === 'enter') && f.mode === 'trip') return;
-      if (pp.where === 'out') { if (p.where === 'clinic' && p.state === 'down') { applyStatic(f, p); return; } queueTrip(f, { kind: 'in', p, style: null }); return; }
+      // a runner left Down never walks home: inside the Clinic (or the House, with no Clinic yet) with the red pill
+      if (pp.where === 'out') { if (p.state === 'down') { applyStatic(f, p); return; } queueTrip(f, { kind: 'in', p, style: null }); return; }
       if (p.where === 'walk') {
         if (pp.where === 'gate') { f.mode = 'walker'; f.pose = 'stand'; f.pill = null; f.idle = 0.6; f.state = 'ready'; return; }   // the stranger gets up
         if (pp.where === 'bench') { f.mode = 'walker'; f.pose = 'stand'; f.idle = 0.4; f.state = 'ready'; return; }

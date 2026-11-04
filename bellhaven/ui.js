@@ -1,7 +1,9 @@
 /* Bellhaven UI (BH.UI): the playable page's DOM side. SPEC 5.5-5.6 (offline, skip prices), 7.1-7.3 (first minutes,
- * the goal chip), 8.2-8.5 (gestures, HUD, building sheet, action bar, build tray, placement), 8.10-8.14 (welcome card,
- * City and Sparks sheets, one-time cards, portrait and desktop), 8.16-8.17 (juice, reduced motion), 11.1-11.2 (save,
- * load, the time loop).
+ * the goal chip, the stranger), 8.2-8.5 (gestures, HUD, building sheet, action bar, build tray, placement), 8.6-8.9
+ * (roster, person and traveler cards, the run sheet, run screen and result card, the fall beat, the revive offer,
+ * goodbye, grave placement and the memorial card), 6.2-6.7 (choosing who goes, the odds in idle frames, the walk to the
+ * gate and back), 8.10-8.14 (welcome card, City and Sparks sheets, one-time cards, portrait and desktop), 8.16-8.17
+ * (juice, reduced motion), 11.1-11.2 (save, load, the time loop).
  *
  * The only file that touches localStorage, Date.now and performance.now. Every state change goes through
  * Engine.act(state, action, Date.now()); the city is drawn by BH.Iso from Engine.view(); sound is BH.Sfx (optional);
@@ -11,8 +13,9 @@
  * Time loop (requestAnimationFrame): Engine.tick(S, frame delta, Date.now()) -> events -> handle(); the view is
  *   rebuilt after every act and at most every 100 ms otherwise (Engine.view is cheap) and pushed to iso.setView;
  *   iso.frame(ts) draws; the HUD re-renders on change (string-diffed); open sheets and overlays re-render twice a
- *   second (timers) through morph(); odds for PLAY and the run sheet are computed in idle frames (<= 6 ms a frame,
- *   6.3.5); the save is written after every successful act, every 10 s, on visibilitychange (hidden) and pagehide.
+ *   second (timers) through morph(); odds for PLAY and the run sheet are computed by a time-sliced queue keyed by
+ *   Engine.oddsKey (below, <= 8 ms of odds work a frame, 6.3.5); the run screen animates in rscFrame(ts); the save is
+ *   written after every successful act, every 10 s, on visibilitychange (hidden) and pagehide.
  * Save and load (11.2): key 'bellhaven.v1' (every access in try/catch; if storage throws the game runs in memory and
  *   says "Progress won't be saved in this browser." once); 'corrupt-reset' copies the raw save to 'bellhaven.v1.bad';
  *   'future-version' plays in memory and never overwrites that save; #demo plays Engine.demo() and never saves.
@@ -32,21 +35,48 @@
  *   pill(text, cls) · num(n) (fmt.compact with the layout's narrowness) · line(icon/img, title, sub, right).
  * Sheets (one at a time, docked right; bottom sheets in portrait): UI.sheet.register(kind, { head(V, a), body(V, a),
  *   foot(V, a), subject(a) -> iso target kept visible }), UI.sheet.open(kind, args), .close(), .current().
- *   Kinds here: building {id}, city, sparks, jobs, res {res}, people (placeholder roster).
+ *   Kinds here: building {id} (the House, Clinic and Inn blocks list residents, Down / Recovering people and the
+ *   travelers as cards), city, sparks, jobs, res {res}, people (the roster, 8.6).
  * Overlays (full screen, one at a time, the rest wait in a queue; the city is not interactive under them):
  *   UI.overlay.register(kind, { render(V, a) -> html, dark?, esc?(a) (Esc / ✕), enter?(a), onOpen?(a),
  *   onClose?(a) }), UI.overlay.open(kind, args) (opens now, the current one is queued back), .queue(kind, args)
  *   (after the current ones), .close(), .current(). Kinds here: welcome, meet, tower, death, finale, crane (no free
- *   crane), and PLACEHOLDERS for the next stage: run (the run sheet, with an instant simulated run), result, offer
- *   (revive), person, memorial. The next stage replaces those five by registering the same kinds (or editing them in
- *   place) and adds the run screen; UI.hooks.openRun / openOffer / openPerson / openMemorial are what the rest of the
- *   page calls, so swapping them is enough.
+ *   crane), run (the run sheet), runscreen, result, offer (revive), person (person and traveler card), memorial, json
+ *   (the handoff or result JSON with COPY). An overlay re-shown from the queue gets onOpen again, so the run sheet
+ *   and the result card keep their state in their args (inited / started) and never restart.
  * Events: Engine events go through handle(events, ctx): flyers, sounds, toasts and cards for the city events below,
- *   then every listener added with UI.onEvent(type, fn(e, ctx)) (the run flow: runStarted, runResolved, down, daily,
- *   firstClear, levelUp, nickname, invited, revived, fell). ctx: { act, offline, tick, at }.
- * Modes: ui.mode = null | { kind: 'place', type, cost } | { kind: 'move', target } (8.5). PLAY becomes ✓ PLACE /
- *   BLOCKED / ✓ DONE, BUILD becomes ✕ CANCEL. Grave placement (next stage) can reuse 'move' with its own labels via
- *   ui.mode.labels { ok: 'LAY TO REST', cancel: null }.
+ *   then every listener added with UI.onEvent(type, fn(e, ctx)) (here: stranger -> the camera finds the stranger and
+ *   the offer opens once; dev op kill -> the offer). ctx: { act, offline, tick, at }.
+ * Modes: ui.mode = null | { kind: 'place', type, cost } | { kind: 'move', target, labels?, onDone? } (8.5). PLAY
+ *   becomes ✓ PLACE / BLOCKED / ✓ DONE, BUILD becomes ✕ CANCEL. Grave placement after SAY GOODBYE is 'move' with the
+ *   labels { ok: 'LAY TO REST', cancel: null, hint: 'Drag to choose a place' } (no ✕; Esc does nothing).
+ *
+ * ===================================================================================================== THE RUN FLOW
+ * PLAY / SEND TONIGHT / a run goal / a landmark -> hooks.openRun({ destId?, personId? }) -> the run sheet (8.7.1):
+ *   destinations, the runner strip (Engine.strip, cached odds; "…" until known), the runner card (Engine.runCard once
+ *   the selected runner's odds are cached: HOME · DEATH, the fall cost (R15), the tired line, the danger hint), the
+ *   kit toggles (opt-outs; their effects from Engine.kitDeltas), REST NOW (R7), "Sent to the game ›" (the handoff
+ *   preview), GO at PLAY's rect ("RUN IT ANYWAY?" under 50 % needs a second tap within 3 s). With a run pending,
+ *   openRun shows the run screen instead.
+ * The odds queue (6.3.5): every frame oddsWork() walks oddsJobs() in order (the selected runner here, the rest of the
+ *   strip, that runner's flipped kits and rested odds, then PLAY's oddsTodo) and computes the uncached ones with
+ *   Engine.odds until the next one would pass 8 ms (one computation, 400 runs, is the smallest step; an estimate of
+ *   its cost is kept). UI.oddsStats() reports what it did (computations, ms, the worst frame, the sheet fill times).
+ * GO: act startRun (saved before anything moves) -> the sheet closes, iso.holdArrivals(true), iso.walkOut(runner,
+ *   { follow, onGate }) -> at the gate (or 2.6 s) the screen fades to night: the run screen (6.4, 8.7.2) plays
+ *   Engine.runSim(state) over lab.runScreenS (8 s): the dot, the events (wanderers, HORDE!, the gate, pills, medkit,
+ *   noise bomb, SECOND WIND), the HP bar with temporary HP, kills; » jumps to the end. Then act resolveRun -> the
+ *   result card (8.7.3): stats, loot rows counting up, XP and level pop, sparks, nickname, kit settlement, overflow,
+ *   rest; on "Overrun." the beat (1.1 s of stats, then 1.5 s "Did Emre make it home?", instant with reduced motion),
+ *   then the Hurt line or the revive offer (once). BACK TO TOWN (PLAY's rect) flies the loot into the chips (they held
+ *   their old numbers: ui.inflight), releases the homecoming (sack, stretcher or limp; the bell rings twice when a
+ *   winner reaches the gate) and keeps the gate in view. A reload during the run reopens the run screen on the same
+ *   night. "Wait for a real result" (the Lab) shows the handoff on the run screen; a pasted result
+ *   (labApi.resolveResult) or SIMULATE IT resolves it the same way.
+ * The offer (8.8): one calm card; REVIVE (cans), REVIVE NOW (sparks), SAY GOODBYE; ✕, DECIDE LATER, Esc and closing
+ *   the page are "decide later". SAY GOODBYE: act goodbye (the grave stands on its default spot) -> the bell tolls
+ *   once, low -> grave move mode with LAY TO REST. The memorial card (8.9) opens from a grave, the roster or a Fallen
+ *   person's card.
  *
  * ===================================================================================================== HOOKS FOR OTHERS
  * Sound (sfx.js, BH.Sfx; every call is guarded with "BH.Sfx &&"):
@@ -57,8 +87,11 @@
  *   BH.Sfx.play(cue, opts)     cues: 'tick' (UI tick) · 'collect' { step (0, 1, 2 ... rising along a pentatonic
  *     scale within a streak of collects), res } · 'place' (a thud and three hammer taps) · 'whirr' (a soft crane
  *     whirr: placement starts, a job starts) · 'finish' (a finish chime) · 'bell' { times: 1 | 2 | 3, low } (1:
- *     LET'S BEGIN, 2: a safe return, 3: a Tower level, low: a goodbye or an expired window) · run screen (next
- *     stage): 'drone' { on }, 'heartbeat', 'horde', 'fallBeat'. Unknown cues must be ignored by sfx.js.
+ *     LET'S BEGIN, 2: a safe return, 3: a Tower level, low: a goodbye or an expired window) · the run screen:
+ *     'drone' { on } (on at the start, off at the end), 'heartbeat' (one lub-dub every 0.9 s while HP is under 30 %),
+ *     'horde' (HORDE!; { gate: true } at the gate), 'fallBeat' (the beat) · P1 extras: 'spark' (sparks earned),
+ *     'levelUp', 'nickname' (the result card), 'revive', 'invite', 'expand' (the fence moves), 'rubble' (cleared),
+ *     'deny' (a tap on something disabled, a refused action). Unknown cues must be ignored by sfx.js.
  * Lab (lab.js, BH.Lab): the LAB chip calls BH.Lab.open(api) after showing the #lab panel (a right panel; full screen
  *   below 640 px wide); BH.Lab.close() is called when the UI closes it (✕ in the Lab should call api.close()).
  *   api = UI.labApi: { el (the #lab element to render into), Engine, DATA, Art, fmt, getState() (the live state:
@@ -71,12 +104,19 @@
  *   flow's hook), kpis(), toast(text), close(), isDemo(), layout() -> { W, H, k, ... }, perf() -> { frames, avg, max, p95 } (ms of script
  *   per frame, the last 120 frames), on(name, fn): 'tick' (once
  *   a second while open), 'events' (every batch of engine events), 'close' }.
+ *   The Lab may also call UI.hooks: openOffer(personId) (a dev kill opens it by itself), openPerson(id),
+ *   openMemorial(graveId), openRun({ destId, personId }), openRunScreen(), openRoster(), resolveResult(json).
+ * Tests and the Lab: UI.oddsStats() -> { computed, totalMs, avgMs, p95Ms, maxMs, maxFrameMs, framesWithWork,
+ *   budgetMs, fills: [{ ms, computed, frames }] } · UI.run.sheet() (the run sheet's choices) · UI.run.screen().
  *
  * ===================================================================================================== DEVIATIONS
  * See the comments marked "Spec reading:" where the spec was ambiguous: the UI scale also looks at the width (so a
  * portrait phone is never scaled past its screen), compact numbers follow the compact top bar as well as < 700 px,
  * the Tower's tray card opens the City sheet, a tray card that cannot be afforded explains instead of entering
- * placement, the action bar sits at the goal chip's x between 640 and 760 px (and centred otherwise).
+ * placement, the action bar sits at the goal chip's x between 640 and 760 px (and centred otherwise). People and runs:
+ * the result card's BACK TO TOWN sits at PLAY's rect below a centred card (the 330 px card and a 60 px button cannot
+ * both fit 390 px), the person card's CARD | HISTORY tabs sit in its footer, the run screen's kill counter is
+ * interpolated (the result lists the total only), a run's loot lands in the chips when the card closes.
  */
 (function (root, f) { const api = f(root.BH || {}); if (typeof module === 'object' && module.exports) module.exports = api; else (root.BH = root.BH || {}).UI = api; })(typeof self !== 'undefined' ? self : this, function (BH) {
   'use strict';
@@ -310,7 +350,7 @@
       pending: 'Tonight’s runner is still out', noCrane: 'Every crane is busy', confirm: 'Tap again to confirm',
     }[r.err] || 'Not possible right now';
     toast(t, { kind: 'bad' });
-    sfx('tick');
+    sfx('deny');
   }
   function refresh() {
     if (!S) return;
@@ -359,7 +399,7 @@
       queueOverlay('tower', { lv: e.lv, opens: e.opens || [], sparks: e.sparks || 0 });
     },
     finale() { queueOverlay('finale', {}); },
-    expanded(e, ctx) { if (!ctx.offline) { sfx('finish'); toast('The fence moves out: land ' + e.side + ' × ' + e.side + '.', { icon: 'check', kind: 'good' }); } },
+    expanded(e, ctx) { if (!ctx.offline) { sfx('expand'); toast('The fence moves out: land ' + e.side + ' × ' + e.side + '.', { icon: 'check', kind: 'good' }); } },
     rested(e, ctx) { if (!ctx.offline && !e.early && ctx.tick) toast(nameFor(e.personId) + ' is rested.', { icon: 'people' }); },
     innRefresh(e, ctx) { if (!ctx.offline && ctx.tick) toast(e.n + ' new traveler' + (e.n === 1 ? '' : 's') + ' at the Inn.', { icon: 'house' }); },
     stranger(e) { toast('Someone lies Down at the gate.', { icon: 'heart', kind: 'bad', ms: 4000 }); },
@@ -373,8 +413,8 @@
     },
     packClaimed(e, ctx) { fly('sparks', e.size, ctx.at || null); toast('+' + fmt.num(e.size) + ' ✦ · a free test pack', { icon: 'spark' }); },
     rubbleCleared(e) {
-      if (e.sparks > 0) { const at = iso ? iso.tileToScreen(e.gx + 0.5, e.gy + 0.5, 18) : null; fly('sparks', e.sparks, at); toast('+' + e.sparks + ' ✦ hidden in the rubble', { icon: 'spark', kind: 'good' }); }
-      else sfx('place');
+      if (e.sparks > 0) { const at = iso ? iso.tileToScreen(e.gx + 0.5, e.gy + 0.5, 18) : null; fly('sparks', e.sparks, at); sfx('spark'); toast('+' + e.sparks + ' ✦ hidden in the rubble', { icon: 'spark', kind: 'good' }); }
+      else sfx('rubble');
     },
     craneBought() { sfx('finish'); toast('A 4th crane joins Bellhaven.', { icon: 'crane', kind: 'good' }); },
     offline(e) { if (e.welcome) queueOverlay('welcome', e.welcome); },
@@ -599,6 +639,9 @@
       buttons += rb({ do: 'move', icon: 'move', label: 'MOVE', aria: 'Move' });
       if (b.bubble && b.bubble.whole >= 1 && !j) buttons += rb({ do: 'collect', data: { id: b.id }, icon: RES_ICON[b.bubble.res], cls: 'col', label: num(b.bubble.whole), aria: 'Collect ' + b.bubble.whole + ' ' + b.bubble.res });
       else if (b.bubble && b.bubble.whole >= 1 && j) buttons += rb({ do: 'collect', data: { id: b.id }, icon: RES_ICON[b.bubble.res], cls: 'col', label: num(b.bubble.whole), aria: 'Collect' });
+      // 6.6.3: the Clinic's red pill (or a House's lantern) is one tap from the revive offer
+      const dn = b.type === 'clinic' || b.type === 'house' ? V.people.find((q) => q.state === 'down' && (b.type === 'clinic' ? q.where === 'clinic' : q.where === 'house' && q.houseId === b.id)) : null;
+      if (dn) buttons += rb({ do: 'decide', data: { id: dn.id }, icon: 'heart', cls: 'go', label: 'DECIDE', aria: 'Decide about ' + dn.first });
     } else if (t.kind === 'grave') {
       const g = V.graves.find((x) => x.id === t.id); if (!g) { gone(); return; }
       label = 'GRAVE · ' + g.first.toUpperCase(); sub = 'Remembered';
@@ -805,18 +848,20 @@
     }
     return s;
   }
+  // the Inn sheet (8.6): the travelers as compact cards side by side (one per row below 640 px), the refresh timer
   function innBlock(b) {
     const inn = V.inn; if (!inn || b.lv < 1) return '';
     let s = '<div class="sec">At the Inn (' + inn.travelers.length + ')</div>';
-    const ci = inn.canInvite;
-    for (const p of inn.travelers) {
-      const why = ci.err === 'beds' ? 'No free bed' : ci.err === 'cost' ? 'Need ' + fmt.num(inn.invitePrice - V.res.cans) + ' more cans' : null;
-      s += line(portrait(p.look, 40), esc(p.name), esc('Lv ' + p.lv + ' · ' + p.roleName + ' · ' + p.traitName),
-        btn({ do: 'invite', data: { id: p.id }, cls: ci.ok ? 'primary' : 'off', off: !ci.ok, why, label: 'INVITE · ' + fmt.num(inn.invitePrice) }) + btn({ do: 'person', data: { id: p.id }, cls: 'ghost icon', icon: 'info', aria: 'Card of ' + p.first }), { k: p.id });
-    }
-    if (!inn.travelers.length) s += '<p class="expl">Nobody is staying right now.</p>';
+    if (inn.travelers.length) { s += '<div class="tcards">'; for (const t of inn.travelers) s += travelerCard(t); s += '</div>'; const inv = inviteInfo(); if (inv && !inv.ok) s += '<p class="empty">' + esc(inv.why === 'No free bed' ? 'No free bed: a new House or a House upgrade makes room.' : inv.why + ' to invite.') + '</p>'; }
+    else s += '<p class="expl">Nobody is staying right now.</p>';
     if (inn.leftMs != null) s += line('', 'New travelers in ' + fmt.clock(inn.leftMs / 1000), 'Each arrival replaces everyone at the Inn', skipBtn('inn', inn.price, 'innNow', null, 'NOW'));
     return s;
+  }
+  function travelerCard(t) {
+    const inv = inviteInfo();
+    return '<div class="tvc" data-k="' + t.id + '"><button class="tm" data-do="person" data-id="' + t.id + '" aria-label="' + esc('Card of ' + t.name) + '">' + portrait(t.look, 40) +
+      '<span class="tx"><b>' + esc(t.first) + '</b><small>Lv ' + t.lv + ' · ' + esc(t.roleName) + '</small><small>' + esc(t.traitName) + '</small></span></button>' +
+      (inv ? btn({ do: 'invite', data: { id: t.id }, cls: inv.ok ? 'primary' : '', off: !inv.ok, why: inv.why, label: 'INVITE · ' + fmt.num(inv.price), aria: 'Invite ' + t.first + ' for ' + inv.price + ' cans' }) : '') + '</div>';
   }
 
   // ---------------------------------------------------------------------------------------------- the City sheet (8.11)
@@ -910,22 +955,41 @@
       return s;
     },
   };
-  // ---------------------------------------------------------------------------------------------- PLACEHOLDER (next stage): the roster (8.6)
+  // ---------------------------------------------------------------------------------------------- the roster (8.6)
+  // PEOPLE · 6/9 BEDS: rows of 56 px in the view's order (Down with DECIDE, Ready, Resting, Hurt, Recovering, then the
+  // runner who is Out); then AT THE INN (INVITE) and REMEMBERED (a tap: the memorial card and the camera on the grave).
+  const stateCls = (p) => (p.state === 'down' ? 'red' : p.state === 'ready' ? 'good' : p.state === 'out' ? '' : p.restKind === 'hurt' ? 'red' : p.restKind === 'recovering' ? 'spk' : 'warm');
+  function rosterRow(p) {
+    const down = p.state === 'down';
+    return '<div class="prow" data-k="' + p.id + '"><button class="pm" data-do="person" data-id="' + p.id + '" aria-label="' + esc(p.fullName + ', level ' + p.lv + ' ' + p.roleName + ', ' + p.pill) + '">' + portrait(p.look, 44, down) +
+      '<span class="pt"><b>' + esc(p.fullName) + '</b><span>' + (down ? pill(p.pill, 'red') : '') + '<em>Lv ' + p.lv + ' · ' + esc(p.roleName) + '</em>' + pill(p.traitName.toUpperCase(), 'warm') + '</span></span></button>' +
+      (down ? btn({ do: 'decide', data: { id: p.id }, cls: 'primary', label: 'DECIDE', aria: 'Decide about ' + p.first }) : '<span class="st">' + pill(p.pill, stateCls(p)) + '</span>') + '</div>';
+  }
+  function travelerRow(t) {
+    const inv = inviteInfo();
+    return '<div class="prow" data-k="' + t.id + '"><button class="pm" data-do="person" data-id="' + t.id + '" aria-label="' + esc('Card of ' + t.name) + '">' + portrait(t.look, 44) +
+      '<span class="pt"><b>' + esc(t.name) + '</b><span><em>Lv ' + t.lv + ' · ' + esc(t.roleName) + '</em>' + pill(t.traitName.toUpperCase(), 'warm') + '</span></span></button>' +
+      (inv ? btn({ do: 'invite', data: { id: t.id }, cls: inv.ok ? 'primary' : '', off: !inv.ok, why: inv.why, label: 'INVITE · ' + fmt.num(inv.price), aria: 'Invite ' + t.first + ' for ' + inv.price + ' cans' }) : '') + '</div>';
+  }
+  function rememberedRow(p) {
+    const g = p.graveId ? V.graves.find((x) => x.id === p.graveId) : null, ep = p.epitaph && p.epitaph[0] ? p.epitaph[0] : '';
+    return '<div class="prow gone" data-k="' + p.id + '"><button class="pm" data-do="remember" data-id="' + esc(p.graveId || '') + '" aria-label="' + esc('Remember ' + p.fullName) + '">' + portrait(p.look, 44, true) +
+      '<span class="pt"><b>' + esc(p.fullName) + '</b><span><em>' + esc(g && g.waiting ? 'Waiting for a place' : ep) + '</em></span></span></button></div>';
+  }
   SHEETS.people = {
     head(v) { return '<div class="sh-title">PEOPLE · ' + v.chips.people.living + '/' + v.chips.people.beds + ' BEDS<small>' + esc(EXPL[3]) + '</small></div>'; },
     body(v) {
       let s = '';
-      for (const p of v.people) s += line(portrait(p.look, 40, p.state === 'down'), esc(p.fullName), esc('Lv ' + p.lv + ' · ' + p.roleName + ' · ' + p.traitName),
-        pill(p.pill, p.state === 'down' ? 'red' : p.state === 'ready' ? 'good' : 'warm') + btn({ do: p.state === 'down' ? 'decide' : 'person', data: { id: p.id }, cls: p.state === 'down' ? 'primary' : 'ghost icon', icon: p.state === 'down' ? null : 'info', label: p.state === 'down' ? 'DECIDE' : '', aria: 'Card of ' + p.first }), { k: p.id });
-      if (v.inn && v.inn.travelers.length) {
+      for (const p of v.people) s += rosterRow(p);
+      if (!v.people.length) s += '<p class="empty">Nobody lives here right now. A drifter walks in at the gate.</p>';
+      if (v.inn && v.inn.lv >= 1) {
         s += '<div class="sec">At the Inn (' + v.inn.travelers.length + ')</div>';
-        for (const p of v.inn.travelers) s += line(portrait(p.look, 40), esc(p.name), esc('Lv ' + p.lv + ' · ' + p.roleName), btn({ do: 'person', data: { id: p.id }, cls: 'ghost icon', icon: 'info', aria: 'Card of ' + p.first }), { k: p.id });
+        for (const t of v.inn.travelers) s += travelerRow(t);
+        const inv = inviteInfo(); if (inv && !inv.ok && v.inn.travelers.length) s += '<p class="empty">' + esc(inv.why === 'No free bed' ? 'No free bed: a new House or a House upgrade makes room.' : inv.why + ' to invite.') + '</p>';
+        if (!v.inn.travelers.length) s += '<p class="empty">Nobody is staying right now' + (v.inn.leftMs != null ? ': new travelers in ' + fmt.clock(v.inn.leftMs / 1000) : '') + '.</p>';
       }
-      if (v.remembered.length) {
-        s += '<div class="sec">Remembered (' + v.remembered.length + ')</div>';
-        for (const p of v.remembered) s += line(portrait(p.look, 40, true), esc(p.fullName), esc(p.epitaph ? p.epitaph[0] || '' : ''), p.graveId ? btn({ do: 'memorial', data: { id: p.graveId }, cls: 'ghost icon', icon: 'grave', aria: 'Memorial of ' + p.first }) : '', { k: p.id });
-      }
-      return s;
+      if (v.remembered.length) { s += '<div class="sec">Remembered (' + v.remembered.length + ')</div>'; for (const p of v.remembered) s += rememberedRow(p); }
+      return s + '<p class="expl">' + esc(EXPL[4]) + '</p>';
     },
   };
 
@@ -1119,11 +1183,6 @@
       if (id === 'expand') { openSheet('city'); return; }
       const tg = { kind: 'building', id }; ui.sel = tg; iso.select(tg, { focus: true }); renderAbar();
     },
-    invite(el) { doAct({ type: 'invite', travelerId: el.dataset.id }); },
-    person(el) { hooks.openPerson(el.dataset.id); },
-    memorial(el) { hooks.openMemorial(el.dataset.id); },
-    decide(el) { hooks.openOffer(el.dataset.id || (ui.sel && ui.sel.id)); },
-    send(el) { hooks.openRun({ personId: el.dataset.id }); },
     upright() { ui.upright = true; store.set(KEY_UPRIGHT, '1'); showRotate(); sfx('tick'); },
   });
 
@@ -1209,153 +1268,725 @@
   DO.craneFinish = () => { const o = ui.overlay; if (!o || o.kind !== 'crane') return; closeOverlay('crane'); if (o.args.onFinish) o.args.onFinish(); };
   DO.craneWait = () => { const o = ui.overlay; if (!o || o.kind !== 'crane') return; closeOverlay('crane'); if (o.args.onWait) o.args.onWait(); };
 
-  // ---------------------------------------------------------------------------------------------- PLACEHOLDERS for the next stage: run sheet, result, revive offer, person card, memorial
-  // A plain run sheet with an instant simulated run, so the goal chain can be played end to end before the full 8.7
-  // screens exist. The next stage replaces these overlay kinds (and UI.hooks) with the real run flow.
-  const run = { destId: null, personId: null, kit: null };
-  function runDefaults(a) {
-    const dests = V.dests.filter((d) => d.open);
-    let dest = a.destId && V.dests.find((d) => d.id === a.destId) ? a.destId : V.play ? V.play.destId : (dests[0] || V.dests[0]).id;
-    if (!V.dests.find((d) => d.id === dest && d.open)) dest = (dests[0] || V.dests[0]).id;
-    return dest;
+  // ============================================================================================== PEOPLE AND RUNS
+  // 6.2-6.7, 7.1 (the stranger), 8.6-8.9: the run sheet with its time-sliced odds, the walk to the gate, the run screen,
+  // the result card with the fall beat, the revive offer, goodbye and the grave, the memorial card, the person and
+  // traveler cards, and the JSON cards. Every number and line comes from the engine; every change goes through act().
+  const KIT_ITEMS = ['medkit', 'pills', 'bomb'];
+  const KIT_WORD = D.TEXT.kitName;                                    // Medkit, Pills, Noise bomb
+  const wideL = () => ui.layout.bb === 'wide' && !ui.layout.portrait;
+  const bLv = (type) => { let m = 0; if (V) for (const b of V.buildings) if (b.type === type && b.lv > m) m = b.lv; return m; };
+  const kitUnlocked = (it) => (it === 'bomb' ? bLv('armory') >= 2 : bLv('clinic') >= 1);
+  const kitLock = (it) => (it === 'bomb' ? 'Armory 2' : 'the Clinic');
+  const signPct = (x) => (x < 0 ? '−' : '+') + Math.round(Math.abs(x) * 100) + '%';
+  // a portrait in a sized frame (CSS sets the frame; the bitmap follows the UI scale so it stays sharp)
+  function pp(look, size, grey, extra) {
+    if (!look) return '<span class="pp' + (extra ? ' ' + extra : '') + '"></span>';
+    return '<span class="pp' + (extra ? ' ' + extra : '') + '">' + portrait(look, Math.round(size * (ui.layout.k || 1)), grey, 'pi') + '</span>';
   }
-  OVERLAYS.run = {
-    dark: true,
-    onOpen(a) { run.destId = runDefaults(a); run.personId = a.personId || null; run.kit = null; if (run.destId !== S.lastDest) doAct({ type: 'setLastDest', destId: run.destId }, { quiet: true }); },
-    render(v) {
-      if (v.pending) return '<div class="rs"><div class="rs-head"><h2>NIGHT ' + v.pending.night + ' · ' + esc(v.pending.destName.toUpperCase()) + '</h2><button class="xbtn" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button></div>' +
-        '<div class="rs-body"><p>' + esc(nameFor(v.pending.personId)) + ' is out.</p>' + btn({ do: 'runResolve', cls: 'primary', label: 'SEE HOW IT WENT', primary: true }) + '</div></div>';
-      const dest = run.destId, strip = E.strip(S, dest);
-      let pid = run.personId && strip.find((r) => r.personId === run.personId) ? run.personId : null;
-      if (!pid) { const sg = E.suggest(S, dest); pid = sg ? sg.personId : strip[0] ? strip[0].personId : null; }
-      let s = '<div class="rs"><div class="rs-head"><h2>NIGHT ' + (v.night + 1) + ' · WHO GOES TONIGHT?</h2><button class="xbtn" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button></div><div class="rs-body"><div class="rs-row">';
-      for (const d of v.dests) s += '<button class="dchip' + (d.id === dest ? ' on' : '') + (d.open ? '' : ' off') + '" data-do="runDest" data-id="' + d.id + '"' + (d.open ? '' : ' aria-disabled="true" data-why="' + esc(d.lock) + '"') + '><b>' + esc(d.name) + '</b><span>' +
-        (d.open ? (d.cleared ? fmt.num(d.bricks) + ' · ' + fmt.num(d.cans) : '✦ ' + d.firstSparks + ' first clear') : esc(d.lock)) + '</span></button>';
-      s += '</div><div class="rs-row">';
-      for (const r of strip) { const p = personV(r.personId); s += '<button class="rchip' + (r.personId === pid ? ' on' : '') + '" data-do="runPick" data-id="' + r.personId + '">' + portrait(p.look, 40) + '<b>' + esc(p.first) + '</b>' + pill(r.home == null ? '…' : fmt.pct(r.home), r.badge === 'good' ? 'good' : r.badge === 'low' ? 'red' : '') + '</button>'; }
-      if (!strip.length) s += '<p class="soft">Nobody can go right now.</p>';
-      s += '</div>';
-      if (pid) {
-        const c = E.runCard(S, dest, pid, run.kit);
-        s += '<div><b class="cond" style="font-size:20px">' + esc(c.name) + '</b> <span class="soft">Lv ' + c.lv + '</span><div class="soft" style="font-size:12px">' + esc(c.roleLine) + ' · ' + esc(c.traitChip) + '</div></div>' +
-          '<div class="odds"><span class="h">' + esc(c.homeText) + '</span><span class="d' + (c.deathRed ? ' red' : '') + '">' + esc(c.deathText) + '</span></div>' +
-          (c.fallLine ? '<div class="soft" style="font-size:12.5px">' + esc(c.fallLine) + '</div>' : '') + (c.tiredLine ? '<div class="soft" style="font-size:12.5px">' + esc(c.tiredLine) + '</div>' : '') +
-          '<div class="soft" style="font-size:12.5px">' + esc(c.hint) + '</div><div class="kitrow">';
-        for (const t of c.toggles) if (t.open) s += btn({ do: 'runKit', data: { item: t.item }, cls: t.on ? 'on' : 'ghost', label: esc(t.label) });
-        s += '</div>' + (c.rest ? skipBtn('rest:' + pid, c.rest.price, 'restNow', { id: pid }, 'REST NOW') : '');
-        s += '<div class="rs-go">' + btn({ do: 'runGo', data: { id: pid }, cls: (c.low ? 'bad' : 'primary') + ' main' + (c.go.ok ? '' : ' off'), why: c.go.ok ? null : c.go.err === 'cost' ? 'Need more cans for the kit' : 'Not possible right now', label: run.low ? 'RUN IT ANYWAY?' : c.go.label, primary: true }) + '</div>';
-      }
-      return s + '</div></div>';
-    },
-    esc() { closeOverlay(); },
-  };
-  DO.runDest = (el) => { run.destId = el.dataset.id; run.kit = null; doAct({ type: 'setLastDest', destId: run.destId }, { quiet: true }); renderOverlay(); };
-  DO.runPick = (el) => { run.personId = el.dataset.id; run.kit = null; run.low = false; renderOverlay(); };
-  DO.runKit = (el) => {
-    const sg = E.suggest(S, run.destId), pid = run.personId || (sg ? sg.personId : null); if (!pid) return;
-    const it = el.dataset.item, c = E.runCard(S, run.destId, pid, run.kit), k = Object.assign({}, c.kit);
-    const t = c.toggles.find((x) => x.item === it); if (!t) return;
-    if (!k[it] && !t.canTurnOn) { toast('Need more cans', { kind: 'bad' }); return; }
-    k[it] = k[it] ? 0 : 1; run.kit = k; renderOverlay();
-  };
-  DO.runGo = (el) => {
-    const pid = el.dataset.id, c = E.runCard(S, run.destId, pid, run.kit);
-    if (c.low && !run.low) { run.low = true; renderOverlay(); setTimeout(() => { run.low = false; renderOverlay(); }, 3000); return; }
-    const r = doAct({ type: 'startRun', destId: run.destId, personId: pid, kit: c.kit, confirmLow: !!run.low }, { quiet: true });
-    run.low = false;
-    if (!r.ok) { explain(r); return; }
-    if (iso) iso.holdArrivals(true);
-    DO.runResolve();
-  };
-  DO.runResolve = () => {
-    const r = doAct({ type: 'resolveRun', source: 'sim' }, { quiet: true });
-    if (!r.ok) { explain(r); if (iso) iso.holdArrivals(false); return; }
-    closeOverlay('run');
-    openOverlay('result', { reward: r.data.reward, offer: r.data.offer });
-  };
-  OVERLAYS.result = {
-    dark: true,
-    render(v, a) {
-      const w = a.reward, L = w.lines || {};
-      let s = '<div class="card"><div class="cb"><h2 style="color:' + (w.win ? 'var(--good)' : 'var(--bad)') + '">' + esc(L.title) + '<small>' + esc(L.sub) + '</small></h2><ul class="srcs">' +
-        '<li>Bricks<b>+' + fmt.num(w.bricks) + (L.salvage ? ' (' + esc(L.salvage) + ')' : '') + '</b></li><li>Cans<b>+' + fmt.num(w.cans) + '</b></li><li>XP<b>+' + fmt.num(w.xp) + '</b></li>';
-      if (L.firstClear) s += '<li>Sparks<b>' + esc(L.firstClear) + '</b></li>';
-      if (L.daily) s += '<li>Sparks<b>' + esc(L.daily) + '</b></li>';
-      s += '</ul>';
-      for (const k of ['nick', 'kit', 'overflow', 'rest', 'fall']) if (L[k]) s += '<p class="soft" style="font-size:12.5px">' + esc(L[k]) + '</p>';
-      return s + '</div><div class="cf">' + btn({ do: 'resultBack', cls: 'primary', label: 'BACK TO TOWN', primary: true }) + '</div></div>';
-    },
-    esc() { DO.resultBack(); },
-  };
-  DO.resultBack = () => {
-    const o = ui.overlay; if (!o || o.kind !== 'result') return;
-    closeOverlay('result');
-    if (iso) iso.holdArrivals(false);
-    if (o.args.reward && o.args.reward.win) { if (iso) iso.ringBell(2); sfx('bell', { times: 2 }); }
-    if (o.args.offer) openOverlay('offer', { personId: o.args.offer.personId });
-  };
-  OVERLAYS.offer = {
-    render(v, a) {
-      const o = E.offer(S, a.personId); if (!o) return null;
-      return '<div class="card"><div class="cb"><div class="meet">' + portrait(o.look, 80, true) + '<div><div class="who" style="font-size:22px">' + esc(o.title) + '</div><p class="soft">' + esc(o.roleLine) + '<br>' + esc(o.where) + '</p></div></div>' +
-        '<div class="tr-list" style="margin-top:10px">' +
-        btn({ do: 'revive', data: { id: o.personId, pay: 'cans' }, cls: 'primary' + (o.revive.ok ? '' : ' off'), why: o.revive.needText, label: esc(o.revive.label) + ' ' + ic('can'), sub: esc(o.revive.sub) }) +
-        btn({ do: 'revive', data: { id: o.personId, pay: 'sparks' }, cls: 'spark' + (o.reviveNow.ok ? '' : ' off'), why: o.reviveNow.needText, label: esc(o.reviveNow.label), sub: esc(o.reviveNow.sub) }) +
-        btn({ do: 'goodbye', data: { id: o.personId }, cls: 'ghost', label: 'SAY GOODBYE', sub: esc(o.goodbye.sub) }) + '</div>' + (o.revivedText ? '<p class="soft">' + esc(o.revivedText) + '</p>' : '') +
-        '</div><div class="cf"><span class="grow">' + esc(o.leftText) + '</span>' + btn({ do: 'closeOverlay', cls: 'ghost', label: 'DECIDE LATER' }) + '</div></div>';
-    },
-  };
-  DO.revive = (el) => { const r = doAct({ type: 'revive', personId: el.dataset.id, pay: el.dataset.pay }); if (r.ok) closeOverlay('offer'); };
-  DO.goodbye = (el) => {
-    const r = doAct({ type: 'goodbye', personId: el.dataset.id });
-    if (!r.ok) return;
-    closeOverlay('offer'); sfx('bell', { times: 1, low: true }); if (iso) iso.ringBell(1, { low: true });
-    if (r.data && r.data.graveId) {
-      const gid = r.data.graveId;
-      if (r.data.spot && iso) {                                 // 6.7: the grave's move mode opens with LAY TO REST and no ✕
-        iso.focus({ kind: 'grave', id: gid }, { ease: true });
-        startMove({ kind: 'grave', id: gid }, { ok: 'LAY TO REST', cancel: null, hint: 'Drag to choose a place' });
+  function lvFrac(lv, xp, from, to) { return lv >= 10 ? 1 : clamp((xp - from) / Math.max(1, to - from), 0, 1); }
+  // swap the current overlay for another (the queue stays put, so nothing queued flashes in between)
+  function swapOverlay(kind, args) {
+    const o = ui.overlay;
+    if (o) { const def = OVERLAYS[o.kind]; ui.overlay = null; if (def && def.onClose) { try { def.onClose(o.args); } catch (e) { console.error(e); } } }
+    showOverlayNow({ kind, args: args || {} });
+  }
+  const isOv = (kind) => !!(ui.overlay && ui.overlay.kind === kind);
+
+  // ---------------------------------------------------------------------------------------------- odds in idle frames (6.3.5)
+  // A time-sliced queue keyed by Engine.oddsKey (the engine's LRU cache is the queue's memory): every frame computes the
+  // uncached odds in this order and stops before 8 ms of work: the selected runner at the selected destination, the rest
+  // of the strip (Ready first; badges show "…" until ready), that runner's kit deltas (one flipped kit per item) and
+  // rested odds, then PLAY's suggestion. One computation (the 400 reference runs) is the smallest step.
+  const OQ = { budget: 8, est: 1.5, n: 0, ms: 0, max: 0, maxFrame: 0, frames: 0, recent: [], fills: [] };
+  function oddsJobs() {
+    const out = [];
+    if (!S.pending && isOv('run') && rs.destId) {
+      const d = rs.destId, sel = rsSel();
+      if (sel) out.push({ destId: d, personId: sel, kit: rs.kit, sheet: true });
+      for (const t of E.oddsTodo(S, d)) { t.sheet = true; out.push(t); }
+      if (sel) {
+        const k = E.kitNorm(S, d, rs.kit);
+        for (const it of KIT_ITEMS) if (kitUnlocked(it)) out.push({ destId: d, personId: sel, kit: Object.assign({}, k, { [it]: k[it] ? 0 : 1 }), sheet: true });
+        const p = S.people.find((x) => x.id === sel);
+        if (p && p.state === 'rest') out.push({ destId: d, personId: sel, kit: k, rested: true, sheet: true });
       }
     }
+    if (!S.pending && V.play && !V.play.known) for (const t of E.oddsTodo(S)) out.push(t);
+    return out;
+  }
+  function oddsWork() {
+    if (!V || !S) return;
+    const jobs = oddsJobs(); if (!jobs.length) return;
+    const t0 = now(); let did = 0, left = 0;
+    for (const j of jobs) {
+      const o = j.rested ? { rested: true } : undefined;
+      if (E.oddsCached(S, j.destId, j.personId, j.kit, o)) continue;
+      if (did && now() - t0 + OQ.est > OQ.budget) { if (j.sheet) left++; continue; }
+      const a = now(); E.odds(S, j.destId, j.personId, j.kit, o); const ms = now() - a;
+      OQ.est = OQ.est * 0.6 + ms * 0.4; OQ.n++; OQ.ms += ms; if (ms > OQ.max) OQ.max = ms; did++;
+      OQ.recent.push(ms); if (OQ.recent.length > 300) OQ.recent.shift();
+    }
+    if (did) { const f = now() - t0; OQ.frames++; if (f > OQ.maxFrame) OQ.maxFrame = f; ui.dirty = true; ui.panelDirty = true; }
+    // measurement: how long the open run sheet took until every number on it was known
+    if (isOv('run') && rs.openedAt && !rs.filledAt && !left && !jobs.some((j) => j.sheet && !E.oddsCached(S, j.destId, j.personId, j.kit, j.rested ? { rested: true } : undefined))) {
+      rs.filledAt = now();
+      OQ.fills.push({ ms: Math.round(rs.filledAt - rs.openedAt), computed: OQ.n - rs.n0, frames: OQ.frames - rs.f0 });
+      if (OQ.fills.length > 50) OQ.fills.shift();
+    }
+  }
+  function oddsStats() {
+    const r = OQ.recent.slice().sort((a, b) => a - b), n = r.length;
+    return { computed: OQ.n, totalMs: +OQ.ms.toFixed(2), avgMs: OQ.n ? +(OQ.ms / OQ.n).toFixed(3) : 0, p95Ms: n ? +r[Math.min(n - 1, Math.floor(n * 0.95))].toFixed(3) : 0,
+      maxMs: +OQ.max.toFixed(3), maxFrameMs: +OQ.maxFrame.toFixed(3), framesWithWork: OQ.frames, budgetMs: OQ.budget, fills: OQ.fills.slice() };
+  }
+
+  // ---------------------------------------------------------------------------------------------- the run sheet (6.2, 8.7.1)
+  // rs survives while a JSON card sits on top of the sheet; it resets when the sheet opens afresh.
+  const rs = { destId: null, personId: null, picked: false, kit: null, lowUntil: 0, openedAt: 0, filledAt: 0, n0: 0, f0: 0 };
+  function rsReset(a) {
+    const open = V.dests.filter((d) => d.open);
+    let dest = a.destId && V.dests.find((d) => d.id === a.destId && d.open) ? a.destId : V.play ? V.play.destId : S.lastDest;
+    if (!V.dests.find((d) => d.id === dest && d.open)) dest = (open[0] || V.dests[0]).id;
+    rs.destId = dest; rs.personId = a.personId || (V.play && V.play.destId === dest ? V.play.personId : null); rs.picked = !!a.personId;
+    rs.kit = null; rs.lowUntil = 0; rsMark();
+  }
+  function rsMark() { rs.openedAt = now(); rs.filledAt = 0; rs.n0 = OQ.n; rs.f0 = OQ.frames; }
+  // the selected runner: the one picked (or sent from a card), else the suggestion for this destination (cached odds;
+  // until they are known it follows the engine's fallback order, so the preselection settles within a few frames)
+  function rsSel() {
+    const strip = E.strip(S, rs.destId);
+    if (rs.personId && strip.some((r) => r.personId === rs.personId)) return rs.personId;
+    const sg = E.suggest(S, rs.destId);
+    return sg ? sg.personId : strip.length ? strip[0].personId : null;
+  }
+  function rsCard(sel) { return sel && E.oddsCached(S, rs.destId, sel, rs.kit) ? E.runCard(S, rs.destId, sel, rs.kit) : null; }
+  OVERLAYS.run = {
+    dark: true,
+    onOpen(a) { if (!a.inited) { a.inited = true; rsReset(a); } else rsMark(); },
+    render(v) { return v.pending ? null : rsHtml(v); },
+    esc() { closeOverlay('run'); },
   };
-  OVERLAYS.person = {
-    render(v, a) {
-      const p = personV(a.id); if (!p) return null;
-      const trav = p.arrivedHow === 'traveler', inn = v.inn;
-      let s = '<div class="card wide"><button class="xbtn x" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button><div class="cb"><div class="meet">' + portrait(p.look, 96, p.state === 'down' || p.state === 'fallen') + '<div style="min-width:0">' +
-        '<div class="who">' + esc(p.fullName) + '<small>, ' + p.age + '</small></div><p>' + esc(p.card) + '</p><div class="chips">' + pill(p.roleChip) + pill(p.traitChip, 'warm') + (p.nickChip ? pill(p.nickChip, 'spk') : '') + '</div>' +
-        '<p class="soft" style="font-size:12px">' + esc(p.ttlLine) + '</p><p class="soft" style="font-size:12px">Lv ' + p.lv + ' · ' + fmt.num(p.xp) + ' / ' + fmt.num(p.xpTo) + ' XP · ' + esc(p.pill) + (p.house ? ' · the ' + esc(p.house) + ' House' : '') + '</p></div></div>';
-      if (!trav && p.history && p.history.length) { s += '<div class="sec">History</div>'; for (const h of p.history.slice(-5).reverse()) s += '<div class="soft" style="font-size:12.5px">' + esc(h[1]) + '</div>'; }
-      s += '</div><div class="cf">';
-      if (trav && inn) s += btn({ do: 'invite', data: { id: p.id }, cls: 'primary' + (inn.canInvite.ok ? '' : ' off'), why: inn.canInvite.err === 'beds' ? 'No free bed' : inn.canInvite.err === 'cost' ? 'Need ' + fmt.num(inn.invitePrice - v.res.cans) + ' more cans' : null, label: 'INVITE · ' + fmt.num(inn.invitePrice) + ' cans', primary: true });
-      else {
-        if (p.state === 'rest') s += skipBtn('rest:' + p.id, E.price.skip(p.restLeftMs / 1000, S), 'restNow', { id: p.id }, 'REST NOW');
-        if (p.state === 'down') s += btn({ do: 'decide', data: { id: p.id }, cls: 'primary', label: 'DECIDE', primary: true });
-        if (p.canRun) s += btn({ do: 'send', data: { id: p.id }, cls: 'primary', label: 'SEND TONIGHT', primary: true });
+  function rsHtml(v) {
+    const wide = wideL(), dest = rs.destId, strip = E.strip(S, dest), sel = rsSel(), p = sel ? personV(sel) : null, c = rsCard(sel);
+    const g = v.goal, gd = S.goal < 9 && !g.done && g.target && g.target.kind === 'dest' ? g.target.destId : null;   // the onboarding spotlight (7.1)
+    let s = '<div class="rs"><div class="rs-head"><h2>NIGHT ' + (v.night + 1) + ' · WHO GOES TONIGHT?</h2>' +
+      '<button class="xbtn" data-do="rsClose" aria-label="Close">' + ic('close') + '</button></div><div class="rs-dests" aria-label="Destinations">';
+    for (const d of v.dests) {
+      const on = d.id === dest;
+      let pips = '<span class="pips" aria-hidden="true">'; for (let i = 1; i <= 6; i++) pips += '<i' + (i <= d.n ? ' class="f"' : '') + '></i>'; pips += '</span>';
+      const l2 = d.open ? '<span class="dl">' + ic('brick') + fmt.num(d.bricks) + ' · ' + ic('can') + fmt.num(d.cans) + '</span>' + (d.cleared ? '<span></span>' : '<span class="fc">✦ ' + d.firstSparks + '</span>')
+        : '<span class="dl">' + ic('lock', '#a9aeb3') + esc(d.lock) + '</span><span></span>';
+      const why = d.open ? null : d.name + (/^Tower/.test(d.lock) ? ' opens at ' + d.lock : ': ' + d.lock.toLowerCase());
+      s += '<button class="dest' + (on ? ' on' : '') + (d.open ? '' : ' locked') + (gd === d.id && !on ? ' pulse' : '') + '" data-do="rsDest" data-id="' + d.id + '" data-k="' + d.id + '" aria-pressed="' + on + '"' +
+        (why ? ' aria-disabled="true" data-why="' + esc(why) + '"' : '') + ' aria-label="' + esc(d.name + ', threat ' + d.n + ' of 6' + (d.open ? ', win ' + d.bricks + ' bricks and ' + d.cans + ' cans' : ', locked: ' + d.lock)) + '">' +
+        '<span class="dn">' + esc(d.name) + '</span>' + pips + l2 + '</button>';
+    }
+    s += '</div><div class="rs-right"><div class="rs-strip" aria-label="Who can go">';
+    for (const r of strip) {
+      const q = personV(r.personId); if (!q) continue;
+      const home = r.personId === sel && c ? c.odds.home : r.home;
+      const badge = home == null ? '…' : fmt.pct(home), bc = home == null ? 'wait' : home >= 0.85 ? 'good' : home >= 0.7 ? 'ok' : 'low';
+      const chip = r.state === 'recovering' ? r.chip.replace('Recovering', 'Rec.') : r.chip;
+      s += '<button class="rn' + (r.personId === sel ? ' on' : '') + '" data-do="rsPick" data-id="' + r.personId + '" data-k="' + r.personId + '" aria-pressed="' + (r.personId === sel) + '" aria-label="' +
+        esc(q.first + ', home ' + (home == null ? 'not known yet' : badge) + ', ' + r.chip) + '"><span class="pp">' + portrait(q.look, Math.round((wide ? 40 : 32) * (ui.layout.k || 1)), false, 'pi') +
+        '<span class="ob ' + bc + '">' + badge + '</span></span><b>' + esc(q.first) + '</b><span class="sc ' + r.state + '">' + esc(chip) + '</span></button>';
+    }
+    if (!strip.length) s += '<p class="empty">Nobody can go right now.</p>';
+    s += '</div>' + rsCardHtml(p, c, wide);
+    const json = '<button class="jlink" data-do="rsHandoff" aria-label="Sent to the game: the handoff JSON">Sent to the game<b>›</b></button>';
+    const rest = rsRestHtml(p, c, wide), kits = rsKitHtml(dest, c, wide), go = rsGoHtml(p, c, gd === dest);
+    if (wide) s += '<div class="rs-rowa">' + kits + rest + '</div><div class="rs-rowb">' + json + go + '</div>';
+    else s += '<div class="rs-rowa">' + json + rest + '</div><div class="rs-rowb">' + kits + go + '</div>';
+    return s + '</div></div>';
+  }
+  function rsCardHtml(p, c, wide) {
+    if (!p) return '<div class="rs-card"><p class="empty">Nobody can go right now. A drifter walks in when nobody is home.</p></div>';
+    const dv = E.derived(S, p.id, rs.destId), f = lvFrac(p.lv, p.xp, p.xpFrom, p.xpTo);
+    let s = '<div class="rs-card">' + pp(p.look, wide ? 72 : 48) +
+      '<div class="rc-info"><div class="rc-name">' + esc(p.fullName) + (wide ? '' : '<small>LV ' + p.lv + '</small>') + '</div><div class="rc-role">' + esc(dv.roleLine) + '</div><div class="rc-ttl">' + esc(dv.ttlLine) + '</div>' +
+      '<div class="rc-chips">' + (wide ? pill(p.traitChip, 'warm') : pill(dv.roleLine) + pill(p.traitName.toUpperCase(), 'warm')) + '</div>' +
+      '<div class="rc-lv"><b>LV ' + p.lv + '</b><span class="lvbar"><i style="width:' + (f * 100).toFixed(1) + '%"></i></span><small>' + (p.lv >= 10 ? 'max level' : fmt.num(p.xp) + ' / ' + fmt.num(p.xpTo) + ' XP') + '</small></div></div><div class="rc-odds">';
+    if (!c) return s + '<div class="rc-big"><span class="h">HOME …</span><span class="sep">·</span><span class="d">DEATH …</span></div><div class="rc-l one">Working out the odds from 400 runs…</div></div></div>';
+    const o = c.odds, safe = o.safe, q = safe === 'home' ? 'close to home' : safe === 'third' ? 'nobody dies before your third person' : null;
+    s += '<div class="rc-big"><span class="h">' + esc(c.homeText) + '</span><span class="sep">·</span><span class="d' + (c.deathRed ? ' red' : '') + '">' + esc(q ? 'DEATH 0%' : c.deathText) + '</span>' +
+      (q ? '<span class="q">· ' + q + '</span>' : '') + '</div>';
+    const lines = [];
+    if (q) lines.push(['q', cap1(q) + '.']);
+    if (c.fallLine) lines.push(['cost', c.fallLine]);                     // R15: what a fall would cost, before GO
+    if (c.tiredLine) lines.push(['tired', c.tiredLine]);
+    else if (p.state === 'rest') lines.push(['tired', (p.hpText || '') + ' now · the rested odds are on the way']);
+    lines.push(['hint', c.hint]);
+    const one = c.fallLine ? 'cost' : 'hint';                             // 568: one 13 px line (8.7.1)
+    for (const l of lines) s += '<div class="rc-l ' + l[0] + (l[0] === one ? ' one' : '') + '">' + esc(l[1]) + '</div>';
+    return s + '</div></div>';
+  }
+  function rsKitHtml(dest, c, wide) {
+    const pr = (V.dests.find((x) => x.id === dest) || {}).kit || { medkit: 0, pills: 0, bomb: 0 }, k = E.kitNorm(S, dest, rs.kit);
+    let s = '<div class="kits" role="group" aria-label="The kit: packed if the cans allow, you only pay for what gets used">';
+    for (const it of KIT_ITEMS) {
+      const open = kitUnlocked(it), on = open && !!k[it], t = c ? c.toggles.find((x) => x.item === it) : null;
+      const eff = t && t.delta != null ? signPct(t.delta) : open ? '…' : '';
+      const aria = KIT_WORD[it] + (open ? ', ' + pr[it] + ' cans, ' + (on ? 'packed' : 'left at home') + (t && t.delta != null ? ', ' + eff + ' home' : '') : ', needs ' + kitLock(it));
+      s += '<button class="kit' + (on ? ' on' : '') + (open ? '' : ' lock') + '" data-do="rsKit" data-item="' + it + '" aria-pressed="' + on + '" aria-label="' + esc(aria) + '"' +
+        (open ? '' : ' aria-disabled="true" data-why="' + esc(KIT_WORD[it] + ' needs ' + kitLock(it)) + '"') + '>' + ic(it) +
+        '<span class="kt"><b>' + esc(KIT_WORD[it]) + '</b><small>' + (open ? ic('can') + pr[it] + (wide ? ' · <span class="e">' + eff + '</span>' : '') : ic('lock', '#a9aeb3') + (it === 'bomb' ? 'ARM 2' : 'CLINIC')) + '</small></span>' +
+        (on ? '<span class="ck">' + ic('check', '#12161c') + '</span>' : '') + '</button>';
+    }
+    return s + '</div>';
+  }
+  // REST NOW (R7): only while the selected runner is not fully rested; at 568 the label carries the rested odds
+  function rsRestHtml(p, c, wide) {
+    if (!p || p.state !== 'rest') return '';
+    const pr = E.price.skip(p.restLeftMs / 1000, S), key = 'rest:' + p.id, conf = skipConfirming(key);
+    const after = !wide && c && c.rest ? ' → ' + fmt.pct(c.rest.home) : '';
+    const label = pr === 0 ? 'REST NOW · FREE' : 'REST NOW · ' + pr + ' ✦' + (conf ? '?' : '');
+    return '<button class="btn ' + (pr === 0 ? 'good' : 'spark' + (conf ? ' confirm' : '')) + ' rest-btn" data-do="restNow" data-id="' + p.id + '" aria-label="' +
+      esc('Rest now: ' + (pr ? pr + ' sparks' : 'free') + (c && c.rest ? ', home ' + fmt.pct(c.rest.home) + ' after' : '')) + '">' + esc(label + after) + '</button>';
+  }
+  function rsGoHtml(p, c, pulse) {
+    if (!p) return '<button class="go-btn off" data-do="noop" aria-disabled="true" data-why="Nobody can go right now">GO</button>';
+    const name = 'GO · ' + p.first.toUpperCase();
+    if (!c) return '<button class="go-btn off" data-do="rsGo" data-primary="1" aria-disabled="true" data-why="One moment: working out the odds">' + esc(name) + '<small>working out the odds…</small></button>';
+    if (c.go.err === 'cost') return '<button class="go-btn off" data-do="rsGo" data-primary="1" aria-disabled="true" data-why="' + esc('Need ' + fmt.num(c.kitTotal - S.res.cans) + ' more cans for the kit') + '">' + esc(name) + '<small>not enough cans for the kit</small></button>';
+    const armed = c.low && Date.now() < rs.lowUntil;
+    const sub = armed ? 'tap again to go' : c.low ? 'home ' + fmt.pct(c.odds.home) : c.kitTotal ? c.kitTotal + ' cans held for the kit' : 'no kit packed';
+    return '<button class="go-btn' + (c.low ? ' low' : '') + (armed ? ' armed' : '') + (pulse && !c.low ? ' pulse' : '') + '" data-do="rsGo" data-primary="1" aria-label="' + esc((c.low ? 'Run it anyway? ' : 'Go: ') + p.first + ', ' + c.homeText + ', ' + c.deathText) + '">' +
+      esc(c.low ? 'RUN IT ANYWAY?' : name) + '<small>' + esc(sub) + '</small></button>';
+  }
+  Object.assign(DO, {
+    rsClose() { closeOverlay('run'); },
+    rsDest(el) { const id = el.dataset.id; if (!id || id === rs.destId) return; rs.destId = id; rs.kit = null; rs.lowUntil = 0; if (!rs.picked) rs.personId = null; rsMark(); renderOverlay(); },
+    rsPick(el) { const id = el.dataset.id; if (rs.personId !== id || !rs.picked) { rs.personId = id; rs.picked = true; rs.kit = null; rs.lowUntil = 0; rsMark(); } renderOverlay(); },
+    rsKit(el) {
+      const it = el.dataset.item, sel = rsSel(); if (!sel || !KIT_ITEMS.includes(it)) return;
+      const pr = (V.dests.find((x) => x.id === rs.destId) || {}).kit, k = E.kitNorm(S, rs.destId, rs.kit);
+      let tot = 0; for (const x of KIT_ITEMS) if (k[x]) tot += pr[x];
+      if (!k[it] && tot + pr[it] > S.res.cans) { toast('Need ' + fmt.num(tot + pr[it] - S.res.cans) + ' more cans to pack the ' + D.TEXT.kitLower[it], { kind: 'bad', icon: 'can' }); return; }
+      k[it] = k[it] ? 0 : 1; rs.kit = k; rs.personId = sel; rs.lowUntil = 0;
+      renderOverlay();
+      if (!wideL()) {                                             // 568: the toggle's effect shows in a toast (8.7.1)
+        const dl = E.kitDeltas(S, rs.destId, sel, k, { cachedOnly: true }), d = dl && dl[it] != null ? ' · ' + signPct(dl[it]) + ' home' : '';
+        toast(KIT_WORD[it] + ' · ' + pr[it] + ' cans' + d + (k[it] ? ' · packed' : ' · left at home'), { icon: it });
       }
-      return s + '</div></div>';
     },
+    rsGo() {
+      const sel = rsSel(), c = rsCard(sel); if (!sel) return;
+      if (!c) { toast('One moment: working out the odds'); return; }
+      if (c.low && Date.now() >= rs.lowUntil) {                   // "Run it anyway?": a second tap within 3 s
+        rs.lowUntil = Date.now() + 3000; renderOverlay();
+        setTimeout(() => { if (isOv('run')) { ui.panelDirty = true; renderOverlay(); } }, 3050);
+        return;
+      }
+      const r = doAct({ type: 'startRun', destId: rs.destId, personId: sel, kit: c.kit, confirmLow: !!c.low }, { quiet: true });
+      rs.lowUntil = 0;
+      if (!r.ok) { if (r.err === 'confirm') { rs.lowUntil = Date.now() + 3000; renderOverlay(); return; } explain(r); renderOverlay(); return; }
+      goFlow(sel, r.data);
+    },
+    rsHandoff() {
+      const sel = rsSel(); if (!sel) return;
+      const h = E.buildHandoff(S, rs.destId, sel, rs.kit, null);
+      if (h) openOverlay('json', { title: 'SENT TO THE GAME', sub: 'Tonight’s handoff to Two Thumbs Left. A preview: the run seed is drawn at GO.', json: h });
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------- GO: the walk to the gate (4.12, 6.4)
+  // The handoff, refs, the held kit and the run-warp allowance are saved by startRun before anything moves. The runner
+  // walks to the gate with the camera following (1.2 s) and through it, then the screen fades to night. Homecomings
+  // wait (iso.holdArrivals) until the result card closes.
+  let flow = null;                                                // { personId, runId, opened }
+  function goFlow(pid, data) {
+    closeOverlay('run');
+    if (iso) iso.holdArrivals(true);
+    flow = { personId: pid, runId: data.runId, opened: false };
+    const f = flow, toNight = () => { if (flow !== f || f.opened) return; openRunScreen(); };
+    try { if (iso) iso.walkOut(pid, { follow: true, onGate: () => setTimeout(toNight, ui.reduced ? 120 : 420) }); } catch (e) { console.error(e); }
+    setTimeout(toNight, ui.reduced ? 600 : 2600);                // a fallback when the walk is cut short or off screen
+  }
+  function openRunScreen() {
+    if (!S.pending || isOv('runscreen')) return;
+    if (flow) flow.opened = true;
+    if (iso) iso.holdArrivals(true);
+    if (ui.mode) cancelMode();
+    if (ui.sheet) closeSheet();
+    openOverlay('runscreen', {});
+  }
+
+  // ---------------------------------------------------------------------------------------------- the run screen (6.4, 8.7.2)
+  // The simulated night: the strip from the start room to the safe room, the model's events popping as the dot reaches
+  // them, the HP bar (temporary HP in white), the kill counter; » jumps to the end. A reload replays the same night
+  // (the engine's runSim reads the seed and run input saved at GO). "Wait for a real result" (the Lab) shows the
+  // handoff and waits for a pasted result, with a way to simulate it instead.
+  let rsc = null;
+  const FIGHT_W = { streets: 0.3, horde: 1, gate: 1.6 };
+  OVERLAYS.runscreen = {
+    dark: true,
+    onOpen() { if (!rsc || !S.pending || rsc.runId !== S.pending.runId) rscInit(); if (iso) iso.holdArrivals(true); },
+    render() { if (!S.pending && !(rsc && rsc.resolving)) return null; return rsc ? rsc.html : null; },
+    esc() { if (rsc && !rsc.sim) closeOverlay('runscreen'); else DO.rscSkip(); },
   };
+  function rscInit() {
+    const pe = S.pending; if (!pe) { rsc = null; return; }
+    const sim = pe.source === 'sim', h = pe.handoff || {}, pl = h.player || {};
+    rsc = { runId: pe.runId, personId: pe.personId, sim, t0: 0, dur: Math.max(1000, (S.lab.runScreenS || 8) * 1000), idx: 0, ended: false, endAt: 0, resolved: false, resolving: false,
+      max: pl.maxHp || 100, hp: Math.min(pl.maxHp || 100, pl.startHp || pl.maxHp || 100), temp: 0, bumps: 0, lastBeat: 0, lastF: 0, gate: false, evs: [], res: null, end: 1, trickle: 0 };
+    if (sim) {
+      const res = E.runSim(S); rsc.res = res; rsc.win = res.result === 'safe_room';
+      const end = rsc.win ? 1 : clamp(+res.progress || 0, 0.02, 1), T = Math.max(1, res.time);
+      rsc.end = end;
+      for (const e of res.events || []) {
+        const k = e[1]; if (k === 'safe_room' || k === 'overrun_end') continue;
+        rsc.evs.push({ t: e[0], k, v: e[2], f: k === 'overrun' ? end : clamp(e[0] / T, 0, end), kills: 0 });
+      }
+      // the kill counter: 40 % trickles in along the way, 60 % lands at the fights (weighted like the model's fights)
+      let tw = 0; const fights = rsc.evs.filter((e) => FIGHT_W[e.k]); for (const e of fights) tw += FIGHT_W[e.k];
+      const K = res.kills || 0, fk = tw ? Math.round(K * 0.6) : 0; rsc.trickle = K - fk;
+      let given = 0; fights.forEach((e, i) => { e.kills = i === fights.length - 1 ? fk - given : Math.round(fk * FIGHT_W[e.k] / tw); given += e.kills; });
+    }
+    rsc.html = rscHtml(pe);
+  }
+  function rscHtml(pe) {
+    const h = pe.handoff || {}, d = V.dests.find((x) => x.id === pe.destId) || {}, p = personV(pe.personId), wide = wideL();
+    const name = p ? p.fullName : (h.runner && h.runner.name) || 'The runner';
+    let s = '<div class="rsc" data-k="rsc-' + esc(pe.runId) + '"><div class="rsc-top">' + pp(p ? p.look : null, wide ? 64 : 48) + '<div class="rsc-who"><b>' + esc(name) + '</b><span>Night ' + pe.night + ' · ' + esc(d.name || '') + '</span></div>';
+    if (!rsc.sim) {
+      s += '</div><button class="xbtn skip" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button><div class="rsc-wait"><p style="margin:0;font-size:15px">Waiting for Two Thumbs Left. Paste the result JSON in the Lab’s Runs group, or simulate this night instead.</p>' +
+        '<div class="row">' + (BH.Lab && BH.Lab.open ? btn({ do: 'rscLab', cls: 'ghost', label: 'OPEN THE LAB', icon: 'flask' }) : '') + btn({ do: 'rscSimulate', cls: 'primary', label: 'SIMULATE IT', primary: true }) +
+        btn({ do: 'copyHandoff', cls: 'ghost', label: 'COPY THE HANDOFF' }) + '</div><div class="sec" style="margin-top:6px">Sent to the game</div><pre class="hj">' + esc(JSON.stringify(h, null, 2)) + '</pre></div></div>';
+      return s;
+    }
+    s += '<div class="rsc-hp"><div class="hl">HP<b class="hpn">' + Math.round(rsc.hp) + ' / ' + rsc.max + '</b></div><div class="hpbar"><i class="tmp" style="transform:scaleX(' + (rsc.hp / rsc.max).toFixed(3) + ')"></i><i class="hp" style="transform:scaleX(' + (rsc.hp / rsc.max).toFixed(3) + ')"></i></div></div>' +
+      '<div class="rsc-kills"><small>KILLS</small><b class="kn">0</b></div></div><button class="skip" data-do="rscSkip" data-primary="1" aria-label="Skip to the end">»</button>';
+    s += '<div class="rsc-mid"><div class="rsc-ban" aria-live="polite"><span class="bn"></span></div><div class="track"><i class="lane"></i><i class="done"></i><i class="gatez" style="left:78%;width:14%"></i>' +
+      '<i class="room s"></i><i class="room e"></i><span class="lbl s">START ROOM</span><span class="lbl g" style="left:85%">GATE</span><span class="lbl e">SAFE ROOM</span>';
+    rsc.evs.forEach((e, i) => {
+      const left = 'left:' + (e.f * 100).toFixed(2) + '%';
+      if (e.k === 'streets') s += '<i class="mk" data-i="' + i + '" style="' + left + '"></i>';
+      else if (e.k === 'horde') s += '<i class="mk horde" data-i="' + i + '" style="' + left + '"></i>';
+      else if (e.k === 'pills' || e.k === 'medkit' || e.k === 'noiseBomb') s += '<i class="mk item" data-i="' + i + '" style="' + left + '">' + ic(e.k === 'noiseBomb' ? 'bomb' : e.k) + '</i>';
+      else if (e.k === 'secondWind') s += '<i class="mk sw" data-i="' + i + '" style="' + left + '">SECOND WIND</i>';
+      else if (e.k === 'overrun') s += '<i class="mk ko" data-i="' + i + '" style="' + left + '"></i>';
+    });
+    s += '<i class="dot"><i class="ring"></i></i></div></div><div class="rsc-log" aria-live="polite"></div></div>';
+    return s;
+  }
+  function rscEls() {
+    const root = $('overlay').querySelector('.rsc'); if (!root) return null;
+    if (rsc.el && rsc.el.root === root) return rsc.el;
+    rsc.el = { root, dot: root.querySelector('.dot'), done: root.querySelector('.done'), hp: root.querySelector('.hpbar .hp'), tmp: root.querySelector('.hpbar .tmp'), bar: root.querySelector('.hpbar'),
+      hpn: root.querySelector('.hpn'), kn: root.querySelector('.kn'), log: root.querySelector('.rsc-log'), ban: root.querySelector('.bn'), gate: root.querySelector('.gatez') };
+    return rsc.el;
+  }
+  function rscLog(el, t, text, cls) {
+    if (!el.log) return;
+    for (const q of el.log.children) q.classList.add('old');
+    const p = document.createElement('p'); if (cls) p.className = cls;
+    p.innerHTML = (t != null ? '<b>' + fmt.clock(t) + '</b>' : '') + esc(text);
+    el.log.appendChild(p);
+    while (el.log.children.length > 3) el.log.removeChild(el.log.firstChild);
+  }
+  function rscBanner(el, text, cls, arrow) {
+    if (!el.ban) return;
+    el.ban.className = 'bn'; void el.ban.offsetWidth;
+    el.ban.className = 'bn show' + (cls ? ' ' + cls : '');
+    el.ban.innerHTML = esc(text) + (arrow ? '<i class="arrow"></i>' : '');
+    clearTimeout(rsc.banT); rsc.banT = setTimeout(() => { if (el.ban && rsc && !rsc.ended) el.ban.className = 'bn'; }, 1400);
+  }
+  function rscHp(el) {
+    const f = clamp(rsc.hp / rsc.max, 0, 1), ft = clamp((rsc.hp + rsc.temp) / rsc.max, 0, 1);
+    if (el.hp) el.hp.style.transform = 'scaleX(' + f.toFixed(3) + ')';
+    if (el.tmp) el.tmp.style.transform = 'scaleX(' + ft.toFixed(3) + ')';
+    if (el.bar) el.bar.classList.toggle('low', f < 0.3);
+    if (el.hpn) el.hpn.textContent = Math.round(rsc.hp) + (rsc.temp > 0 ? ' +' + Math.round(rsc.temp) : '') + ' / ' + rsc.max;
+  }
+  function rscFire(el, e) {
+    const mk = el.root.querySelector('.mk[data-i="' + rsc.evs.indexOf(e) + '"]'); if (mk) mk.classList.add('on');
+    const hit = (d) => { d = Math.max(0, +d || 0); const ft = Math.min(rsc.temp, d); rsc.temp -= ft; rsc.hp = Math.max(1, rsc.hp - (d - ft)); return d; };
+    switch (e.k) {
+      case 'streets': { const d = hit(e.v); rsc.bumps += e.kills; rscLog(el, e.t, 'Wanderers · ' + (d ? '−' + d + ' HP' : 'no harm')); break; }
+      case 'horde': { const d = hit(e.v); rsc.bumps += e.kills; rscLog(el, e.t, 'HORDE! · −' + d + ' HP', 'bad'); rscBanner(el, 'HORDE!', '', true); sfx('horde'); break; }
+      case 'gate': {
+        const d = hit(e.v); rsc.bumps += e.kills; rsc.gate = true; rscLog(el, e.t, 'The gate · −' + d + ' HP', 'bad'); rscBanner(el, 'THE GATE', 'calm');
+        if (el.gate) el.gate.classList.add('hot'); if (el.dot && !ui.reduced) el.dot.classList.add('gate'); sfx('horde', { gate: true }); break;
+      }
+      case 'noiseBomb': rscLog(el, e.t, 'Noise bomb · the horde follows the beeping'); break;   // 6.4 says "they follow": no pronouns on screen
+      case 'pills': rsc.temp = Math.min(rsc.max - rsc.hp, rsc.temp + (+e.v || 50)); rscLog(el, e.t, 'Pills · +' + (+e.v || 50) + ' temporary HP', 'good'); break;
+      case 'medkit': rsc.hp = Math.min(rsc.max, rsc.hp + (+e.v || 0)); rsc.temp = Math.min(rsc.temp, rsc.max - rsc.hp); rscLog(el, e.t, 'Medkit · +' + (+e.v || 0) + ' HP', 'good'); break;
+      case 'secondWind': rscLog(el, e.t, 'SECOND WIND', 'bad'); rscBanner(el, 'SECOND WIND'); sfx('heartbeat'); break;
+      case 'overrun': {
+        rsc.hp = 0; rsc.temp = 0; const w = { streets: 'in the streets', hordes: 'in a horde', gate: 'at the gate' }[e.v] || 'out there';
+        rscLog(el, rsc.res ? rsc.res.time : e.t, 'Overrun ' + w + '.', 'bad'); if (el.dot) el.dot.classList.add('dead'); break;
+      }
+      default: break;
+    }
+    rsc.lastF = e.f;
+    rscHp(el);
+  }
+  function rscFrame(ts) {
+    if (!rsc || !rsc.sim || rsc.resolved || !isOv('runscreen')) return;
+    const el = rscEls(); if (!el) return;
+    if (!rsc.t0) { rsc.t0 = ts; sfx('drone', { on: true }); rscLog(el, 0, 'Out of the start room.'); }
+    const k = clamp((ts - rsc.t0) / rsc.dur, 0, 1), x = k * rsc.end;
+    while (!rsc.ended && rsc.idx < rsc.evs.length && rsc.evs[rsc.idx].f <= x + 1e-9) rscFire(el, rsc.evs[rsc.idx++]);
+    const shown = rsc.ended ? rsc.end : ui.reduced ? rsc.lastF : x;   // reduced motion: the dot steps from event to event (8.17)
+    if (el.dot) el.dot.style.left = (shown * 100).toFixed(2) + '%';
+    if (el.done) el.done.style.transform = 'scaleX(' + shown.toFixed(4) + ')';
+    if (el.kn && !rsc.ended) el.kn.textContent = String(Math.round(rsc.trickle * (rsc.end ? Math.min(1, x / rsc.end) : 1)) + rsc.bumps);
+    if (!rsc.ended && rsc.hp > 0 && rsc.hp / rsc.max < 0.3 && ts - rsc.lastBeat > 900) { rsc.lastBeat = ts; sfx('heartbeat'); }
+    if (k >= 1 && !rsc.ended) rscEnd(el, ts);
+    if (rsc.ended && ts - rsc.endAt > (rsc.skipped ? 350 : ui.reduced ? 500 : 1100)) rscResolve();
+  }
+  function rscEnd(el, ts) {
+    while (rsc.idx < rsc.evs.length) rscFire(el, rsc.evs[rsc.idx++]);
+    rsc.ended = true; rsc.endAt = ts;
+    const r = rsc.res;
+    if (el.kn) el.kn.textContent = String(r.kills);
+    if (el.dot) el.dot.style.left = (rsc.end * 100).toFixed(2) + '%';
+    if (el.done) el.done.style.transform = 'scaleX(' + rsc.end.toFixed(4) + ')';
+    if (rsc.win) { rsc.hp = r.endHp; rsc.temp = 0; rscHp(el); rscLog(el, r.time, 'SAFE ROOM · You made it.', 'good'); rscBanner(el, 'YOU MADE IT', 'go'); }
+    else rscBanner(el, 'OVERRUN');
+    sfx('drone', { on: false });
+  }
+  function rscResolve() {
+    if (!rsc || rsc.resolved) return;
+    rsc.resolved = true; rsc.resolving = true;
+    resolveNow({ type: 'resolveRun', source: 'sim' });
+  }
+  // resolve the pending run (the run screen's end, SIMULATE IT, or a pasted result) and show the result card
+  function resolveNow(action) {
+    const before = { bricks: S.res.bricks, cans: S.res.cans, sparks: S.res.sparks };
+    const r = doAct(action, { quiet: true });
+    if (rsc) rsc.resolving = false;
+    if (!r.ok) {
+      const er = r.data && r.data.errors && r.data.errors[0];
+      toast(er || 'The result could not be applied', { kind: 'bad' });
+      if (isOv('runscreen') && !S.pending) closeOverlay('runscreen');
+      return r;
+    }
+    showResult(r.data, before);
+    return r;
+  }
+  Object.assign(DO, {
+    rscSkip() {
+      if (!rsc || !rsc.sim || rsc.resolved) return;
+      const el = rscEls(); if (!el) return;
+      if (!rsc.t0) rsc.t0 = now();
+      if (!rsc.ended) { rsc.skipped = true; rscEnd(el, now()); return; }
+      rscResolve();
+    },
+    rscSimulate() { if (!S.pending) return; if (rsc) { rsc.resolved = true; rsc.resolving = true; } resolveNow({ type: 'resolveRun', source: 'sim' }); },
+    rscLab() { closeOverlay('runscreen'); openLab(); },
+    copyHandoff() { const pe = S.pending; if (pe && pe.handoff) copyText(JSON.stringify(pe.handoff, null, 2)); },
+  });
+
+  // ---------------------------------------------------------------------------------------------- the result card and the fall beat (8.7.3, 6.6.1)
+  // The loot is already in storage when the card opens (resolveRun saved it); the chips keep their old numbers
+  // (ui.inflight) and the gains fly to them when BACK TO TOWN closes the card. On "Overrun." the stats show first, then
+  // "Did Emre make it home?" plays for 1.5 s (two heartbeats, the portrait greys; instant with reduced motion), then
+  // either the Hurt line or the revive offer (opened once). BACK TO TOWN waits for the beat.
+  function showResult(data, before) {
+    const rw = data.reward, gains = {};
+    for (const k of RES) { const g = S.res[k] - before[k]; if (g > 0) { gains[k] = g; ui.inflight[k] += g; } }
+    const a = { rw, notes: data.notes || [], result: data.result, handoff: S.lastRun ? S.lastRun.handoff : null, gains, phase: null, timers: [], started: false, offerShown: false };
+    rsc = null; if (flow) flow.opened = true;
+    if (iso) iso.holdArrivals(true);
+    if (isOv('runscreen')) swapOverlay('result', a); else openOverlay('result', a);
+  }
+  OVERLAYS.result = {
+    dark: true,
+    onOpen(a) { if (!a.started) { a.started = true; resultStart(a); } },
+    onClose(a) { resultClosed(a); },
+    render(v, a) { return resultHtml(v, a); },
+    esc(a) { if (a.phase === 'done') closeOverlay('result'); },
+  };
+  function resultStart(a) {
+    const rw = a.rw, beat = !rw.win && !!(rw.lines && rw.lines.beat);
+    const later = (fn, ms) => a.timers.push(setTimeout(fn, ms));
+    if (!beat) a.phase = 'done';
+    else if (ui.reduced) { a.phase = 'done'; if (rw.outcome === 'down') later(() => resultOffer(a), 60); }   // 8.17: the outcome at once
+    else {
+      a.phase = 'stats';
+      later(() => {
+        a.phase = 'beat'; sfx('fallBeat'); if (isOv('result')) renderOverlay();
+        later(() => { a.phase = 'done'; if (isOv('result')) renderOverlay(); if (rw.outcome === 'down') resultOffer(a); }, 1500);
+      }, 1100);
+    }
+    if (rw.sparks && (rw.sparks.firstClear || rw.sparks.daily)) later(() => sfx('spark'), 450);
+    if (rw.levelUps && rw.levelUps.length) later(() => sfx('levelUp'), 700);
+    if (rw.nickname) later(() => sfx('nickname'), 1000);
+    requestAnimationFrame(countUp);
+  }
+  function resultOffer(a) {
+    if (a.offerShown) return;
+    a.offerShown = true;
+    if (E.offer(S, a.rw.personId)) openOverlay('offer', { personId: a.rw.personId, fromResult: true });
+  }
+  function countUp() {                                            // the loot rows count up (8.7.3); reduced motion shows the totals
+    if (ui.reduced || !isOv('result')) return;
+    const els = Array.prototype.slice.call($('overlay').querySelectorAll('[data-count]')); if (!els.length) return;
+    const t0 = now(), dur = 750;
+    const step = () => {
+      const k = clamp((now() - t0) / dur, 0, 1), e = 1 - Math.pow(1 - k, 3);
+      for (const el of els) if (el.isConnected) el.textContent = fmt.num(Math.round((+el.dataset.count || 0) * e));
+      if (k < 1) requestAnimationFrame(step);
+    };
+    step();
+  }
+  function resultHtml(v, a) {
+    const rw = a.rw, res = a.result || {}, L = rw.lines || {}, p = personV(rw.personId), wide = wideL(), first = p ? p.first : 'The runner';
+    const st = p ? p.state : null, grey = a.phase === 'beat' || (a.phase === 'done' && (st === 'down' || st === 'fallen'));
+    let s = '<div class="rcd"><div class="res-card"><div class="res-body"><div class="res-top">' + pp(p ? p.look : null, wide ? 64 : 52, false, grey ? 'grey' : '') +
+      '<h2 class="' + (rw.win ? 'win' : 'loss') + '">' + esc(L.title || (rw.win ? 'You made it.' : 'Overrun.')) + '<small>' + esc(L.sub || '') + '</small></h2></div>';
+    const stats = [['Time', fmt.clock(res.time || 0)], ['Kills', fmt.num(res.kills || 0)], ['Accuracy', (res.accuracy || 0) + '%'], ['Shoves', fmt.num(res.shoves || 0)], ['Damage taken', fmt.num(res.damageTaken || 0)], ['Hordes', fmt.num(res.hordes || 0)]];
+    s += '<dl class="stats">' + stats.map((x) => '<div><dt>' + x[0] + '</dt><dd>' + x[1] + '</dd></div>').join('') + '</dl><div class="loot">';
+    const cnt = (n) => '<b>+<span data-count="' + n + '">' + fmt.num(n) + '</span></b>';
+    s += '<div class="lr"><span class="amt">' + ic('brick') + cnt(rw.bricks) + '</span>' + (rw.killBricks ? '<span class="soft">' + esc(L.salvage) + '</span>' : '') +
+      '<span class="amt">' + ic('can') + cnt(rw.cans) + '</span>' + (rw.sparks.firstClear || rw.sparks.daily ? '<span class="amt spark-t">' + ic('spark') + '<b>+' + (rw.sparks.firstClear + rw.sparks.daily) + '</b></span>' : '') + '</div>';
+    const f = lvFrac(rw.lvTo, rw.xpNow, rw.xpFrom, rw.xpTo), up = rw.levelUps && rw.levelUps.length;
+    s += '<div class="lr xp"><span class="amt">' + cnt(rw.xp) + '<b>XP</b></span><span class="lvbar grow"><i style="width:' + (f * 100).toFixed(1) + '%"></i></span><span class="soft">Lv ' + rw.lvTo +
+      (rw.lvTo < 10 ? ' · ' + fmt.num(rw.xpNow) + ' / ' + fmt.num(rw.xpTo) : '') + '</span>' + (up ? '<span class="lvpop">LV ' + rw.lvTo + '</span>' : '') + '</div>';
+    const sp = [L.firstClear, L.daily].filter(Boolean);
+    if (sp.length) s += '<div class="lr spark-t">' + ic('spark') + esc(sp.join(' · ')) + '</div>';
+    if (L.nick) s += '<div class="nickc">' + esc(L.nick).replace('“' + esc(rw.nickName) + '”', '<b>“' + esc(rw.nickName) + '”</b>') + '</div>';
+    if (L.kit) s += '<div class="lr soft">' + esc(L.kit) + '</div>';
+    if (L.overflow) s += '<div class="lr" style="color:var(--timer)">' + esc(L.overflow) + '</div>';
+    s += resultFall(a, p, first) + '</div></div></div>';
+    const back = a.phase === 'done';
+    s += '<div class="res-bar"><span class="links"><button class="jlink" data-do="resJson" data-which="handoff">Sent to the game<b>›</b></button><button class="jlink" data-do="resJson" data-which="result">Back from the game<b>›</b></button></span>' +
+      '<button class="go-btn' + (back ? '' : ' off') + '" data-do="resultBack" data-primary="1"' + (back ? '' : ' aria-disabled="true" data-why="One moment"') + '>BACK TO TOWN</button></div></div>';
+    return s;
+  }
+  function resultFall(a, p, first) {
+    const rw = a.rw, L = rw.lines || {};
+    if (rw.win) return L.rest ? '<div class="fall">' + ic('house') + '<span class="grow">' + esc(L.rest) + '</span></div>' : '';
+    if (a.phase === 'stats') return '';
+    if (a.phase === 'beat') return '<div class="fall beat"><i></i><span class="grow">' + esc(L.beat) + '</span></div>';
+    if (rw.outcome === 'hurt') return '<div class="fall">' + ic('heart', '#ff8f7a') + '<span class="grow">' + esc(L.fall) + '</span></div>';
+    // Down: what happened since (the offer decides it)
+    if (!p) return '';
+    if (p.state === 'down') return '<div class="fall beat">' + ic('heart', '#ff4b2f') + '<span class="grow">' + esc(first + ' is Down · ' + fmt.hoursLeft(p.downLeftMs) + ' to decide.') + '</span>' +
+      btn({ do: 'decide', data: { id: p.id }, cls: 'primary', label: 'DECIDE' }) + '</div>';
+    if (p.state === 'rest') return '<div class="fall">' + ic('heart', '#9fd3cb') + '<span class="grow">' + esc(first + ' is recovering · ' + p.pill.replace(/^Recovering /, '') + ' left.') + '</span></div>';
+    if (p.state === 'ready') return '<div class="fall">' + ic('heart', '#3bd16f') + '<span class="grow">' + esc(first + ' is up and Ready.') + '</span></div>';
+    return '<div class="fall">' + ic('grave') + '<span class="grow">' + esc(first + ' rests in Bellhaven now.') + '</span></div>';
+  }
+  function resultClosed(a) {
+    for (const t of a.timers || []) clearTimeout(t); a.timers = [];
+    const L = ui.layout, k = L.k || 1, from = { x: L.W - L.pr - (L.bb === 'compact' ? 84 : 118) * k, y: L.H - L.pb - 28 * k };
+    for (const r of RES) { const g = a.gains && a.gains[r]; if (g > 0) { ui.inflight[r] = Math.max(0, ui.inflight[r] - g); fly(r, g, from); } }
+    a.gains = {};
+    flow = null;
+    if (iso) iso.holdArrivals(false);
+    const rw = a.rw;
+    if (rw.win) {                                                 // the bell rings twice as the winner comes through the gate
+      ui.bellFor = rw.personId;
+      if (ui.reduced) ringHome(); else setTimeout(() => { if (ui.bellFor === rw.personId) ringHome(); }, 6500);
+    }
+    const pv = personV(rw.personId);                             // watch the homecoming: the camera keeps the gate in view
+    if (iso && pv && pv.state !== 'down' && pv.state !== 'fallen') { try { iso.focus({ kind: 'gate' }, { ease: true }); } catch (e) { /* the gate is always there */ } }
+  }
+  function ringHome() { ui.bellFor = null; if (iso) iso.ringBell(2); sfx('bell', { times: 2 }); }
+  Object.assign(DO, {
+    resultBack() { const o = ui.overlay; if (!o || o.kind !== 'result' || o.args.phase !== 'done') return; closeOverlay('result'); },
+    resJson(el) {
+      const o = ui.overlay; if (!o || o.kind !== 'result') return;
+      const a = o.args, which = el.dataset.which;
+      if (which === 'handoff') { if (a.handoff) openOverlay('json', { title: 'SENT TO THE GAME', sub: 'The handoff of Night ' + a.rw.night + ' to Two Thumbs Left.', json: a.handoff }); return; }
+      openOverlay('json', { title: 'BACK FROM THE GAME', sub: 'The result of Night ' + a.rw.night + ' (' + (a.result && a.result.source === 'sim' ? 'simulated' : a.result && a.result.source === 'game' ? 'from the game' : 'pasted') + '). It carries no loot: Bellhaven pays from these stats.', json: a.result, notes: a.notes, details: true });
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------- the revive offer (6.6.2, 8.8)
+  // One calm offer: no ticking seconds, no pulsing, no shop link, no discount; a short balance disables a button with
+  // "Need 320 more cans". Closing (✕, DECIDE LATER, Esc, the page) is "decide later"; nothing reopens it by itself.
+  OVERLAYS.offer = {
+    render(v, a) { return offerHtml(a); },
+    esc() { DO.offerLater(); },
+  };
+  function offerHtml(a) {
+    const o = E.offer(S, a.personId); if (!o) return null;
+    const wide = wideL();
+    let s = '<div class="offer" role="document"><button class="xbtn x" data-do="offerLater" aria-label="Decide later">' + ic('close') + '</button>';
+    s += '<div class="of-who">' + pp(o.look, wide ? 96 : 80, true) + '<h2>' + esc(o.title) + '</h2><p>' + esc(o.roleLine) + '</p><p class="w">' + esc(o.where) + '</p>' + (o.revivedText ? '<p>' + esc(o.revivedText) + '</p>' : '') + '</div>';
+    s += '<div class="of-btns">' +
+      btn({ do: 'revive', data: { id: o.personId, pay: 'cans' }, cls: o.revive.ok ? 'primary' : '', off: !o.revive.ok, why: o.revive.needText, label: esc(o.revive.label) + ic('can'), sub: esc(o.revive.ok ? o.revive.sub : o.revive.needText), aria: 'Revive with ' + o.revive.cans + ' cans, ' + o.revive.sub }) +
+      btn({ do: 'revive', data: { id: o.personId, pay: 'sparks' }, cls: 'spark', off: !o.reviveNow.ok, why: o.reviveNow.needText, label: esc(o.reviveNow.label), sub: esc(o.reviveNow.ok ? o.reviveNow.sub : o.reviveNow.needText), aria: 'Revive now with ' + o.reviveNow.sparks + ' sparks, ready at once' }) +
+      btn({ do: 'goodbye', data: { id: o.personId }, cls: 'ghost', label: 'SAY GOODBYE', sub: esc(o.goodbye.sub) }) + '</div>';
+    return s + '<div class="of-foot"><span>' + esc(o.leftText) + '</span>' + btn({ do: 'offerLater', cls: 'ghost', label: 'DECIDE LATER' }) + '</div></div>';
+  }
+  // an offer for this person is showing or waiting already (the stranger, the Lab's kill and a DECIDE can meet)
+  const offerOpen = (pid) => (isOv('offer') && ui.overlay.args.personId === pid) || ui.queue.some((q) => q.kind === 'offer' && q.args.personId === pid);
+  function whereDown(p) { return !p ? '' : p.where === 'gate' ? 'at the gate' : p.where === 'clinic' ? 'in the Clinic' : 'at home'; }
+  Object.assign(DO, {
+    offerLater() {
+      const o = ui.overlay; if (!o || o.kind !== 'offer') return;
+      const p = personV(o.args.personId);
+      closeOverlay('offer');
+      if (p && p.state === 'down') toast(p.first + ' waits ' + whereDown(p) + ' · ' + fmt.hoursLeft(p.downLeftMs) + ' to decide.', { icon: 'heart' });
+    },
+    revive(el) {
+      const id = el.dataset.id, pay = el.dataset.pay;
+      const r = doAct({ type: 'revive', personId: id, pay }, { quiet: true });
+      if (!r.ok) { explain(r); return; }
+      if (isOv('offer')) closeOverlay('offer');
+      const p = personV(id), first = p ? p.first : 'Someone';
+      sfx('revive');
+      toast(pay === 'cans' ? first + ' rests ' + fmt.dur(r.data.restMs / 1000) + (bLv('clinic') >= 1 ? ' in the Clinic.' : '.') : first + ' is up and Ready.', { icon: 'heart', kind: 'good' });
+    },
+    goodbye(el) {
+      const id = el.dataset.id, p0 = personV(id), first = p0 ? p0.first : 'Someone';
+      const r = doAct({ type: 'goodbye', personId: id }, { quiet: true });
+      if (!r.ok) { explain(r); return; }
+      // the grave needs the city: the result card (and this person's card) behind the offer close too
+      ui.queue = ui.queue.filter((q) => { if (q.kind === 'result') { resultClosed(q.args); return false; } return !(q.kind === 'person' && q.args.id === id); });
+      if (isOv('offer')) closeOverlay('offer');
+      if (isOv('result')) closeOverlay('result');
+      sfx('bell', { times: 1, low: true }); if (iso) iso.ringBell(1, { low: true });
+      const gid = r.data && r.data.graveId;
+      if (gid && r.data.spot && iso) {                            // 6.7: move mode on the default spot, LAY TO REST, no ✕
+        ui.sel = null; iso.select(null);
+        try { iso.focus({ kind: 'grave', id: gid }, { ease: true }); } catch (e) { /* the grave is on the land */ }
+        startMove({ kind: 'grave', id: gid }, { ok: 'LAY TO REST', cancel: null, hint: 'Drag to choose a place' });
+        if (ui.mode) ui.mode.onDone = () => toast(first + ' is laid to rest. Tap the grave to remember.', { icon: 'grave', ms: 3500 });
+      } else if (gid) toast('No free tile: ' + first + '’s grave waits for a place.', { icon: 'grave', ms: 4000 });
+    },
+  });
+
+  // ---------------------------------------------------------------------------------------------- the memorial card (8.9)
   OVERLAYS.memorial = {
     render(v, a) {
       const m = E.memorial(S, a.id); if (!m) return null;
-      return '<div class="card"><div class="cb"><div class="meet">' + portrait(m.look, 80, true) + '<div><div class="who" style="font-size:22px">' + esc(m.name) + '</div><p class="soft">' + esc(m.roleLine) + '<br>' + esc(m.usedToBe) + '</p></div></div>' +
-        '<p style="font-style:italic">' + m.epitaph.map(esc).join('<br>') + '</p>' + (m.record ? '<p class="soft">' + esc(m.record) + '</p>' : '') + (m.fellLine ? '<p class="soft">' + esc(m.fellLine) + '</p>' : '') +
-        '</div><div class="cf">' + btn({ do: 'memorialMove', data: { id: m.graveId }, cls: 'ghost', label: 'MOVE' }) + btn({ do: 'closeOverlay', cls: 'primary', label: 'CLOSE', primary: true }) + '</div></div>';
+      let s = '<div class="card mc"><button class="xbtn x" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button><div class="cb"><div class="pc-top">' + pp(m.look, 80, true) + '<div class="pc-txt">' +
+        '<div class="who">' + esc(m.name) + '</div><p class="mut">' + esc(m.roleLine) + '</p><p class="mut">' + esc(m.usedToBe) + '</p></div></div>' +
+        '<p class="epi">' + m.epitaph.map(esc).join('<br>') + '</p>';
+      if (m.record) s += '<p class="soft" style="font-size:13px;margin:4px 0">' + esc(m.record) + '</p>';
+      if (m.fellLine) s += '<p class="soft" style="font-size:13px;margin:4px 0">' + esc(m.fellLine) + '</p>';
+      if (m.waiting) s += '<p class="soft" style="font-size:13px;margin:4px 0">Waiting for a place: the grave stands as soon as a tile frees.</p>';
+      return s + '</div><div class="cf">' + btn({ do: 'memorialMove', data: { id: m.graveId }, cls: 'ghost', label: 'MOVE', off: m.waiting, why: m.waiting ? 'Waiting for a place' : null }) +
+        btn({ do: 'closeOverlay', cls: 'primary', label: 'CLOSE', primary: true }) + '</div></div>';
     },
+    esc() { closeOverlay('memorial'); },
   };
   DO.memorialMove = (el) => { const id = el.dataset.id; closeOverlay('memorial'); startMove({ kind: 'grave', id }); };
-  // what the rest of the page calls; the next stage swaps these for the full run flow, roster and death screens
+  DO.remember = (el) => {                                        // the roster's REMEMBERED: the memorial and the camera on the grave
+    const gid = el.dataset.id, g = V.graves.find((x) => x.id === gid);
+    if (ui.sheet && (ui.layout.portrait || ui.layout.bb !== 'wide')) closeSheet();
+    if (g && g.gx != null && iso) { const t = { kind: 'grave', id: gid }; ui.sel = t; iso.select(t, { focus: true }); }
+    hooks.openMemorial(gid);
+  };
+
+  // ---------------------------------------------------------------------------------------------- the person card and the traveler card (8.6)
+  OVERLAYS.person = {
+    render(v, a) { return personHtml(v, a); },
+    esc() { closeOverlay('person'); },
+  };
+  function stateLine(p) {
+    if (p.state === 'out') { const pe = V.pending; return 'Out tonight' + (pe && pe.personId === p.id ? ' · ' + pe.destName : ''); }
+    if (p.state === 'down') return p.pill + ' left to decide · ' + whereDown(p);
+    const home = p.where === 'clinic' ? 'in the Clinic' : p.house ? 'the ' + p.house + ' House' : 'sleeps on the plaza bench';
+    return p.pill + ' · ' + home;
+  }
+  function personHtml(v, a) {
+    const p = personV(a.id); if (!p || p.state === 'fallen') return null;
+    const trav = p.arrivedHow === 'traveler', wide = wideL(), hist = !trav && a.tab === 'history';
+    let s = '<div class="card pc"><button class="xbtn x" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button><div class="cb">';
+    if (hist) {
+      s += '<div class="pc-top">' + pp(p.look, 56, p.state === 'down') + '<div class="pc-txt"><div class="who">' + esc(p.fullName) + '</div><p class="mut">' + esc(p.roleName + ' · Lv ' + p.lv + ' · ' + fmt.num(p.runs) + (p.runs === 1 ? ' night · ' : ' nights · ') + fmt.num(p.kills) + ' kills') + '</p></div></div>';
+      const h = (p.history || []).slice(-12).reverse();
+      s += '<ul class="hist" aria-label="History">' + (h.length ? h.map((x) => '<li>' + esc(x[1]) + '</li>').join('') : '<li class="soft">Nothing yet.</li>') + '</ul>';
+    } else {
+      const f = lvFrac(p.lv, p.xp, p.xpFrom, p.xpTo);
+      s += '<div class="pc-top">' + pp(p.look, wide ? 96 : 72, p.state === 'down') + '<div class="pc-txt"><div class="who">' + esc(p.fullName) + '<small>, ' + p.age + '</small></div><p>' + esc(p.card) + '</p>' +
+        (p.kinLine ? '<p class="mut">' + esc(p.kinLine) + '</p>' : '') +
+        '<div class="chips">' + pill(p.roleChip) + '</div><div class="mut">' + esc(p.ttlLine) + '</div><div class="chips">' + pill(p.traitChip, 'warm') + (p.nickChip ? pill(p.nickChip, 'spk') : '') + '</div>' +
+        '<div class="mut" style="font-style:italic">“' + esc(p.traitLine) + '”</div>' +
+        '<div class="xp"><span>LV ' + p.lv + '</span><span class="lvbar"><i style="width:' + (f * 100).toFixed(1) + '%"></i></span><small>' + (p.lv >= 10 ? 'max level' : fmt.num(p.xp) + ' / ' + fmt.num(p.xpTo) + ' XP') + '</small></div>' +
+        (trav ? '<div class="mut">Staying at the Inn · leaves when new travelers arrive</div>' : '<div class="mut">' + esc(stateLine(p)) + '</div>') + '</div></div>';
+    }
+    s += '</div><div class="cf">';
+    if (!trav) s += '<span class="grow" style="display:flex;gap:4px">' + ['card', 'history'].map((t) => '<button class="tab' + ((a.tab || 'card') === t ? ' on' : '') + '" data-do="personTab" data-tab="' + t + '" aria-pressed="' + ((a.tab || 'card') === t) + '">' + t.toUpperCase() + '</button>').join('') + '</span>';
+    else s += '<span class="grow"></span>';
+    if (trav) {
+      const inv = inviteInfo();
+      if (inv) s += btn({ do: 'invite', data: { id: p.id }, cls: inv.ok ? 'primary' : '', off: !inv.ok, why: inv.why, label: 'INVITE · ' + fmt.num(inv.price) + ' cans', sub: inv.ok ? null : esc(inv.why), primary: inv.ok, aria: 'Invite ' + p.first + ' for ' + inv.price + ' cans' + (inv.ok ? '' : ': ' + inv.why) });
+    } else {
+      if (p.state === 'rest') s += skipBtn('rest:' + p.id, E.price.skip(p.restLeftMs / 1000, S), 'restNow', { id: p.id }, 'REST NOW');
+      if (p.state === 'down') s += btn({ do: 'decide', data: { id: p.id }, cls: 'primary', label: 'DECIDE', primary: true });
+      if (p.canRun) s += btn({ do: 'send', data: { id: p.id }, cls: 'primary', label: 'SEND TONIGHT', primary: true });
+    }
+    return s + '</div></div>';
+  }
+  DO.personTab = (el) => { const o = ui.overlay; if (!o || o.kind !== 'person') return; o.args.tab = el.dataset.tab; renderOverlay(); };
+  function inviteInfo() {
+    const inn = V.inn; if (!inn || inn.lv < 1) return null;
+    const ci = inn.canInvite;
+    return { ok: ci.ok, price: inn.invitePrice, why: ci.err === 'beds' ? 'No free bed' : ci.err === 'cost' ? 'Need ' + fmt.num(inn.invitePrice - V.res.cans) + ' more cans' : null };
+  }
+  Object.assign(DO, {
+    invite(el) {
+      const id = el.dataset.id, r = doAct({ type: 'invite', travelerId: id });
+      if (r.ok) sfx('invite');
+      if (r.ok && isOv('person') && ui.overlay.args.id === id) closeOverlay('person');
+    },
+    person(el) { hooks.openPerson(el.dataset.id); },
+    memorial(el) { hooks.openMemorial(el.dataset.id); },
+    decide(el) { hooks.openOffer(el.dataset.id || (ui.sel && ui.sel.id)); },
+    send(el) { const id = el.dataset.id; if (isOv('person')) closeOverlay('person'); hooks.openRun({ personId: id }); },
+  });
+
+  // ---------------------------------------------------------------------------------------------- the JSON cards (6.8, 6.9)
+  OVERLAYS.json = {
+    render(v, a) {
+      let s = '<div class="card jc"><button class="xbtn x" data-do="closeOverlay" aria-label="Close">' + ic('close') + '</button><div class="cb"><h2>' + esc(a.title) + '<small>' + esc(a.sub || '') + '</small></h2>';
+      if (a.details) s += '<div class="sec">Details</div>' + (a.notes && a.notes.length ? '<ul class="notes">' + a.notes.map((n) => '<li>' + esc(n) + '</li>').join('') + '</ul>' : '<p class="soft" style="font-size:12.5px;margin:0">Validated with no notes.</p>');
+      return s + '<pre>' + esc(JSON.stringify(a.json, null, 2)) + '</pre></div><div class="cf">' + btn({ do: 'copyJson', cls: 'ghost', label: 'COPY' }) + btn({ do: 'closeOverlay', cls: 'primary', label: 'CLOSE', primary: true }) + '</div></div>';
+    },
+    esc() { closeOverlay('json'); },
+  };
+  DO.copyJson = () => { const o = ui.overlay; if (o && o.kind === 'json') copyText(JSON.stringify(o.args.json, null, 2)); };
+  function copyText(txt) {
+    const done = () => toast('Copied.', { icon: 'check', kind: 'good' });
+    const fallback = () => { if (legacyCopy(txt)) done(); else toast('Select the text to copy it.'); };
+    try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(done, fallback); else fallback(); } catch (e) { fallback(); }
+  }
+  function legacyCopy(txt) {
+    try {
+      const ta = document.createElement('textarea'); ta.value = txt; ta.setAttribute('readonly', ''); ta.style.position = 'fixed'; ta.style.left = '-9999px'; ta.style.top = '0';
+      document.body.appendChild(ta); ta.select(); const ok = document.execCommand ? document.execCommand('copy') : false; ta.remove(); return !!ok;
+    } catch (e) { return false; }
+  }
+
+  // ---------------------------------------------------------------------------------------------- people events: the stranger, revives, the Lab's kill
+  function strangerOffer(pid, tries) {                            // 6.6.6, 7.1: the camera finds the stranger, then the offer opens once
+    setTimeout(() => {
+      const p = S && S.people.find((x) => x.id === pid); if (!p || p.state !== 'down') return;
+      if ((ui.mode || ui.tray) && tries < 60) { strangerOffer(pid, tries + 1); return; }
+      if (iso && !ui.overlay) { try { iso.focus({ kind: 'person', id: pid }, { ease: true }); } catch (e) { /* off screen is fine */ } }
+      if (!offerOpen(pid)) queueOverlay('offer', { personId: pid });
+    }, tries ? 1000 : 1400);
+  }
+  (LISTENERS.stranger = LISTENERS.stranger || []).push((e, ctx) => { if (!ctx.offline && !ui.demo && e.personId) strangerOffer(e.personId, 0); });
+  (LISTENERS.dev = LISTENERS.dev || []).push((e, ctx) => {     // the Lab's "kill the selected person" opens the Down flow (9)
+    const a = ctx.act; if (e.op === 'kill' && a && a.personId) setTimeout(() => hooks.openOffer(a.personId), 0);
+  });
+
+  // what the rest of the page (and the Lab) calls
   const hooks = {
-    openRun(a) { openOverlay('run', a || {}); },
-    openOffer(personId) { if (personId) openOverlay('offer', { personId }); },
-    openPerson(id) { if (id) openOverlay('person', { id }); },
+    openRun(a) { if (S.pending) { openRunScreen(); return; } if (isOv('run')) return; openOverlay('run', Object.assign({}, a || {})); },
+    openOffer(personId) { if (personId && E.offer(S, personId) && !offerOpen(personId)) openOverlay('offer', { personId }); },
+    openPerson(id) {
+      if (!id) return;
+      const p = personV(id);
+      if (p && p.state === 'fallen') { if (p.graveId) hooks.openMemorial(p.graveId); return; }
+      openOverlay('person', { id, tab: 'card' });
+    },
     openMemorial(graveId) { if (graveId) openOverlay('memorial', { id: graveId }); },
     openRoster() { openSheet('people'); },
-    resolveResult(json) {                                       // the Lab's "paste a result JSON"
-      const r = doAct({ type: 'resolveRun', result: json, source: 'paste' }, { quiet: true });
-      if (r.ok) { if (iso) iso.holdArrivals(true); openOverlay('result', { reward: r.data.reward, offer: r.data.offer }); }
-      return r;
+    openRunScreen,
+    resolveResult(json) {                                         // the Lab's "paste a result JSON": the same validation and card
+      if (!S.pending) return { ok: false, err: 'state', events: [], data: { errors: ['No run is out'], notes: [] } };
+      if (rsc) { rsc.resolved = true; rsc.resolving = true; }
+      return resolveNow({ type: 'resolveRun', result: json, source: 'paste' });
     },
   };
 
@@ -1380,8 +2011,10 @@
   }
   function replaceState(next, status) {
     S = next; ui.status = status || 'ok'; ui.dispInit = false; ui.inflight = { bricks: 0, cans: 0, sparks: 0 };
-    ui.sel = null; ui.mode = null; ui.queue = [];
-    if (iso) { iso.ghostEnd(); iso.select(null); }
+    ui.sel = null; ui.mode = null; ui.queue = []; ui.bellFor = null;
+    if (ui.overlay && ui.overlay.args && ui.overlay.args.timers) for (const t of ui.overlay.args.timers) clearTimeout(t);
+    rsc = null; flow = null;                                    // the run flow of the old city ends with it
+    if (iso) { iso.ghostEnd(); iso.select(null); iso.holdArrivals(false); }
     if (ui.overlay) { ui.overlay = null; morph($('overlay'), ''); setClass('ov-open', false); if (iso) iso.setInteractive(true); }
     applyReduced(); refresh(); save();
     if (iso) iso.fit({ ease: false });
@@ -1421,7 +2054,7 @@
     on(name, fn) { if (labSubs[name] && typeof fn === 'function') labSubs[name].push(fn); return () => { const l = labSubs[name]; const i = l ? l.indexOf(fn) : -1; if (i >= 0) l.splice(i, 1); }; },
   };
 
-  // ---------------------------------------------------------------------------------------------- the onboarding spotlight (7.1) and odds in idle frames (6.3.5)
+  // ---------------------------------------------------------------------------------------------- the onboarding spotlight (7.1)
   function coachTarget() {
     if (!S.flags.metPeople || ui.overlay || ui.demo || S.goal >= 9) return null;
     const g = V.goal, kiln = V.buildings.find((b) => b.type === 'kiln' && b.lv >= 1 && b.bubble && b.bubble.show);
@@ -1446,19 +2079,6 @@
     ui.coachKey = key; ui.coach = c;
     if (iso && !gp) iso.pulse(c && c.iso ? c.iso : null);
     ui.hudDirty = true; ui.panelDirty = true;
-  }
-  function oddsWork() {
-    if (!V || !S) return;
-    const t0 = now();
-    let list = null;
-    if (ui.overlay && ui.overlay.kind === 'run' && run.destId) list = E.oddsTodo(S, run.destId);
-    if ((!list || !list.length) && V.play && !V.play.known) list = E.oddsTodo(S);
-    if (!list || !list.length) return;
-    for (const it of list) {
-      E.odds(S, it.destId, it.personId, it.kit);
-      ui.dirty = true; ui.panelDirty = true;
-      if (now() - t0 > 6) break;
-    }
   }
 
   // ---------------------------------------------------------------------------------------------- save (11.2)
@@ -1496,6 +2116,7 @@
     if (ui.panelDirty || ts - ui.lastPanel > 500) renderPanels();
     if (ts - ui.lastCoach > 300) { ui.lastCoach = ts; runCoach(); }
     oddsWork();
+    rscFrame(ts);
     if (ui.lab && ts - ui.lastLabTick > 1000) { ui.lastLabTick = ts; for (const f of labSubs.tick) { try { f(); } catch (e) { console.error(e); } } }
     if (Date.now() - ui.lastSave > 10000) save();
     perf.ms[perf.i] = now() - t0; perf.i = (perf.i + 1) % 120; perf.n++;
@@ -1507,7 +2128,7 @@
     if (!el) return;
     const fn = DO[el.dataset.do]; if (!fn) return;
     e.preventDefault();
-    if (el.getAttribute('aria-disabled') === 'true') { const why = el.dataset.why; if (why) toast(why); sfx('tick'); return; }
+    if (el.getAttribute('aria-disabled') === 'true') { const why = el.dataset.why; if (why) toast(why); sfx('deny'); return; }
     if (el.dataset.do !== 'collect' && el.dataset.do !== 'play') sfx('tick');
     fn(el, e);
   }
@@ -1566,6 +2187,7 @@
       onLandmark(destId) { const d = V.dests.find((x) => x.id === destId); if (d && !d.open) { toast(d.name + ': ' + d.lock, { icon: 'lock' }); return; } hooks.openRun({ destId }); },
       onLift() { try { if (navigator.vibrate) navigator.vibrate(8); } catch (e) { /* no haptics */ } },
       onMoveStart(target) { startMove(target); },
+      onTrip(e) { if (e && e.kind === 'in' && ui.bellFor && e.personId === ui.bellFor && (e.phase === 'gate' || e.phase === 'done')) ringHome(); },
       onGhostMove(gh) {
         if (!ui.mode) return;
         const was = ui.mode.valid; ui.mode.valid = !!gh.valid; ui.mode.reason = gh.reason;
@@ -1627,6 +2249,7 @@
     renderHud();
     save();
     ui.booted = true;
+    if (S.pending && !ui.demo) ui.queue.unshift({ kind: 'runscreen', args: {} });   // 6.2: a reload during the run replays the same night
     const next = ui.queue.shift(); if (next) showOverlayNow(next);
     if (mql) { const fn = () => applyReduced(); if (mql.addEventListener) mql.addEventListener('change', fn); else if (mql.addListener) mql.addListener(fn); }
     document.addEventListener('click', onClick);
@@ -1652,6 +2275,7 @@
     mode: { startMove, cancel: cancelMode, confirm: confirmMode, current: () => ui.mode },
     h: { ic, esc, btn, costChip, needLine, needText, timeChip, skipBtn, skipAct, portrait, pill, num, line, morph },
     sfx, fly, perf: perfStats, layout: () => Object.assign({}, ui.layout), select(t) { ui.sel = t; if (iso) iso.select(t, { focus: true }); renderAbar(); },
+    oddsStats, run: { sheet: () => Object.assign({}, rs), screen: () => (rsc ? { runId: rsc.runId, sim: rsc.sim, ended: !!rsc.ended, resolved: !!rsc.resolved } : null) },
   };
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   return UI;

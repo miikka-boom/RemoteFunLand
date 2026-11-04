@@ -596,7 +596,7 @@
     if (base >= 1 || !s.flags.deathOn) rescue = 1;            // 6.3.3: the Allotments and before the third present person
     const weapon = B.armory.weapon[ar];
     const roleName = DATA.ROLE_STATS[role] ? DATA.ROLE_STATS[role].name.toUpperCase() : role;
-    const roleLine = fav ? roleName + ' · +5 at the ' + d.name : role === 'medic' ? roleName + ' · medkit heals ' + Math.round(medkitHeal * 100) + ' %' : roleName;
+    const roleLine = fav ? roleName + ' · +5 at ' + d.theName : role === 'medic' ? roleName + ' · medkit heals ' + Math.round(medkitHeal * 100) + ' %' : roleName;   // "at Hospital Hill", not "at the Hospital Hill"
     const ttl = role === 'sprinter' ? 'speed ' + speed : role === 'brawler' ? 'shove cooldowns ×' + shoveCdMul.toFixed(2)
       : role === 'marksman' ? 'aim assist ' + assist.toFixed(2) + ' · damage ×' + damageMul.toFixed(2)
       : role === 'medic' ? 'medkit ' + Math.round(medkitHeal * 100) + ' % in ' + medkitHealS + ' s' : 'flashlight ' + flashlightR + ' · horde warning +' + r1(0.2 * L) + ' s';
