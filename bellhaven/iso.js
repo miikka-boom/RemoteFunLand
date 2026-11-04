@@ -161,8 +161,10 @@
  * 'house' / 'clinic' are inside (the House's "z N" pill, the Clinic's "+N" and red "Emre · 23 h" pills; a Down
  * person with no Clinic gets the red pill on the House); 'bench' sits on a bench (or the plaza); 'gate' lies at the
  * gate with the red pill (the stranger); 'out' is beyond the gate. A figure on a trip finishes it before taking a
- * new state. Idle cranes park on free tiles beside the Tower (iso picks the spot: view.cranes.list[].park can fall
- * inside a building); a crane rolls between the park and its site in 0.5 s when a job starts or ends.
+ * new state. Idle cranes park on free tiles beside the Tower (iso picks the spot with the same rule as the view's
+ * cranes.list[].park); a crane rolls between the park and its site in 0.5 s when a job starts or ends. A homecoming
+ * takes its style from PersonView.arrival ('sack' | 'stretcher' | 'limp') when the view gives one; a walker's grave
+ * stop prefers a housemate's grave (view.graves[].houseId).
  * Time: frame(now) needs a monotonic timestamp; gestures use the pointer events' timeStamp and one 250 ms timer.
  */
 (function (root, f) { const api = f(root.BH || {}); if (typeof module === 'object' && module.exports) module.exports = api; else (root.BH = root.BH || {}).Iso = api; })(typeof self !== 'undefined' ? self : this, function (BH) {
@@ -585,7 +587,7 @@
       } else if (cat === 'bench') {
         for (const d of view.decor) if (d.type === 'bench' && walkable(d.gx, d.gy + 1)) out.push({ tile: [d.gx, d.gy + 1], sit: [d.gx + 0.5, d.gy + 0.62], face: 1 });
       } else if (cat === 'grave') {
-        const mates = view.graves.filter((x) => x.gx != null && f.mates && f.mates.indexOf(x.personId) >= 0);
+        const mates = view.graves.filter((x) => x.gx != null && ((f.mates && f.mates.indexOf(x.personId) >= 0) || (x.houseId && x.houseId === f.houseId)));
         const list = mates.length ? mates : view.graves.filter((x) => x.gx != null);
         for (const x of list) { const t = walkable(x.gx, x.gy + 1) ? [x.gx, x.gy + 1] : walkable(x.gx + 1, x.gy) ? [x.gx + 1, x.gy] : null; if (t) out.push({ tile: t, face: t[1] > x.gy ? 3 : 2, grave: true }); }
       }
@@ -769,6 +771,7 @@
       const o = trip.o || {};
       const clinic = buildingOf('clinic');
       let style = trip.style || o.style;
+      if (!style && p.arrival) style = p.arrival === 'sack' ? 'win' : p.arrival;   // the engine's own word (view PersonView.arrival)
       if (!style) style = p.state === 'rest' && p.restKind === 'hurt' ? 'hurt' : p.state === 'rest' && p.restKind === 'tired' ? 'win' : 'plain';
       if (style === 'hurt') style = clinic ? 'stretcher' : 'limp';
       const dest = p.where === 'clinic' ? clinic : p.where === 'house' ? (p.houseId ? bById.get(p.houseId) : null) : null;

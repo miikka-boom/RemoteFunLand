@@ -152,8 +152,9 @@
  *                   inn: { travelers } (Inn), tower: { storeys, gold } (Tower) }],
  *     jobs: [JobView { id, kind, buildingId, type, name, toLv, startMs, endMs, leftMs, progress, price, free, confirm, label }],
  *     cranes: { total, free, crane4, buy: { ok, err, price }, list: [{ i, busy, jobId, site: { gx, gy, w, d } | null, park: { x, y } }] },
+ *             (park: a free land tile beside the Tower, idle cranes first; never inside a building or on a gate tile)
  *     rubble: [{ id, gx, gy, ring, glint, cost: { res, n }, ok }],
- *     graves: [{ id, personId, gx, gy, waiting, placedMs, ageMs, first, name, initial, ribbon, grassed, flowers,
+ *     graves: [{ id, personId, gx, gy, waiting, placedMs, ageMs, first, name, initial, ribbon, grassed, flowers, houseId,
  *                flowerColors[4], candle, epitaph }],
  *     decor: [{ id, type, gx, gy }],
  *     people: [PersonView] living, roster order (Down, Ready, Resting, Hurt, Recovering, Out),
@@ -176,7 +177,8 @@
  *     where: 'walk'|'house'|'bench'|'clinic'|'gate'|'out'|'grave', pill ('Rested', 'Tired 6:10', 'Hurt 31:00',
  *     'Recovering 12:00', 'Down · 20 h', 'Out'), stranger, runs, wins, kills, bestKills, revives, history, epitaph,
  *     suggested, graveId, arrivedNight, arrivedHow ('starter'|'inn'|'drifter'|'stranger'|'lab'|'traveler'), fellNight,
- *     fellDest, fellOdds, kin, kinLine ('Says Efua Boateng was family.' | null), canRun (Ready or resting, no run out),
+ *     fellDest, fellOdds, kin, kinLine ('Says Efua Boateng was family.' | null), arrival ('sack' | 'stretcher' | 'limp': how
+ *     the last run brought this person home; null otherwise or while Out), canRun (Ready or resting, no run out),
  *     roleChip ('SCOUT · +5 at the Night Market'; a Medic adds '· medkit heals 88 %'), ttlLine ('In Two Thumbs Left:
  *     flashlight 568 · horde warning +0.8 s'), traitChip ('QUICK LEARNER · XP × 1.25'), nickChip ('“GHOST” · speed +5 in
  *     Two Thumbs Left' | null), hpText ('HP 72%' while resting), fellAt, arrivedMs }
@@ -199,7 +201,7 @@
  *   upgrade { id, finishOther? } · expand { finishOther? } · clearRubble { id } · move { target: { kind: 'building' |
  *   'grave' | 'decor', id }, gx, gy } · finish { jobId, confirm? } · restNow { personId, confirm? } · innNow { confirm? } ·
  *   buyCrane · claimPack { size: 100 | 500 | 2500 } · flag { name: 'metPeople' | 'deathCardSeen' | 'finale' } ·
- *   setLastDest { destId } · dev { op, ... } ·
+ *   setLastDest { destId } · setSound { on } (state.ui.sound: the City sheet's SOUND toggle) · dev { op, ... } ·
  *   invite { travelerId } -> data { personId, price }   60 + 30 x living cans, a free bed (err beds), a history line.
  *   startRun { destId, personId, kit?, confirmLow? } -> data { runId, handoff }   GO (6.2): kit null = packed
  *            automatically; a packed item must be unlocked (err locked, data { item }) and paid for (err cost); the kit
@@ -1131,6 +1133,7 @@
     },
     flag(s, a) { if (!UI_FLAGS.includes(a.name)) return { err: 'notFound' }; s.flags[a.name] = a.value !== false; return {}; },
     setLastDest(s, a) { if (!DEST[a.destId]) return { err: 'notFound' }; s.lastDest = a.destId; return {}; },
+    setSound(s, a) { s.ui.sound = a.on !== false; return {}; },             // 8.11 SOUND on/off (state.ui.sound, saved)
     dev(s, a, ev) { return devOp(s, a, ev); },
     // invite, startRun, resolveRun, revive, goodbye: RUN_ACTIONS below (the people and runs)
   };
@@ -1833,7 +1836,9 @@
       downLeftMs: downLeft, houseId: p.houseId, house: houseName(s, p.houseId), where, pill, stranger, runs: p.runs, wins: p.wins,
       kills: p.kills, bestKills: p.bestKills, revives: p.revives, history: p.history, epitaph: p.epitaph, suggested: p.id === suggestedId,
       graveId: g ? g.id : null, arrivedNight: p.arrivedNight, arrivedHow: p.arrivedHow, fellNight: p.fellNight, fellDest: p.fellDest, fellOdds: p.fellOdds,
-      kin: p.kin, kinLine: kinLine(s, p) };
+      kin: p.kin, kinLine: kinLine(s, p),
+      // how the last run brought this person home ('sack' | 'stretcher' | 'limp'), for the walk in through the gate
+      arrival: p.state !== 'out' && s.lastRun && s.lastRun.reward && s.lastRun.reward.personId === p.id ? s.lastRun.reward.arrival || null : null };
   }
   // PLAY (8.3): the suggestion with its labels. home is null (shown "…") until the UI has computed those odds.
   function playView(s, sug, claimed) {
@@ -1858,6 +1863,18 @@
     const err = b.lv < 1 || j ? 'busy' : needT ? 'locked' : s.res[c.res] < c.n ? 'cost' : cranesFree(s) < 1 ? 'noCrane' : null;
     return { lv, cost: c, timeS: jobMs(s, b.type, lv) / SEC, ok: !err, err, needTower: needT, need: err === 'cost' ? c.n - s.res[c.res] : 0 };
   }
+  // Free land tiles beside the Tower where idle cranes stand folded (tile centres; right side first, then the back,
+  // the front, the left and the corners; never a gate tile), so a park spot never falls inside a building.
+  function parkSpots(s, grid, tw) {
+    const out = []; if (!tw) return out;
+    const tx = tw.gx, ty = tw.gy, n = B.tower.w, add = (x, y) => { if (x >= 0 && y >= 0 && x < G && y < G && inLand(s, x, y) && !isGate(s, x, y) && grid[y * G + x] == null) out.push({ x: x + 0.62, y: y + 0.42 }); };
+    for (let y = ty; y < ty + n; y++) add(tx + n, y);
+    for (let x = tx + n - 1; x >= tx; x--) add(x, ty - 1);
+    for (let x = tx; x < tx + n; x++) add(x, ty + n);
+    for (let y = ty; y < ty + n; y++) add(tx - 1, y);
+    add(tx + n, ty - 1); add(tx + n, ty + n); add(tx - 1, ty - 1); add(tx - 1, ty + n);
+    return out;
+  }
   function view(s) {
     const grid = occGrid(s), T = towerLv(s), tw = towerB(s), sug = suggest(s), sugId = sug ? sug.personId : null;
     const jobs = s.jobs.slice().sort((a, b) => a.endMs - b.endMs || idNum(a.id) - idNum(b.id)).map((j) => jobView(s, j));
@@ -1877,11 +1894,13 @@
       else if (b.type === 'tower') o.tower = { storeys: 1 + Math.ceil(b.lv / 2), gold: b.lv >= 10 };
       return o;
     });
-    const total = cranesTotal(s), cranesList = [];
+    const total = cranesTotal(s), cranesList = [], parks = parkSpots(s, grid, tw);
     for (let i = 0; i < Math.max(total, jobs.length); i++) {               // (more jobs than cranes only after the Lab lowered the Tower)
       const j = jobs[i], b = j && j.buildingId ? byId(s, j.buildingId) : null;
       const site = !j ? null : b ? { gx: b.gx, gy: b.gy, w: B[b.type].w, d: B[b.type].w } : { gx: landHi(s) - 1, gy: START.gateGy[0], w: 1, d: 2 };
-      cranesList.push({ i, busy: !!j, jobId: j ? j.id : null, site, park: tw ? { x: tw.gx + 3.3, y: tw.gy + 0.4 + 0.8 * (i - (jobs.length)) } : { x: 12, y: 12 } });
+      // idle cranes fold on free tiles beside the Tower (the first spots); a busy crane's park is where it returns to
+      const k = j ? Math.max(0, total - jobs.length) + i : i - jobs.length;
+      cranesList.push({ i, busy: !!j, jobId: j ? j.id : null, site, park: parks[k] || parks[parks.length - 1] || (tw ? { x: tw.gx + 3.5, y: tw.gy + 0.5 } : { x: 12, y: 12 }) });
     }
     const people = living(s).map((p) => personView(s, p, sugId)).sort((a, b) => ROSTER[a.state === 'rest' ? a.restKind : a.state] - ROSTER[b.state === 'rest' ? b.restKind : b.state] || a.index - b.index);
     const remembered = s.people.filter((p) => p.state === 'fallen').map((p) => personView(s, p, null));
@@ -1890,7 +1909,7 @@
       return { id: g.id, personId: g.personId, gx: g.gx, gy: g.gy, waiting: g.gx == null, placedMs: g.placedMs, ageMs: age, first: p ? p.first : '', name: p ? p.first + ' ' + p.last : '',
         initial: p ? p.first.charAt(0) : '', ribbon: p ? p.look.jacket : '#8a8f98', grassed: age >= DATA.GRAVE.grassMs,
         flowers: age >= DATA.GRAVE.flowers4Ms ? 4 : age >= DATA.GRAVE.flowers2Ms ? 2 : 0, flowerColors: [0, 1, 2, 3].map(() => DATA.FLOWERS[Math.floor(r() * 4)]),
-        candle: g.gx != null && age < DATA.GRAVE.candleMs, epitaph: p ? p.epitaph : null };
+        candle: g.gx != null && age < DATA.GRAVE.candleMs, epitaph: p ? p.epitaph : null, houseId: g.houseId || null };
     });
     const caps = { bricks: capOf(s, 'bricks'), cans: capOf(s, 'cans') }, inn = innB(s);
     const tray = TYPES.map((t) => {
