@@ -850,8 +850,37 @@ test('12 placement: the land, the gate, overlaps, moving, graves, counts and the
   // suggestSpot: the valid origin nearest the point; the onboarding Cannery ghost
   const s7 = city(); eq(E.suggestSpot(s7, 'cannery', 14, 14), { gx: 13, gy: 13 }, 'the first spot (13, 13)');
   const sp = E.suggestSpot(s7, 'kiln', 12, 12); ok(sp && E.canPlace(s7, 'kiln', sp.gx, sp.gy).ok, 'a suggested spot is valid');
+  // suggestSpot keeps a building out of the Tower's shadow at its top level while a clear spot exists (the coached
+  // Armory, aimed at the Tower, went to (10, 8) right behind it), else takes the least hidden valid spot
+  const hides = (s, x, y) => { const t = s.buildings.find((b) => b.type === 'tower'), dc = Math.abs(x - y - (t.gx - t.gy)); if (dc > 3 || x >= t.gx + 3 || y >= t.gy + 3 || (x >= t.gx && y >= t.gy)) return false; return (t.gx + t.gy + dc - x - y - 1) * 16 <= 66 + 22 * 6 - 64; };   // 6 storeys: level 10
+  const hidN = (s, at, w) => { let n = 0; for (let y = at.gy; y < at.gy + w; y++) for (let x = at.gx; x < at.gx + w; x++) if (hides(s, x, y)) n++; return n; };
+  eq(E.view(city()).tower.topStoreys, 6, 'view.tower.topStoreys: the Tower at level 10');
+  const s10 = city(); addB(s10, 'cannery', 1, 13, 13);
+  eq(E.suggestSpot(s10, 'armory', 11.5, 11.5), { gx: 13, gy: 11 }, 'the Armory aimed at the Tower: beside it, not behind it at (10, 8)');
+  addB(s10, 'armory', 1, 13, 11);
+  eq(E.suggestSpot(s10, 'clinic', 11.5, 11.5), { gx: 11, gy: 13 }, 'then the Clinic: in front of it');
+  addB(s10, 'clinic', 1, 11, 13);
+  eq(E.suggestSpot(s10, 'depot', 11.5, 11.5), { gx: 11, gy: 8 }, 'no clear spot left on the start land: the least hidden one, half of it beside the Tower (not (10, 8), wholly behind)');
+  eq(E.suggestSpot(s10, 'tower', 11.5, 11.5, 'b1'), { gx: 10, gy: 10 }, 'the Tower itself: its own spot, no shadow rule');
+  let hidLate = 0, hidWorse = 0, R = 7;
+  const rnd = () => { R = (R * 16807) % 2147483647; return R / 2147483647; };
+  for (let k = 0; k < 60; k++) {
+    const c = city({ ring: k % 5, tower: 1 + (k % 10) });
+    for (let n = 0; n < 14; n++) {
+      const ty = D.TYPES[1 + (n % 7)], at = E.suggestSpot(c, ty, 4 + rnd() * 16, 4 + rnd() * 16); if (!at) break;
+      const hn = hidN(c, at, 2);
+      if (hn > 0) {
+        let least = hn;
+        for (let y = 0; y < 24; y++) for (let x = 0; x < 24; x++) if (E.canPlace(c, ty, x, y).ok) least = Math.min(least, hidN(c, { gx: x, gy: y }, 2));
+        if (least < hn) hidWorse++; else hidLate++;
+      }
+      addB(c, ty, 1, at.gx, at.gy);
+    }
+  }
+  ok(hidLate > 0, 'the property test reaches full lands (' + hidLate + ' spots behind the Tower with no clear one left)');
+  eq(hidWorse, 0, 'over 60 cities x 14 buildings at random aims, no valid spot has fewer tiles behind the Tower than the suggested one');
   // graveSpot: in front of the House, else the quiet corner
-  const s8 = city(); s8.people[1].houseId = null; eq(E.graveSpot(s8, 'p1'), { gx: 9, gy: 8 }, 'no House: the quiet corner (8, 8) is rubble, so the next tile by gy then gx');
+  const s8 = city(); s8.people[1].houseId = null; eq(E.graveSpot(s8, 'p1'), { gx: 12, gy: 8 }, 'no House: the quiet corner (8, 8) is rubble and the tiles near it are clear of the Tower today but behind it at its top level, so (12, 8)');
   eq(E.graveSpot(s8, 'p0'), { gx: 9, gy: 15 }, 'in front of the House');
   const s9 = city({ tower: 3 }); s9.rubble = s9.rubble.filter((r) => !(r.gx === 8 && r.gy === 8));
   const h2 = addB(s9, 'house', 1, 9, 8); s9.people[1].houseId = h2.id;

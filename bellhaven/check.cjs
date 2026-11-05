@@ -492,6 +492,41 @@ async function test27(browser) {
     const hit = await t.ev(() => window.__taps[window.__taps.length - 1] || null);
     ok(!!hit && hit.kind === 'ground' && hit.gx === probe.gx && hit.gy === probe.gy, '27 a canvas tap at a known tile picks that tile', { hit, want: [probe.gx, probe.gy] });
   }
+  // the Bell Tower's shadow (6.7, 8.1): a ghost aimed behind the Tower starts beside it; a Depot behind it is outlined over
+  // the Tower while selected or spotlit, and a tap inside that outline reaches the Depot instead of the Tower
+  const sh = await t.ev(() => {
+    const E = BH.Engine, s = E.create({ realNow: Date.now(), tzOffsetMin: 0, seed: 20261104 });
+    const put = (type, gx, gy) => { const b = { id: 'b' + (++s.ids.b), type, lv: 1, gx, gy }; if (type === 'cannery') { b.bubbleBase = 0; b.bubbleSinceMs = s.cityMs; } s.buildings.push(b); return b; };
+    s.flags.metPeople = true; s.buildings[0].lv = 4; put('cannery', 13, 13); const d = put('depot', 10, 8); s.goal = 7; s.res.bricks = 900; s.res.cans = 500;
+    const r = BH.UI.labApi.importSave(E.serialize(s));
+    return { ok: r.ok, depot: d.id, tower: s.buildings[0].id };
+  });
+  ok(sh.ok, '27 shadow city imported', sh); await sleep(700);
+  await t.ev(() => { const b = BH.UI.ui.overlay && document.querySelector('#overlay [data-primary]'); if (b) b.click(); }); await sleep(500);
+  const aim = await t.ev(() => ({ sp: BH.UI.iso.suggestSpot('armory', 10.5, 8.5), e: BH.Engine.suggestSpot(BH.UI.state, 'armory', 10.5, 8.5) }));
+  ok(aim.sp && aim.e && aim.sp.gx === aim.e.gx && aim.sp.gy === aim.e.gy && [[13, 11], [11, 13]].some(([x, y]) => aim.sp.gx === x && aim.sp.gy === y), '27 an Armory aimed right behind the Tower starts beside or in front of it (Iso and Engine agree)', aim);
+  await t.ev((id) => BH.UI.iso.select({ kind: 'building', id }), sh.depot); await sleep(250);
+  const xsel = await t.ev(() => BH.UI.iso.debug().xray);
+  ok(xsel.length === 1 && xsel[0].id === sh.depot && xsel[0].sel, '27 the selected Depot behind the Tower is outlined over it', xsel);
+  const xpt = await t.ev((o) => {
+    const iso = BH.UI.iso, sb = iso.screenOf({ kind: 'building', id: o.depot }).box, tb = iso.screenOf({ kind: 'building', id: o.tower }).box;
+    for (let j = 1; j < 12; j++) for (let i = 1; i < 12; i++) {
+      const x = sb.x + sb.w * i / 12, y = sb.y + sb.h * j / 12;
+      if (x <= tb.x || x >= tb.x + tb.w || y <= tb.y || y >= tb.y + tb.h) continue;
+      const a = iso.pick(x, y); if (!(a.kind === 'building' && a.id === o.depot)) continue;
+      iso.select(null); const b = iso.pick(x, y); iso.select({ kind: 'building', id: o.depot });
+      if (b.kind === 'building' && b.id === o.tower) return { x, y };
+    }
+    return null;
+  }, sh);
+  ok(!!xpt, '27 a point over the Tower inside the outline picks the Depot (the Tower once nothing is selected)', xpt);
+  await t.shot('shadow-xray');
+  await t.ev(() => BH.UI.iso.select(null)); await sleep(200);
+  ok((await t.ev(() => BH.UI.iso.debug().xray)).length === 0, '27 no outline once nothing is selected');
+  await t.ev((id) => BH.UI.iso.pulse({ kind: 'building', id }, { ms: 3000 }), sh.depot); await sleep(250);
+  const xpu = await t.ev(() => BH.UI.iso.debug().xray);
+  ok(xpu.length === 1 && xpu[0].id === sh.depot && !xpu[0].sel, '27 the spotlit Depot is outlined too', xpu);
+  await t.ev(() => BH.UI.iso.pulse(null));
   errsOk(t, 'test 27');
   await t.close();
 }

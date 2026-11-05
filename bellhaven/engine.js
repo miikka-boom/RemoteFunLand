@@ -46,7 +46,8 @@
  *            kind: a building type (footprint 3 x 3 for the Tower, else 2 x 2), or 'grave' | 'decor' | 'rubble' (1 x 1)
  *   suggestSpot(state, type, nearGx, nearGy)  -> { gx, gy } | null  the valid origin whose footprint centre is nearest
  *            the point (nearGx, nearGy) in grid units (pass the ground point under the clear view's centre; to aim at an
- *            origin, pass origin + w / 2, e.g. the onboarding Cannery: DATA.START.firstSpot + 1 = (14, 14))
+ *            origin, pass origin + w / 2, e.g. the onboarding Cannery: DATA.START.firstSpot + 1 = (14, 14)), among the
+ *            footprints with the fewest tiles the Bell Tower hides at its top level (none whenever possible)
  *   graveSpot(state, personId)                -> { gx, gy } | null  6.7 default spot
  *   kpis(state)                               -> telemetry summary (Lab, sim-bot): counters, shares, calibration,
  *            the section-10 targets this save can be judged on
@@ -141,7 +142,7 @@
  *
  * ==================================================================================================== VIEW
  *   { v, cityMs, night, demo, today, realLast,
- *     tower: { id, lv, gx, gy, storeys, gold, hordeWarnS, job, next: { lv, cost, timeS, opens[], ok, err, needTower } | null },
+ *     tower: { id, lv, gx, gy, storeys, topStoreys, gold, hordeWarnS, job, next: { lv, cost, timeS, opens[], ok, err, needTower } | null },
  *     land: { ring, side, lo, hi, gate: { x (the fence line gx = hi), gy: [11, 12], tiles: [[gx, gy] x 2] },
  *             quietCorner: { gx, gy }, next: { ring, side, needTower, cost, timeS, ok, err } | null,
  *             groundKey (changes when the land, the Tower's spot or the plaza change: re-render the ground cache) },
@@ -401,25 +402,36 @@
     const reason = fitsGrid(s, occGrid(s, ignoreId), footW(kind), gx, gy);
     return { ok: !reason, reason };
   }
+  // The valid origin with the fewest tiles the Tower hides (below), then the nearest: a clear footprint whenever one
+  // exists, else the least hidden one. The Tower itself ignores the rule.
   function suggestSpot(s, type, nearGx, nearGy, ignoreId) {
     const w = footW(type), grid = occGrid(s, ignoreId), lo = landLo(s), hi = landHi(s);
     const cx = fin(nearGx, 12), cy = fin(nearGy, 12);
-    let best = null, bd = Infinity;
+    let best = null, bh = Infinity, bd = Infinity;
     for (let y = lo; y + w <= hi; y++) for (let x = lo; x + w <= hi; x++) {
       if (fitsGrid(s, grid, w, x, y)) continue;
+      const hc = type === 'tower' ? 0 : hiddenCount(s, x, y, w);
       const dx = x + w / 2 - cx, dy = y + w / 2 - cy, dd = dx * dx + dy * dy;
-      if (dd < bd - 1e-9) { bd = dd; best = { gx: x, gy: y }; }
+      if (hc < bh || (hc === bh && dd < bd - 1e-9)) { bh = hc; bd = dd; best = { gx: x, gy: y }; }
     }
     return best;
   }
-  // A grave right behind the Bell Tower on screen can be neither seen nor tapped: the Tower is drawn after it (8.1) and
-  // its extruded 3 x 3 footprint (art.js hit height 66 + 22 x storeys px) covers the headstone's top, 64 px above the
-  // tile's centre. Only the Tower is tall enough to do that (every other building is at most 68 px).
+  // A grave or building right behind the Bell Tower on screen can be neither seen nor tapped: the Tower is drawn after
+  // it (8.1) and its extruded 3 x 3 footprint (art.js hit height 66 + 22 x storeys px) covers anything 64 px tall on the
+  // tile (a headstone's top; most of a building). Only the Tower is tall enough to do that (every other building is at
+  // most 68 px). The test uses the Tower's top level (storeys at max), so a tile clear today stays clear as it grows.
+  // iso.js repeats this rule for the placement ghost (Iso suggestSpot); keep the two in step.
+  const TOWER_TOP_STOREYS = 1 + Math.ceil(B.tower.max / 2);
   function towerHides(s, gx, gy) {
     const t = towerB(s); if (!t) return false;
     const dc = Math.abs(gx - gy - (t.gx - t.gy));             // columns from the Tower's centre line (screen x)
     if (dc > 3 || gx >= t.gx + 3 || gy >= t.gy + 3 || (gx >= t.gx && gy >= t.gy)) return false;   // beside or in front
-    return (t.gx + t.gy + dc - gx - gy - 1) * 16 <= 66 + 22 * (1 + Math.ceil(t.lv / 2)) - 64;
+    return (t.gx + t.gy + dc - gx - gy - 1) * 16 <= 66 + 22 * TOWER_TOP_STOREYS - 64;
+  }
+  function hiddenCount(s, gx, gy, w) {
+    let n = 0;
+    for (let y = gy; y < gy + w; y++) for (let x = gx; x < gx + w; x++) if (towerHides(s, x, y)) n++;
+    return n;
   }
   // 6.7: Chebyshev rings 0, 1, 2, ...; gy then gx ascending. Pass 0 skips the tiles the Tower hides; pass 1 takes any
   // free tile, so a spot is found whenever the land has one.
@@ -1985,7 +1997,7 @@
     const today = dayOf(s, s.realLast);
     return {
       v: V, cityMs: s.cityMs, night: s.night, demo: !!s.demo, today, realLast: s.realLast,
-      tower: { id: tw.id, lv: T, gx: tw.gx, gy: tw.gy, storeys: 1 + Math.ceil(T / 2), gold: T >= 10, hordeWarnS: DATA.TOWER.hordeWarn[T], job: jobOf[tw.id] || null, next: tn },
+      tower: { id: tw.id, lv: T, gx: tw.gx, gy: tw.gy, storeys: 1 + Math.ceil(T / 2), topStoreys: TOWER_TOP_STOREYS, gold: T >= 10, hordeWarnS: DATA.TOWER.hordeWarn[T], job: jobOf[tw.id] || null, next: tn },
       land: { ring: s.ring, side: hi - lo, lo, hi, gate: { x: hi, gy: START.gateGy.slice(), tiles: START.gateGy.map((y) => [hi - 1, y]) },
               quietCorner: { gx: lo, gy: lo }, next: landNext, groundKey: s.ring + '|' + tw.gx + ',' + tw.gy + '|' + plaza.map((t) => t.join(',')).join(';') },
       plaza, walkable: walk, buildings, jobs,

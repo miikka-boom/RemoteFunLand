@@ -97,6 +97,9 @@
  *   pulse(target | null, { ms })   the tutorial spotlight: a pulsing orange ring on a building, bubble ({ kind:
  *                                'bubble', id }), tile spot ({ kind: 'tile', gx, gy, w, d }) or person; static
  *                                with reduced motion; ms default Infinity
+ *                                X-ray: a selected or spotlit building, grave or decoration the Bell Tower covers (35 %
+ *                                of its silhouette or more) gets a dashed orange outline over the Tower, and a tap
+ *                                inside it that would pick the Tower picks that object (debug().xray lists them).
  *   ringBell(times, { low })     swing the Tower bell +-12 deg once per ring (0.9 s each, 1.6 s when low); the UI
  *                                plays the sound
  * Placement and move mode (8.5): one ghost at a time; gestures switch to placement mode while it exists
@@ -109,6 +112,7 @@
  *   validAt(kind, gx, gy, ignoreId) -> { ok, reason: 'outside'|'gate'|'occupied'|'bad'|null }   3.3 from the view
  *                                (equals Engine.canPlace; opts.canPlace overrides it)
  *   suggestSpot(kind, nearGx, nearGy, ignoreId) -> { gx, gy } | null   Engine.suggestSpot's rule from the view
+ *                                (the fewest tiles the Tower hides at its top level first; view.tower.topStoreys)
  *   Gestures in placement mode: a tap moves the ghost (its footprint centred on the tile); a press on the ghost drags
  *   it at once (a finger holds the footprint's centre 36 px above it, a mouse keeps its grab offset); within 48 px of
  *   the clear view's edge the camera scrolls (up to 600 px/s); pinch and other drags pan and zoom.
@@ -518,12 +522,21 @@
       }
       return { ok: true, reason: null };
     }
-    function suggestSpot(kind, nx, ny, ignoreId) {   // Engine.suggestSpot's rule: the valid origin whose centre is nearest
-      const [w] = footOf(kind); let best = null, bd = Infinity;
-      for (let y = lo; y + w <= hi; y++) for (let x = lo; x + w <= hi; x++) {
+    // Engine.towerHides's rule, at the Tower's top level: a tile behind the Tower whose 64 px object it would cover
+    function towerHides(x, y) {
+      const t = view && view.tower; if (!t) return false;
+      const dc = Math.abs(x - y - (t.gx - t.gy));
+      if (dc > 3 || x >= t.gx + 3 || y >= t.gy + 3 || (x >= t.gx && y >= t.gy)) return false;
+      return (t.gx + t.gy + dc - x - y - 1) * 16 <= 66 + 22 * (t.topStoreys || 6) - 64;
+    }
+    function suggestSpot(kind, nx, ny, ignoreId) {   // Engine.suggestSpot's rule: the valid origin with the fewest tiles
+      const [w, d] = footOf(kind);                   // the Tower hides, then whose centre is nearest
+      const hc = (x0, y0) => { let n = 0; for (let y = y0; y < y0 + d; y++) for (let x = x0; x < x0 + w; x++) if (towerHides(x, y)) n++; return n; };
+      let best = null, bh = Infinity, bd = Infinity;
+      for (let y = lo; y + d <= hi; y++) for (let x = lo; x + w <= hi; x++) {
         if (!validAt(kind, x, y, ignoreId).ok) continue;
-        const dx = x + w / 2 - nx, dy = y + w / 2 - ny, dd = dx * dx + dy * dy;
-        if (dd < bd - 1e-9) { bd = dd; best = { gx: x, gy: y }; }
+        const h = kind === 'tower' ? 0 : hc(x, y), dx = x + w / 2 - nx, dy = y + d / 2 - ny, dd = dx * dx + dy * dy;
+        if (h < bh || (h === bh && dd < bd - 1e-9)) { bh = h; bd = dd; best = { gx: x, gy: y }; }
       }
       return best;
     }
@@ -1170,6 +1183,7 @@
           draw: () => { g.save(); g.globalAlpha *= Math.max(0, e.alpha); Art.stretcher(g, x, y, z, { facing: e.facing, phase: e.phase, reduced }); g.restore(); } });
       }
       depthSort(L.list);
+      L.xray = xrayOf(L);
       // overlays: bubbles and pills per building, stacked above the building's pill anchor
       for (const b of view.buildings) {
         if (b.id === movingId) continue;
@@ -1254,6 +1268,44 @@
     function footPoly(gx, gy, w, d) { return [toScreen(gx, gy, 0), toScreen(gx + w, gy, 0), toScreen(gx + w, gy + d, 0), toScreen(gx, gy + d, 0)]; }
     function selDiamond(x, y, isSel) { if (isSel) Art.select(g, x, y, cam.z, 1, 1); else Art.footprint(g, x, y, cam.z, 1, 1, null, 'rgba(255,255,255,.85)', 1.6); }
     function liftOf(kind, id) { return lifted && lifted.kind === kind && lifted.id === id ? lifted.amount : 0; }
+    // x-ray: the selected or spotlit building, grave or decoration that the Bell Tower covers (drawn before it, and at
+    // least XRAY_COVER of its silhouette under the Tower's) gets a dashed outline over the Tower (drawXray), and a tap
+    // inside that outline that would pick the Tower picks it instead (pick)
+    const XRAY_COVER = 0.35;
+    function xrayOf(L) {
+      const out = []; if (!sel && !(pulseT && pulseT.target)) return out;
+      const ti = L.list.findIndex((d) => d.kind === 'building' && d.b && d.b.type === 'tower'), tw = L.list[ti];
+      if (!tw || !tw.hit || !tw.hit.poly) return out;
+      for (const [t, isSel] of [[sel, true], [pulseT && pulseT.target, false]]) {
+        if (!t || (t.kind !== 'building' && t.kind !== 'grave' && t.kind !== 'decor') || out.some((x) => x.kind === t.kind && x.id === t.id)) continue;
+        const i = L.list.findIndex((d) => d.kind === t.kind && d.id === t.id), d = L.list[i];
+        if (!d || i > ti || !d.hit || !d.hit.poly || coveredBy(d.hit.poly, tw.hit.poly) < XRAY_COVER) continue;
+        out.push({ kind: t.kind, id: t.id, d, poly: d.hit.poly, tower: tw.hit.poly, sel: isSel });
+      }
+      return out;
+    }
+    function coveredBy(poly, cover) {               // the share of poly's area inside cover (a 9 x 9 grid over its box)
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0, m = 0;
+      for (const [x, y] of poly) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+      for (let j = 0; j < 9; j++) for (let i = 0; i < 9; i++) {
+        const x = x0 + (x1 - x0) * (i + 0.5) / 9, y = y0 + (y1 - y0) * (j + 0.5) / 9;
+        if (inPoly(poly, x, y)) { n++; if (inPoly(cover, x, y)) m++; }
+      }
+      return n ? m / n : 0;
+    }
+    function drawXray(L) {
+      if (!L.xray || !L.xray.length) return;
+      const path = (pts) => { g.beginPath(); pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y))); g.closePath(); };
+      for (const xr of L.xray) {
+        if (!xr.sel && !pulseT) continue;            // the spotlight ended this frame (drawPulse)
+        g.save();
+        path(xr.tower); g.clip();                    // only where the Tower stands in front: elsewhere the object shows itself
+        g.globalAlpha = xr.sel ? 1 : 0.55 + 0.45 * pulseK();
+        path(xr.poly); g.fillStyle = 'rgba(255,122,47,.14)'; g.fill();
+        g.setLineDash([7, 5]); g.lineWidth = 2.5; g.lineJoin = 'round'; g.strokeStyle = Art.PAL.accent; g.stroke();
+        g.restore();
+      }
+    }
     // depth: footprints first (A wholly behind B along gx or gy draws first), else the front-corner key
     function depthSort(list) {
       list.sort((a, b) => a.key - b.key || a.k2 - b.k2);
@@ -1397,6 +1449,7 @@
       Art.fence(g, sxOf(0), syOf(0), z, wNow, 'front');
       for (const d of L.list) if (d.out && vis(d)) { d.draw(); drawn++; }
       Art.ruins(g, sxOf(0), syOf(0), z, wNow, 'front');
+      drawXray(L);
       // dust puffs of placed objects (once landed)
       for (const e of fx) if (e.kind === 'drop' && !e.puffed && now - e.t0 >= e.dur) { e.puffed = true; const o = bById.get(e.id) || gById.get(e.id) || dById.get(e.id); if (o && o.gx != null && !reduced) fx.push({ kind: 'puff', gx: o.gx, gy: o.gy, w: e.w, d: e.d, t0: now, dur: PUFF_MS }); }
       const t4 = pc ? pc() : 0;
@@ -1491,6 +1544,7 @@
         const d = order[i]; if (!d.hit) continue;
         if (d.kind === 'person' && o.people === false) continue;
         const hit = d.hit.poly ? inPoly(d.hit.poly, x, y) : inBox(d.hit.box, x, y);
+        if (hit && d.b && d.b.type === 'tower' && L.xray) { const xr = L.xray.find((r) => inPoly(r.poly, x, y)); if (xr) return res(xr.d); }
         if (hit) return res(d);
       }
       let grown = null, gd = Infinity;
@@ -1814,7 +1868,8 @@
       debug: () => ({ cam: { X: cam.X, Y: cam.Y, z: cam.z }, camera: getCamera(), W, H, bs, bsMax, perfDrop, gesture: gest ? gest.mode : null,
         jibs: layout && layout.jibAngles ? layout.jibAngles.slice() : [], canvas: { w: canvas.width, h: canvas.height },
         ground: { k: gc.k, w: gc.w, h: gc.h, renders: gc.renders, key: gc.key }, drawn: lastStats.drawn, reduced, insets: Object.assign({}, insets),
-        figures: figs.size, fx: fx.length, confetti: confetti.length, frames, layout: layout ? layout.list.map((d) => d.kind + ':' + d.id) : [] }),
+        figures: figs.size, fx: fx.length, confetti: confetti.length, frames, layout: layout ? layout.list.map((d) => d.kind + ':' + d.id) : [],
+        xray: layout && layout.xray ? layout.xray.map((r) => ({ kind: r.kind, id: r.id, sel: r.sel })) : [] }),
       _int: { toScreen, toGround, depthSort, bfsFrom, pathTo, walkable, startPinch, movePinch, pointers, applyBs, renderGround, gc,
         profile: (clock) => { profClock = clock || null; }, profLast: () => profLast, dbg,
         sit: (id) => { const f = figs.get(id); if (!f) return false; f.pose = 'sit'; f.seatTile = [Math.floor(f.x), Math.floor(f.y) + 1]; return true; },
