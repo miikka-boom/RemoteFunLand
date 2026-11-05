@@ -402,45 +402,49 @@
     const reason = fitsGrid(s, occGrid(s, ignoreId), footW(kind), gx, gy);
     return { ok: !reason, reason };
   }
-  // The valid origin with the fewest tiles the Tower hides (below), then the nearest: a clear footprint whenever one
-  // exists, else the least hidden one. The Tower itself ignores the rule.
+  // The valid origin with the fewest tiles the Tower hides at its top level (below), then the fewest it hides today,
+  // then the nearest: a clear footprint whenever one exists, else the least hidden one. The Tower ignores the rule.
   function suggestSpot(s, type, nearGx, nearGy, ignoreId) {
     const w = footW(type), grid = occGrid(s, ignoreId), lo = landLo(s), hi = landHi(s);
-    const cx = fin(nearGx, 12), cy = fin(nearGy, 12);
-    let best = null, bh = Infinity, bd = Infinity;
+    const cx = fin(nearGx, 12), cy = fin(nearGy, 12), now = { storeys: towerStoreysNow(s) };
+    let best = null, bh = Infinity, bn = Infinity, bd = Infinity;
     for (let y = lo; y + w <= hi; y++) for (let x = lo; x + w <= hi; x++) {
       if (fitsGrid(s, grid, w, x, y)) continue;
-      const hc = type === 'tower' ? 0 : hiddenCount(s, x, y, w);
+      const hc = type === 'tower' ? 0 : hiddenCount(s, x, y, w), hn = type === 'tower' || !hc ? 0 : hiddenCount(s, x, y, w, now);
       const dx = x + w / 2 - cx, dy = y + w / 2 - cy, dd = dx * dx + dy * dy;
-      if (hc < bh || (hc === bh && dd < bd - 1e-9)) { bh = hc; bd = dd; best = { gx: x, gy: y }; }
+      if (hc < bh || (hc === bh && (hn < bn || (hn === bn && dd < bd - 1e-9)))) { bh = hc; bn = hn; bd = dd; best = { gx: x, gy: y }; }
     }
     return best;
   }
   // A grave or building right behind the Bell Tower on screen can be neither seen nor tapped: the Tower is drawn after
-  // it (8.1) and its extruded 3 x 3 footprint (art.js hit height 66 + 22 x storeys px) covers anything 64 px tall on the
-  // tile (a headstone's top; most of a building). Only the Tower is tall enough to do that (every other building is at
-  // most 68 px). The test uses the Tower's top level (storeys at max), so a tile clear today stays clear as it grows.
-  // iso.js repeats this rule for the placement ghost (Iso suggestSpot); keep the two in step.
+  // it (8.1) and its extruded 3 x 3 footprint (art.js hit height 66 + 22 x storeys px) covers anything o.h px tall on
+  // the tile (64 by default: a headstone's top, most of a building; a rubble pile's pick height is 10). Only the Tower is
+  // tall enough to do that (every other building is at most 68 px). The test uses the Tower's top level unless
+  // o.storeys says otherwise, so a tile clear today stays clear as it grows. iso.js repeats this rule for the
+  // placement ghost (Iso suggestSpot); keep the two in step.
   const TOWER_TOP_STOREYS = 1 + Math.ceil(B.tower.max / 2);
-  function towerHides(s, gx, gy) {
+  const towerStoreysNow = (s) => { const t = towerB(s); return 1 + Math.ceil((t ? t.lv : 1) / 2); };
+  function towerHides(s, gx, gy, o) {
     const t = towerB(s); if (!t) return false;
     const dc = Math.abs(gx - gy - (t.gx - t.gy));             // columns from the Tower's centre line (screen x)
     if (dc > 3 || gx >= t.gx + 3 || gy >= t.gy + 3 || (gx >= t.gx && gy >= t.gy)) return false;   // beside or in front
-    return (t.gx + t.gy + dc - gx - gy - 1) * 16 <= 66 + 22 * TOWER_TOP_STOREYS - 64;
+    const st = o && o.storeys != null ? o.storeys : TOWER_TOP_STOREYS, h = o && o.h != null ? o.h : 64;
+    return (t.gx + t.gy + dc - gx - gy - 1) * 16 <= 66 + 22 * st - h;
   }
-  function hiddenCount(s, gx, gy, w) {
+  function hiddenCount(s, gx, gy, w, o) {
     let n = 0;
-    for (let y = gy; y < gy + w; y++) for (let x = gx; x < gx + w; x++) if (towerHides(s, x, y)) n++;
+    for (let y = gy; y < gy + w; y++) for (let x = gx; x < gx + w; x++) if (towerHides(s, x, y, o)) n++;
     return n;
   }
-  // 6.7: Chebyshev rings 0, 1, 2, ...; gy then gx ascending. Pass 0 skips the tiles the Tower hides; pass 1 takes any
-  // free tile, so a spot is found whenever the land has one.
+  // 6.7: Chebyshev rings 0, 1, 2, ...; gy then gx ascending. Pass 0 skips the tiles the Tower hides at its top level,
+  // pass 1 the tiles it hides today, pass 2 takes any free tile, so a spot is found whenever the land has one.
   function spotFrom(s, sx, sy, grid) {
     grid = grid || occGrid(s);
-    for (let pass = 0; pass < 2; pass++)
+    const now = { storeys: towerStoreysNow(s) };
+    for (let pass = 0; pass < 3; pass++)
       for (let r = 0; r < G; r++) for (let y = sy - r; y <= sy + r; y++) for (let x = sx - r; x <= sx + r; x++) {
         if (Math.max(Math.abs(x - sx), Math.abs(y - sy)) !== r || x < 0 || y < 0 || x >= G || y >= G) continue;
-        if (!fitsGrid(s, grid, 1, x, y) && (pass || !towerHides(s, x, y))) return { gx: x, gy: y };
+        if (!fitsGrid(s, grid, 1, x, y) && (pass === 2 || !towerHides(s, x, y, pass === 1 ? now : null))) return { gx: x, gy: y };
       }
     return null;
   }
@@ -693,8 +697,11 @@
     return j;
   }
   function dropRubble(s, ev) {                                // 3.2: the new ring's rubble from the city RNG, one glinting piece
-    const lo = landLo(s), hi = landHi(s), tiles = [];
-    for (let y = lo; y < hi; y++) for (let x = lo; x < hi; x++) if ((x === lo || y === lo || x === hi - 1 || y === hi - 1) && !isGate(s, x, y)) tiles.push([x, y]);
+    const lo = landLo(s), hi = landHi(s), all = [];
+    for (let y = lo; y < hi; y++) for (let x = lo; x < hi; x++) if ((x === lo || y === lo || x === hi - 1 || y === hi - 1) && !isGate(s, x, y)) all.push([x, y]);
+    // never where the Tower would cover a pile (its 10 px pick height) at its top level: a pile left there could never
+    // be tapped and cleared, and it might be the ring's glint (the same number of draws, so the RNG stays in step)
+    const clear = all.filter(([x, y]) => !towerHides(s, x, y, { h: 10 })), tiles = clear.length >= EXP.rubble[s.ring] ? clear : all;
     const n = EXP.rubble[s.ring], gl = Math.floor(rand(s) * n), ids = [];
     let glintId = null;
     for (let i = 0; i < n && i < tiles.length; i++) {
@@ -1835,7 +1842,7 @@
         if (s.res.cans < pr.cans) return { err: 'cost', data: { res: 'cans', need: pr.cans - s.res.cans } };
         s.res.cans -= pr.cans; paid = pr.cans; restMs = recoverMs(s, p);
         p.state = 'rest'; p.restKind = 'recovering'; p.restFromMs = s.cityMs; p.restUntilMs = s.cityMs + restMs;
-        history(s, p, fill(TEXT.revivedCans, { n: s.night }));
+        history(s, p, fill(clinicLv(s) >= 1 ? TEXT.revivedCans : TEXT.revivedHome, { n: s.night }));   // no Clinic: recovers at home
       } else {
         if (s.res.sparks < pr.sparks) return { err: 'cost', data: { res: 'sparks', need: pr.sparks - s.res.sparks } };
         spend(s, pr.sparks, 'revive'); paid = pr.sparks;
@@ -2191,7 +2198,8 @@
     }
     for (const b of bl) if (b.lv === 0 && !s.jobs.some((j) => j.target === b.id)) { b.lv = 1; note(b.type + ' with no build job finished'); }
     s.crane4 = o.crane4 === true;
-    // positions: inside the land, off the gate, no overlaps (moved to the nearest valid spot when needed)
+    // positions: inside the land, off the gate, no overlaps (moved when needed to suggestSpot's spot: the fewest tiles
+    // the Tower hides, then the nearest valid one)
     s.rubble = []; s.decor = []; s.graves = [];
     const tmp = Object.assign({}, t, { ring: s.ring, buildings: [], rubble: s.rubble, decor: s.decor, graves: s.graves });
     for (const b of bl.slice().sort((a, b) => (a.type === 'tower' ? -1 : b.type === 'tower' ? 1 : 0))) {

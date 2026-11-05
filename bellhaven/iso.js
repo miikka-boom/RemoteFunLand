@@ -85,7 +85,9 @@
  *                                silhouettes, people's drawn bounds + 6 px, the tile diamond extended up for graves /
  *                                rubble / decorations; then those small objects' 44 x 44 minimum boxes (the nearest
  *                                centre wins where two overlap); then a person's 22 px circle (only when nothing else
- *                                is under the point); then landmarks; then the ground tile.
+ *                                is under the point); then landmarks; then the ground tile. The Bell Tower's shape
+ *                                follows its drawing (Art.silhouette), and a point that would pick it but lies inside
+ *                                an x-ray outline (pulse(), below) picks that object instead.
  *                                hit = { kind: 'bubble'|'building'|'grave'|'decor'|'rubble'|'person'|'landmark'|
  *                                'ghost'|'ground', id?, gx?, gy?, inLand?, near? (the circle), x, y }
  *   screenOf(target) -> { x, y, box } | null   where a target is drawn (bubble targets give the bubble's centre)
@@ -106,7 +108,8 @@
  *   ghostStart({ kind, mode: 'place'|'move', id?, gx?, gy?, lv?, art? }) -> ghost
  *                                kind: a building type, 'grave', 'tree', 'bench' or 'lamp'. mode 'move' moves the
  *                                existing object id (hidden while the ghost shows; kind is then read from the view).
- *                                Without gx / gy the ghost starts on the valid origin nearest the clear view's centre.
+ *                                Without gx / gy the ghost starts on suggestSpot's origin: the fewest tiles the Tower
+ *                                hides, then the nearest to the clear view's centre.
  *                                art = extra BH.Art options (roof, initial, ribbon, ageDays, seed ...).
  *   ghostMove(gx, gy) -> ghost   ghost() -> ghost | null   ghostValid(gx, gy) -> { ok, reason }
  *   validAt(kind, gx, gy, ignoreId) -> { ok, reason: 'outside'|'gate'|'occupied'|'bad'|null }   3.3 from the view
@@ -142,7 +145,8 @@
  *   debug() -> { cam, camera, W, H, bs, bsMax, perfDrop, gesture, jibs (crane jib angles drawn this frame: constant
  *                                under reduced motion), canvas: { w, h } (backing store px), ground: { k, w, h,
  *                                renders, key }, drawn, reduced, insets, figures, fx, confetti, frames, layout
- *                                (the drawn order as 'kind:id') }
+ *                                (the drawn order as 'kind:id'), xray ([{ kind, id, sel }] outlined over the Tower),
+ *                                towerSpot (the Tower's spotlight was drawn again over its neighbours this frame) }
  *   _int                         internals for tests only (parkFig, sit, depthSort, ...); not an API
  *
  * Pure helpers (also in node): BH.Iso.fitZoom({ W, H, side, storeys, pad, top }) -> z,
@@ -157,8 +161,8 @@
  * than 5 % off, and when the backing scale is restored to a higher value (a drop just draws the sharper bitmap
  * smaller). During the 0.8 s fence slide the ground is drawn live. Then the objects in depth order (footprints first:
  * an object wholly behind another along gx or gy draws first; else the front-corner key gx + w + gy + d, ties by
- * gx + w, people x + y + 0.5), the crane jibs, the front fence, people outside the land (the road), the front ruins,
- * then the overlay: bubbles, timer, state and people's pills (clamped 8 px inside the clear view, hidden under a right
+ * gx + w, people x + y + 0.5; right after the Tower, the x-ray outlines), the crane jibs, the front fence, people
+ * outside the land (the road), the front ruins, a spotlight on the Tower again (clipped off the Tower), then the overlay: bubbles, timer, state and people's pills (clamped 8 px inside the clear view, hidden under a right
  * sheet), confetti, the ghost. Backing store min(devicePixelRatio, 3); 2 while a pan or pinch is active and after a
  * second whose frames averaged over 20 ms; restored after 2 s averaging 18 ms or less (doubling to at most 32 s when it
  * keeps dropping right after a restore, so a device too slow for 3x settles at 2x instead of re-rendering the ground
@@ -522,21 +526,22 @@
       }
       return { ok: true, reason: null };
     }
-    // Engine.towerHides's rule, at the Tower's top level: a tile behind the Tower whose 64 px object it would cover
-    function towerHides(x, y) {
+    // Engine.towerHides's rule: a tile behind the Tower whose 64 px object it would cover, at its top level by default
+    function towerHides(x, y, st) {
       const t = view && view.tower; if (!t) return false;
       const dc = Math.abs(x - y - (t.gx - t.gy));
       if (dc > 3 || x >= t.gx + 3 || y >= t.gy + 3 || (x >= t.gx && y >= t.gy)) return false;
-      return (t.gx + t.gy + dc - x - y - 1) * 16 <= 66 + 22 * (t.topStoreys || 6) - 64;
+      return (t.gx + t.gy + dc - x - y - 1) * 16 <= 66 + 22 * (st || t.topStoreys || 6) - 64;
     }
-    function suggestSpot(kind, nx, ny, ignoreId) {   // Engine.suggestSpot's rule: the valid origin with the fewest tiles
-      const [w, d] = footOf(kind);                   // the Tower hides, then whose centre is nearest
-      const hc = (x0, y0) => { let n = 0; for (let y = y0; y < y0 + d; y++) for (let x = x0; x < x0 + w; x++) if (towerHides(x, y)) n++; return n; };
-      let best = null, bh = Infinity, bd = Infinity;
+    function suggestSpot(kind, nx, ny, ignoreId) {   // Engine.suggestSpot's rule: the valid origin with the fewest tiles the
+      const [w, d] = footOf(kind);                   // Tower hides at its top level, then today, then the nearest centre
+      const today = view && view.tower ? view.tower.storeys : null;
+      const hc = (x0, y0, st) => { let n = 0; for (let y = y0; y < y0 + d; y++) for (let x = x0; x < x0 + w; x++) if (towerHides(x, y, st)) n++; return n; };
+      let best = null, bh = Infinity, bn = Infinity, bd = Infinity;
       for (let y = lo; y + d <= hi; y++) for (let x = lo; x + w <= hi; x++) {
         if (!validAt(kind, x, y, ignoreId).ok) continue;
-        const h = kind === 'tower' ? 0 : hc(x, y), dx = x + w / 2 - nx, dy = y + d / 2 - ny, dd = dx * dx + dy * dy;
-        if (h < bh || (h === bh && dd < bd - 1e-9)) { bh = h; bd = dd; best = { gx: x, gy: y }; }
+        const h = kind === 'tower' ? 0 : hc(x, y), hn = !h || !today ? 0 : hc(x, y, today), dx = x + w / 2 - nx, dy = y + d / 2 - ny, dd = dx * dx + dy * dy;
+        if (h < bh || (h === bh && (hn < bn || (hn === bn && dd < bd - 1e-9)))) { bh = h; bn = hn; bd = dd; best = { gx: x, gy: y }; }
       }
       return best;
     }
@@ -1096,7 +1101,7 @@
               if (job) Art.scaffold(g, x, y - liftNow, z, b.w, b.d, Art.info(b.type, lv).h + 16);
             }
           },
-          hit: { poly: Art.silhouette(b.type, lv, x, y - liftNow, z) } });
+          hit: { poly: Art.silhouette(b.type, lv, x, y - liftNow, z, job && !site ? { box: Art.info(b.type, lv).h + 16 } : null) } });   // a scaffold covers the whole footprint
         d.b = b;
       }
       // cranes: busy masts at the sites (the jib is drawn after every object), idle ones folded beside the Tower
@@ -1405,6 +1410,21 @@
       }
       g.restore();
     }
+    // The spotlight on the Bell Tower once more, over whatever stands around it (by the 'Bell Tower to 3' step the
+    // buildings on every side hide its whole ground ring), but never over the Tower itself
+    let towerSpotFrame = -1;
+    function drawTowerSpot(L) {
+      const t = pulseT && pulseT.target;
+      if (!t || t.kind !== 'building' || !view || !view.tower || t.id !== view.tower.id) return;
+      const tw = L.list.find((d) => d.kind === 'building' && d.id === t.id), b = bById.get(t.id);
+      if (!tw || !tw.hit || !tw.hit.poly || !b) return;
+      const k = pulseK(), z = cam.z, e = 0.12 + 0.1 * k, [x, y] = toScreen(b.gx - e, b.gy - e, 0);
+      g.save();
+      g.beginPath(); g.rect(0, 0, W, H); tw.hit.poly.forEach(([px, py], i) => (i ? g.lineTo(px, py) : g.moveTo(px, py))); g.closePath(); g.clip('evenodd');
+      g.globalAlpha = 0.55 + 0.45 * k;
+      Art.footprint(g, x, y, z, (b.w || 3) + 2 * e, (b.d || 3) + 2 * e, null, Art.PAL.accent, 3);
+      g.restore(); towerSpotFrame = frames;
+    }
     function drawConfetti() {
       if (!confetti.length) return;
       const z = cam.z, keep = [];
@@ -1442,14 +1462,14 @@
       for (const p of fx) if (p.kind === 'puff') { const k = (now - p.t0) / p.dur; if (k > 0 && k < 1) { const [x, y] = toScreen(p.gx, p.gy, 0); Art.puff(g, x, y, z, k, p.w, p.d); } }
       let drawn = 0;
       const vis = (d) => d.sb[2] >= -20 && d.sb[0] <= W + 20 && d.sb[3] >= -20 && d.sb[1] <= H + 20;
-      for (const d of L.list) if (!d.out && vis(d)) { d.draw(); drawn++; }
+      for (const d of L.list) if (!d.out && vis(d)) { d.draw(); drawn++; if (d.b && d.b.type === 'tower') drawXray(L); }   // x-ray: anything in front of the Tower still covers it, as in pick()
       const t3 = pc ? pc() : 0;
       for (const j of L.jibs) j();
       const wNow = worldOfNow(landNow);
       Art.fence(g, sxOf(0), syOf(0), z, wNow, 'front');
       for (const d of L.list) if (d.out && vis(d)) { d.draw(); drawn++; }
       Art.ruins(g, sxOf(0), syOf(0), z, wNow, 'front');
-      drawXray(L);
+      drawTowerSpot(L);
       // dust puffs of placed objects (once landed)
       for (const e of fx) if (e.kind === 'drop' && !e.puffed && now - e.t0 >= e.dur) { e.puffed = true; const o = bById.get(e.id) || gById.get(e.id) || dById.get(e.id); if (o && o.gx != null && !reduced) fx.push({ kind: 'puff', gx: o.gx, gy: o.gy, w: e.w, d: e.d, t0: now, dur: PUFF_MS }); }
       const t4 = pc ? pc() : 0;
@@ -1869,7 +1889,7 @@
         jibs: layout && layout.jibAngles ? layout.jibAngles.slice() : [], canvas: { w: canvas.width, h: canvas.height },
         ground: { k: gc.k, w: gc.w, h: gc.h, renders: gc.renders, key: gc.key }, drawn: lastStats.drawn, reduced, insets: Object.assign({}, insets),
         figures: figs.size, fx: fx.length, confetti: confetti.length, frames, layout: layout ? layout.list.map((d) => d.kind + ':' + d.id) : [],
-        xray: layout && layout.xray ? layout.xray.map((r) => ({ kind: r.kind, id: r.id, sel: r.sel })) : [] }),
+        xray: layout && layout.xray ? layout.xray.map((r) => ({ kind: r.kind, id: r.id, sel: r.sel })) : [], towerSpot: towerSpotFrame === frames }),
       _int: { toScreen, toGround, depthSort, bfsFrom, pathTo, walkable, startPinch, movePinch, pointers, applyBs, renderGround, gc,
         profile: (clock) => { profClock = clock || null; }, profLast: () => profLast, dbg,
         sit: (id) => { const f = figs.get(id); if (!f) return false; f.pose = 'sit'; f.seatTile = [Math.floor(f.x), Math.floor(f.y) + 1]; return true; },

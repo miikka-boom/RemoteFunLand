@@ -1079,6 +1079,7 @@
     const compact = ui.layout.bb === 'compact', tw = compact ? 72 : 84, th = compact ? 42 : 56, c = ui.coach || {};
     let s = '<div class="tx"><button class="xbtn" data-do="closeTray" aria-label="Close the tray">' + ic('close') + '</button></div><div class="cards">';
     const byType = {}; for (const t of V.tray) byType[t.type] = t;
+    const countAt = (type, lv) => { let n = 0; for (const [tw, c] of D.BUILDINGS[type].count) if (lv >= tw) n = c; return n; };   // a locked card: how many its Tower level allows
     for (const type of TRAY_ORDER) {
       const t = byType[type]; if (!t) continue;
       const img = t.decor ? decorThumb(type, tw, th) : Art.thumbURL(type, 1, tw, th);
@@ -1087,7 +1088,7 @@
       s += '<button class="' + cls + '" data-do="trayCard" data-type="' + type + '" data-k="' + type + '" aria-label="' + esc(t.name + (locked ? ', needs Tower ' + t.locked : full ? ', all built' : ', ' + t.cost.n + ' ' + t.cost.res)) + '">' +
         (img ? '<img alt="" src="' + img + '">' : '') + '<b>' + esc(t.name) + '</b>' +
         (locked ? '<span class="lock">' + ic('lock', '#a9aeb3') + 'Tower ' + t.locked + '</span>' : type === 'tower' ? '<span class="lock">Lv ' + V.tower.lv + '</span>' : '<span class="tc' + (short ? ' short' : '') + '">' + ic(RES_ICON[t.cost.res]) + fmt.num(t.cost.n) + '</span>') +
-        (t.decor ? '' : '<span class="cnt">' + t.built + '/' + (t.allowed || t.max) + '</span>') + '</button>';
+        (t.decor ? '' : '<span class="cnt">' + t.built + '/' + (locked ? countAt(type, t.locked) : t.allowed || t.max) + '</span>') + '</button>';
     }
     morph($('tray'), s + '</div>');
   }
@@ -2332,8 +2333,8 @@
     const el = $('rotate');
     if (on && !el.__built) {
       el.__built = true;
-      el.innerHTML = '<div class="rc">' + rotateIcon() + '<h2>Turn your phone sideways</h2><p>Bellhaven is made for landscape.</p>' +
-        btn({ do: 'upright', cls: 'ghost', label: 'USE IT UPRIGHT ANYWAY' }) + '</div>';
+      el.innerHTML = '<div class="rc">' + rotateIcon() + '<h2>Turn your phone sideways</h2><p>Bellhaven is made for landscape.</p><div class="rbtns">' +
+        btn({ do: 'upright', cls: 'ghost', label: 'USE IT UPRIGHT ANYWAY' }) + '<a class="btn ghost" href="../" aria-label="Back to the gallery">GALLERY</a></div></div>';   // the card covers the top bar's back chip
     }
     setClass('rotate-on', on);
   }

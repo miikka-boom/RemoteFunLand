@@ -442,6 +442,8 @@ async function test27(browser) {
   await t.goto('?seed=20261104');
   await pastMeet(t);
   await t.tap('#bBuild'); await sleep(350);
+  const dcnt = await t.ev(() => { const c = document.querySelector('#tray .tcard[data-type=depot] .cnt'); return c ? c.textContent : null; });
+  ok(dcnt === '0/1', '27 the locked Depot card counts what Tower 2 allows (0/1), like the other locked cards', dcnt);
   await t.tap('#tray .tcard[data-type=cannery]'); await sleep(450);
   let gh = await t.ev(() => BH.UI.iso.ghost());
   ok(!!gh && gh.valid && gh.kind === 'cannery', '27 BUILD -> Cannery: the ghost sits on a valid spot', gh);
@@ -531,6 +533,43 @@ async function test27(browser) {
   const xtw = await t.ev(() => BH.UI.iso.debug().xray);
   ok(xtw.length === 0, '27 the Tower itself, selected and spotlit, is never outlined over itself', xtw);
   await t.ev(() => { BH.UI.iso.pulse(null); BH.UI.iso.select(null); });
+  // the Bell Tower picks only where it is drawn: the coached second House (9, 8) and Depot (11, 8) behind it answer taps
+  // on what shows of them; its spotlight shows over the buildings around it
+  const co = await t.ev(() => {
+    const E = BH.Engine, s = E.create({ realNow: Date.now(), tzOffsetMin: 0, seed: 8086 });
+    const put = (type, gx, gy) => { const b = { id: 'b' + (++s.ids.b), type, lv: 1, gx, gy }; if (type === 'cannery') { b.bubbleBase = 0; b.bubbleSinceMs = s.cityMs; } if (type === 'house') b.houseIdx = s.buildings.filter((x) => x.type === 'house').length; s.buildings.push(b); return b; };
+    s.flags.metPeople = true; s.buildings[0].lv = 3; put('cannery', 13, 13); put('armory', 13, 11); put('clinic', 11, 13); const dp = put('depot', 11, 8), h2 = put('house', 9, 8); s.goal = 10;
+    return { ok: BH.UI.labApi.importSave(E.serialize(s)).ok, depot: dp.id, house: h2.id, tower: s.buildings[0].id };
+  });
+  await sleep(700); await t.ev(() => { const b = BH.UI.ui.overlay && document.querySelector('#overlay [data-primary]'); if (b) b.click(); BH.UI.iso.fit(); }); await sleep(900);
+  const share = await t.ev((o) => {
+    const iso = BH.UI.iso, out = {};
+    for (const [k, id] of [['house', o.house], ['depot', o.depot]]) {
+      const b = iso.screenOf({ kind: 'building', id }).box; let n = 0, m = 0;
+      for (let j = 1; j < 16; j++) for (let i = 1; i < 16; i++) { n++; const h = iso.pick(b.x + b.w * i / 16, b.y + b.h * j / 16); if (h.kind === 'building' && h.id === id) m++; }
+      out[k] = Math.round(m / n * 100) / 100;
+    }
+    const tw = BH.UI.view.tower, side = iso.tileToScreen(tw.gx, tw.gy + 3, 60), shaft = iso.tileToScreen(tw.gx + 1.5, tw.gy + 1.5, 40), a = iso.pick(side.x, side.y), b = iso.pick(shaft.x, shaft.y);
+    out.side = a.kind + ':' + (a.id || ''); out.shaft = b.kind + ':' + (b.id || '');
+    return out;
+  }, co);
+  ok(co.ok && share.house >= 0.1 && share.depot >= 0.1, '27 the coached House (9, 8) and Depot (11, 8) behind the Tower answer taps on what shows of them (0 and 0.01 of their box with the old 3 x 3 pick box)', share);
+  ok(share.side !== 'building:' + co.tower && share.shaft === 'building:' + co.tower, '27 the Tower picks its shaft, not the air beside it', share);
+  await t.ev((id) => BH.UI.iso.pulse({ kind: 'building', id }, { ms: 3000 }), co.tower); await sleep(250);
+  ok(await t.ev(() => BH.UI.iso.debug().towerSpot), '27 the spotlit Tower gets its ring again over the buildings around it');
+  await t.shot('tower-spot');
+  await t.ev(() => BH.UI.iso.pulse(null));
+  for (const lv of [1, 10]) {           // every start pile answers taps, at Tower 1 and Tower 10
+    const im = await t.ev((lv) => { const E = BH.Engine, s = E.create({ realNow: Date.now(), tzOffsetMin: 0, seed: 5 }); s.flags.metPeople = true; s.buildings[0].lv = lv; return BH.UI.labApi.importSave(E.serialize(s)).ok; }, lv);
+    await sleep(600); await t.ev(() => { const b = BH.UI.ui.overlay && document.querySelector('#overlay [data-primary]'); if (b) b.click(); BH.UI.iso.fit(); }); await sleep(900);
+    const piles = await t.ev(() => BH.UI.view.rubble.map((r) => {
+      const iso = BH.UI.iso, sc = iso.screenOf({ kind: 'rubble', id: r.id }); if (!sc) return { at: r.gx + ',' + r.gy, share: -1 };
+      const b = sc.box; let n = 0, m = 0;
+      for (let j = 1; j < 10; j++) for (let i = 1; i < 10; i++) { n++; const h = iso.pick(b.x + b.w * i / 10, b.y + b.h * j / 10); if (h.kind === 'rubble' && h.id === r.id) m++; }
+      return { at: r.gx + ',' + r.gy, glint: r.glint, share: Math.round(m / n * 100) / 100 };
+    }));
+    ok(im && piles.length === 6 && piles.every((x) => x.share >= 0.1) && piles.some((x) => x.glint && x.share >= 0.5), '27 every start pile answers taps at Tower ' + lv + ', the glint clearly ((8, 11) sits behind House 1)', piles);
+  }
   errsOk(t, 'test 27');
   await t.close();
 }
@@ -798,6 +837,8 @@ async function test34(browser) {
   const rc = await t.ev(() => { const r = document.getElementById('rotate'), c = r.querySelector('.rc') || r; const b = c.getBoundingClientRect(); return { on: document.documentElement.classList.contains('rotate-on'), txt: r.innerText, h: b.height, t: b.top }; });
   ok(rc.on && /Turn your phone sideways/i.test(rc.txt) && /USE IT UPRIGHT ANYWAY/i.test(rc.txt), '34 the rotate card shows', rc);
   ok(rc.t <= 1 && rc.h >= 844 * 0.35 && rc.h <= 844 * 0.45, '34 the card covers the top 40 %', rc);
+  const gl = await t.ev(() => { const a = document.querySelector('#rotate a[href="../"]'), c = document.querySelector('#rotate .rc'); if (!a) return null; const b = a.getBoundingClientRect(), cb = c.getBoundingClientRect(); const top = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2); return { w: Math.round(b.width), h: Math.round(b.height), inCard: b.bottom <= cb.bottom + 0.5, onTop: !!top && (top === a || a.contains(top)) }; });
+  ok(!!gl && gl.onTop && gl.inCard && gl.w >= 44 && gl.h >= 44, '34 the card, which covers the top bar, has its own link back to the gallery', gl);
   await t.shot('portrait-rotate');
   await t.tap('#rotate [data-do=upright]'); await sleep(400);
   const L = await t.ev(() => {

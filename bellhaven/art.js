@@ -50,7 +50,9 @@
  *     points, pill = where a timer / "z N" / "+N" / Down pill sits (stack a bubble above a pill when both show),
  *     door = the ground point at the door on the footprint edge, crane = the mast spot for a job, colors = confetti.
  *     Also for grave, rubble, tree, bench and lamp (h = how far their tile diamond extends up for picking).
- * Art.silhouette(type, lv, x, y, z) -> [[sx, sy] x 6]   the footprint diamond extruded to h (8.1 hit-testing).
+ * Art.silhouette(type, lv, x, y, z, o?) -> [[sx, sy] x n]   the footprint diamond extruded to h (8.1 hit-testing);
+ *     the Bell Tower's follows its drawing (12 points: plinth, column, eaves) so the buildings beside it can be
+ *     tapped. o.box: the plain extruded footprint instead (true: to h; a number: to that height, e.g. a scaffold's).
  * Art.bounds(type, lv, x, y, z) -> { x0, y0, x1, y1 }   screen box of the body and its shadow, for culling.
  * Art.site(g, type, x, y, z, progress, o)   a new building's site: foundation, walls rising with progress 0-1, a
  *     brick pallet and the scaffold (draw a crane beside it).
@@ -824,9 +826,15 @@
     if (R.live) withAt(ctx, x, by, z, () => R.live(lv, o));
     ctx.restore();
   }
-  function silhouette(type, lv, x, y, z) {
+  function silhouette(type, lv, x, y, z, o) {
     const f = FOOT[type] || [1, 1], h = RECIPES[type] ? hitOf(type, clampLv(type, lv)) : 30, w = f[0], d = f[1];
     const p = (u, v, hh) => [x + SX(u, v) * z, y + SY(u, v, hh) * z];
+    if (o && o.box) { const hb = o.box === true ? h : o.box; return [p(0, 0, hb), p(w, 0, hb), p(w, 0, 0), p(w, d, 0), p(0, d, 0), p(0, d, hb)]; }
+    if (type === 'tower') {                         // its drawing, not its 3 x 3 box: the plinth, the column as wide as the
+      const bz = 8 + 22 * storeys(clampLv(type, lv));   // cap, the roof's eaves (whose back corner is the top on screen)
+      return [p(0, 3, 0), p(0, 3, 8), p(0, 1.86, 8), p(0.57, 2.43, bz + 30), p(0.49, 2.51, bz + 30), p(0.49, 0.49, bz + 30),
+        p(2.51, 0.49, bz + 30), p(2.43, 0.57, bz + 30), p(1.86, 0, 8), p(3, 0, 8), p(3, 0, 0), p(3, 3, 0)];
+    }
     return [p(0, 0, h), p(w, 0, h), p(w, 0, 0), p(w, d, 0), p(0, d, 0), p(0, d, h)];
   }
   function bounds(type, lv, x, y, z) {                // the body plus its ground shadow

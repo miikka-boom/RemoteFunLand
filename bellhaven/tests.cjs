@@ -30,6 +30,13 @@ const clone = (s) => JSON.parse(JSON.stringify(s));
 const PRONOUN = /\b(he|she|him|her|his|hers|they|them|their|theirs)\b/i;
 
 // ------------------------------------------------------------------ fixtures
+// 6.7's rule, written out here so the tests do not lean on the engine's copy: does the Tower (its 3 x 3 box at
+// `st` storeys) cover the top of an object `h` px tall standing on tile (x, y)?
+function covers(s, x, y, h, st) {
+  const t = s.buildings.find((b) => b.type === 'tower'), dc = Math.abs(x - y - (t.gx - t.gy));
+  if (dc > 3 || x >= t.gx + 3 || y >= t.gy + 3 || (x >= t.gx && y >= t.gy)) return false;
+  return (t.gx + t.gy + dc - x - y - 1) * 16 <= 66 + 22 * st - h;
+}
 function city(o) {
   o = o || {};
   const s = E.create({ realNow: T0, tzOffsetMin: 0, seed: o.seed == null ? 1 : o.seed });
@@ -117,7 +124,8 @@ test('2 tables: 3.4, 3.2, 4.8 and 6.1 against BH.DATA', () => {
   const s = city();
   eq([s.res, E.caps(s), s.buildings.map((b) => [b.type, b.lv, b.gx, b.gy]), E.bubble(s, 'b2').whole], [{ bricks: 200, cans: 150, sparks: 15 }, { bricks: 1000, cans: 600 },
     [['tower', 1, 10, 10], ['kiln', 1, 13, 9], ['house', 1, 9, 13]], 100], 'start amounts and layout');
-  eq(s.rubble.map((r) => [r.gx, r.gy, r.glint]), [[8, 8, true], [15, 8, false], [8, 11, false], [11, 15, false], [15, 15, false], [8, 15, false]], 'start rubble, (8, 8) glinting');
+  eq(s.rubble.map((r) => [r.gx, r.gy, r.glint]), [[15, 10, true], [15, 8, false], [8, 11, false], [11, 15, false], [15, 15, false], [8, 15, false]], 'start rubble, (15, 10) glinting');
+  ok(s.rubble.filter((r) => r.glint).every((r) => !covers(s, r.gx, r.gy, 10, 6)), 'the start glint stands clear of the Tower at any level (at (8, 8) it could never be tapped; check.cjs test 27 picks every start pile)');
   eq([E.cranes(s), E.beds(s), s.people.length], [{ total: 1, free: 1 }, 2, 2], 'one crane, two beds, two starters');
   // 4.8 XP
   eq(D.XP_AT, [0, 0, 60, 180, 380, 680, 1100, 1700, 2500, 3600, 5000], 'cumulative XP');
@@ -520,6 +528,18 @@ test('8 run model: 6.3.4 fixtures, margin curve, 6.9 JSON byte for byte, city ro
     if (o.win !== (x.win ? 1 : 0) || o.fell !== (x.fellAt ? FI[x.fellAt] : -1) || o.damageTaken !== x.damageTaken || o.kills !== x.kills || o.shoves !== x.shoves) twin++;
   }
   eq(twin, 0, 'Run.stats() = Run.simulate() on win, fall, damage, kills and shoves in 10,000 random runs');
+  // a loss counts every point of health lost down to 0, so never less than the starting health (an overrun with no
+  // second wind left took its overkill off twice: 'DAMAGE TAKEN 0' on the result card)
+  const R3 = N.mulberry32(888); let losses = 0, lowLoss = 0;
+  for (let i = 0; i < 10000; i++) {
+    const d = DEST[D.DEST_IDS[1 + Math.floor(R3() * 5)]], maxHp = [100, 105, 110, 115, 120][Math.floor(R3() * 5)];
+    const L = { P: Math.floor(R3() * 60), maxHp, startHp: Math.round(maxHp * (0.6 + 0.02 * Math.floor(R3() * 21))), sw: Math.floor(R3() * 3), heal: 0.8,
+      pillsTemp: 50, medkit: R3() < 0.5 ? 1 : 0, pills: R3() < 0.5 ? 1 : 0, bomb: R3() < 0.5 ? 1 : 0, weapon: 'pistol', shoveMul: 1, accAdd: 0 };
+    const seed = Math.floor(R3() * 4294967296) >>> 0, x = Run.simulate(d, L, seed), o = Run.stats(d, L, seed, {});
+    if (!x.win) { losses++; if (x.damageTaken < L.startHp || o.damageTaken !== x.damageTaken) lowLoss++; }
+  }
+  ok(losses > 2000, 'the loss property test sees enough losses (' + losses + ')');
+  eq(lowLoss, 0, 'every loss reports at least its starting health as damage taken, and stats() agrees (10,000 random runs)');
 });
 
 // ================================================================== people-and-runs fixtures
@@ -728,7 +748,7 @@ test('11 generator: 4.7 fixtures, unique names, trait shares, no pronouns, epita
     strs.push(N.cardLine(q), N.habitLine(q.habit), N.habitPast(q.habit), N.usedToBe(q.trade));
     for (const k of Object.keys(T.arrived)) strs.push(T.arrived[k].replace('{n}', 1234));
     const fill = (t) => t.replace(/\{n\}/g, '1234').replace(/\{D\}/g, D0).replace(/\{F\}/g, first).replace(/\{Nick\}/g, nk).replace(/\{N\}/g, q.name).replace(/\{L\}/g, 10).replace(/\{m\}/g, '12:34').replace(/\{k\}/g, '1,234');
-    for (const k of ['win', 'winSecondWind', 'hurt', 'down', 'revivedCans', 'revivedSparks', 'nickname', 'level', 'lost']) { const line = fill(T[k]); strs.push(line); ok(line.length <= 60 || i > 0, 'history line under 60: ' + line); }
+    for (const k of ['win', 'winSecondWind', 'hurt', 'down', 'revivedCans', 'revivedHome', 'revivedSparks', 'nickname', 'level', 'lost']) { const line = fill(T[k]); strs.push(line); ok(line.length <= 60 || i > 0, 'history line under 60: ' + line); }
     const pp = Object.assign({}, q, { nick: i % 3 ? null : D.NICK_IDS[i % 7], bestKills: i % 5 === 0 ? 150 : 0, runs: i % 4, arrivedNight: 7 });
     strs.push(...ep(s, pp));
   }
@@ -847,6 +867,20 @@ test('12 placement: the land, the gate, overlaps, moving, graves, counts and the
   must(s6, { type: 'clearRubble', id: gl.id });
   eq([s6.res.sparks - sp0, br0 - s6.res.bricks], [3, 50], 'clearing the glinting piece: 50 bricks, +3 ✦');
   s6.res.bricks = 10; eq(act(s6, { type: 'clearRubble', id: ring1.find((x) => !x.glint).id }).data, { res: 'bricks', need: 40 }, 'clearing needs the bricks');
+  // a new ring's piles never stand where the Tower would cover them at its top level (a pile there could never be
+  // tapped and cleared): 40 seeds, every ring
+  let piles = 0, coveredPiles = 0;
+  for (let sd = 1; sd <= 40; sd++) {
+    const c = city({ seed: sd });
+    for (let r = 1; r <= D.EXPAND.maxRing; r++) {
+      c.buildings[0].lv = D.EXPAND.tower[r]; c.res.bricks = D.EXPAND.cost[r];
+      if (!E.act(c, { type: 'expand' }, c.realLast).ok) break;
+      E.advance(c, D.EXPAND.time[r] * SEC + SEC);
+    }
+    for (const pl of c.rubble.filter((x) => x.ring >= 1)) { piles++; if (covers(c, pl.gx, pl.gy, 10, 6)) coveredPiles++; }
+  }
+  eq(piles, 40 * (5 + 6 + 7 + 8), 'the rubble property test opens all four rings in 40 seeds');
+  eq(coveredPiles, 0, 'no new ring pile stands where the Tower covers it at its top level');
   // suggestSpot: the valid origin nearest the point; the onboarding Cannery ghost
   const s7 = city(); eq(E.suggestSpot(s7, 'cannery', 14, 14), { gx: 13, gy: 13 }, 'the first spot (13, 13)');
   const sp = E.suggestSpot(s7, 'kiln', 12, 12); ok(sp && E.canPlace(s7, 'kiln', sp.gx, sp.gy).ok, 'a suggested spot is valid');
@@ -880,7 +914,12 @@ test('12 placement: the land, the gate, overlaps, moving, graves, counts and the
   ok(hidLate > 0, 'the property test reaches full lands (' + hidLate + ' spots behind the Tower with no clear one left)');
   eq(hidWorse, 0, 'over 60 cities x 14 buildings at random aims, no valid spot has fewer tiles behind the Tower than the suggested one');
   // graveSpot: in front of the House, else the quiet corner
-  const s8 = city(); s8.people[1].houseId = null; eq(E.graveSpot(s8, 'p1'), { gx: 12, gy: 8 }, 'no House: the quiet corner (8, 8) is rubble and the tiles near it are clear of the Tower today but behind it at its top level, so (12, 8)');
+  const s8 = city(); s8.people[1].houseId = null; eq(E.graveSpot(s8, 'p1'), { gx: 12, gy: 8 }, 'no House: the quiet corner (8, 8) and the tiles near it are clear of the Tower today but behind it at its top level, so (12, 8)');
+  // when every free tile is behind the Tower at its top level, a tile it does not hide today comes first
+  const s11 = city(); s11.people[1].houseId = null; let dz = 0;
+  for (let y = 8; y < 16; y++) for (let x = 8; x < 16; x++) if (!(x === 9 && y === 9) && !(x === 8 && y === 10) && E.canPlace(s11, 'grave', x, y).ok) s11.decor.push({ id: 'dz' + (++dz), type: 'tree', gx: x, gy: y });
+  ok(covers(s11, 9, 9, 64, 6) && covers(s11, 8, 10, 64, 6) && covers(s11, 9, 9, 64, 2) && !covers(s11, 8, 10, 64, 2), 'fixture: (9, 9) hidden now and at the top, (8, 10) only at the top');
+  eq(E.graveSpot(s11, 'p1'), { gx: 8, gy: 10 }, 'only tiles behind the Tower at its top level are free: the one it does not hide today, (8, 10), not (9, 9) under it');
   eq(E.graveSpot(s8, 'p0'), { gx: 9, gy: 15 }, 'in front of the House');
   const s9 = city({ tower: 3 }); s9.rubble = s9.rubble.filter((r) => !(r.gx === 8 && r.gy === 8));
   const h2 = addB(s9, 'house', 1, 9, 8); s9.people[1].houseId = h2.id;
@@ -971,6 +1010,10 @@ test('14 death -> revive -> grave: the offer, prices, REVIVE / REVIVE NOW / SAY 
   r = playRun(s, 'D3', 'p0', { seed: hi, force: 'down', kit: {} });
   s.res.sparks = 100; must(s, { type: 'revive', personId: 'p0', pay: 'sparks' });
   eq([p.state, s.res.sparks, p.revives, s.flags.paidSkip, p.history[p.history.length - 1][1]], ['ready', 44, 2, false, 'Night 2. Revived with sparks.'], 'REVIVE NOW: Ready, 56 ✦');
+  // REVIVE (cans) with no Clinic: the person recovers at home, and the history does not name a Clinic
+  const sn = city(), pn = sn.people[0]; pn.state = 'down'; pn.downUntilMs = sn.cityMs + 24 * H; sn.res.cans = 5000;
+  must(sn, { type: 'revive', personId: pn.id, pay: 'cans' });
+  eq([pn.state, pn.restKind, pn.history[pn.history.length - 1][1]], ['rest', 'recovering', 'Night 0. Revived with cans.'], 'REVIVE with no Clinic: "Revived with cans."');
   // SAY GOODBYE: Fallen and the grave on the 6.7 default spot in the same act; a later move relocates it
   r = playRun(s, 'D3', 'p0', { seed: hi, force: 'down', kit: {} });
   const spot = E.graveSpot(s, 'p0'), gb = must(s, { type: 'goodbye', personId: 'p0' });
@@ -1004,7 +1047,7 @@ test('14 death -> revive -> grave: the offer, prices, REVIVE / REVIVE NOW / SAY 
     'REVIVE NOW · 5 ✦: the stranger takes the free bed; three present people unlock death; the special price was once (next: L2 x 2 = 500, clamped to 480 under a 600 cap)');
   must(sg, { type: 'goodbye', personId: stg.id });
   const sgr = sg.graves[0], sm = E.memorial(sg, sgr.id);
-  eq([[sgr.gx, sgr.gy], sm.fellLine, sm.record, sm.epitaph[0], sg.flags.deathOn], [[12, 8], 'Found Down at the gate · Night 0', null, 'Came to the gate on Night 0.', false], 'goodbye to the stranger: the first grave in the quiet corner ((8, 8) is rubble and the free tiles near it stand behind the Tower: the next tile)');
+  eq([[sgr.gx, sgr.gy], sm.fellLine, sm.record, sm.epitaph[0], sg.flags.deathOn], [[12, 8], 'Found Down at the gate · Night 0', null, 'Came to the gate on Night 0.', false], 'goodbye to the stranger: the first grave in the quiet corner ((8, 8) and the free tiles near it stand behind the Tower at its top level: the next tile)');
   E.advance(sg, 2 * H); eq([sg.people.length, sg.flags.strangerDone], [3, true], 'the stranger appears once');
   // the death-unlock card's flag is set once and never resets
   const du = city({ tower: 3, goalsDone: true }); addB(du, 'inn', 1, 13, 13); addB(du, 'house', 1, 11, 13); du.flags.strangerDone = true; E._internal.refreshInn(du, []); du.res.cans = 500;

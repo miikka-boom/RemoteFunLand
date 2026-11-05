@@ -72,7 +72,7 @@
   const START = {
     bricks: 200, cans: 150, sparks: 15, kilnBubble: 100,
     tower: { gx: 10, gy: 10 }, kiln: { gx: 13, gy: 9 }, house: { gx: 9, gy: 13 },
-    rubble: [[8, 8, true], [15, 8, false], [8, 11, false], [11, 15, false], [15, 15, false], [8, 15, false]],
+    rubble: [[15, 10, true], [15, 8, false], [8, 11, false], [11, 15, false], [15, 15, false], [8, 15, false]],   // the glint never behind the Tower
     firstSpot: { gx: 13, gy: 13 },                                        // the onboarding Cannery ghost
     world: 24, gateGy: [11, 12],
   };
@@ -200,7 +200,7 @@
     win: 'Night {n}. {D}: home in {m}, {k} kills.', winSecondWind: 'Night {n}. {D}: home on a second wind.',
     // {D} in hurt, down and lost is the destination with its article ('the Night Market', 'Hospital Hill': DESTS[].theName)
     hurt: 'Night {n}. Overrun at {D}. Carried home.', down: 'Night {n}. Overrun at {D}. Down.',
-    revivedCans: 'Night {n}. Revived in the Clinic.', revivedSparks: 'Night {n}. Revived with sparks.',
+    revivedCans: 'Night {n}. Revived in the Clinic.', revivedHome: 'Night {n}. Revived with cans.', revivedSparks: 'Night {n}. Revived with sparks.',
     nickname: 'Night {n}. Everyone calls {F} “{Nick}” now.', level: 'Night {n}. Level {L}.', lost: 'Night {n}. Lost {N} at {D}.',
     levelLines: [3, 5, 7, 10],
     epitaphNick: 'Everyone called {F} “{Nick}”.', epitaphKills: 'Once cleared {k} in one night.',

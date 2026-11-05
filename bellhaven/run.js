@@ -54,14 +54,14 @@
                   : 3 * U(10, 24) * (dest.hordeMul || 1) * 0.8;
       const ft = Math.min(temp, d); temp -= ft; hp -= d - ft; dmg += d;
       if (hp <= 0) {
-        const over = -hp; dmg -= over; let rest = over;
+        const over = -hp; dmg -= over; let rest = over, swHere = 0;   // dmg counts the damage down to 0 HP
         while (hp <= 0 && sw > 0) {
-          sw--; swUsed++; hp = 1; temp = 0; log.push([e.f, 'secondWind']);
+          sw--; swUsed++; swHere++; hp = 1; temp = 0; log.push([e.f, 'secondWind']);
           rest = Math.round(rest * U(0, K.SW_CARRY));
           if (pills && rest > 0) { pills = 0; used.pills = 1; temp = Math.min(maxHp - hp, L.pillsTemp || 50); log.push([e.f, 'pills']); }
           const t2 = Math.min(temp, rest); temp -= t2; hp -= rest - t2; dmg += rest;
         }
-        if (hp <= 0) { dmg += hp; hp = 0; kills += kHere * U(0.3, 0.7); dead = e; log.push([e.f, 'overrun', e.k]); break; }
+        if (hp <= 0) { if (swHere) dmg += hp; hp = 0; kills += kHere * U(0.3, 0.7); dead = e; log.push([e.f, 'overrun', e.k]); break; }   // without a second wind the overkill is already out
       }
       kills += kHere; if (e.k !== 'wander') hordes++;
       log.push([e.f, e.k, d, Math.round(kHere)]);
@@ -109,14 +109,14 @@
       const kHere = k === 0 ? U(5, 12) : k === 1 ? (U(10, 17) + hordes) * hm : 3 * U(10, 24) * hm * 0.8;
       const ft = Math.min(temp, d); temp -= ft; hp -= d - ft; dmg += d;
       if (hp <= 0) {
-        const over = -hp; dmg -= over; let rest = over;
+        const over = -hp; dmg -= over; let rest = over, swHere = 0;
         while (hp <= 0 && sw > 0) {
-          sw--; hp = 1; temp = 0;
+          sw--; swHere++; hp = 1; temp = 0;
           rest = Math.round(rest * U(0, K.SW_CARRY));
           if (pills && rest > 0) { pills = 0; temp = Math.min(maxHp - hp, pT); }
           const t2 = Math.min(temp, rest); temp -= t2; hp -= rest - t2; dmg += rest;
         }
-        if (hp <= 0) { dmg += hp; hp = 0; kills += kHere * U(0.3, 0.7); dead = k; deadF = SF[i]; break; }
+        if (hp <= 0) { if (swHere) dmg += hp; hp = 0; kills += kHere * U(0.3, 0.7); dead = k; deadF = SF[i]; break; }
       }
       kills += kHere; if (k !== 0) hordes++;
       temp = Math.max(0, temp - K.TEMP_DECAY);
