@@ -161,6 +161,7 @@ svg { flex: none; display: block; }
 #goal.side .ge { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .sel #goal { display: none; }
 .sheet-open.bb-compact #goal, .tray-open #goal, .tray-open #bBuild, .tray-open #play, .sheet-open #play, .lab-open #play { visibility: hidden; }
+.lab-open.bb-mid #goal { visibility: hidden; }   /* 640-760 px: the 400 px Lab panel would cover the right half of the chip */
 .portrait.sheet-open #bottom, .portrait.lab-open #bottom { visibility: hidden; }
 #play { right: 0; bottom: 0; width: calc(236 * var(--u)); height: calc(60 * var(--u)); border-radius: calc(12 * var(--u));
   background: var(--accent); color: #12161c; display: flex; align-items: center; gap: calc(9 * var(--u));

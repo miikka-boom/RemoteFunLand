@@ -15,10 +15,10 @@
 // sheet, the run screen, the result card and both JSON cards, a forced Down with the fall beat and the revive offer,
 // SAY GOODBYE with grave placement and LAY TO REST, the memorial card from a tap on the grave, the welcome card, the Lab
 // with every group open). In every state: no horizontal scroll, every visible interactive element at least 44 x 44 CSS
-// px (on the screen, for a control outside any clipping box), the panels inside the viewport, and a light card over
-// all of the top bar or none of it. Spec reading (test 23): a failed request to the Google Fonts hosts is the
-// network's doing, not the page's; it is printed as a note and does not fail the run (the page falls back to its
-// system fonts). Every other console error fails it.
+// px (on the screen, for a control outside any clipping box), the panels inside the viewport, a light card over
+// all of the top bar or none of it, and the goal chip never partly under the Lab or a sheet. Spec reading (test 23):
+// a failed request to the Google Fonts hosts is the network's doing, not the page's; it is printed as a note and does
+// not fail the run (the page falls back to its system fonts). Every other console error fails it.
 'use strict';
 const path = require('path');
 const fs = require('fs');
@@ -189,13 +189,26 @@ async function audit(t, what, o) {
       });
       if (part.length) halfBar = part.length + ' chips partly under the card (card top ' + Math.round(cb.top) + ', ' + part.map(([c]) => c.id).join(',') + ')';
     }
-    return { small, outside, clipped, cut, halfBar, n: seen.length, sw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, iw: innerWidth, sx: scrollX };
+    // the goal chip fits beside a right panel (the Lab, a sheet) or steps back: never partly under it (its line ran
+    // under the 400 px Lab at 640-759 px)
+    let chipUnder = null;
+    const gl = document.getElementById('goal');
+    if (gl && !hidden(gl)) {
+      const gb = gl.getBoundingClientRect();
+      for (const id of ['lab', 'sheet']) {
+        const pn = document.getElementById(id); if (!pn || hidden(pn)) continue;
+        const pb = pn.getBoundingClientRect(), ox = Math.min(gb.right, pb.right) - Math.max(gb.left, pb.left), oy = Math.min(gb.bottom, pb.bottom) - Math.max(gb.top, pb.top);
+        if (pb.width && ox > 0.5 && oy > 0.5 && (ox < gb.width - 0.5 || oy < gb.height - 0.5)) chipUnder = '#' + id + ' covers ' + Math.round(ox) + ' of the chip\'s ' + Math.round(gb.width) + ' px';
+      }
+    }
+    return { small, outside, clipped, cut, halfBar, chipUnder, n: seen.length, sw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, iw: innerWidth, sx: scrollX };
   }, o);
   const m = t.tag + ' ' + what;
   ok(r.sw <= r.iw && r.bw <= r.iw && r.sx === 0, '24 no horizontal scroll: ' + m, [r.sw, r.bw, r.iw, r.sx]);
   ok(!r.small.length, '25 every visible target is 44 x 44: ' + m, r.small.slice(0, 8).join(' · '));
   ok(!r.outside.length, '24 panels inside the viewport: ' + m, r.outside.slice(0, 6).join(' · '));
   ok(!r.halfBar, '24 a light card covers all of the top bar or none of it: ' + m, r.halfBar);
+  ok(!r.chipUnder, '24 the goal chip is never partly under the Lab or a sheet: ' + m, r.chipUnder);
   ok(!r.clipped.length, 'no text cut off: ' + m, r.clipped.slice(0, 6).join(' · '));
   for (const c of r.cut) note(t.tag + ' ' + what + ': ellipsis on ' + c);
   if (o.min) ok(r.n >= o.min, 'found the controls of ' + m + ' (' + r.n + ')', r.n);
