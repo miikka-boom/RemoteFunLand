@@ -919,6 +919,12 @@ test('14 death -> revive -> grave: the offer, prices, REVIVE / REVIVE NOW / SAY 
   const card = E.runCard(t3, 'D3', 'p0'), prc = E.price.revive(t3, 'p0');
   eq([card.fallLine, card.odds.fallCost.cans, card.odds.fallCost.sparks], ['If Down: revive 1,040 cans or 112 ✦', prc.cans, prc.sparks], 'the fall cost shown before GO');
   eq(E.runCard(t3, 'D1', 'p0').fallLine, null, 'no fall cost when Death is 0 %');
+  // the offer asks what the card showed, even when the loss XP levels the runner up (the level at the fall, fellLv)
+  const lu = fixture({ lv: 3, armory: 4, clinic: 1 }); for (const [x, y] of [[13, 13], [15, 6], [15, 13]]) addB(lu.s, 'depot', 8, x, y);
+  lu.p.xp = D.XP_AT[4] - 1; const shown = E.runCard(lu.s, 'D3', 'p0').odds.fallCost;
+  const lr = playRun(lu.s, 'D3', 'p0', { seed: hi, force: 'loss', kit: kitOf('mpb') }), lp = E.price.revive(lu.s, 'p0');
+  eq([lr.outcome, lu.p.lv, lu.p.fellLv, lp.cans, lp.sparks], ['down', 4, 3, shown.cans, shown.sparks], 'a loss that levels the runner up (L3 to L4): the offer is the L3 price the card showed before GO');
+  const lb = E.load(E.serialize(lu.s), lu.s.realLast).state; eq(E.price.revive(lb, 'p0'), lp, 'the level at the fall survives a reload');
   // the offer's lines (8.8)
   const of = E.offer(s, 'p0');
   eq([of.title, of.roleLine, of.where, of.leftText, of.revive.label, of.revive.sub, of.reviveNow.label, of.revivedText],
@@ -1355,7 +1361,7 @@ test('X1 goals: the 7.2 chain, state-based steps, C1 (harder wins count), C2 (ne
   // C2: the next Tower above the cap: "needs a bigger Depot", the target is the Depot
   const c2 = city({ tower: 4, res: { bricks: 900 } }); c2.goal = 19;
   eq([E.goal(c2).text, E.goal(c2).eta, E.goal(c2).target], ['Bell Tower to 5', 'needs a bigger Depot', { kind: 'build', type: 'depot' }], 'Tower 5 (1,900) above a 1,000 cap');
-  ok(E.goal(c2).side && /^Meanwhile: /.test(E.goal(c2).side.text), 'a side task while the ETA is long: ' + JSON.stringify(E.goal(c2).side));
+  eq(E.goal(c2).side, null, 'a "needs …" ETA is itself the instruction: no side task takes its line (the chip shows a side task in place of the ETA)');
   const dep = addB(c2, 'depot', 1, 13, 13), kb = c2.buildings[1];
   const bubble = (n) => { kb.bubbleBase = n; kb.bubbleSinceMs = c2.cityMs; };
   bubble(0); eq([E.goal(c2).eta, E.goal(c2).side], ['in 3:20:00', { text: 'Meanwhile: upgrade a Kiln', target: { kind: 'building', id: 'b2' } }], '1,000 short at 300/h (5 runs at the Night Market); the cheapest affordable upgrade on the side');
@@ -1388,10 +1394,27 @@ test('X1 goals: the 7.2 chain, state-based steps, C1 (harder wins count), C2 (ne
   eq(E.goal(c8).eta, 'ready now', 'a free bed, travelers waiting, 150 cans for a 120-can invite');
   // step 14 when nothing is running
   const c9 = city(); c9.goal = 13; eq(E.goal(c9).eta, 'start a job longer than a minute', 'step 14 with no timer');
-  // after step 30
+  // side tasks beyond the 30-min wait (7.2): a run step whose best runner shows Death in red, a resource at the cap
+  const cr = city({ tower: 3 }); addB(cr, 'clinic', 1, 13, 13); cr.flags.deathOn = true; cr.goal = 12; E.oddsCacheClear();
+  eq([E.goal(cr).eta, E.goal(cr).side], ['1 run', null], 'step 13 before the odds are known: no side task');
+  const crs = E.suggest(cr, 'D3', { compute: true });
+  eq([crs.death > 0.05, E.goal(cr).eta, E.goal(cr).side], [true, '1 run · HOME ' + E.fmt.pct(crs.home), { text: 'Meanwhile: level up at the Car Wash', target: { kind: 'dest', destId: 'D2' } }],
+    'Death in red at the Night Market: level up at the next easier open place first (the ETA keeps "HOME %" for the aria-label)');
+  const cf = city({ tower: 4 }); cf.goal = 18; addB(cf, 'armory', 2, 13, 13); addB(cf, 'depot', 3, 11, 13);
+  const cfc = E.suggestSpot(cf, 'cannery', 12, 12), cfb = addB(cf, 'cannery', 1, cfc.gx, cfc.gy); cf.res.bricks = E.caps(cf).bricks; cf.res.cans = 550;
+  eq([E.goal(cf).eta, E.goal(cf).side], ['≈ 2 runs', { text: 'Meanwhile: upgrade a Cannery', target: { kind: 'building', id: cfb.id } }], 'a cans step with the bricks at the cap and a crane free: the cheapest upgrade paid in bricks');
+  cf.res.bricks = Math.round(0.68 * E.caps(cf).bricks); eq(E.goal(cf).side, null, 'bricks at 68 % of the cap: no side task');
+  cf.res.bricks = E.caps(cf).bricks; cf.res.cans = 700; eq([E.goal(cf).eta, E.goal(cf).side], ['ready now', null], 'the step is ready now: no side task over it');
+  cf.res.cans = 0; cf.goal = 4; const cg = E.goal(cf);
+  eq([cg.text, /^(≈|in )/.test(cg.eta), cg.side], ['Build the Clinic', true, null], 'the coached first steps (7.1) get no cap side task: ' + cg.eta);
+  cf.goal = 18; cf.res.cans = 0; cf.res.bricks = 0; ok(/^Meanwhile: a run at the Night Market · ~\d+ cans$/.test(E.goal(cf).side.text), 'a long wait with nothing affordable: a run, its loot in the step\'s currency: ' + E.goal(cf).side.text);
+  const cw = city({ tower: 6 }); cw.goal = 24; addB(cw, 'clinic', 3, 13, 13); cw.buildings[2].lv = 2; cw.res.bricks = 0; cw.res.cans = 2400; job(cw, 'upgrade', 'b1', 7, cw.cityMs + 2 * H);
+  ok(/^Meanwhile: upgrade the Clinic$/.test((E.goal(cw).side || {}).text || ''), '"the Clinic", never "a Clinic": ' + JSON.stringify(E.goal(cw).side));
+  // after step 30: the side task is the ETA (shown once)
   const cz = city({ tower: 10 }); cz.goal = 30; const gz = E.goal(cz);
   eq([gz.text, gz.done, gz.step], ['Bellhaven is whole.', true, 31], 'the chain is done');
-  ok(gz.eta && gz.side, 'side tasks after the chain');
+  ok(gz.eta && gz.side && gz.eta === gz.side.text, 'side tasks after the chain: ' + gz.eta);
+  cz.res.bricks = cz.res.cans = 0; eq(E.goal(cz).side, { text: 'A nickname for ' + cz.people[0].first, target: { kind: 'person', id: 'p0' } }, 'nothing affordable: a nickname for the first person without one');
   // never empty, at every step and in odd states
   for (const st of [city(), city({ tower: 10, ring: 4 }), steppingCity().s, E.demo({ realNow: T0 })]) for (let k = 0; k <= 30; k++) { st.goal = k; const go = E.goal(st); ok(go.text && go.eta, 'goal text and ETA at step ' + k + ': ' + JSON.stringify(go)); }
 });

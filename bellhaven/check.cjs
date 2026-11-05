@@ -8,7 +8,8 @@
 // any failure. Touch input goes through the DevTools protocol (Input.dispatchTouchEvent), so taps, drags and the pinch
 // travel the same pointer path as a finger on a phone.
 //
-// The sweep (tests 23, 24, 25, 36) runs at 568 x 320, 667 x 375, 844 x 390, 932 x 430, 390 x 844 and 1440 x 900: a new
+// The sweep (tests 23, 24, 25, 36) runs at 568 x 320, 667 x 375, 844 x 390, 932 x 430, 390 x 844, 375 x 667 (the
+// narrowest upright top bar) and 1440 x 900: a new
 // save (the rotate card in portrait, the meet cards, the build tray, placement mode) and then the #demo city (the HUD,
 // the action bar, the building and Inn sheets, the Sparks sheet, the roster, the person and traveler cards, the run
 // sheet, the run screen, the result card and both JSON cards, a forced Down with the fall beat and the revive offer,
@@ -28,7 +29,7 @@ const ROOT = __dirname;
 const PAGE = pathToFileURL(path.join(ROOT, 'index.html')).href;
 const GALLERY = pathToFileURL(path.join(ROOT, '..', 'index.html')).href;
 const SHOTS = process.env.SHOTS || path.join(os.tmpdir(), 'bellhaven-shots');
-const ALL_SIZES = [[568, 320], [667, 375], [844, 390], [932, 430], [390, 844], [1440, 900]];
+const ALL_SIZES = [[568, 320], [667, 375], [844, 390], [932, 430], [390, 844], [375, 667], [1440, 900]];   // 375 x 667: the narrowest upright bar
 const FONT_HOSTS = /fonts\.(googleapis|gstatic)\.com/;
 const HOUR = 3600000;
 

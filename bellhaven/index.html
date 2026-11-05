@@ -145,7 +145,7 @@ svg { flex: none; display: block; }
 #goal { left: calc(68 * var(--u)); bottom: calc(4 * var(--u)); width: calc(268 * var(--u)); height: calc(52 * var(--u));
   border-radius: calc(12 * var(--u)); background: var(--panel); display: grid; grid-template-columns: calc(22 * var(--u)) 1fr;
   grid-template-rows: auto auto; column-gap: calc(8 * var(--u)); align-content: center; padding: 0 calc(12 * var(--u)) calc(3 * var(--u)); text-align: left; overflow: hidden; }
-.bb-mid #goal { width: calc(200 * var(--u)); }
+.bb-mid #goal { width: auto; right: calc(288 * var(--u)); }   /* 640-760 px: to 8 px short of a 280 px sheet (287 px at 667) */
 .bb-compact #goal { left: calc(58 * var(--u)); right: calc(176 * var(--u)); width: auto; height: calc(48 * var(--u)); bottom: calc(2 * var(--u)); }
 #goal svg { grid-row: 1 / span 2; align-self: center; width: calc(20 * var(--u)); height: calc(20 * var(--u)); }
 #goal .gt { font: 700 calc(15 * var(--u))/1.15 var(--cond); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
@@ -155,6 +155,10 @@ svg { flex: none; display: block; }
   background: rgba(255,255,255,.1); border-radius: 2px; overflow: hidden; }
 #goal .bar i { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: var(--accent); transition: width .4s; }
 #goal.done .gt { color: var(--timer); }
+/* a side task (7.2) has the second line to itself; a long one (a wide fallback font) wraps to two rows, the chip grows up */
+#goal.side, .bb-compact #goal.side { height: auto; min-height: calc(52 * var(--u)); padding-top: calc(6 * var(--u)); padding-bottom: calc(10 * var(--u)); }
+.bb-compact #goal.side { min-height: calc(48 * var(--u)); }
+#goal.side .ge { white-space: normal; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; }
 .sel #goal { display: none; }
 .sheet-open.bb-compact #goal, .tray-open #goal, .tray-open #bBuild, .tray-open #play, .sheet-open #play, .lab-open #play { visibility: hidden; }
 .portrait.sheet-open #bottom, .portrait.lab-open #bottom { visibility: hidden; }
@@ -290,6 +294,7 @@ svg { flex: none; display: block; }
   font-size: calc(13 * var(--u)); line-height: 1.35; -webkit-overflow-scrolling: touch; }
 .sh-foot { flex: none; position: relative; height: calc(60 * var(--u)); display: flex; align-items: center; padding-left: calc(14 * var(--u)); padding-right: calc(244 * var(--u)); }
 .bb-compact .sh-foot { height: calc(52 * var(--u)); padding-right: calc(176 * var(--u)); }
+.bb-mid .sh-foot .note { display: none; }   /* 640-760 px: UPGRADE at PLAY's 236 px rect fills the 280 px foot; the body and the button carry the note */
 .sh-foot .note { font: 600 calc(11.5 * var(--u))/1.25 var(--body); color: var(--ink-soft); }
 .sh-foot .note b { display: block; color: var(--ink); font: 800 calc(14 * var(--u))/1.1 var(--cond); }
 .sec { margin: calc(12 * var(--u)) 0 calc(6 * var(--u)); font: 800 calc(12 * var(--u))/1 var(--cond); letter-spacing: .08em; color: var(--ink-soft); text-transform: uppercase; }
@@ -727,7 +732,7 @@ svg { flex: none; display: block; }
 .of-who p.w { color: var(--ink); }
 .of-btns { min-width: 0; display: flex; flex-direction: column; gap: calc(8 * var(--u)); padding-top: calc(32 * var(--u)); overflow-y: auto; }
 .of-btns .btn { width: 100%; max-width: calc(300 * var(--u)); min-height: calc(52 * var(--u)); justify-content: flex-start; padding: 0 calc(14 * var(--u)); text-align: left; }
-.of-btns .btn.stack { align-items: flex-start; }
+.of-btns .btn.stack { align-items: flex-start; justify-content: center; }   /* a column: the label and its line sit in the middle, left-aligned */
 .of-btns .btn > span:first-child { display: inline-flex; align-items: center; gap: calc(5 * var(--u)); }
 .of-btns .btn svg { width: calc(17 * var(--u)); height: calc(17 * var(--u)); }
 .of-btns .btn.off .sub { color: #ff8f7a; opacity: 1; }
@@ -794,6 +799,8 @@ svg { flex: none; display: block; }
 
 /* reduced motion (8.17): prefers-reduced-motion or the Lab toggle; ui.js sets the class */
 .rm *, .rm *::before, .rm *::after { animation: none !important; transition: none !important; }
+/* the upright fallback at 360-387 px (iPhone SE 375, 360 px Androids): the top bar's first row needs 388 px; tighter chips */
+@media (max-width: 387px) { .tb-rows #top .grp.l { gap: 2px; } .tb-rows #cTower { width: calc(48 * var(--u)); } .tb-rows .chip.res { width: calc(88 * var(--u)); } .tb-rows #cCans { width: calc(80 * var(--u)); } }
 </style>
 </head>
 <body>

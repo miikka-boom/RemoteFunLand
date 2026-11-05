@@ -422,6 +422,7 @@
     goal(e, ctx) {                                              // a run goal lands while the result card is up: after it
       const rw = e.reward || {};
       cityFx((held) => {
+        if (ui.sel && !ui.mode && !ui.sheet) deselect();          // the next goal shows in the chip (an action bar would hide it)
         toast('✓ ' + e.text + rewardText(rw), { kind: 'good' });
         const from = ctx.offline ? null : goalRect();
         for (const k of RES) if (rw[k] > 0) fly(k, rw[k], from, held);
@@ -593,10 +594,14 @@
     const g = V.goal, el = $('goal');
     let eta = g.eta || '';
     if (!g.done && g.reward) { const rw = rewardText(g.reward); if (rw) eta += (eta ? ' · ' : '') + rw.slice(3); }
-    if (g.side) eta += ' · ' + g.side.text;
-    morph(el, ic('flag', '#ff7a2f') + '<span class="gt">' + esc(g.text) + '</span><span class="ge">' + esc(eta) + '</span><i class="bar"><i style="width:' + Math.round((g.progress || 0) * 100) + '%"></i></i>');
+    // 7.2: a side task takes the second line on its own (a tap goes to it); the ETA, the reward and the side task's loot
+    // stay in the aria-label. After step 30 the ETA is the side task: shown once.
+    const side = g.side ? g.side.text : '', line2 = side ? side.replace(/ · ~.*$/, '') : eta;
+    const full = side && side !== g.eta ? (eta ? eta + ' · ' : '') + side : eta;
+    morph(el, ic('flag', '#ff7a2f') + '<span class="gt">' + esc(g.text) + '</span><span class="ge">' + esc(line2) + '</span><i class="bar"><i style="width:' + Math.round((g.progress || 0) * 100) + '%"></i></i>');
     el.classList.toggle('done', !!g.done);
-    el.setAttribute('aria-label', 'Goal: ' + g.text + (g.eta ? ', ' + g.eta : ''));
+    el.classList.toggle('side', !!side);                          // the side line may wrap to a second row (index.html)
+    el.setAttribute('aria-label', 'Goal: ' + g.text.replace(/\.$/, '') + (full ? ', ' + full : ''));
   }
   function renderPlay() {
     const el = $('play'), v = V, m = ui.mode, compact = ui.layout.bb === 'compact';
@@ -1047,7 +1052,8 @@
     $('tray').__html = null;
     setClass('tray-open', true);
     renderTray(); renderBottom(); applyInsets();
-    if (focusType) { const c = $('tray').querySelector('[data-type="' + focusType + '"]'); if (c && c.scrollIntoView) { try { c.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* old browsers */ } } }
+    const gt = V && V.goal && V.goal.target, into = focusType || (gt && gt.kind === 'build' ? gt.type : null);   // the goal's card in view (568, 667)
+    if (into) { const c = $('tray').querySelector('[data-type="' + into + '"]'); if (c && c.scrollIntoView) { try { c.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (e) { /* old browsers */ } } }
     sfx('tick');
   }
   function closeTray(silent) {
@@ -1174,16 +1180,27 @@
       hooks.openRun({});
     },
     goal() {
-      const g = V.goal, t = g.target; sfx('tick');
+      const g = V.goal, t = g.side ? g.side.target : g.target; sfx('tick');   // the chip shows the side task in place of the ETA
       if (!t) { toast(g.eta || g.text); return; }
       if (t.kind === 'build') { openTray(t.type); return; }
-      if (t.kind === 'building' || t.kind === 'collect') {
+      if (t.kind === 'collect') {                                 // the bubble is the target: pan to it and pulse it, no action bar
+        if (ui.sheet) closeSheet(); deselect(); iso.focus({ kind: 'building', id: t.id }, { ease: true }); iso.pulse({ kind: 'bubble', id: t.id }, { ms: 3200 });
+        ui.goalPulse = { until: now() + 3200 }; return;            // (a selected Kiln showed an orange upgrade under the finger)
+      }
+      if (t.kind === 'building' && /^people:/.test(g.key) && !g.side && bld(t.id) && bld(t.id).type === 'inn' && bld(t.id).lv >= 1) {
+        const tg = { kind: 'building', id: t.id }; ui.sel = tg; iso.select(tg, { focus: true }); openSelSheet(tg); return;   // the travelers and INVITE
+      }
+      if (t.kind === 'building') {
         const tg = { kind: 'building', id: t.id }; if (ui.sheet) closeSheet();
-        ui.sel = tg; iso.select(tg, { focus: true }); iso.pulse(t.kind === 'collect' ? { kind: 'bubble', id: t.id } : tg, { ms: 3200 });
+        ui.sel = tg; iso.select(tg, { focus: true }); iso.pulse(tg, { ms: 3200 });
         ui.goalPulse = { until: now() + 3200 }; renderAbar(); return;
       }
       if (t.kind === 'dest') { hooks.openRun({ destId: t.destId }); return; }
-      if (t.kind === 'expand') { openSheet('city'); return; }
+      if (t.kind === 'expand') {                                  // the land row sits below the Tower block: EXPAND into view (568)
+        openSheet('city'); const e = $('sheet').querySelector('[data-do="expand"]');
+        if (e && e.scrollIntoView) { try { e.scrollIntoView({ block: 'nearest' }); } catch (x) { /* old browsers */ } }
+        return;
+      }
       if (t.kind === 'job') { const j = V.jobs.find((x) => x.id === t.id); if (j && j.buildingId) { const tg = { kind: 'building', id: j.buildingId }; ui.sel = tg; iso.select(tg, { focus: true }); iso.pulse(tg, { ms: 3200 }); renderAbar(); } else openSheet('city'); return; }
       if (t.kind === 'person') { const tg = { kind: 'person', id: t.id }; ui.sel = tg; iso.select(tg, { focus: true }); renderAbar(); }
     },
@@ -1235,9 +1252,11 @@
     render(v, w) {
       let s = '<div class="card"><div class="cb"><h2>' + esc(w.title) + '</h2>';
       for (const r of w.rows) {
-        const ico = WROW_ICON[r.kind] || ['check', null], live = r.kind === 'down' && r.personId ? personV(r.personId) : null;
+        const live = r.kind === 'down' && r.personId ? personV(r.personId) : null, gone = !!live && live.state === 'fallen';
+        const ico = (gone ? WROW_ICON.expired : WROW_ICON[r.kind]) || ['check', null];
         const decide = r.action === 'decide' && live && live.state === 'down';
-        s += '<div class="wrow' + (r.kind === 'down' ? ' down' : '') + '"><span class="ic">' + ic(r.kind === 'bubbles' && /cans/.test(r.text) && !/bricks/.test(r.text) ? 'can' : ico[0], ico[1]) + '</span><span class="grow">' + esc(r.text) + '</span>' +
+        const text = live && live.state !== 'down' ? live.first + (gone ? ' is laid to rest.' : ' was revived.') : r.text;   // decided since
+        s += '<div class="wrow' + (r.kind === 'down' ? ' down' : '') + '"><span class="ic">' + ic(r.kind === 'bubbles' && /cans/.test(r.text) && !/bricks/.test(r.text) ? 'can' : ico[0], ico[1]) + '</span><span class="grow">' + esc(text) + '</span>' +
           (decide ? btn({ do: 'decide', data: { id: r.personId }, cls: 'primary', label: 'DECIDE' }) : '') + '</div>';
       }
       if (w.more) s += '<div class="wrow"><span class="ic">' + ic('plus') + '</span><span class="grow soft">and ' + w.more + ' more</span></div>';
@@ -1302,7 +1321,12 @@
       // the card covers the plaza: the gathering stays for 20 s after it closes, with the Tower in view, then everyone
       // goes back to their day
       if (iso && iso.gather) {
-        try { if (V && V.tower) iso.setCamera({ tx: V.tower.gx + 1.5, ty: V.tower.gy + 2, z: Math.max(iso.getCamera().z, 1.1) }, { ease: true }); } catch (e) { /* the Tower is always there */ }
+        try {
+          if (V && V.tower) {                                     // close on the plaza, then out just enough for the whole Tower and its gold bell
+            iso.setCamera({ tx: V.tower.gx + 1.5, ty: V.tower.gy + 2, z: Math.max(iso.getCamera().z, 1.1) }, { ease: true });
+            iso.focus({ kind: 'building', id: V.tower.id }, { ease: true });
+          }
+        } catch (e) { /* the Tower is always there */ }
         clearTimeout(ui.gatherT); ui.gatherT = setTimeout(() => { if (iso && iso.gather) iso.gather(false); }, 20000);
       }
       doAct({ type: 'flag', name: 'finale' }, { quiet: true });
@@ -1364,6 +1388,8 @@
       }
     }
     if (!S.pending && V.play && !V.play.known) for (const t of E.oddsTodo(S)) out.push(t);
+    const gt = V.goal && V.goal.target;                         // the goal chip's run step: "1 run · HOME 86%" and its red side task (7.2)
+    if (!S.pending && gt && gt.kind === 'dest' && V.dests.some((d) => d.id === gt.destId && d.open)) for (const t of E.oddsTodo(S, gt.destId)) out.push(t);
     return out;
   }
   function oddsWork() {
@@ -1838,6 +1864,7 @@
     for (const r of RES) { const g = a.gains && a.gains[r]; if (g > 0) { ui.inflight[r] = Math.max(0, ui.inflight[r] - g); fly(r, g, from); } }
     a.gains = {};
     flow = null;
+    if (ui.sel && !ui.mode) deselect();                           // back in town: the goal chip, not an action bar from before the run
     if (iso) iso.holdArrivals(false);
     const rw = a.rw;
     if (rw.win) {                                                 // the bell rings twice as the winner comes through the gate
@@ -1897,10 +1924,13 @@
     },
     goodbye(el) {
       const id = el.dataset.id, p0 = personV(id), first = p0 ? p0.first : 'Someone';
-      const r = doAct({ type: 'goodbye', personId: id }, { quiet: true });
-      if (!r.ok) { explain(r); return; }
-      // the grave needs the city: the result card (and this person's card) behind the offer close too
-      ui.queue = ui.queue.filter((q) => { if (q.kind === 'result') { resultClosed(q.args); return false; } return !(q.kind === 'person' && q.args.id === id); });
+      const held = ui.queue.splice(0);                            // the cards behind the offer: the act's redraw closes the offer
+      const r = doAct({ type: 'goodbye', personId: id }, { quiet: true });   // (the person is Fallen), which would show the next card now
+      if (!r.ok) { ui.queue.unshift(...held); explain(r); return; }
+      // the grave needs the city: the result card (and this person's card) behind the offer close too; the rest (the
+      // welcome card) comes back after LAY TO REST
+      const later = held.filter((q) => { if (q.kind === 'result') { resultClosed(q.args); return false; } return !(q.kind === 'person' && q.args.id === id); });
+      const back = () => { for (const q of later) queueOverlay(q.kind, q.args); };
       if (isOv('offer')) closeOverlay('offer');
       if (isOv('result')) closeOverlay('result');
       sfx('bell', { times: 1, low: true }); if (iso) iso.ringBell(1, { low: true });
@@ -1909,8 +1939,8 @@
         ui.sel = null; iso.select(null);
         try { iso.focus({ kind: 'grave', id: gid }, { ease: true }); } catch (e) { /* the grave is on the land */ }
         startMove({ kind: 'grave', id: gid }, { ok: 'LAY TO REST', cancel: null, hint: 'Drag to choose a place' });
-        if (ui.mode) ui.mode.onDone = () => toast(first + ' is laid to rest. Tap the grave to remember.', { icon: 'grave', ms: 3500 });
-      } else if (gid) toast('No free tile: ' + first + '’s grave waits for a place.', { icon: 'grave', ms: 4000 });
+        if (ui.mode) ui.mode.onDone = () => { toast(first + ' is laid to rest. Tap the grave to remember.', { icon: 'grave', ms: 3500 }); back(); }; else back();
+      } else { if (gid) toast('No free tile: ' + first + '’s grave waits for a place.', { icon: 'grave', ms: 4000 }); back(); }
     },
   });
 

@@ -894,7 +894,7 @@
             fadeOut(f, () => { f.visible = false; f.mode = 'hidden'; tripEvent(f, 'done'); f.trip = null; if (followId === f.id) followId = null; }, 0.35);
           }
         } else if (f.trip && f.trip.onEnd) { const cb = f.trip.onEnd; f.trip.onEnd = null; cb(); }
-        if (followId === f.id) followNow(f);
+        if (followId === f.id && f.trip && f.trip.kind === 'out') followNow(f);   // only the walk out is followed (6.4)
         return;
       }
       if (f.mode !== 'walker') return;

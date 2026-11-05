@@ -33,6 +33,8 @@
  *            the engine settles state-based rules at the current time (goals, the stranger, the drifter, death unlock).
  *   view(state)                               -> View (derived, read-only; see below). Cheap enough for every frame.
  *   goal(state)                               -> { step, key, text, reward, eta, progress, side, target, done }
+ *            side: null | { text, target }, the chip's second line in place of the ETA (7.2): a wait over 30 min, a
+ *            run step whose best runner shows Death in red, or bricks / cans at the cap; after step 30, eta = side.text
  *   info(state, buildingId)                   -> { id, type, title, rows: [{ label, from, to, run }], next, job, opens }
  *            the building sheet (8.4): before -> after rows, RUN-tagged run effects, the Tower's next opens
  *   derived(state, personId, destId)          -> the 4.6 values for this person there (card and handoff), plus
@@ -123,7 +125,8 @@
  *   As 11.2, plus: ids { b, j, r, g, d } (id counters: 'b4', 'j12', ...), demo (true only for #demo), grave.houseId
  *   (the House the person slept in, for the default spot), person.kin (the buried person whose family name a traveler
  *   or drifter took, P1), person.arrivedMs (city ms of arrival: "3 days in Bellhaven"), person.fellAt ('streets' |
- *   'hordes' | 'gate': where the run that left the person Down ended), tel.strangerRev (0 none, 1 cans, 2 sparks),
+ *   'hordes' | 'gate': where the run that left the person Down ended), person.fellLv (the level when the person went
+ *   Down, before the run's loss XP: the revive price, 6.6.2), tel.strangerRev (0 none, 1 cans, 2 sparks),
  *   tel.deathShown (the sum of the Death % shown at GO: the expected Downs). Times are integer ms; bubbles are bubbleBase +
  *   bubbleSinceMs. Inn travelers are full person records (state 'ready', no House, no history until invited). Beds:
  *   living people hold their beds, even the stranger Down at the gate with no House; a newcomer while living > beds (a
@@ -501,7 +504,7 @@
       lv, xp: XP_AT[lv], state: 'ready', restKind: null, restFromMs: 0, restUntilMs: 0, downUntilMs: 0, houseId: null,
       revives: 0, runs: 0, wins: 0, hurtCount: 0, kills: 0, bestKills: 0,
       history: line ? [[night, fill(line, { n: night })]] : [], arrivedNight: night, arrivedHow: how, arrivedMs: Math.max(0, Math.round(fin(atMs, 0))),
-      fellNight: null, fellDest: null, fellOdds: null, fellAt: null, epitaph: null, kin: null };
+      fellNight: null, fellDest: null, fellOdds: null, fellAt: null, fellLv: null, epitaph: null, kin: null };
   }
   // A new person from the save seed and the next index (4.2): first names unique among the living, the buried and the Inn.
   // Kin (4.11, P1): travelers and drifters may take a buried family name (the generator always draws for it, so the
@@ -576,7 +579,7 @@
     if (why === 'expired') ev.push({ type: 'downExpired', personId: p.id, graveId: grave.id, where });
     return grave;
   }
-  function setDown(s, p) { p.state = 'down'; p.restKind = null; p.restFromMs = 0; p.restUntilMs = 0; p.downUntilMs = s.cityMs + Math.round(s.lab.downWindowMs); }
+  function setDown(s, p) { p.fellLv = p.lv; p.state = 'down'; p.restKind = null; p.restFromMs = 0; p.restUntilMs = 0; p.downUntilMs = s.cityMs + Math.round(s.lab.downWindowMs); }
   function restMulOf(s, p) {
     return B.clinic.restMul[clinicLv(s)] * (p.trait === 'light_sleeper' ? DATA.TRAITS.light_sleeper.rest : 1) * (p.nick === 'oldhand' ? DATA.NICKNAMES.oldhand.rest : 1) * s.lab.mul.rest;
   }
@@ -627,9 +630,10 @@
       const p = personById(s, personId); if (!p) return null;
       if (p.arrivedHow === 'stranger' && p.revives === 0) return { cans: RULES.strangerCans, sparks: RULES.strangerSparks, n: 0, stranger: true };
       const n = p.revives, esc = Math.pow(2, Math.min(n, s.lab.escalationCap)), m = s.lab.mul.revive;
+      const L = p.state === 'down' && p.fellLv ? p.fellLv : p.lv;   // the level at the fall, so the offer is the runner card's price (R15)
       const clampC = Math.floor(RULES.reviveCapShare * capOf(s, 'cans') / 10) * 10;
-      const cans = Math.min(Math.round((RULES.reviveCansA * p.lv * p.lv + RULES.reviveCansB) * esc * m), clampC);
-      return { cans, sparks: Math.round((RULES.reviveSparksA + RULES.reviveSparksB * p.lv) * esc * m), n, stranger: false };
+      const cans = Math.min(Math.round((RULES.reviveCansA * L * L + RULES.reviveCansB) * esc * m), clampC);
+      return { cans, sparks: Math.round((RULES.reviveSparksA + RULES.reviveSparksB * L) * esc * m), n, stranger: false };
     },
     invite: (s) => RULES.inviteBase + RULES.invitePer * living(s).length,
     kit(destId) { const d = DEST[destId] || DATA.DESTS[0]; return { medkit: DATA.KIT.medkit * d.n, pills: DATA.KIT.pills * d.n, bomb: DATA.KIT.bomb * d.n }; },
@@ -958,18 +962,30 @@
   }
   const jobEta = (s, j, target) => ({ eta: 'in ' + fmtClock((j.endMs - s.cityMs) / SEC), mins: (j.endMs - s.cityMs) / MIN, progress: jobView(s, j).progress, target: target || { kind: 'job', id: j.id } });
   const needTower = (s, n, target) => ({ eta: 'needs Tower ' + n, mins: Infinity, progress: 0, target: target || { kind: 'building', id: towerB(s).id } });
-  function sideTask(s, res) {
-    const fc = cranesFree(s) > 0, up = fc ? candidates(s).filter((c) => c.kind === 'upgrade' && c.type !== 'tower' && c.n <= s.res[c.res]).sort((a, b) => a.n - b.n || idNum(a.id) - idNum(b.id))[0] : null;
-    if (up) return { text: 'Meanwhile: upgrade ' + (B[up.type].name === 'Inn' ? 'the Inn' : 'a ' + B[up.type].name), target: { kind: 'building', id: up.id } };
+  const theB = (t) => (t === 'tower' ? 'the Bell Tower' : (t === 'clinic' || t === 'armory' || t === 'inn' ? 'the ' : 'a ') + B[t].name);   // one Clinic, Armory, Inn
+  // A side task (7.2) for the chip's second line. o.runDest: a run step whose best runner shows Death in red: level up
+  // at the next easier open place. o.full: bricks or cans at the cap: the cheapest affordable upgrade paid in that
+  // resource (the Tower too), else none. Otherwise (a wait over 30 min): the cheapest affordable upgrade (not the Tower), else a run at
+  // the best open place with its win loot in the step's currency.
+  function sideTask(s, res, o) {
+    o = o || {};
+    if (o.runDest) {
+      const d = DATA.DESTS.filter((x) => x.n < o.runDest.n && destOpen(s, x)).pop();
+      return d ? { text: 'Meanwhile: level up at ' + d.theName, target: { kind: 'dest', destId: d.id } } : null;
+    }
+    const fc = cranesFree(s) > 0, up = fc ? candidates(s).filter((c) => c.kind === 'upgrade' && (o.full ? c.res === o.full : c.type !== 'tower') && c.n <= s.res[c.res]).sort((a, b) => a.n - b.n || idNum(a.id) - idNum(b.id))[0] : null;
+    if (up) return { text: 'Meanwhile: upgrade ' + theB(up.type), target: { kind: 'building', id: up.id } };
+    if (o.full) return null;
     const d = bestOpenDest(s), loot = Math.round((res === 'cans' ? d.cans : d.bricks) * lootMul(s));
-    return { text: 'Meanwhile: a run at the ' + d.name + ' · ~' + fmtNum(loot) + ' ' + (res === 'cans' ? 'cans' : 'bricks'), target: { kind: 'dest', destId: d.id } };
+    return { text: 'Meanwhile: a run at ' + d.theName + ' · ~' + fmtNum(loot) + ' ' + (res === 'cans' ? 'cans' : 'bricks'), target: { kind: 'dest', destId: d.id } };
   }
+  const COACHED = 9;                                          // steps 1-9 follow the coach's ring (7.1; ui.js coachTarget)
   function goal(s) {
     if (s.goal >= GOALS.length) {
       const fc = cranesFree(s) > 0, up = fc ? candidates(s).filter((c) => c.kind === 'upgrade' && c.n <= s.res[c.res]).sort((a, b) => a.n - b.n)[0] : null;
       const noNick = living(s).find((p) => !p.nick);
-      const side = up ? { text: 'Max a building: upgrade ' + (up.type === 'inn' ? 'the Inn' : 'a ' + B[up.type].name), target: { kind: 'building', id: up.id } }
-        : noNick ? { text: 'A nickname for everyone: ' + noNick.first + ' has none yet', target: { kind: 'person', id: noNick.id } }
+      const side = up ? { text: 'Max a building: upgrade ' + theB(up.type), target: { kind: 'building', id: up.id } }
+        : noNick ? { text: 'A nickname for ' + noNick.first, target: { kind: 'person', id: noNick.id } }
         : { text: 'A run at the Ferry Terminal', target: { kind: 'dest', destId: 'D6' } };
       return { step: GOALS.length + 1, key: 'done', text: 'Bellhaven is whole.', reward: {}, eta: side.text, progress: 1, side, target: side.target, done: true };
     }
@@ -999,7 +1015,7 @@
     } else if (k === 'win') {
       const d = DEST[a], lock = destLock(s, d);
       if (lock) r = lock.startsWith('Tower') ? needTower(s, d.tower, { kind: 'dest', destId: d.id }) : { eta: 'needs the Clinic', mins: Infinity, progress: 0, target: clinicLv(s) ? { kind: 'dest', destId: d.id } : { kind: 'build', type: 'clinic' } };
-      else { const hint = oddsHint(s, d.id); r = { eta: '1 run' + (hint ? ' · HOME ' + fmtPct(hint.home) : ''), mins: 0, progress: 0, target: { kind: 'dest', destId: d.id } }; }
+      else { const hint = oddsHint(s, d.id); r = { eta: '1 run' + (hint ? ' · HOME ' + fmtPct(hint.home) : ''), mins: 0, progress: 0, target: { kind: 'dest', destId: d.id }, red: !!(hint && hint.known && hint.death > 0.05) }; }
     } else if (k === 'people') {
       res = 'cans';
       const inn = innB(s), L = living(s).length, n = +a;
@@ -1016,7 +1032,15 @@
       r = j ? { eta: 'ready now', mins: 0, progress: 0, target: { kind: 'job', id: j.id } } : p ? { eta: 'ready now', mins: 0, progress: 0, target: { kind: 'person', id: p.id } }
         : innT ? { eta: 'ready now', mins: 0, progress: 0, target: { kind: 'building', id: inn.id } } : { eta: 'start a job longer than a minute', mins: Infinity, progress: 0, target: null };
     } else r = { eta: '', mins: 0, progress: 0, target: null };
-    const side = r.mins > 30 && k !== 'skip' ? sideTask(s, res) : null;
+    // The side task (7.2; the chip shows it in place of the ETA, and a tap goes to it): a run step whose best runner shows
+    // Death in red; bricks or cans the step does not spend at 95 % of the cap with a crane free, unless the step is ready
+    // now (after the coached steps); a wait over 30 min. A "needs …" ETA (mins Infinity) is itself the instruction.
+    let side = null;
+    if (k !== 'skip' && isFinite(r.mins)) {
+      const spend = k === 'win' ? null : res;
+      const full = s.goal >= COACHED && r.eta !== 'ready now' && cranesFree(s) > 0 ? ['bricks', 'cans'].find((x) => x !== spend && s.res[x] >= 0.95 * capOf(s, x)) : null;
+      side = (r.red ? sideTask(s, res, { runDest: DEST[a] }) : null) || (full ? sideTask(s, res, { full }) : null) || (r.mins > 30 ? sideTask(s, res) : null);
+    }
     return { step: s.goal + 1, key, text, reward, eta: r.eta, progress: clamp(fin(r.progress, 0), 0, 1), side, target: r.target, done: false };
   }
 
@@ -1891,13 +1915,17 @@
     return out;
   }
   function view(s) {
-    const grid = occGrid(s), T = towerLv(s), tw = towerB(s), sug = suggest(s), sugId = sug ? sug.personId : null;
+    const grid = occGrid(s), T = towerLv(s), tw = towerB(s), sug = suggest(s), sugId = sug ? sug.personId : null, gl = goal(s);
+    // the goal's "ready now" may count a bubble still under the 10 % line (costEta): that bubble shows, so the coach's
+    // ring and the chip's pulse have something to point at
+    const glCollect = gl.target && gl.target.kind === 'collect' ? gl.target.id : null;
     const jobs = s.jobs.slice().sort((a, b) => a.endMs - b.endMs || idNum(a.id) - idNum(b.id)).map((j) => jobView(s, j));
     const jobOf = {}; for (const j of jobs) if (j.buildingId) jobOf[j.buildingId] = j;
     const buildings = s.buildings.map((b) => {
       const o = { id: b.id, type: b.type, name: B[b.type].name, lv: b.lv, gx: b.gx, gy: b.gy, w: B[b.type].w, d: B[b.type].w,
         label: B[b.type].name.toUpperCase() + ' · LV ' + b.lv, maxLv: B[b.type].max, building: b.lv < 1, job: jobOf[b.id] || null,
         bubble: bubbleView(s, b), next: nextUp(s, b) };
+      if (b.id === glCollect && o.bubble && o.bubble.whole >= 1) o.bubble.show = true;
       if (b.type === 'house') {
         const res = s.people.filter((p) => p.state !== 'fallen' && p.houseId === b.id), col = DATA.HOUSE_COLORS[b.houseIdx % 3];
         const resting = res.filter((p) => p.state === 'rest' && p.restKind !== 'recovering').length;
@@ -1974,7 +2002,7 @@
       tray,
       dests: DATA.DESTS.map((d) => ({ id: d.id, n: d.n, name: d.name, threat: d.threat, open: destOpen(s, d), lock: destLock(s, d), cleared: s.dest[d.id].cleared,
         firstSparks: d.first, bricks: d.bricks, cans: d.cans, xp: d.xp, fav: d.fav, kit: price.kit(d.id) })),
-      goal: goal(s), play: playView(s, sug, s.daily.lastDay === today), daily: { claimed: s.daily.lastDay === today }, deathOn: s.flags.deathOn,
+      goal: gl, play: playView(s, sug, s.daily.lastDay === today), daily: { claimed: s.daily.lastDay === today }, deathOn: s.flags.deathOn,
       pending: pendingView(s), lastRun: s.lastRun,
       flags: Object.assign({}, s.flags), lab: { timeScale: s.lab.timeScale, reducedMotion: s.lab.reducedMotion, runScreenS: s.lab.runScreenS, force: s.lab.force, waitReal: s.lab.waitReal },
     };
@@ -2089,7 +2117,7 @@
       history: (Array.isArray(p.history) ? p.history : []).filter((h) => Array.isArray(h) && typeof h[1] === 'string').map((h) => [clampInt(h[0], 0, BIG, 0), h[1].slice(0, 120)]).slice(-RULES.maxHistory),
       arrivedNight: clampInt(p.arrivedNight, 0, BIG, 0), arrivedHow: HOWS.includes(p.arrivedHow) ? p.arrivedHow : 'lab', arrivedMs: clampInt(p.arrivedMs, 0, BIG, 0),
       fellNight: p.fellNight == null ? null : clampInt(p.fellNight, 0, BIG, 0), fellDest: DEST[p.fellDest] ? p.fellDest : null,
-      fellOdds: p.fellOdds == null ? null : clamp(fin(p.fellOdds, 0), 0, 1), fellAt: ['streets', 'hordes', 'gate'].includes(p.fellAt) ? p.fellAt : null,
+      fellOdds: p.fellOdds == null ? null : clamp(fin(p.fellOdds, 0), 0, 1), fellAt: ['streets', 'hordes', 'gate'].includes(p.fellAt) ? p.fellAt : null, fellLv: p.fellLv == null ? null : clampInt(p.fellLv, 1, 10, 1),
       epitaph: Array.isArray(p.epitaph) && p.epitaph.length === 2 && p.epitaph.every((x) => typeof x === 'string') ? p.epitaph.slice() : null,
       kin: typeof p.kin === 'string' && /^p\d+$/.test(p.kin) ? p.kin : null };
     if (q.wins > q.runs) q.wins = q.runs;
