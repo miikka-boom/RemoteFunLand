@@ -527,6 +527,10 @@ async function test27(browser) {
   const xpu = await t.ev(() => BH.UI.iso.debug().xray);
   ok(xpu.length === 1 && xpu[0].id === sh.depot && !xpu[0].sel, '27 the spotlit Depot is outlined too', xpu);
   await t.ev(() => BH.UI.iso.pulse(null));
+  await t.ev((id) => { BH.UI.iso.select({ kind: 'building', id }); BH.UI.iso.pulse({ kind: 'building', id }, { ms: 3000 }); }, sh.tower); await sleep(250);
+  const xtw = await t.ev(() => BH.UI.iso.debug().xray);
+  ok(xtw.length === 0, '27 the Tower itself, selected and spotlit, is never outlined over itself', xtw);
+  await t.ev(() => { BH.UI.iso.pulse(null); BH.UI.iso.select(null); });
   errsOk(t, 'test 27');
   await t.close();
 }

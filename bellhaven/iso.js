@@ -1279,7 +1279,7 @@
       for (const [t, isSel] of [[sel, true], [pulseT && pulseT.target, false]]) {
         if (!t || (t.kind !== 'building' && t.kind !== 'grave' && t.kind !== 'decor') || out.some((x) => x.kind === t.kind && x.id === t.id)) continue;
         const i = L.list.findIndex((d) => d.kind === t.kind && d.id === t.id), d = L.list[i];
-        if (!d || i > ti || !d.hit || !d.hit.poly || coveredBy(d.hit.poly, tw.hit.poly) < XRAY_COVER) continue;
+        if (!d || i >= ti || !d.hit || !d.hit.poly || coveredBy(d.hit.poly, tw.hit.poly) < XRAY_COVER) continue;
         out.push({ kind: t.kind, id: t.id, d, poly: d.hit.poly, tower: tw.hit.poly, sel: isSel });
       }
       return out;
