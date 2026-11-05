@@ -15,7 +15,8 @@
 // sheet, the run screen, the result card and both JSON cards, a forced Down with the fall beat and the revive offer,
 // SAY GOODBYE with grave placement and LAY TO REST, the memorial card from a tap on the grave, the welcome card, the Lab
 // with every group open). In every state: no horizontal scroll, every visible interactive element at least 44 x 44 CSS
-// px, the panels inside the viewport. Spec reading (test 23): a failed request to the Google Fonts hosts is the
+// px (on the screen, for a control outside any clipping box), the panels inside the viewport, and a light card over
+// all of the top bar or none of it. Spec reading (test 23): a failed request to the Google Fonts hosts is the
 // network's doing, not the page's; it is printed as a note and does not fail the run (the page falls back to its
 // system fonts). Every other console error fails it.
 'use strict';
@@ -107,6 +108,7 @@ async function audit(t, what, o) {
     const name = (el) => (el.id ? '#' + el.id : '') + (el.dataset && el.dataset.do ? '[do=' + el.dataset.do + ']' : el.dataset && el.dataset.a ? '[a=' + el.dataset.a + ']' : el.dataset && el.dataset.c ? '[c=' + el.dataset.c + ']' : '') +
       (el.className && typeof el.className === 'string' ? '.' + el.className.trim().split(/\s+/).slice(0, 2).join('.') : '') + ' "' + (el.getAttribute('aria-label') || el.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 28) + '"';
     const root = o.root ? document.querySelector(o.root) : document;
+    const inClip = (el) => { for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) { const c = getComputedStyle(a); if (c.overflowX !== 'visible' || c.overflowY !== 'visible') return true; } return false; };
     const small = [], seen = [];
     if (root) for (const el of root.querySelectorAll('button, a[href], [data-do], [data-a], [data-c], input:not([type=hidden]), select, textarea, [role=button], summary')) {
       if (hidden(el) || getComputedStyle(el).pointerEvents === 'none') continue;
@@ -120,6 +122,8 @@ async function audit(t, what, o) {
       if (top && top !== el && !el.contains(top) && !top.contains(el)) continue;                // covered: not visible
       seen.push(el);
       if (b.width < 43.5 || b.height < 43.5) small.push(name(el) + ' ' + Math.round(b.width) + 'x' + Math.round(b.height));
+      // a control outside any clipping box counts only the part on the screen (a 44 px ✕ 2 px above the top edge)
+      else if (!inClip(el)) { const vw = Math.min(b.right, innerWidth) - Math.max(b.left, 0), vh = Math.min(b.bottom, innerHeight) - Math.max(b.top, 0); if (vw < 43.5 || vh < 43.5) small.push(name(el) + ' ' + Math.round(vw) + 'x' + Math.round(vh) + ' on the screen'); }
     }
     // panels and chips inside the viewport (fixed elements never widen the page, so check them directly)
     const outside = [];
@@ -174,12 +178,24 @@ async function audit(t, what, o) {
         }
       }
     }
-    return { small, outside, clipped, cut, n: seen.length, sw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, iw: innerWidth, sx: scrollX };
+    // a light card covers all of the top bar or none of it (chip fragments showed beside and above a card over part of it)
+    let halfBar = null;
+    const ov = document.getElementById('overlay'), card = ov && !ov.classList.contains('dark') ? ov.firstElementChild : null;
+    if (card && !hidden(card)) {
+      const cb = card.getBoundingClientRect();
+      const part = [...document.querySelectorAll('#top .chip, #back')].filter((c) => !hidden(c)).map((c) => [c, c.getBoundingClientRect()]).filter(([c, b]) => {
+        const ox = Math.min(b.right, cb.right) - Math.max(b.left, cb.left), oy = Math.min(b.bottom, cb.bottom) - Math.max(b.top, cb.top);
+        return b.width && ox > 0.5 && oy > 0.5 && (ox < b.width - 0.5 || oy < b.height - 0.5);
+      });
+      if (part.length) halfBar = part.length + ' chips partly under the card (card top ' + Math.round(cb.top) + ', ' + part.map(([c]) => c.id).join(',') + ')';
+    }
+    return { small, outside, clipped, cut, halfBar, n: seen.length, sw: document.documentElement.scrollWidth, bw: document.body.scrollWidth, iw: innerWidth, sx: scrollX };
   }, o);
   const m = t.tag + ' ' + what;
   ok(r.sw <= r.iw && r.bw <= r.iw && r.sx === 0, '24 no horizontal scroll: ' + m, [r.sw, r.bw, r.iw, r.sx]);
   ok(!r.small.length, '25 every visible target is 44 x 44: ' + m, r.small.slice(0, 8).join(' · '));
   ok(!r.outside.length, '24 panels inside the viewport: ' + m, r.outside.slice(0, 6).join(' · '));
+  ok(!r.halfBar, '24 a light card covers all of the top bar or none of it: ' + m, r.halfBar);
   ok(!r.clipped.length, 'no text cut off: ' + m, r.clipped.slice(0, 6).join(' · '));
   for (const c of r.cut) note(t.tag + ' ' + what + ': ellipsis on ' + c);
   if (o.min) ok(r.n >= o.min, 'found the controls of ' + m + ' (' + r.n + ')', r.n);

@@ -53,7 +53,8 @@
  *   are kept), and city news raised while a card is up (a run goal reached as the result shows, a job done under the
  *   Tower card, a revive's confirmation) waits for the last card to close: cityFx(fn, holds) / runLater(); the chips
  *   hold the old numbers meanwhile. Under any card the bottom bar steps back (.ov-open), and under the night screens
- *   (the run sheet, the run screen, the result) the top bar too (.ov-dark).
+ *   (the run sheet, the run screen, the result) the top bar too (.ov-dark). A light card sits below the top bar; at
+ *   568-759 px one too tall for that space takes the whole screen (#overlay.full, fitOverlay), never half the bar.
  * Modes: ui.mode = null | { kind: 'place', type, cost } | { kind: 'move', target, labels?, onDone? } (8.5). PLAY
  *   becomes ✓ PLACE / BLOCKED / ✓ DONE, BUILD becomes ✕ CANCEL. Grave placement after SAY GOODBYE is 'move' with the
  *   labels { ok: 'LAY TO REST', cancel: null, hint: 'Drag to choose a place' } (no ✕; Esc does nothing).
@@ -236,7 +237,7 @@
     confirm: null, disp: { bricks: 0, cans: 0, sparks: 0 }, inflight: { bricks: 0, cans: 0, sparks: 0 }, dispInit: false,
     lastTs: 0, lastView: 0, lastHud: 0, lastPanel: 0, lastSave: 0, lastCoach: 0, lastLabTick: 0,
     dirty: true, hudDirty: true, panelDirty: true, coach: null, goalPulse: null, streak: { n: 0, at: 0 },
-    gestured: false, insetKey: '', meetTimer: null, booted: false, later: [], calmUntil: 0, acts: 0,
+    gestured: false, insetKey: '', meetTimer: null, booted: false, later: [], calmUntil: 0, acts: 0, kitToast: null, nightOf: null,
   };
   const SHEETS = {}, OVERLAYS = {}, LISTENERS = {}, DO = {};
   const labSubs = { tick: [], events: [], close: [] };
@@ -289,11 +290,12 @@
     applyInsets();
     ui.hudDirty = true; ui.panelDirty = true;
   }
-  // The camera's clear view (8.1): the screen minus the top bar, the bottom bar (or the tray) and any right sheet.
+  // The camera's clear view (8.1): the screen minus the top bar, the bottom bar (or the tray), any right sheet and the
+  // left and right safe areas.
   function applyInsets() {
     if (!iso) return;
     const L = ui.layout; if (!L.W) return;
-    let right = 0, bottom = L.pb + L.barH;
+    let right = L.sr || 0, bottom = L.pb + L.barH;
     if (ui.sheet || ui.lab) {
       if (L.portrait) { const el = ui.lab ? $('lab') : $('sheet'); const r = el ? el.getBoundingClientRect() : null; bottom = r && r.height ? L.H - r.top : L.H * 0.62; }
       else { const el = ui.lab ? $('lab') : $('sheet'); const r = el ? el.getBoundingClientRect() : null; right = r && r.width ? L.W - r.left : L.shw + L.pr; }
@@ -512,13 +514,14 @@
   function toast(text, o) {
     o = o || {};
     const box = $('toasts'); if (!box) return;
-    for (const c of box.children) if (c.__text === text && !c.classList.contains('out')) { clearTimeout(c.__t); c.__t = setTimeout(() => dropToast(c), o.ms || 2500); return; }
+    for (const c of box.children) if (c.__text === text && !c.classList.contains('out')) { clearTimeout(c.__t); c.__t = setTimeout(() => dropToast(c), o.ms || 2500); return c; }
     const el = document.createElement('div');
     el.className = 'toast' + (o.kind ? ' ' + o.kind : ''); el.__text = text; el.__keep = !!o.keep;
     el.innerHTML = (o.icon ? ic(o.icon) : '') + '<span>' + esc(text) + '</span>';
     box.appendChild(el);
     while (box.children.length > 3) box.removeChild(box.firstChild);
     el.__t = setTimeout(() => dropToast(el), o.ms || 2500);
+    return el;
   }
   function dropToast(el) { el.classList.add('out'); setTimeout(() => el.remove(), ui.reduced ? 0 : 320); }
   // a card that opens takes the screen: the toasts about what happened before it go (they sit over the card's title
@@ -771,7 +774,7 @@
   }
   function queueOverlay(kind, args) {
     if (!OVERLAYS[kind]) return;
-    if (!ui.overlay && ui.booted) showOverlayNow({ kind, args: args || {} });
+    if (!ui.overlay && ui.booted && !goWindow()) showOverlayNow({ kind, args: args || {} });
     else ui.queue.push({ kind, args: args || {} });
   }
   function showOverlayNow(o) {
@@ -794,7 +797,7 @@
     ui.overlay = null;
     if (def && def.onClose) { try { def.onClose(o.args); } catch (e) { console.error(e); } }
     if (ui.overlay) return;                                 // onClose opened the next one
-    const next = ui.queue.shift();
+    const next = goWindow() ? null : ui.queue.shift();      // the walk to the gate: the queue waits for the night
     if (next) { showOverlayNow(next); return; }
     morph($('overlay'), ''); setClass('ov-open', false); setClass('ov-dark', false);
     if (iso) iso.setInteractive(true);
@@ -807,7 +810,17 @@
     let html = '';
     try { html = def.render(V, ui.overlay.args); } catch (e) { console.error(e); }
     if (html == null) { closeOverlay(); return; }
-    morph($('overlay'), html);
+    const el = $('overlay'), key = ui.layout.W + 'x' + ui.layout.H;
+    if (morph(el, html) || el.__fit !== key) fitOverlay(el, key);
+  }
+  // A light card sits below the top bar (index.html). At 568-759 px one that does not fit there takes the whole screen
+  // instead, covering the bar from its top edge, never half of it (the person, memorial, offer and JSON cards always do).
+  function fitOverlay(el, key) {
+    const L = ui.layout, c = el.firstElementChild;
+    el.__fit = key; el.classList.remove('full');
+    if (!c || el.classList.contains('dark') || L.portrait || L.bb === 'wide') return;
+    const cb = c.querySelector('.cb'), need = c.offsetHeight + (cb ? cb.scrollHeight - cb.clientHeight : 0);
+    if (need > L.H - L.sht - L.pb + 0.5) el.classList.add('full');
   }
   function renderPanels() {
     renderSheet(); renderOverlay(); renderTray();
@@ -1116,7 +1129,7 @@
     if (!gh || gh.mode !== 'move' || gh.id !== target.id) gh = iso.ghostStart({ mode: 'move', id: target.id });
     if (!gh) return;
     ui.mode = { kind: 'move', target: { kind: gh.targetKind || target.kind, id: target.id }, valid: !!gh.valid, reason: gh.reason, labels: labels || null };
-    ui.sel = null; setClass('sel', false);
+    deselect();                                                   // iso's outline too: nothing stays selected after the move
     hint(labels && labels.hint ? labels.hint : 'Drag to move · free and instant', 4000);
     applyInsets(); renderBottom();
   }
@@ -1507,7 +1520,7 @@
       const aria = KIT_WORD[it] + (open ? ', ' + pr[it] + ' cans, ' + (on ? 'packed' : 'left at home') + (t && t.delta != null ? ', ' + eff + ' home' : '') : ', needs ' + kitLock(it));
       s += '<button class="kit' + (on ? ' on' : '') + (open ? '' : ' lock') + '" data-do="rsKit" data-item="' + it + '" aria-pressed="' + on + '" aria-label="' + esc(aria) + '"' +
         (open ? '' : ' aria-disabled="true" data-why="' + esc(KIT_WORD[it] + ' needs ' + kitLock(it)) + '"') + '>' + ic(it) +
-        '<span class="kt"><b>' + esc(KIT_WORD[it]) + '</b><small>' + (open ? ic('can') + pr[it] + (wide ? ' · <span class="e">' + eff + '</span>' : '') : ic('lock', '#a9aeb3') + (it === 'bomb' ? 'ARM 2' : 'CLINIC')) + '</small></span>' +
+        '<span class="kt"><b>' + esc(KIT_WORD[it]) + '</b><small>' + (open ? ic('can') + pr[it] + (wide ? '<span class="sep">·</span><span class="e">' + eff + '</span>' : '') : ic('lock', '#a9aeb3') + (it === 'bomb' ? 'ARM 2' : 'CLINIC')) + '</small></span>' +
         (on ? '<span class="ck">' + ic('check', '#12161c') + '</span>' : '') + '</button>';
     }
     return s + '</div>';
@@ -1544,7 +1557,8 @@
       renderOverlay();
       if (!wideL()) {                                             // 568: the toggle's effect shows in a toast (8.7.1)
         const dl = E.kitDeltas(S, rs.destId, sel, k, { cachedOnly: true }), d = dl && dl[it] != null ? ' · ' + signPct(dl[it]) + ' home' : '';
-        toast(KIT_WORD[it] + ' · ' + pr[it] + ' cans' + d + (k[it] ? ' · packed' : ' · left at home'), { icon: it });
+        const old = ui.kitToast; if (old && old.isConnected && !old.classList.contains('out')) { clearTimeout(old.__t); dropToast(old); }   // one at a time
+        ui.kitToast = toast(KIT_WORD[it] + ' · ' + pr[it] + ' cans' + d + (k[it] ? ' · packed' : ' · left at home'), { icon: it });
       }
     },
     rsGo() {
@@ -1570,8 +1584,11 @@
   // ---------------------------------------------------------------------------------------------- GO: the walk to the gate (4.12, 6.4)
   // The handoff, refs, the held kit and the run-warp allowance are saved by startRun before anything moves. The runner
   // walks to the gate with the camera following (1.2 s) and through it, then the screen fades to night. Homecomings
-  // wait (iso.holdArrivals) until the result card closes.
+  // wait (iso.holdArrivals) until the result card closes. A card that waits in the queue or comes up between GO and the
+  // night screen (the stranger's offer, a Tower card) shows after the night instead of flashing in between (goWindow:
+  // a run is pending and its run screen has not opened yet; the run sheet already closes inside startRun's refresh).
   let flow = null;                                                // { personId, runId, opened }
+  function goWindow() { return !!(S && S.pending && S.pending.runId !== ui.nightOf); }
   function goFlow(pid, data) {
     closeOverlay('run');
     if (iso) iso.holdArrivals(true);
@@ -1598,7 +1615,7 @@
   const FIGHT_W = { streets: 0.3, horde: 1, gate: 1.6 };
   OVERLAYS.runscreen = {
     dark: true,
-    onOpen() { if (!rsc || !S.pending || rsc.runId !== S.pending.runId) rscInit(); if (iso) iso.holdArrivals(true); },
+    onOpen() { if (!rsc || !S.pending || rsc.runId !== S.pending.runId) rscInit(); if (iso) iso.holdArrivals(true); if (S.pending) ui.nightOf = S.pending.runId; },
     render() { if (!S.pending && !(rsc && rsc.resolving)) return null; return rsc ? rsc.html : null; },
     esc() { if (rsc && !rsc.sim) closeOverlay('runscreen'); else DO.rscSkip(); },
   };
@@ -2053,7 +2070,7 @@
     setTimeout(() => {
       const p = S && S.people.find((x) => x.id === pid); if (!p || p.state !== 'down') return;
       if ((ui.mode || ui.tray) && tries < 60) { strangerOffer(pid, tries + 1); return; }
-      if (iso && !ui.overlay) { try { iso.focus({ kind: 'person', id: pid }, { ease: true }); } catch (e) { /* off screen is fine */ } }
+      if (iso && !ui.overlay && !goWindow()) { try { iso.focus({ kind: 'person', id: pid }, { ease: true }); } catch (e) { /* off screen is fine */ } }
       if (!offerOpen(pid)) queueOverlay('offer', { personId: pid });
     }, tries ? 1000 : 1400);
   }

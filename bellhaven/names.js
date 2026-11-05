@@ -29,7 +29,7 @@
     ['Siobhan Cian Niamh Rory Aoife Declan Orla Fionn', 'Kelly Byrne Doyle Gallagher Walsh Quinn'],
     ['Thiago Larissa Caio Bianca Rafael Lívia Bruno Yara', 'Rocha Almeida Souza Barbosa Carvalho Pereira'],
     ['Linh Minh Thu Bao Mai Duc Lan Khoa', 'Tran Nguyen Pham Le Vo Dang'],
-    ['Elif Emre Zeynep Can Defne Burak Selin Kerem', 'Yılmaz Demir Şahin Aydın Kaya Öztürk'],
+    ['Elif Emre Zeynep Arda Defne Burak Selin Kerem', 'Yılmaz Demir Şahin Aydın Kaya Öztürk'],
     ['Kwame Ama Kofi Efua Yaw Akosua Kojo Abena', 'Mensah Owusu Boateng Asante Appiah Darko'],
     ['Sven Elin Linnea Axel Maja Oskar Freja Nils', 'Lund Berg Holm Ek Sjöberg Nyström'],
     ['Eleni Nikos Sofia Yannis Katerina Petros Dimitra Alexis', 'Pappas Antoniou Georgiou Christou Lambrou Ioannou'],

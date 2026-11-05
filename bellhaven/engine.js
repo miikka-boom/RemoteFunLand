@@ -1561,15 +1561,17 @@
   }
 
   // ------------------------------------------------------------------ settlement (6.5): reward and the fall
-  function nickFor(p, res, refs, outcome) {                  // 4.8, checked in this order; the first that triggers
-    const win = res.result === 'safe_room';
-    if (win && refs && res.damageTaken <= refs.dmgP10) return 'ghost';
-    if (refs && res.kills >= refs.killsP90) return 'mower';
-    if (refs && res.shoves >= refs.shovesP90) return 'elbows';
-    if (win && res.endHp <= DATA.NICKNAMES.gatecrasher.endHpMax) return 'gatecrasher';
-    if (win && res.secondWindUsed >= 1) return 'lastbreath';
-    if (outcome === 'hurt' && p.hurtCount >= DATA.NICKNAMES.comeback.hurtTimes) return 'comeback';
-    if (p.runs >= DATA.NICKNAMES.oldhand.runs) return 'oldhand';
+  // 4.8, checked in this order: the first that triggers and that no other living person holds (taken: a Set of the
+  // nickname ids the others hold, so two living people never share one)
+  function nickFor(p, res, refs, outcome, taken) {
+    const win = res.result === 'safe_room', free = (n) => !(taken && taken.has(n));
+    if (win && refs && res.damageTaken <= refs.dmgP10 && free('ghost')) return 'ghost';
+    if (refs && res.kills >= refs.killsP90 && free('mower')) return 'mower';
+    if (refs && res.shoves >= refs.shovesP90 && free('elbows')) return 'elbows';
+    if (win && res.endHp <= DATA.NICKNAMES.gatecrasher.endHpMax && free('gatecrasher')) return 'gatecrasher';
+    if (win && res.secondWindUsed >= 1 && free('lastbreath')) return 'lastbreath';
+    if (outcome === 'hurt' && p.hurtCount >= DATA.NICKNAMES.comeback.hurtTimes && free('comeback')) return 'comeback';
+    if (p.runs >= DATA.NICKNAMES.oldhand.runs && free('oldhand')) return 'oldhand';
     return null;
   }
   function refsOf(s, pe) {
@@ -1650,7 +1652,7 @@
     br.lvTo = p.lv; br.xpNow = p.xp; br.xpFrom = XP_AT[p.lv]; br.xpTo = p.lv < 10 ? XP_AT[p.lv + 1] : XP_AT[10];
     // 7. the nickname (4.8): the first that triggers, kept for good; telemetry
     if (!p.nick) {
-      const n = nickFor(p, res, refsOf(s, pe), br.outcome);
+      const n = nickFor(p, res, refsOf(s, pe), br.outcome, new Set(s.people.filter((q) => q !== p && q.state !== 'fallen' && q.nick).map((q) => q.nick)));
       if (n) {
         p.nick = n; s.tel.nicknames++; const N = DATA.NICKNAMES[n];
         history(s, p, fill(TEXT.nickname, { n: night, F, Nick: N.name }));

@@ -373,6 +373,15 @@ svg { flex: none; display: block; }
   padding: calc(8px + var(--sat)) var(--pr) var(--pb) var(--pl); background: rgba(12,15,21,.55); }
 .ov-open #overlay { display: flex; }
 #overlay.dark { background: rgba(12,15,21,.94); }
+/* a light card never covers part of the top bar (that left chip fragments beside and above it): it sits below the bar
+   (at the wide layout it scrolls if it must), and at 568-759 px a card that takes the whole screen (the person,
+   memorial, offer and JSON cards, or one too tall to fit below the bar: ui.js fitOverlay adds .full) covers the whole
+   bar from its top edge; upright, a full-height card starts at the bar's top edge too */
+.bb-wide #overlay:not(.dark), .bb-mid #overlay:not(.dark), html.bb-compact:not(.portrait) #overlay:not(.dark) { padding-top: var(--sht); }
+.portrait #overlay:not(.dark) { padding-top: var(--pt); }
+:is(.bb-mid, html.bb-compact:not(.portrait)) #overlay:not(.dark) > :is(.card.pc, .card.mc, .card.jc, .offer),
+:is(.bb-mid, html.bb-compact:not(.portrait)) #overlay.full:not(.dark) > * {
+  width: 100%; margin-top: calc(var(--pt) - var(--sht)); height: calc(100% + var(--sht) - var(--pt)); max-height: none; }
 /* a card takes the screen: the bottom bar, a sheet and the Lab step back (they showed half-covered around a centred
    card, a second INVITE beside the card's own), and under the night screens (the run sheet, the run screen, the result)
    the top bar too; the cards carry their own buttons; closing the card brings them back as they were */
@@ -526,7 +535,12 @@ svg { flex: none; display: block; }
 .kit svg { width: calc(20 * var(--u)); height: calc(20 * var(--u)); flex: none; }
 .kit .kt { display: flex; flex-direction: column; gap: calc(2 * var(--u)); min-width: 0; }
 .kit .kt b { font: 800 calc(12.5 * var(--u))/1 var(--cond); letter-spacing: .03em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.kit .kt small { display: flex; align-items: center; gap: calc(2 * var(--u)); font: 700 calc(12 * var(--u))/1 var(--cond); white-space: nowrap; }
+.kit .kt small { display: flex; flex-wrap: wrap; align-items: center; gap: calc(2 * var(--u)); font: 700 calc(12 * var(--u))/1 var(--cond); white-space: nowrap; }
+.kit .kt .sep { padding: 0 calc(1 * var(--u)); }
+/* a toggle narrowed by notch insets (81-93 px with REST NOW shown) puts the effect on a third line, without the dot
+   (the query reads the content box: 104 px toggles have 90 px) */
+.kit { container-type: inline-size; }
+@container (max-width: 88px) { .kit .kt .sep { display: none; } .kit .kt .e { flex-basis: 100%; } }
 .kit .kt small svg { width: calc(11 * var(--u)); height: calc(11 * var(--u)); }
 .kit .kt .e { color: var(--good); }
 .kit.on { background: rgba(59,209,111,.13); box-shadow: inset 0 0 0 1.5px rgba(59,209,111,.7); color: var(--ink); }
@@ -545,6 +559,7 @@ svg { flex: none; display: block; }
 .go-btn.good { background: var(--good); }
 /* 568 geometry (also 640-760 px): title 40, destinations 200 wide, a smaller strip and card, the kit in the bottom row */
 .bb-compact .rs, .bb-mid .rs { grid-template-columns: calc(200 * var(--u)) minmax(0, 1fr); grid-template-rows: calc(40 * var(--u)) minmax(0, 1fr); column-gap: calc(8 * var(--u)); row-gap: calc(4 * var(--u)); }
+.bb-compact .rs-head .xbtn, .bb-mid .rs-head .xbtn { align-self: flex-start; }   /* 44 px from the screen's top edge, not 2 px above it */
 .bb-compact .dest, .bb-mid .dest { height: calc(44 * var(--u)); padding-left: calc(12 * var(--u)); padding-right: calc(8 * var(--u)); }
 .bb-compact .dest .dn, .bb-mid .dest .dn { font-size: calc(14.5 * var(--u)); }
 .bb-compact .rs-right, .bb-mid .rs-right { gap: calc(4 * var(--u)); }

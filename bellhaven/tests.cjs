@@ -1161,6 +1161,19 @@ test('18 nicknames: relative triggers from refs in table order, the first one st
   must(t.f.s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: kitOf('mpb'), confirmLow: true });
   const rr = must(t.f.s, { type: 'resolveRun', result: Object.assign(E.runSim(t.f.s), { kills: 1999 }), source: 'paste' });
   eq([t.f.p.nick, rr.data.reward.nickname, t.f.s.tel.nicknames], ['ghost', null, 1], 'one nickname for good');
+  // two living people never share one: a nickname another living person holds is skipped for the next that triggers;
+  // a fallen person's is free again
+  const share = (fallen, tweak) => {
+    const f = fixture({ lv: 3, armory: 2, clinic: 1 }), q = f.s.people.find((x) => x !== f.p); q.nick = 'mower';
+    if (fallen) E._internal.fall(f.s, q, 'goodbye', []);
+    must(f.s, { type: 'startRun', destId: 'D3', personId: 'p0', kit: kitOf('mpb'), confirmLow: true });
+    const rf = f.s.pending.refs, res = Object.assign(E.runSim(f.s), { result: 'overrun', endHp: 0, progress: 0.5, fellAt: 'hordes', kills: rf.killsP90 - 1, shoves: rf.shovesP90 - 1, secondWindUsed: 0 }, tweak(rf));
+    must(f.s, { type: 'resolveRun', result: res, source: 'paste' });
+    return f.p.nick;
+  };
+  eq(share(false, (rf) => ({ kills: rf.killsP90, shoves: rf.shovesP90 })), 'elbows', 'Mower held by a living person: the next that triggers (Elbows)');
+  eq(share(false, (rf) => ({ kills: rf.killsP90 })), null, 'Mower held and nothing else triggers: no nickname yet');
+  eq(share(true, (rf) => ({ kills: rf.killsP90 })), 'mower', 'a fallen person no longer holds a nickname');
   // the reference rates hold over the fixtures' 400 reference runs (4.8: Gatecrasher 1-14 % of wins, Lastbreath 0.3-8 %)
   for (const r of ROWS_634.filter((x) => 'BDEFGH'.includes(x[0]) && x[0].length === 1)) {
     const f = rowFixture(r), inp = E._internal.runInput(f.s, f.p, E._internal.DEST[r[1]], kitOf(r[7]));

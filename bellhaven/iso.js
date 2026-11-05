@@ -62,8 +62,9 @@
  * Camera (8.1)
  *   setInsets({ top, bottom, left, right, pad })  the clear view = the canvas minus the top bar (top = its bottom
  *                                edge: 52 at 844 x 390, 50 at 568 x 320), the bottom bar (bottom = canvas height
- *                                minus the bar's top edge: 68 / 58), a right sheet (right = its width plus margin)
- *                                and left safe area. The selection and the ghost are kept visible after a change.
+ *                                minus the bar's top edge: 68 / 58), a right sheet (right = its width plus margin,
+ *                                else the right safe area) and the left safe area. The selection and the ghost are
+ *                                kept visible after a change.
  *   getCamera() -> { tx, ty, z, vx, vy }   the spec's camera: the ground point (tx, ty) under the clear view's
  *                                centre (vx, vy), zoom z
  *   setCamera({ tx, ty, z }, { ease })      put (tx, ty) under the clear view's centre (clamped to the land + 2)
@@ -116,8 +117,10 @@
  *                                setView(view) before or after; either order is safe.
  * People (4.12)
  *   walkOut(personId, { follow, onGate, onDone }) -> { gateMs, totalMs }   GO: the runner walks to the gate (1.2 s,
- *                                the camera follows) and out onto the road. Started automatically when a person
- *                                turns 'out' in a view; calling it again is harmless (returns the running trip).
+ *                                the camera follows) and out onto the road; with no path to the gate the runner
+ *                                fades out and in at the gate and steps out through it (onGate after 1 s). Started
+ *                                automatically when a person turns 'out' in a view; calling it again is harmless
+ *                                (returns the running trip).
  *   walkIn(personId, { style, onDone }) -> { totalMs }   the runner comes back in through the gate: style 'win' (a
  *                                sack), 'hurt' (a red-edged "Hurt" pill; carried on a stretcher by two medics when
  *                                there is a Clinic, else limping), 'limp', 'stretcher' or 'plain'; default from the
@@ -151,11 +154,11 @@
  * smaller). During the 0.8 s fence slide the ground is drawn live. Then the objects in depth order (footprints first:
  * an object wholly behind another along gx or gy draws first; else the front-corner key gx + w + gy + d, ties by
  * gx + w, people x + y + 0.5), the crane jibs, the front fence, people outside the land (the road), the front ruins,
- * then the overlay: bubbles, timer and state pills (clamped 8 px inside the clear view, hidden under a right sheet),
- * confetti, the ghost. Backing store min(devicePixelRatio, 3); 2 while a pan or pinch is active and after a second whose
- * frames averaged over 20 ms; restored after 2 s averaging 18 ms or less (doubling to at most 32 s when it keeps
- * dropping right after a restore, so a device too slow for 3x settles at 2x instead of re-rendering the ground cache
- * every few seconds).
+ * then the overlay: bubbles, timer, state and people's pills (clamped 8 px inside the clear view, hidden under a right
+ * sheet), confetti, the ghost. Backing store min(devicePixelRatio, 3); 2 while a pan or pinch is active and after a
+ * second whose frames averaged over 20 ms; restored after 2 s averaging 18 ms or less (doubling to at most 32 s when it
+ * keeps dropping right after a restore, so a device too slow for 3x settles at 2x instead of re-rendering the ground
+ * cache every few seconds).
  * The view gives no screen positions for people: iso walks the figures itself (BFS over view.walkable, 0.8 tiles/s,
  * legs of 4-10 tiles: House door -> plaza -> beside a Kiln or Cannery -> a bench or a grave, idling 3-8 s; about 1
  * leg in 10 ends at a grave for 3 s, a housemate's first). Where people are, from PersonView.where: 'walk' walks;
@@ -179,7 +182,7 @@
   const TAP_MOVE = 10, TAP_MS = 500, TAP_SEL_MS = 250, HOLD_MS = 250;
   const GHOST_LIFT = 36, EDGE = 48, EDGE_SPEED = 600;
   const SLOW_MS = 20, SLOW_FOR = 1000, GOOD_FOR = 2000, GOOD_MS = 18;
-  const WALK = 0.8, IDLE_MIN = 3, IDLE_MAX = 8, GRAVE_IDLE = 3, FADE = 0.2, RM_FADE = 0.15;
+  const WALK = 0.8, IDLE_MIN = 3, IDLE_MAX = 8, GRAVE_IDLE = 3, FADE = 0.2, RM_FADE = 0.15, GATE_STEP = 0.8;   // s: gate tile -> road
   const SLIDE_MS = 800, POP_MS = 260, DROP_MS = 200, PUFF_MS = 600, STRETCH_MS = 420, BOUNCE_MS = 260, CONFETTI_MS = 1100;
   const LIFT_PX = 12, BELL_SWING = 0.21;
   const TAU = Math.PI * 2;
@@ -747,7 +750,10 @@
       hold = !!onFlag;
       if (!hold) { const list = heldTrips.splice(0); for (const h of list) if (figs.get(h.f.id) === h.f) runTrip(h.f, h.trip); }
     }
-    // GO: to the gate in 1.2 s, then out along the road
+    // GO: to the gate in 1.2 s, then out along the road. With no path to the gate (buildings and rubble wall it in: the
+    // start layout does for half its free tiles, the first Cannery for the rest) 4.12's rule applies: fade out here and
+    // in at the gate (200 ms), then out through the gate, so the gate moment still shows for about the walk's 1.2 s
+    // before the night (6.4) and the runner is never drawn walking through a building.
     function startOut(f, p, o) {
       o = o || {};
       if (!f.visible || f.mode === 'hidden') {        // from the House or the Clinic door
@@ -759,8 +765,8 @@
       f.mode = 'trip'; f.pose = 'stand'; f.pill = null; f.state = 'out'; f.carry = null; f.limp = false;
       const gi = Math.abs(f.y - (gateTiles[0][1] + 0.5)) <= Math.abs(f.y - (gateTiles[1][1] + 0.5)) ? 0 : 1, gt = gateTile(gi);
       bfsFrom(Math.floor(f.x), Math.floor(f.y));
-      let path = pathTo(gt[0], gt[1]) || [[gt[0] + 0.5, gt[1] + 0.5]];
-      path = [[f.x, f.y]].concat(path.slice(1));
+      const found = pathTo(gt[0], gt[1]), gate = [gt[0] + 0.5, gt[1] + 0.5];
+      const path = [[f.x, f.y]].concat(found ? found.slice(1) : [gate]);
       const toGate = pathLen(path);
       const road = [[hi + 0.5, gt[1] + 0.5], [hi + 2.5, gt[1] + 0.5], [hi + 4.2, gt[1] + 0.5]];
       const speed = clamp(toGate / 1.2, WALK, 14), roadSpeed = Math.min(speed, 3), gateMs = Math.round(toGate / speed * 1000);
@@ -775,6 +781,17 @@
           fadeIn(f, half, () => { if (!f.trip) return; f.trip.gateDone = true; tripEvent(f, 'gate');
             f.fadeTo = { to: 1, rate: 1, wait: 0.35, then: () => fadeOut(f, () => { f.visible = false; f.mode = 'hidden'; tripEvent(f, 'done'); f.trip = null; if (followId === f.id) followId = null; }, half) };
           });
+        }, half);
+      } else if (!found) {
+        const half = FADE / 2, tr = f.trip, follow = o.follow !== false;
+        f.path = null; if (followId === f.id) followId = null;     // nothing to follow while the runner fades out
+        tr.roadSpeed = 1 / GATE_STEP; tr.gateMs = Math.round((2 * half + GATE_STEP) * 1000); tr.totalMs = tr.gateMs + Math.round(3.7 / tr.roadSpeed * 1000) + 350;
+        if (follow) followPt(gate[0], gate[1]);                    // any camera move happens at GO, as the run sheet closes
+        fadeOut(f, () => {
+          if (f.trip !== tr) return;
+          setPos(f, gate[0], gate[1]); f.path = [gate].concat(road); f.pi = 1; f.speed = tr.roadSpeed; tr.gateAt = 1;   // the gate event: through the gate
+          if (follow) followId = f.id;
+          fadeIn(f, half);
         }, half);
       }
       return { gateMs: f.trip.gateMs, totalMs: f.trip.totalMs };
@@ -967,8 +984,9 @@
         if (e.fade) { e.alpha -= dt / 0.25; if (e.alpha <= 0) e.done = true; }
       }
     }
-    function followNow(f) {                         // the camera follows the runner: keep it inside the clear view
-      const [sx, sy] = toScreen(f.x, f.y, 20), cv = clearView(), m = 60;
+    function followNow(f) { followPt(f.x, f.y); }   // the camera follows the runner: keep it inside the clear view
+    function followPt(x, y) {
+      const [sx, sy] = toScreen(x, y, 20), cv = clearView(), m = 60;
       let dx = 0, dy = 0;
       if (sx < cv.x0 + m) dx = cv.x0 + m - sx; else if (sx > cv.x1 - m) dx = cv.x1 - m - sx;
       if (sy < cv.y0 + m) dy = cv.y0 + m - sy; else if (sy > cv.y1 - m) dy = cv.y1 - m - sy;
@@ -1281,9 +1299,10 @@
       L.hits = [];
       const clampPt = (x, y, w, h) => [clamp(x, cv.x0 + CLAMP + w / 2, cv.x1 - CLAMP - w / 2), clamp(y, cv.y0 + CLAMP + h, cv.y1 - CLAMP)];
       for (const ov of L.overlays) {
-        if (ov.kind === 'pill') {
+        if (ov.kind === 'pill') {                   // a person's pill (the stranger's 'Name · N h', Hurt): clamped like the rest
           if (ov.x > sheetX) continue;
-          const box = Art.pill(g, ov.x, ov.y, ov.text, ov.pk);
+          const [px, py] = clampPt(ov.x, ov.y, 60, 22);
+          const box = Art.pill(g, px, py, ov.text, ov.pk);
           if (ov.person) L.hits.push({ kind: 'person', id: ov.person, box });
           continue;
         }
