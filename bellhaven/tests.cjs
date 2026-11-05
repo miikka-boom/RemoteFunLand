@@ -853,6 +853,9 @@ test('12 placement: the land, the gate, overlaps, moving, graves, counts and the
   // graveSpot: in front of the House, else the quiet corner
   const s8 = city(); s8.people[1].houseId = null; eq(E.graveSpot(s8, 'p1'), { gx: 9, gy: 8 }, 'no House: the quiet corner (8, 8) is rubble, so the next tile by gy then gx');
   eq(E.graveSpot(s8, 'p0'), { gx: 9, gy: 15 }, 'in front of the House');
+  const s9 = city({ tower: 3 }); s9.rubble = s9.rubble.filter((r) => !(r.gx === 8 && r.gy === 8));
+  const h2 = addB(s9, 'house', 1, 9, 8); s9.people[1].houseId = h2.id;
+  eq(E.graveSpot(s9, 'p1'), { gx: 8, gy: 12 }, 'a House right behind the Tower: its front tile and the tiles near it are hidden, so the first visible one');
 });
 
 // ================================================================== 13
@@ -966,7 +969,7 @@ test('14 death -> revive -> grave: the offer, prices, REVIVE / REVIVE NOW / SAY 
     'REVIVE NOW · 5 ✦: the stranger takes the free bed; three present people unlock death; the special price was once (next: L2 x 2 = 500, clamped to 480 under a 600 cap)');
   must(sg, { type: 'goodbye', personId: stg.id });
   const sgr = sg.graves[0], sm = E.memorial(sg, sgr.id);
-  eq([[sgr.gx, sgr.gy], sm.fellLine, sm.record, sm.epitaph[0], sg.flags.deathOn], [[9, 8], 'Found Down at the gate · Night 0', null, 'Came to the gate on Night 0.', false], 'goodbye to the stranger: the first grave in the quiet corner ((8, 8) is rubble: the next tile)');
+  eq([[sgr.gx, sgr.gy], sm.fellLine, sm.record, sm.epitaph[0], sg.flags.deathOn], [[12, 8], 'Found Down at the gate · Night 0', null, 'Came to the gate on Night 0.', false], 'goodbye to the stranger: the first grave in the quiet corner ((8, 8) is rubble and the free tiles near it stand behind the Tower: the next tile)');
   E.advance(sg, 2 * H); eq([sg.people.length, sg.flags.strangerDone], [3, true], 'the stranger appears once');
   // the death-unlock card's flag is set once and never resets
   const du = city({ tower: 3, goalsDone: true }); addB(du, 'inn', 1, 13, 13); addB(du, 'house', 1, 11, 13); du.flags.strangerDone = true; E._internal.refreshInn(du, []); du.res.cans = 500;

@@ -20,6 +20,8 @@
  *   says "Progress won't be saved in this browser." once); 'corrupt-reset' copies the raw save to 'bellhaven.v1.bad';
  *   'future-version' plays in memory and never overwrites that save; #demo plays Engine.demo() and never saves.
  *   Offline time is credited by Engine.resume() on load and on every return to the tab (the welcome card, 5.5).
+ *   One save, several tabs: a tab never writes over a save another tab stored since this tab last read or wrote it;
+ *   it reloads instead, when it is shown again or before its next act (save(), storeMoved()).
  * URL: #demo (the Tower-4 demo city, in memory) · ?insets=L[,B[,R[,T]]] a simulated notch for tests (px; R defaults
  *   to L) · ?seed=N the save seed of a NEW save (tests; an existing save is kept).
  *
@@ -28,7 +30,7 @@
  *   whose tag (and data-k key) is unchanged, so a button that only changes its label is never replaced (a tap is
  *   never lost to a re-render). Interaction is one delegated click handler: an element with data-do="name" calls
  *   DO[name](el, event); its data-* attributes carry the arguments. aria-disabled="true" with data-why="..." shows
- *   that reason as a toast instead.
+ *   that reason as a toast instead. A tap within 450 ms of a change under the finger is ignored (calm(), onClick).
  * Component helpers (UI.h): ic(name, color) inline SVG icon (BH.Art) · esc(text) · btn({ do, label, sub, cls, data,
  *   icon, off, why, primary }) · costChip({ res, n }) · needLine(cost) · timeChip(sec) · skipBtn(key, price, do,
  *   data, verb) the 5.6 skip button with the second-tap confirm at 20 ✦ or more · portrait(look, size, grey) <img> ·
@@ -1529,7 +1531,7 @@
       }
       const r = doAct({ type: 'startRun', destId: rs.destId, personId: sel, kit: c.kit, confirmLow: !!c.low }, { quiet: true });
       rs.lowUntil = 0;
-      if (!r.ok) { if (r.err === 'confirm') { rs.lowUntil = Date.now() + 3000; renderOverlay(); return; } explain(r); renderOverlay(); return; }
+      if (!r.ok) { if (r.err === 'confirm') { rs.lowUntil = Date.now() + 3000; renderOverlay(); calm(); return; } explain(r); renderOverlay(); return; }
       goFlow(sel, r.data);
     },
     rsHandoff() {
@@ -2077,6 +2079,7 @@
     rsc = null; flow = null;                                    // the run flow of the old city ends with it
     if (iso) { iso.ghostEnd(); iso.select(null); iso.holdArrivals(false); clearTimeout(ui.gatherT); if (iso.gather) iso.gather(false); }
     if (ui.overlay) { ui.overlay = null; morph($('overlay'), ''); setClass('ov-open', false); setClass('ov-dark', false); if (iso) iso.setInteractive(true); }
+    lastIO = store.get(KEY);                                    // the Lab's reset or import takes the save over, even another tab's
     applyReduced(); refresh(); save();
     if (iso) iso.fit({ ease: false });
   }
@@ -2195,9 +2198,11 @@
 
   // ---------------------------------------------------------------------------------------------- input (8.2: the DOM side)
   // A tap within 450 ms of a change under the finger (a card or the run sheet opening or closing, a mode ending, a tap
-  // that acted) is the rest of a double tap or a mash, not a choice: it is ignored, and a burst of taps keeps it quiet
-  // until the finger pauses. So a double tap never pays twice, never sends a runner nobody chose (GO sits at PLAY's
-  // rect) and never answers a revive offer that opened under the finger. Taps on the city canvas do not come through here.
+  // that acted, armed a second-tap confirm or selected something, whose action bar can appear where the goal chip was)
+  // is the rest of a double tap or a mash, not a choice: it is ignored, and a burst of taps keeps it quiet until the
+  // finger pauses. So a double tap never pays twice, never sends a runner nobody chose (GO sits at PLAY's rect) and
+  // never answers a revive offer that opened under the finger. A deliberate tap 0.5 s later counts. Taps on the city
+  // canvas do not come through here.
   function calm() { ui.calmUntil = Math.max(ui.calmUntil, now() + 450); }
   function onClick(e) {
     const el = e.target && e.target.closest ? e.target.closest('[data-do]') : null;
@@ -2207,7 +2212,7 @@
     if (now() < ui.calmUntil) { calm(); return; }              // a stray tap: see calm()
     if (el.getAttribute('aria-disabled') === 'true') { const why = el.dataset.why; if (why) toast(why); sfx('deny'); return; }
     if (el.dataset.do !== 'collect' && el.dataset.do !== 'play') sfx('tick');
-    const n = ui.acts; fn(el, e); if (ui.acts !== n) calm();
+    const n = ui.acts, sel = ui.sel; fn(el, e); if (ui.acts !== n || (ui.sel && ui.sel !== sel)) calm();
   }
   function onKey(e) {
     unlockAudio();

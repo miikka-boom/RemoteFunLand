@@ -70,7 +70,9 @@ async function open(browser, w, h, o) {
   const cdp = await ctx.newCDPSession(p);
   t.ev = (fn, a) => p.evaluate(fn, a);
   t.touch = (type, pts) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: pts || [] });
-  t.tapXY = async (x, y, holdMs) => { await t.touch('touchStart', [{ x, y }]); await sleep(holdMs || 40); await t.touch('touchEnd'); await sleep(90); };
+  // a finger does not tap again within the page's 450 ms calm after a screen change (ui.js onClick ignores such taps)
+  t.calm = () => p.waitForFunction(() => !(window.BH && BH.UI && BH.UI.ui) || performance.now() >= (BH.UI.ui.calmUntil || 0), null, { timeout: 4000 }).catch(() => {});
+  t.tapXY = async (x, y, holdMs) => { await t.calm(); await t.touch('touchStart', [{ x, y }]); await sleep(holdMs || 40); await t.touch('touchEnd'); await sleep(90); };
   t.drag = async (x0, y0, x1, y1, steps, pre) => {
     steps = steps || 12; await t.touch('touchStart', [{ x: x0, y: y0 }]); await sleep(pre || 20);
     for (let i = 1; i <= steps; i++) { await t.touch('touchMove', [{ x: x0 + (x1 - x0) * i / steps, y: y0 + (y1 - y0) * i / steps }]); await sleep(16); }
@@ -477,6 +479,21 @@ async function test28(browser) {
   const b = await t.ev(() => ({ b: BH.UI.state.buildings.map((x) => x.type + '@' + x.gx + ',' + x.gy).join(' '), res: BH.UI.state.res.bricks, seed: BH.UI.state.saveSeed, people: BH.UI.state.people.map((p) => p.first).join(','), ov: BH.UI.ui.overlay && BH.UI.ui.overlay.kind, status: BH.UI.ui.status }));
   ok(a.b === b.b && a.seed === b.seed && a.people === b.people && b.res === a.res, '28 a reload keeps the city', { a, b });
   ok(b.ov !== 'meet', '28 a reload does not replay the meet cards', b.ov);
+  // two tabs on one save (11.2): tab B opens first, then A (reloaded) moves on; B, shown again, must not write its older
+  // city over A's progress: it reloads to continue from it
+  const pB = await t.ctx.newPage();
+  pB.on('pageerror', (e) => t.errs.push('PAGEERROR (tab B) ' + e.message));
+  await pB.goto(PAGE); await pB.waitForFunction(() => window.BH && BH.UI && BH.UI.state); await sleep(400);
+  await t.p.reload(); await t.p.waitForFunction(() => window.BH && BH.UI && BH.UI.state); await sleep(400);
+  await t.dev('grant', { what: 'sparks' });
+  const sparksA = await t.ev(() => BH.UI.state.res.sparks);
+  const reloaded = pB.waitForEvent('load', { timeout: 6000 }).then(() => true, () => false);
+  await pB.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+  const rl = await reloaded;
+  await pB.waitForFunction(() => window.BH && BH.UI && BH.UI.state, null, { timeout: 8000 }).catch(() => {}); await sleep(300);
+  const tabs = await pB.evaluate(() => ({ b: BH.UI.state.res.sparks, stored: JSON.parse(localStorage.getItem('bellhaven.v1')).res.sparks }));
+  ok(rl && tabs.b === sparksA && tabs.stored === sparksA, '28 two tabs: the older tab, shown again, reloads to the newer save and never writes over it', { sparksA, tabB: tabs.b, stored: tabs.stored, reloaded: rl });
+  await pB.close();
   errsOk(t, 'test 28 reload');
   await t.close();
   // storage that throws: every call (quota, private mode) and the localStorage getter itself (blocked site data)
@@ -534,6 +551,17 @@ async function test30(browser) {
   await t.goto('?seed=20261104');
   await pastMeet(t);
   await t.dev('runScreenS', { value: 3 });
+  // a double tap on PLAY opens the run sheet and sends nobody: GO sits at PLAY's rect (6.2) and the second tap is the
+  // rest of a double tap (8.2)
+  {
+    const r = await t.ev(() => { const b = document.getElementById('play').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; });
+    await t.calm();
+    for (let i = 0; i < 2; i++) { await t.touch('touchStart', [r]); await sleep(35); await t.touch('touchEnd'); await sleep(150); }
+    await sleep(500);
+    const d = await t.ev(() => ({ pending: !!BH.UI.state.pending, ov: BH.UI.ui.overlay && BH.UI.ui.overlay.kind }));
+    ok(!d.pending && d.ov === 'run', '30 a double tap on PLAY opens the run sheet and sends nobody', d);
+    if (d.ov === 'run') { await t.tap('#overlay [data-do=rsClose]'); await t.waitNoOv(4000).catch(() => {}); await sleep(300); }
+  }
   for (let n = 1; n <= 2; n++) {
     const before = await goRun(t);
     ok(await t.ev(() => !!BH.UI.state.pending), '30 GO saves the run before the run screen (run ' + n + ')');

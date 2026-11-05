@@ -409,12 +409,24 @@
     }
     return best;
   }
-  function spotFrom(s, sx, sy, grid) {                        // 6.7: Chebyshev rings 0, 1, 2, ...; gy then gx ascending
+  // A grave right behind the Bell Tower on screen can be neither seen nor tapped: the Tower is drawn after it (8.1) and
+  // its extruded 3 x 3 footprint (art.js hit height 66 + 22 x storeys px) covers the headstone's top, 64 px above the
+  // tile's centre. Only the Tower is tall enough to do that (every other building is at most 68 px).
+  function towerHides(s, gx, gy) {
+    const t = towerB(s); if (!t) return false;
+    const dc = Math.abs(gx - gy - (t.gx - t.gy));             // columns from the Tower's centre line (screen x)
+    if (dc > 3 || gx >= t.gx + 3 || gy >= t.gy + 3 || (gx >= t.gx && gy >= t.gy)) return false;   // beside or in front
+    return (t.gx + t.gy + dc - gx - gy - 1) * 16 <= 66 + 22 * (1 + Math.ceil(t.lv / 2)) - 64;
+  }
+  // 6.7: Chebyshev rings 0, 1, 2, ...; gy then gx ascending. Pass 0 skips the tiles the Tower hides; pass 1 takes any
+  // free tile, so a spot is found whenever the land has one.
+  function spotFrom(s, sx, sy, grid) {
     grid = grid || occGrid(s);
-    for (let r = 0; r < G; r++) for (let y = sy - r; y <= sy + r; y++) for (let x = sx - r; x <= sx + r; x++) {
-      if (Math.max(Math.abs(x - sx), Math.abs(y - sy)) !== r || x < 0 || y < 0 || x >= G || y >= G) continue;
-      if (!fitsGrid(s, grid, 1, x, y)) return { gx: x, gy: y };
-    }
+    for (let pass = 0; pass < 2; pass++)
+      for (let r = 0; r < G; r++) for (let y = sy - r; y <= sy + r; y++) for (let x = sx - r; x <= sx + r; x++) {
+        if (Math.max(Math.abs(x - sx), Math.abs(y - sy)) !== r || x < 0 || y < 0 || x >= G || y >= G) continue;
+        if (!fitsGrid(s, grid, 1, x, y) && (pass || !towerHides(s, x, y))) return { gx: x, gy: y };
+      }
     return null;
   }
   function graveStart(s, houseId) {
