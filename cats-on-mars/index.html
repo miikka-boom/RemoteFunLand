@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cats on Mars</title>
+<meta name="description" content="A 2:41 lowtech demo and music video: a digital singer, a 320x180 software renderer and cats on Mars, about the nature of life. Everything is computed in your browser.">
+<style>
+:root {
+  --bg: #08060f;
+  --ink: #f2e6dc;
+  --soft: #a8968c;
+  --line: #2c2232;
+  --btn: #17121e;
+  --accent: #ff8a3c;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.55 var(--mono) }
+a { color: inherit }
+.top {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap;
+  padding: 12px max(16px, env(safe-area-inset-right)) 10px max(16px, env(safe-area-inset-left));
+}
+.top a { color: var(--soft); text-decoration: none }
+.top a:hover, .top a:focus-visible { color: var(--accent) }
+.top .no { color: var(--accent); letter-spacing: .06em; font-size: 12px }
+.stage {
+  position: relative;
+  width: min(100vw, calc((100vh - 150px) * 16 / 9), 1280px);
+  min-width: min(100vw, 320px);
+  aspect-ratio: 16 / 9;
+  margin: 0 auto;
+  background: #000;
+}
+.stage canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated }
+.stage:fullscreen { width: 100vw; height: 100vh; max-width: none; aspect-ratio: auto; display: grid; place-items: center }
+.stage:fullscreen canvas { width: min(100vw, calc(100vh * 16 / 9)); height: auto; aspect-ratio: 16 / 9 }
+#hit {
+  position: absolute; inset: 0; width: 100%; height: 100%; border: 0; padding: 0; margin: 0;
+  background: transparent; cursor: pointer; color: transparent;
+}
+#hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -4px }
+.bar {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px;
+  padding: 12px 16px 4px;
+}
+.bar button {
+  font: inherit; font-size: 13px; color: var(--ink); background: var(--btn);
+  border: 1px solid var(--line); border-radius: 4px; padding: 6px 12px; cursor: pointer;
+}
+.bar button:hover:not(:disabled) { border-color: var(--accent) }
+.bar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px }
+.bar button:disabled { opacity: .45; cursor: default }
+.bar button[aria-pressed="true"] { border-color: var(--accent); color: var(--accent) }
+#time { color: var(--soft); font-variant-numeric: tabular-nums; min-width: 9ch; text-align: center }
+.about { max-width: 68ch; margin: 10px auto 48px; padding: 0 16px; color: var(--soft); font-size: 13px }
+.about p { margin: 0 0 10px }
+.about strong { color: var(--ink); font-weight: 500 }
+kbd { font: inherit; border: 1px solid var(--line); border-radius: 3px; padding: 0 4px }
+</style>
+
+<header class="top">
+  <a href="../">&larr; RemoteFunLand</a>
+  <span class="no">No. 016 &middot; CATS ON MARS</span>
+</header>
+
+<main>
+  <div class="stage" id="stage">
+    <canvas id="screen" width="640" height="360" role="img" aria-label="Cats on Mars, a pixel-art music video: an astronaut cat walks across Mars, sings to a digital melody, and the red planet slowly turns green."></canvas>
+    <button id="hit" type="button" aria-label="Play">Play</button>
+  </div>
+
+  <div class="bar" role="group" aria-label="Playback">
+    <button id="play" type="button" disabled>Preparing&hellip;</button>
+    <button id="restart" type="button" disabled>Restart</button>
+    <span id="time" aria-live="off">0:00 / 2:41</span>
+    <button id="calm" type="button" aria-pressed="false" title="Softer flashes on cuts and beats">Calm flashes</button>
+    <button id="full" type="button">Fullscreen</button>
+  </div>
+
+  <section class="about">
+    <p><strong>A lowtech demo and music video.</strong> A transmission from Mars, a cat in a space suit, a song about the nature of life. Born, grow, play, sleep.</p>
+    <p>Nothing here is a recording. The song is synthesized in your browser when the page opens (the &ldquo;precalc&rdquo;): drums, bass, chip arpeggios, FM bells, Martian wind, purring, and a formant-synthesis singer that sings the lyrics from phonemes and meows on cue. Every frame is drawn pixel by pixel into a 320&times;180 buffer by plain JavaScript and dithered to the Amiga&rsquo;s 4096 colours: rotating Mars, voxel landscapes, copper bars, plasma, a tunnel, a rotozoomer, vector balls, metaballs, the Game of Life and a DNA helix.</p>
+    <p><kbd>Space</kbd> play or pause &middot; <kbd>R</kbd> restart &middot; <kbd>F</kbd> fullscreen. Sound on.</p>
+  </section>
+</main>
+
+<script src="./song.js"></script>
+<script src="./synth.js"></script>
+<script src="./gfx.js"></script>
+<script>
+(() => {
+  'use strict';
+  const CM = window.CM, G = CM.gfx, S = CM.song;
+  const W = G.W, H = G.H, N = Math.ceil(S.DURATION * S.SR);
+  const $ = id => document.getElementById(id);
+  const stage = $('stage'), screen = $('screen'), sctx = screen.getContext('2d');
+  const off = document.createElement('canvas');
+  off.width = W; off.height = H;
+  const octx = off.getContext('2d'), img = octx.createImageData(W, H), px = new Uint32Array(img.data.buffer);
+  const playBtn = $('play'), restartBtn = $('restart'), hit = $('hit'), timeEl = $('time'), calmBtn = $('calm');
+
+  const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  G.OPT.calm = reduce;
+  calmBtn.setAttribute('aria-pressed', String(reduce));
+
+  function fit() {
+    const r = screen.getBoundingClientRect(), d = Math.min(2, window.devicePixelRatio || 1);
+    const w = Math.max(W, Math.round(r.width * d)), h = Math.max(H, Math.round(r.height * d));
+    if (screen.width !== w || screen.height !== h) { screen.width = w; screen.height = h; }
+  }
+  function blit(fb) {
+    px.set(fb);
+    octx.putImageData(img, 0, 0);
+    fit();
+    sctx.imageSmoothingEnabled = false;
+    sctx.drawImage(off, 0, 0, screen.width, screen.height);
+  }
+  const fmt = s => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+  // ---- precalc: synthesize the whole song into an AudioBuffer, a few milliseconds per frame
+  let abuf = null;
+  try { abuf = new AudioBuffer({ length: N, numberOfChannels: 2, sampleRate: S.SR }); } catch (e) { abuf = null; }
+  const job = CM.createAudioJob(abuf ? { L: abuf.getChannelData(0), R: abuf.getChannelData(1) } : {});
+  const hashT = (() => { const m = location.hash.match(/t=([\d.]+)/); return m ? Math.min(S.DURATION, +m[1]) : null; })();
+  let state = 'precalc';
+  const tStart = performance.now();
+
+  // ---- playback, clocked by the audio hardware
+  let actx = null, src = null, startAt = 0;
+  const now = () => (actx ? actx.currentTime - startAt - (actx.outputLatency || 0) : 0);
+  async function start(from) {
+    if (!actx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      actx = new AC({ latencyHint: 'playback' });
+    }
+    if (actx.state === 'suspended') await actx.resume();
+    if (!abuf || abuf.sampleRate !== S.SR || !(abuf instanceof AudioBuffer)) {
+      abuf = actx.createBuffer(2, N, S.SR);
+      abuf.copyToChannel(job.L, 0); abuf.copyToChannel(job.R, 1);
+    }
+    if (src) { try { src.onended = null; src.stop(); } catch (e) {} }
+    src = actx.createBufferSource();
+    src.buffer = abuf;
+    src.connect(actx.destination);
+    const when = actx.currentTime + 0.06;
+    src.start(when, from);
+    startAt = when - from;
+    src.onended = () => { if (state === 'playing' && now() >= S.DURATION - 0.5) finish(); };
+    state = 'playing';
+    ui();
+  }
+  async function toggle() {
+    if (state === 'precalc') return;
+    if (state === 'ready' || state === 'ended') return start(0);
+    if (state === 'playing') { await actx.suspend(); state = 'paused'; ui(); return; }
+    if (state === 'paused') { await actx.resume(); state = 'playing'; ui(); }
+  }
+  function finish() { state = 'ended'; ui(); }
+  function ui() {
+    const label = { precalc: 'Preparing…', ready: 'Play', playing: 'Pause', paused: 'Resume', ended: 'Play again' }[state];
+    playBtn.textContent = label;
+    playBtn.disabled = state === 'precalc';
+    restartBtn.disabled = state === 'precalc' || state === 'ready';
+    hit.setAttribute('aria-label', label);
+  }
+
+  function loop() {
+    requestAnimationFrame(loop);
+    if (state === 'precalc') {
+      job.step(22);
+      if (job.done) {
+        CM.audio = { L: job.L, R: job.R, mouth: job.mouth };
+        state = 'ready';
+        ui();
+      }
+      blit(G.precalc(job.progress, (performance.now() - tStart) / 1000, job.done));
+      return;
+    }
+    if (state === 'ready') {
+      blit(hashT !== null ? G.frame(hashT) : G.precalc(1, (performance.now() - tStart) / 1000, true));
+      return;
+    }
+    let t = now();
+    if (state === 'playing' && t >= S.DURATION) { finish(); t = S.DURATION; }
+    if (state === 'ended') t = S.DURATION - 0.6;
+    blit(G.frame(Math.max(0, t)));
+    timeEl.textContent = `${fmt(Math.max(0, Math.min(t, S.DURATION)))} / ${fmt(S.DURATION)}`;
+  }
+  requestAnimationFrame(loop);
+
+  playBtn.addEventListener('click', toggle);
+  hit.addEventListener('click', toggle);
+  restartBtn.addEventListener('click', () => { if (state !== 'precalc') { if (actx && actx.state === 'suspended') actx.resume(); start(0); } });
+  calmBtn.addEventListener('click', () => { G.OPT.calm = !G.OPT.calm; calmBtn.setAttribute('aria-pressed', String(G.OPT.calm)); });
+  $('full').addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else if (stage.requestFullscreen) stage.requestFullscreen();
+  });
+  window.addEventListener('keydown', e => {
+    if (e.target && e.target.tagName === 'BUTTON' && (e.key === ' ' || e.key === 'Enter')) return;
+    if (e.key === ' ') { e.preventDefault(); toggle(); }
+    else if (e.key === 'r' || e.key === 'R') restartBtn.click();
+    else if (e.key === 'f' || e.key === 'F') $('full').click();
+  });
+  ui();
+})();
+</script>
+</html>
