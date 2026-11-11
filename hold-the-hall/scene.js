@@ -325,16 +325,16 @@
     for (const h of hits) { const d = Math.hypot(h.x - sx, h.y - sy); if (d < Math.max(26, h.r) && d < bd) { bd = d; best = h; } }
     if (best) return { kind: 'marker', what: best.what, id: best.id };
     const w = toWorld(sx, sy);
-    bd = 30 / cam.z;
-    for (const z of zs) { if (!shootable(z)) continue; const q = P(z.x, z.y, 13 * z.s), d = Math.hypot(q[0] - w[0], q[1] - w[1]) - (z.s > 1.5 ? 14 : 0); if (d < bd) { bd = d; best = z; } }
-    if (best) return { kind: 'zombie', z: best };
+    // walkers, survivors and graves: whichever the finger is closest to, each measured against its own reach
+    let score = 1, out = null;
+    const cand = (q, r, res) => { const d = Math.hypot(q[0] - w[0], q[1] - w[1]) * cam.z / r; if (d < score) { score = d; out = res; } };
+    for (const z of zs) if (shootable(z)) cand(P(z.x, z.y, 13 * z.s), z.s > 1.5 ? 44 : 30, { kind: 'zombie', z });
+    for (const f of figs.values()) cand(P(f.x, f.y, 13), 24, { kind: 'person', id: f.id });
+    S.graves.forEach((gr, i) => { const q = graveAt(i); cand(P(q[0], q[1], 7), 18, { kind: 'grave', id: gr.id }); });
+    if (out) return out;
     bd = 20 / cam.z;                                  // a walker on the street, but too far from the wall to hit
     for (const z of zs) { if (z.kind !== 'street' || z.st === 'dead') continue; const q = P(z.x, z.y, 13), d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d < bd) { bd = d; best = z; } }
     if (best) return { kind: 'far', z: best };
-    bd = 24 / cam.z;
-    for (const f of figs.values()) { const q = P(f.x, f.y, 13), d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d < bd) { bd = d; best = f; } }
-    if (best) return { kind: 'person', id: best.id };
-    if (S.graves.length) { bd = 18 / cam.z; S.graves.forEach((gr, i) => { const q = graveAt(i), a = P(q[0], q[1], 7), d = Math.hypot(a[0] - w[0], a[1] - w[1]); if (d < bd) { bd = d; best = gr; } }); if (best) return { kind: 'grave', id: best.id }; }
     const order = S.blocks.slice().sort((a, b) => b.bx + b.by - a.bx - a.by);
     for (const b of order) { const X = lot(b.bx), Y = lot(b.by), h = HGT[b.type] || 40; if (inPoly([P(X + 0.5, Y + 3.0), P(X + 3.1, Y + 3.0), P(X + 3.1, Y + 0.5), P(X + 3.1, Y + 0.5, h), P(X + 0.5, Y + 0.5, h), P(X + 0.5, Y + 3.0, h)], w[0], w[1])) return { kind: 'block', b }; }
     const t = toTile(sx, sy), tx = Math.floor(t[0]), ty = Math.floor(t[1]);

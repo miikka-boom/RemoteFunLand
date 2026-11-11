@@ -227,9 +227,10 @@ const CHECKS = {
     await T.tapEl('#panel [data-do="offer"]'); await sleep(450); ok((await T.s()).panel === 'offer', 'KEEP WAITING goes back');
     await T.tapEl('#panel [data-do="bye"]'); await sleep(450); await T.tapEl('#panel [data-do="bye2"]'); await sleep(500); s = await T.s();
     ok(s.people.length === n0 - 1 && s.graves === 1 && !s.people.some((p) => p.id === lost.id), 'LAY TO REST leaves a grave', s.graves);
+    await sleep(2600);                                                  // the camera settles
     const g = await T.ev(() => { const Sc = HH.Scene, X = Sc.lot(2), Y = Sc.lot(2), a = Sc.P(X + 3.62, Y + 0.5, 7), b = Sc.toScreen(a[0], a[1]); return [b[0], b[1], Sc.pick(b[0], b[1]).kind]; });
     ok(g[2] === 'grave', 'the grave stands on the hall lawn', g);
-    await sleep(2600); await T.tap(g[0], g[1]); await sleep(450); s = await T.s(); ok(s.panel === 'grave' && new RegExp(lost.name).test(await T.ev(() => document.getElementById('panel').textContent)), 'a tap on it remembers the name', s.panel);
+    await T.tap(g[0], g[1]); await sleep(450); s = await T.s(); ok(s.panel === 'grave' && new RegExp(lost.name).test(await T.ev(() => document.getElementById('panel').textContent)), 'a tap on it remembers the name', s.panel);
     await T.shot('06-grave'); await T.done('down, revive, goodbye');
   },
   // 7 ------------------------------------------------------------------------------------------------
@@ -434,7 +435,7 @@ const CHECKS = {
   async 16(browser) {
     const html = fs.readFileSync(path.join(ROOT, '..', 'index.html'), 'utf8'), readme = fs.readFileSync(path.join(ROOT, '..', 'README.md'), 'utf8');
     const first = (html.match(/<li class="entry">[\s\S]*?<\/li>/) || [''])[0];
-    ok(/href="\.\/hold-the-hall\/"/.test(first) && /No\. 016/.test(first) && /\.\/hold-the-hall\/thumb\.jpg/.test(first), 'the gallery lists Hold the Hall first, as No. 016', first.slice(0, 160));
+    ok(/href="(\.\/)?hold-the-hall\/"/.test(first) && /No\. 016/.test(first) && /src="(\.\/)?hold-the-hall\/thumb\.jpg"/.test(first), 'the gallery lists Hold the Hall first, as No. 016', first.slice(0, 160));
     ok(fs.existsSync(path.join(ROOT, 'thumb.jpg')) && fs.statSync(path.join(ROOT, 'thumb.jpg')).size > 8000, 'the thumbnail is there');
     ok(/\| 016 \|.*hold-the-hall/.test(readme), 'the README has its row');
     let size = 0; for (const f of fs.readdirSync(ROOT)) size += fs.statSync(path.join(ROOT, f)).size; ok(size < 10 * 1024 * 1024, 'the folder is under 10 MB', size);
