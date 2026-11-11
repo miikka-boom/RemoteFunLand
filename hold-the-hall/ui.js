@@ -20,10 +20,11 @@
   const dur = (ms) => (ms < 60000 ? Math.round(ms / 1000) + ' s' : ms < 3600000 ? Math.round(ms / 60000) + ' min' : Math.round(ms / 360000) / 10 + ' h');
   const clock = (ms) => Sc.clock(Math.max(0, ms));
   const theN = (name) => 'the ' + (name.indexOf('The ') === 0 ? name.slice(4) : name);
-  const wide = () => root.innerWidth >= 640 && root.innerWidth > root.innerHeight;
+  const wide = () => root.innerWidth >= root.innerHeight;       // landscape: the panel sits at the side
 
   // ---------------------------------------------------------------- engine calls
-  function save() { if (DEMO || !S) return; lastSave = performance.now(); store.set(KEY, E.save(S, Date.now())); }
+  let wiped = false;                                 // RESET SAVE: the page is about to reload and must not save on its way out
+  function save() { if (DEMO || !S || wiped) return; lastSave = performance.now(); store.set(KEY, E.save(S, Date.now())); }
   function act(a) {
     const r = E.act(S, a);
     if (r.ok) { handle(r.ev); save(); hudAt = 0; }
@@ -105,7 +106,7 @@
       if (b.owned) return PANELS.block(p);
       let sel = E.person(S, p.pid); if (!sel || sel.state !== 'ok') { sel = bestReady(b); p.pid = sel ? sel.id : null; }
       let h = head(esc(b.name), b.type === 'bridge' ? T.line : 'Becomes ' + T.name + ' · ' + T.line);
-      h += row('Walker nests', pips(b)) + row('Threat', b.threat + (sel ? ' <span class="muted">· ' + esc(sel.name) + ' has ' + E.power(S, sel) + ' power</span>' : ''));
+      h += row('Nests ' + pips(b), 'Threat ' + b.threat + (sel ? ' <span class="muted">· power ' + E.power(S, sel) + '</span>' : ''));
       if (why === 'far') return h + '<p class="note">Too far. Take a block next to it first.</p>';
       if (why === 'hall') return h + '<p class="note">Out of reach. Needs Town Hall level ' + E.needHall(b) + '.</p>' + btn('TOWN HALL', 'block', ' data-id="12"');
       const mul = (1 + D.TYPES.workshop.loot * E.sumLv(S, 'workshop')) * (sel ? 1 + (D.TRAITS[sel.trait].loot || 0) : 1);
@@ -117,29 +118,29 @@
         h += '<button class="card' + (sel && pn.id === sel.id ? ' sel' : '') + (ready ? '' : ' off') + '" data-do="sel" data-id="' + pn.id + '"><div class="nm">' + dot(pn) + esc(pn.name) + '</div><div class="lv">Lv ' + pn.lv + ' · ' + D.TRAITS[pn.trait].name + '</div>' +
           (ready ? '<div class="od">' + pct(o.win) + '<small>WIN</small></div><div class="dt' + (o.death > 0 ? ' risk' : '') + '">DEATH ' + pct(o.death) + '</div>' : '<div class="dt" data-live="st:' + pn.id + '"></div>') + '</button>';
       }
-      h += '</div>';
+      h += '</div><div class="foot"><div class="btns">';
       if (S.run) h += btn('SOMEONE IS OUT THERE', 'none', '', 'off');
-      else if (sel) { const o = E.odds(S, sel, b); h += btn('SEND ' + esc(sel.name), 'go', '', 'go', 'WIN ' + pct(o.win) + ' · DEATH ' + pct(o.death)); }
+      else if (sel) { const o = E.odds(S, sel, b); h += btn('SEND ' + esc(sel.name), 'go', '', 'go', 'A simulated night · ' + pct(o.win) + ' to win'); }
       else h += btn('NOBODY IS READY', 'panel', ' data-k="people"', 'off');
-      if (E.targets(S).length > 1) h += btn('ANOTHER BLOCK ▸', 'next');
-      return h + '<p class="note">The run is a night of Two Thumbs Left. Here it is simulated.</p>';
+      if (E.targets(S).length > 1) h += '<button class="btn next" data-do="next" aria-label="Another block">▸</button>';
+      return h + '</div></div>';
     },
     block(p) {
       const b = S.blocks[p.bid], T = D.TYPES[b.type], hall = b.type === 'hall', id = ' data-id="' + b.id + '"';
       if (!b.owned) return PANELS.target(p);
       if (b.type === 'bridge') return head('THE BRIDGE', 'The road is open. The town is yours.') + btn('OK', 'close');
-      let h = b.lv < 1 ? head(esc(b.name), 'A ruin. Restore it and it becomes ' + T.name + '.') : head(T.name + ' <span class="amber">LV ' + b.lv + '</span>', (hall ? '' : esc(b.name) + ' · ') + T.line);
+      let h = b.lv < 1 ? head(esc(b.name), 'A ruin. Restore it and it becomes ' + T.name + '.') : head(T.name + ' <span class="amber">LV ' + b.lv + '</span>', (hall ? '' : esc(b.name) + ' · ') + T.line), foot = '';
       if (b.lv >= 1) h += row('Now', fxText(b, b.lv));
-      if (T.rate && b.lv >= 1) h += row(b.type === 'gas' ? 'Fuel in store' : 'In store', '<span data-live="stock:' + b.id + '"></span>') + btn('COLLECT', 'collect', id);
-      if (b.job) h += row(b.lv < 1 ? 'Restoring' : 'Upgrading to LV ' + (b.lv + 1), '<span data-live="job:' + b.id + '"></span>') + '<button class="btn fuel" data-do="skipJob"' + id + '><span data-live="jobSkip:' + b.id + '"></span></button>';
+      if (T.rate && b.lv >= 1) h += row(b.type === 'gas' ? 'Fuel in store' : 'In store', '<span data-live="stock:' + b.id + '"></span><button class="mini" data-do="collect"' + id + '>COLLECT</button>');
+      if (b.job) { h += row(b.lv < 1 ? 'Restoring' : 'Upgrading to LV ' + (b.lv + 1), '<span data-live="job:' + b.id + '"></span>'); foot = '<button class="btn fuel" data-do="skipJob"' + id + '><span data-live="jobSkip:' + b.id + '"></span></button>'; }
       else if (b.lv < T.max) {
         const next = b.lv + 1, cost = T.cost[b.lv];
         if (b.lv >= 1) h += row('Level ' + next, fxText(b, next), 'good');
         if (!hall && b.lv >= E.hallLv(S)) h += '<p class="note">Level ' + next + ' needs Town Hall level ' + next + '.</p>';
-        else h += btn(b.lv < 1 ? 'RESTORE' : 'UPGRADE', 'build', id, 'main' + (S.res.sup < cost ? ' off' : ''), num(cost) + ' supplies · ' + dur(T.time[b.lv]));
+        else foot = btn(b.lv < 1 ? 'RESTORE' : 'UPGRADE', 'build', id, 'main' + (S.res.sup < cost ? ' off' : ''), num(cost) + ' supplies · ' + dur(T.time[b.lv]));
       } else h += '<p class="note">As good as it gets.</p>';
       if (hall) h += row('Wall', Math.floor(E.ammoCap(S)) + ' ammo · +1 every ' + R.ammoMs / 1000 + ' s') + (S.graves.length ? btn('REMEMBERED · ' + S.graves.length, 'panel', ' data-k="people"') : '');
-      return h;
+      return h + (foot ? '<div class="foot">' + foot + '</div>' : '');
     },
     people() {
       let h = head('SURVIVORS', S.people.length + ' of ' + E.beds(S) + ' beds · night ' + S.night);
@@ -167,7 +168,7 @@
       h += btn('REVIVE · ' + num(pr.sup) + ' SUPPLIES', 'revive', id + ' data-pay="sup"', 'main' + (noS ? ' off' : ''), noS ? 'Need ' + num(pr.sup - S.res.sup) + ' more' : 'Then rests ' + dur(R.recoverMs * pn.lv));
       h += btn('REVIVE NOW · ' + pr.fuel + ' FUEL', 'revive', id + ' data-pay="fuel"', 'fuel' + (noF ? ' off' : ''), noF ? 'Need ' + (pr.fuel - S.res.fuel) + ' more' : 'Ready at once');
       h += btn('SAY GOODBYE', 'bye', id, 'danger');
-      return h + '<p class="note">' + esc(pn.name) + ' waits at the hall until you decide.' + (p.fresh ? ' ' + btnLink('Decide later') : '') + '</p>';
+      return h + '<p class="note">' + esc(pn.name) + ' waits at the hall until you decide.</p>' + (p.fresh ? btn('DECIDE LATER', 'close') : '');
     },
     bye(p) {
       const pn = E.person(S, p.pid); if (!pn || pn.state !== 'down') return null;
@@ -205,6 +206,7 @@
       const sp = S.lab.speed || 1, f = S.lab.force;
       const opt = (label, doName, k, on) => '<button class="btn' + (on ? ' main' : '') + '" data-do="' + doName + '" data-k="' + k + '"><span>' + label + '</span></button>';
       let h = head('LAB', 'Prototype tools. Nothing here is part of the game.');
+      if (S.run) h += '<div class="row"><b>Run in progress</b><span class="r muted">what the real game would report</span></div><div class="btns">' + opt('REPORT WIN', 'report', 'win') + opt('REPORT LOSS', 'report', 'loss') + '</div>';
       h += '<div class="row"><b>Time</b></div><div class="btns">' + opt('×1', 'speed', 1, sp === 1) + opt('×10', 'speed', 10, sp === 10) + opt('×60', 'speed', 60, sp === 60) + '</div>';
       h += '<div class="btns">' + opt('+200 SUPPLIES', 'grant', 'sup') + opt('+20 FUEL', 'grant', 'fuel') + '</div>';
       h += '<div class="row"><b>Next run</b></div><div class="btns">' + opt('AUTO', 'force', '', !f) + opt('WIN', 'force', 'win', f === 'win') + opt('HURT', 'force', 'hurt', f === 'hurt') + opt('DOWN', 'force', 'down', f === 'down') + '</div>';
@@ -217,7 +219,6 @@
       return head('THE TOWN IS YOURS', 'Night ' + S.night + ' · ' + S.people.length + ' survivors · ' + S.graves.length + ' remembered', true) + '<p class="note" style="margin-top:0">The bridge is open and every block has lights. That is the whole prototype. The Lab can reset it.</p>' + btn('OK', 'close', '', 'main');
     },
   };
-  const btnLink = (label) => '<button data-do="close" style="text-decoration:underline;color:inherit;font:inherit">' + label + '</button>';
   function live() {                                  // the numbers that change while a panel is open
     if (!panel) return;
     for (const el of $('panel').querySelectorAll('[data-live]')) {
@@ -245,7 +246,7 @@
   }
   function layout() {
     const el = $('panel'), w = wide();
-    Sc.setInsets({ t: 60, b: panel && !w ? Math.min(root.innerHeight * 0.66, el.offsetHeight + 16) : 74, l: 0, r: panel && w ? 334 : 0 });
+    Sc.setInsets({ t: 60, b: panel && !w ? Math.min(root.innerHeight * 0.66, el.offsetHeight + 16) : 74, l: 0, r: panel && w ? el.offsetWidth + 16 : 0 });
   }
   function openBlock(b, focus) {
     if (focus !== false) Sc.focus(b);
@@ -289,7 +290,7 @@
     const m = mainState(), ex = $('expand'), txt = m.big + '|' + m.small + '|' + m.cls + '|' + (m.pulse ? 1 : 0);
     if (shown.ex !== txt) { shown.ex = txt; ex.className = m.cls + (m.pulse ? ' pulse' : ''); ex.innerHTML = esc(m.big) + '<small>' + esc(m.small) + '</small>'; }
     const bn = $('banner');
-    if (S.horde) { bn.textContent = 'HORDE AT THE WALL · ' + S.horde.left + ' LEFT · ' + clock(S.horde.t1 - S.t); bn.classList.add('on'); } else bn.classList.remove('on');
+    if (S.horde) { bn.textContent = 'HORDE · TAP THEM ALL · ' + S.horde.left + ' LEFT · ' + clock(S.horde.t1 - S.t); bn.classList.add('on'); } else bn.classList.remove('on');
     $('sndOn').style.display = Sfx.isOn() ? '' : 'none';
     live();
   }
@@ -311,7 +312,7 @@
     go() {
       const b = S.blocks[panel.bid], r = act({ type: 'go', bid: panel.bid, pid: panel.pid });
       if (!r.ok) { need(r, 'go'); return; }
-      lastHandoff = S.run.handoff; Sc.runStart(S.run); close(); Sc.focus(b, 1.3); Sfx.play('door');
+      lastHandoff = S.run.handoff; Sc.runStart(S.run); close(); Sc.focus(b, 1.4, true); Sfx.play('door');
     },
     build(el) { const b = S.blocks[+el.getAttribute('data-id')], r = act({ type: 'build', bid: b.id }); if (!r.ok) { need(r); return; } Sfx.play('build'); if (panel && panel.kind === 'result') close(); else render(); },
     skipJob(el) { const r = act({ type: 'skip', kind: 'job', bid: +el.getAttribute('data-id') }); if (!r.ok) need(r); else guard = performance.now() + 380; },
@@ -327,8 +328,9 @@
     speed(el) { act({ type: 'lab', op: 'speed', v: +el.getAttribute('data-k') }); },
     grant(el) { const k = el.getAttribute('data-k'); act({ type: 'lab', op: k, n: k === 'sup' ? 200 : 20 }); pop(k === 'sup' ? 'cSup' : 'cFuel'); },
     force(el) { act({ type: 'lab', op: 'force', v: el.getAttribute('data-k') || null }); },
+    report(el) { if (S.run) { act({ type: 'lab', op: 'result', win: el.getAttribute('data-k') === 'win', down: false }); close(); } },
     hordeNow() { if (!S.horde && !S.run) { S.hordeAt = S.t; close(); } else toast('Not during a run or another horde.', 'bad'); },
-    reset() { if (resetArmed > performance.now()) { store.del(KEY); location.hash = ''; location.reload(); } else { resetArmed = performance.now() + 3000; render(); setTimeout(() => { if (panel && panel.kind === 'lab') render(); }, 3100); } },
+    reset() { if (resetArmed > performance.now()) { wiped = true; store.del(KEY); if (DEMO) location.hash = ''; else location.reload(); } else { resetArmed = performance.now() + 3000; render(); setTimeout(() => { if (panel && panel.kind === 'lab') render(); }, 3100); } },
   };
   function onClick(e) {
     const el = e.target.closest('[data-do]'); if (!el) return;
@@ -354,6 +356,7 @@
       else { Sfx.play('deny'); pop('cAmmo'); if (performance.now() - denyAt > 2500) { denyAt = performance.now(); toast('Out of ammo. One shot comes back every ' + R.ammoMs / 1000 + ' s.', 'bad'); } }
       return;
     }
+    if (hit.kind === 'far') { if (performance.now() - denyAt > 2500) { denyAt = performance.now(); toast('Too far. Shots only reach walkers near your wall.'); } return; }
     if (panel && panel.modal) return;
     if (hit.kind === 'person') { open({ kind: E.person(S, hit.id) && E.person(S, hit.id).state === 'down' ? 'offer' : 'person', pid: hit.id }); return; }
     if (hit.kind === 'grave') { open({ kind: 'grave', gid: hit.id }); return; }
@@ -391,12 +394,14 @@
     const q = new URLSearchParams(location.search), seed = q.get('seed') != null && isFinite(+q.get('seed')) ? +q.get('seed') >>> 0 : (Math.random() * 4294967296) >>> 0;
     if (DEMO) S = E.demo(20261111, Date.now()); else if (loaded) S = loaded.s; else { if (raw) store.set(KEY + '.bad', raw); S = E.create(seed, Date.now()); }
     if (S.ui && S.ui.sound === false) Sfx.setOn(false);
-    root.HH.UI = { get state() { return S; }, act, open, close, get panel() { return panel; }, mainState, save };
+    // for check.cjs and the console: advance(ms) moves the game clock and shows what happened, as a frame would
+    root.HH.UI = { get state() { return S; }, act, open, close, get panel() { return panel; }, mainState, save, advance: (ms) => handle(E.tick(S, ms)) };
     Sc.setState(S); Sc.onTap = onTap; Sc.onHold = (down) => { Sfx.unlock(); if (Intro.active) Intro.hold(down); }; Sc.onShot = () => Sfx.play('shot');
     lastReal = Date.now(); layout();
     document.addEventListener('click', onClick);
     root.addEventListener('resize', () => { Sc.resize(); layout(); if (!Intro.active) Sc.fit(false); });
     document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+    root.addEventListener('hashchange', () => { save(); location.reload(); });      // #demo added or removed by hand
     root.addEventListener('pagehide', save);
     if (!S.intro) startIntro();
     else {

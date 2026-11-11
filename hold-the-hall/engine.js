@@ -341,6 +341,7 @@
     hall(s).lv = 2; s.night = 14; s.res.sup = 380; s.res.fuel = 12; s.goal = 7; s.stats.kills = 41;
     for (let i = 0; i < 3; i++) addPerson(s, 2 + i);
     s.people[0].lv = 4; s.people[1].lv = 3; s.people[2].lv = 3;
+    s.people.forEach((p, i) => { p.runs = [6, 4, 3, 1, 0, 0][i] || 0; p.wins = [5, 3, 2, 1, 0, 0][i] || 0; });
     s.people[1].state = 'rest'; s.people[1].until = s.t + 95000;
     const lost = s.people.pop();
     s.graves.push({ id: 'g' + (++s.ids), name: lost.name, lv: 3, trait: lost.trait, look: lost.look, where: s.blocks[6].name, night: 11, runs: 7, wins: 5 });

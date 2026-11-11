@@ -131,13 +131,19 @@
     for (let k = 0; k < 40; k++) { const u = (Math.random() * WORLD) | 0, side = (Math.random() * 4) | 0, tx = side === 0 ? 0 : side === 1 ? WORLD - 1 : u, ty = side === 2 ? 0 : side === 3 ? WORLD - 1 : u; if (streetOk(tx, ty) && distOwn(tx + 0.5, ty + 0.5) > 3) return [tx, ty]; }
     return null;
   }
-  function killZ(z, quiet) { if (z.st === 'dead') return; z.st = 'dead'; z.fall = 0.01; z.path = null; if (!quiet) burst(z.x, z.y, 14, '#b9c7a8', 5); }
+  const respawn = [];                                // yards that lost a walker to the wall fill up again
+  function killZ(z, quiet) {
+    if (z.st === 'dead') return;
+    if (z.kind === 'yard' && !S.blocks[z.lot].owned) respawn.push({ lot: z.lot, at: T + rand(16, 34) });
+    z.st = 'dead'; z.fall = 0.01; z.path = null; if (!quiet) burst(z.x, z.y, 14, '#b9c7a8', 5);
+  }
   function stepWalkers(dt) {
     let bangers = 0, street = 0;
     for (const z of zs) { if (z.st === 'bang' || z.bang) bangers++; if (z.kind === 'street' && z.st !== 'dead') street++; }
     for (let i = zs.length - 1; i >= 0; i--) {
       const z = zs[i]; z.t += dt; if (z.hit > 0) z.hit -= dt * 7;
       if (z.st === 'dead') { z.fall += dt / 0.5; if (z.fall >= 1) zs.splice(i, 1); continue; }
+      if (z.st === 'rise') { z.fall -= dt / 0.9; if (z.fall <= 0) { z.fall = 0; z.st = 'idle'; } continue; }   // getting up off the ground
       if (z.kind === 'yard') {
         const b = S.blocks[z.lot]; if (b.owned) { killZ(z); continue; }
         if (z.pull) { const dx = z.pull[0] - z.x, dy = z.pull[1] - z.y, d = Math.hypot(dx, dy); if (d > 0.25) { z.x += dx / d * 0.7 * dt; z.y += dy / d * 0.7 * dt; z.face = dx - dy >= 0 ? 1 : -1; z.walk = true; } continue; }
@@ -178,8 +184,13 @@
       z.x += dx / d * sp * dt; z.y += dy / d * sp * dt; z.walk = true; z.face = dx - dy >= 0 ? 1 : -1;
     }
     if (!api.intro && street < 24 && Math.random() < dt * 0.5) { const e0 = edgeTile(); if (e0) spawnZ({ x: e0[0] + 0.5, y: e0[1] + 0.5 }); }
+    for (let i = respawn.length - 1; i >= 0; i--) if (T >= respawn[i].at) {
+      const b = S.blocks[respawn[i].lot]; respawn.splice(i, 1);
+      if (!b.owned) { const u = rand(0.2, 6), q = yardPt(b, u); spawnZ({ kind: 'yard', lot: b.id, u, x: q[0], y: q[1], sp: rand(0.12, 0.22), st: 'rise', fall: 1 }); }
+    }
   }
-  const shootable = (z) => z.st !== 'dead' && (z.kind === 'intro' || z.kind === 'horde' || (z.kind === 'street' && distOwn(z.x, z.y) <= RANGE));
+  // what a tap can hit: the story's walkers, a horde anywhere, and any walker close enough to our wall
+  const shootable = (z) => z.st !== 'dead' && (z.kind === 'intro' || z.kind === 'horde' || ((z.kind === 'street' || z.kind === 'yard') && distOwn(z.x, z.y) <= RANGE));
 
   // ---------------------------------------------------------------- survivors
   function homeLots() { const out = S.blocks.filter((b) => b.owned && b.type !== 'bridge'); out.sort((a, b) => (a.type === 'hall' ? -1 : b.type === 'hall' ? 1 : a.id - b.id)); return out; }
@@ -280,7 +291,7 @@
     const bx = boxOf(mine.length ? mine : [E.hall(S)], 170, 62);          // ours, and the near side of each block beside it
     view(bx[0], bx[1], bx[2], bx[3], snap, 1.5, 0.5);
   }
-  function focus(b, zmax) { const bx = boxOf([b].concat(E.neighbours(S, b).filter((n) => n.owned)), 40); view(bx[0], bx[1], bx[2], bx[3], false, zmax || 1.25); }
+  function focus(b, zmax, alone) { const bx = boxOf(alone ? [b] : [b].concat(E.neighbours(S, b).filter((n) => n.owned)), alone ? 48 : 40); view(bx[0], bx[1], bx[2], bx[3], false, zmax || 1.25); }
 
   // ---------------------------------------------------------------- input: tap, drag, pinch, wheel
   const ptr = new Map(); let gest = null;
@@ -317,6 +328,9 @@
     bd = 30 / cam.z;
     for (const z of zs) { if (!shootable(z)) continue; const q = P(z.x, z.y, 13 * z.s), d = Math.hypot(q[0] - w[0], q[1] - w[1]) - (z.s > 1.5 ? 14 : 0); if (d < bd) { bd = d; best = z; } }
     if (best) return { kind: 'zombie', z: best };
+    bd = 20 / cam.z;                                  // a walker on the street, but too far from the wall to hit
+    for (const z of zs) { if (z.kind !== 'street' || z.st === 'dead') continue; const q = P(z.x, z.y, 13), d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d < bd) { bd = d; best = z; } }
+    if (best) return { kind: 'far', z: best };
     bd = 24 / cam.z;
     for (const f of figs.values()) { const q = P(f.x, f.y, 13), d = Math.hypot(q[0] - w[0], q[1] - w[1]); if (d < bd) { bd = d; best = f; } }
     if (best) return { kind: 'person', id: best.id };
@@ -379,6 +393,7 @@
       L.push([x, y, 85, 0.6, 0]);
     }
     if (fight) L.push([fight.x, fight.y, 105, 0.85, 0]);
+    for (const z of zs) if (z.kind === 'horde' && z.st !== 'dead') L.push([z.x, z.y, 54, 0.7, 2]);
     for (const f of flashes) L.push([f.x, f.y, 110 * (1 - f.t / 0.12), 0.9, 0]);
     return L;
   }
@@ -392,7 +407,7 @@
       if (l[2] <= 1) continue;
       const a = P(l[0], l[1], 0), r = l[2];
       lg.save(); lg.translate(a[0], a[1]); lg.scale(1, 0.6);
-      const gr = lg.createRadialGradient(0, 0, 0, 0, 0, r), c = l[4] ? '150,175,235' : '255,236,200';
+      const gr = lg.createRadialGradient(0, 0, 0, 0, 0, r), c = l[4] === 2 ? '255,130,104' : l[4] ? '150,175,235' : '255,236,200';
       gr.addColorStop(0, 'rgba(' + c + ',' + l[3] + ')'); gr.addColorStop(0.55, 'rgba(' + c + ',' + l[3] * 0.8 + ')'); gr.addColorStop(1, 'rgba(' + c + ',0)');
       lg.fillStyle = gr; lg.fillRect(-r, -r, r * 2, r * 2); lg.restore();
     }
@@ -456,6 +471,10 @@
       g.fillStyle = '#e5484d'; g.beginPath(); g.arc(s[0], y - 10, 13, 0, TAU); g.fill(); g.fillStyle = '#fff'; g.fillRect(s[0] - 2, y - 17, 4, 14); g.fillRect(s[0] - 7, y - 12, 14, 4);
       hits.push({ what: 'down', id: f.id, x: s[0], y: y - 10, r: 24 });
     }
+    for (const z of zs) if (z.kind === 'horde' && z.st !== 'dead') {                 // a horde walker: a red arrow that keeps its size at any zoom
+      const a = P(z.x, z.y, 31 * z.s), s = toScreen(a[0], a[1]), y = s[1] - 7 + (reduced ? 0 : Math.sin(T * 8 + z.seed) * 3);
+      for (let k = 0; k < 2; k++) { g.fillStyle = k ? '#ff5a4a' : 'rgba(0,0,0,.45)'; const o = k ? 0 : 1.5; g.beginPath(); g.moveTo(s[0] - 7, y - 7 + o); g.lineTo(s[0] + 7, y - 7 + o); g.lineTo(s[0], y + 3 + o); g.fill(); }
+    }
   }
   function bestOdds(b) { let best = null; for (const p of S.people) if (p.state === 'ok') { const w = E.odds(S, p, b).win; if (best == null || w > best) best = w; } return best; }
   const clock = (ms) => { const s = Math.ceil(ms / 1000), m = Math.floor(s / 60); return m >= 60 ? Math.floor(m / 60) + 'h ' + (m % 60) + 'm' : m + ':' + (s % 60 < 10 ? '0' : '') + (s % 60); };
@@ -491,7 +510,16 @@
     for (const b of S.blocks) list.push({ key: lot(b.bx) + lot(b.by) + 3.5, f: () => drawBlock(b) });
     for (const p of props) list.push({ key: p.x + p.y, f: () => drawProp(p) });
     for (const w of walls) list.push({ key: w.key, f: () => A.wall(g, w.x0, w.y0, w.x1, w.y1, 21 * bornK(w.bid), w.kind, em, T, w.seed) });
-    for (const z of zs) list.push({ key: z.x + z.y, f: () => { const q = P(z.x, z.y, 0); A.zombie(g, q[0], q[1], z); } });
+    const loaded = E.ammo(S) >= 1;
+    for (const z of zs) list.push({ key: z.x + z.y, f: () => {
+      const q = P(z.x, z.y, 0), horde = z.kind === 'horde';
+      if (z.st !== 'dead' && (horde || (!I && shootable(z)))) {                      // a ring at the feet: this one can be tapped
+        const k = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(T * (horde ? 9 : 4) + z.seed);
+        g.strokeStyle = horde ? 'rgba(255,80,60,' + (0.55 + 0.4 * k) + ')' : loaded ? 'rgba(255,176,90,' + (0.3 + 0.3 * k) + ')' : 'rgba(170,176,188,.3)';
+        g.lineWidth = horde ? 2.2 : 1.4; g.beginPath(); g.ellipse(q[0], q[1], (horde ? 12 : 9.5) + k * 1.5, (horde ? 6 : 4.8) + k * 0.8, 0, 0, TAU); g.stroke();
+      }
+      A.zombie(g, q[0], q[1], z);
+    } });
     if (I) for (const f of I.group) list.push({ key: f.x + f.y, f: () => { const q = P(f.x, f.y, 0); A.person(g, q[0], q[1], f); } });
     else for (const f of figs.values()) list.push({ key: f.x + f.y, f: () => { const q = P(f.x, f.y, 0); A.person(g, q[0], q[1], f); } });
     if (I && I.extra) for (const x of I.extra) list.push(x);
@@ -503,7 +531,7 @@
     drawLight(lights());
     tf(); g.globalCompositeOperation = 'lighter';
     for (const e2 of em) A.glow(g, e2, T);
-    for (const z of zs) if (z.st !== 'dead' && !z.hit) { const q = P(z.x, z.y, 24.6 * z.s); g.fillStyle = 'rgba(214,255,150,.85)'; g.fillRect(q[0] + (z.face > 0 ? 1.2 : -3.6) * z.s, q[1] - 0.6, 1.3 * z.s, 1.3 * z.s); g.fillRect(q[0] + (z.face > 0 ? 3.6 : -1.4) * z.s, q[1] - 0.2, 1.3 * z.s, 1.3 * z.s); }
+    for (const z of zs) if (z.st !== 'dead' && z.st !== 'rise' && !z.hit) { const q = P(z.x, z.y, 24.6 * z.s); g.fillStyle = z.kind === 'horde' ? 'rgba(255,96,70,.95)' : 'rgba(214,255,150,.85)'; g.fillRect(q[0] + (z.face > 0 ? 1.2 : -3.6) * z.s, q[1] - 0.6, 1.3 * z.s, 1.3 * z.s); g.fillRect(q[0] + (z.face > 0 ? 3.6 : -1.4) * z.s, q[1] - 0.2, 1.3 * z.s, 1.3 * z.s); }
     for (const t of tracers) { g.strokeStyle = 'rgba(255,240,190,' + (1 - t.t / 0.09) + ')'; g.lineWidth = 1.6; g.beginPath(); g.moveTo(t.a[0], t.a[1]); g.lineTo(t.b[0], t.b[1]); g.stroke(); }
     g.globalCompositeOperation = 'source-over';
     const sp = soft();
@@ -535,7 +563,7 @@
   }
   function setState(s) {
     S = s;
-    if (seedKey !== s.seed + ':' + (s.demo ? 'd' : '')) { seedKey = s.seed + ':' + (s.demo ? 'd' : ''); buildProps(); for (const k in born) delete born[k]; figs.clear(); fight = null; rebuildTerritory(); seedWalkers(); groundKey = ''; frame.key = ownedKey(); }
+    if (seedKey !== s.seed + ':' + (s.demo ? 'd' : '')) { seedKey = s.seed + ':' + (s.demo ? 'd' : ''); buildProps(); for (const k in born) delete born[k]; figs.clear(); fight = null; respawn.length = 0; rebuildTerritory(); seedWalkers(); groundKey = ''; frame.key = ownedKey(); }
   }
   function init(canvas) {
     cv = canvas; g = cv.getContext('2d');
@@ -544,7 +572,7 @@
     bind(); resize();
   }
   function horde(n) {                                  // a horde runs in from the edge of town
-    for (let i = 0; i < n; i++) { const e0 = edgeTile(); if (e0) spawnZ({ kind: 'horde', x: e0[0] + 0.5, y: e0[1] + 0.5, st: 'idle', wait: i * 0.25 }); }
+    for (let i = 0; i < n; i++) { const e0 = edgeTile(); if (e0) spawnZ({ kind: 'horde', x: e0[0] + 0.5, y: e0[1] + 0.5, st: 'idle', wait: i * 0.25, s: 1.2 }); }
   }
   function hordeOver(won) { for (const z of zs) if (z.kind === 'horde') { if (won) killZ(z); else { z.kind = 'street'; z.st = 'idle'; z.wait = rand(0.5, 3); z.bang = false; } } }
 
