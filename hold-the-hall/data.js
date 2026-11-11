@@ -72,7 +72,7 @@
     { k: 'built', n: 2, text: 'Restore two buildings.', sup: 30 },
     { k: 'blocks', n: 5, text: 'Hold 5 blocks.', fuel: 2 },
     { k: 'hall', n: 2, text: 'Upgrade the Town Hall to reach further.', sup: 60 },
-    { k: 'blocks', n: 9, text: 'Take every block around the hall.', fuel: 3 },
+    { k: 'blocks', n: 9, text: 'Hold 9 blocks.', fuel: 3 },
     { k: 'people', n: 6, text: 'Shelter 6 survivors.', sup: 80 },
     { k: 'blocks', n: 15, text: 'Hold 15 blocks.', fuel: 3 },
     { k: 'hall', n: 3, text: 'Upgrade the Town Hall to level 3.', sup: 150 },

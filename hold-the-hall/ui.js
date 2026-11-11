@@ -55,8 +55,9 @@
         const b = S.blocks[e.bid];
         Sc.runEnd(e); Sfx.play(e.win ? 'win' : 'lose'); pop('cSup');
         if (e.taken) { Sc.taken(b); Sfx.play('bell'); Sc.float(Sc.lot(b.bx) + 2, Sc.lot(b.by) + 2, 60, b.type === 'bridge' ? 'THE ROAD IS OPEN' : 'OURS!', '#ffd27a'); } else Sc.fit(false);
-        const p = e.down ? { kind: 'offer', pid: e.pid, modal: true, fresh: true } : { kind: 'result', res: e, modal: true };
-        setTimeout(() => show(p), e.taken ? 900 : 500);
+        const p = e.down ? { kind: 'offer', pid: e.pid, modal: true, fresh: true } : { kind: 'result', res: e, modal: true }, wait = e.taken ? 900 : 500;
+        guard = Math.max(guard, performance.now() + wait + 150);          // the card is on its way: no other panel in between
+        setTimeout(() => show(p), wait);
       } else if (e.type === 'built') {
         const b = S.blocks[e.bid]; Sfx.play('build'); Sc.float(Sc.lot(b.bx) + 2, Sc.lot(b.by) + 2, 50, e.lv === 1 ? 'RESTORED' : 'LEVEL ' + e.lv, '#9dffb0'); Sc.burst(Sc.lot(b.bx) + 2, Sc.lot(b.by) + 2, 30, '#ffd27a', 14);
       } else if (e.type === 'newcomer') { Sfx.play('level'); show({ kind: 'newcomer', pid: e.pid, modal: true }); }
@@ -111,6 +112,7 @@
       if (why === 'hall') return h + '<p class="note">Out of reach. Needs Town Hall level ' + E.needHall(b) + '.</p>' + btn('TOWN HALL', 'block', ' data-id="12"');
       const mul = (1 + D.TYPES.workshop.loot * E.sumLv(S, 'workshop')) * (sel ? 1 + (D.TRAITS[sel.trait].loot || 0) : 1);
       h += row('Brings home', '~' + Math.round((R.loot0 + R.lootT * b.threat) * mul) + ' supplies' + (b.hp === 1 ? '<br><small class="muted">+' + (R.bonus0 + R.bonusT * b.threat) + ' and ' + (b.type === 'bridge' ? 5 : b.ring) + ' fuel for the block</small>' : ''));
+      if (sel) { const ho = E.handoff(S, sel, b, S.night + 1, 0), gun = { pistol: 'Pistol', smg: 'SMG', shotgun: 'Shotgun', rifle: 'Rifle' }[ho.startRoom.primary] || ho.startRoom.primary; h += row('Goes out with', gun + (ho.startRoom.medkit ? ' · medkit' : '') + ' · ' + ho.player.maxHp + ' HP'); }
       h += '<div class="cards">';
       const order = S.people.slice().sort((x, y) => (y.state === 'ok') - (x.state === 'ok') || E.power(S, y) - E.power(S, x));
       for (const pn of order) {
@@ -182,7 +184,7 @@
     result(p) {
       const r = p.res, b = S.blocks[r.bid], pn = E.person(S, r.pid), nm = pn ? esc(pn.name) : 'Someone', id = ' data-id="' + b.id + '"';
       let h;
-      if (r.win && r.taken) h = head(esc(b.name) + (b.type === 'bridge' ? ' IS OPEN' : ' IS OURS'), 'Night ' + r.night + ' · ' + nm + ' cleared the last nest', true);
+      if (r.win && r.taken) h = head(b.type === 'bridge' ? 'THE BRIDGE IS OPEN' : 'WE HOLD ' + esc(theN(b.name)), 'Night ' + r.night + ' · ' + nm + ' cleared the last nest', true);
       else if (r.win) h = head('PUSHED BACK', nm + ' cleared a nest at ' + esc(theN(b.name)) + ' · ' + r.hpLeft + ' left', true);
       else h = head('CARRIED HOME', nm + ' was overrun at ' + esc(theN(b.name)), true);
       h += row('Supplies', '+' + num(r.sup + r.bonus) + (r.bonus ? ' <span class="muted">(' + r.bonus + ' for the block)</span>' : ''), 'good');
@@ -206,13 +208,15 @@
       const sp = S.lab.speed || 1, f = S.lab.force;
       const opt = (label, doName, k, on) => '<button class="btn' + (on ? ' main' : '') + '" data-do="' + doName + '" data-k="' + k + '"><span>' + label + '</span></button>';
       let h = head('LAB', 'Prototype tools. Nothing here is part of the game.');
-      if (S.run) h += '<div class="row"><b>Run in progress</b><span class="r muted">what the real game would report</span></div><div class="btns">' + opt('REPORT WIN', 'report', 'win') + opt('REPORT LOSS', 'report', 'loss') + '</div>';
-      h += '<div class="row"><b>Time</b></div><div class="btns">' + opt('×1', 'speed', 1, sp === 1) + opt('×10', 'speed', 10, sp === 10) + opt('×60', 'speed', 60, sp === 60) + '</div>';
-      h += '<div class="btns">' + opt('+200 SUPPLIES', 'grant', 'sup') + opt('+20 FUEL', 'grant', 'fuel') + '</div>';
-      h += '<div class="row"><b>Next run</b></div><div class="btns">' + opt('AUTO', 'force', '', !f) + opt('WIN', 'force', 'win', f === 'win') + opt('HURT', 'force', 'hurt', f === 'hurt') + opt('DOWN', 'force', 'down', f === 'down') + '</div>';
-      h += '<div class="btns">' + opt('SOUND ' + (Sfx.isOn() ? 'ON' : 'OFF'), 'sound', '') + opt('HORDE NOW', 'hordeNow', '') + '</div>';
+      if (S.run) h += '<div class="row"><b>Run in progress</b><span class="r muted">what the real game would report</span></div><div class="btns wrap">' + opt('REPORT WIN', 'report', 'win') + opt('REPORT LOSS', 'report', 'loss') + '</div>';
+      h += '<div class="row"><b>Time</b></div><div class="btns wrap">' + opt('×1', 'speed', 1, sp === 1) + opt('×10', 'speed', 10, sp === 10) + opt('×60', 'speed', 60, sp === 60) + '</div>';
+      h += '<div class="btns wrap">' + opt('+200 SUPPLIES', 'grant', 'sup') + opt('+20 FUEL', 'grant', 'fuel') + '</div>';
+      h += '<div class="row"><b>Next run</b></div><div class="btns wrap">' + opt('AUTO', 'force', '', !f) + opt('WIN', 'force', 'win', f === 'win') + opt('HURT', 'force', 'hurt', f === 'hurt') + opt('DOWN', 'force', 'down', f === 'down') + '</div>';
+      h += '<div class="btns wrap">' + opt('SOUND ' + (Sfx.isOn() ? 'ON' : 'OFF'), 'sound', '') + opt('HORDE NOW', 'hordeNow', '') + '</div>';
       h += row('Nights', S.night) + row('Runs won / lost', S.stats.wins + ' / ' + S.stats.losses) + row('Walkers shot', S.stats.kills) + row('Down · revived · graves', S.stats.downs + ' · ' + S.stats.revives + ' · ' + S.graves.length);
-      if (lastHandoff) h += '<div class="row"><b>Last handoff to Two Thumbs Left</b></div><pre class="json">' + esc(JSON.stringify(lastHandoff, null, 1)) + '</pre>';
+      const ho = (S.run && S.run.handoff) || lastHandoff;
+      if (ho) h += '<div class="row"><b>Last handoff to Two Thumbs Left</b></div><pre class="json">' + esc(JSON.stringify(ho, null, 1)) + '</pre>';
+      if (DEMO) return h + btn('LEAVE THE DEMO', 'reset', '', '', 'Back to your own town. The demo is never saved.');
       return h + btn(resetArmed > performance.now() ? 'TAP AGAIN TO RESET' : 'RESET SAVE', 'reset', '', 'danger', 'Starts over from the opening');
     },
     win() {
@@ -238,18 +242,27 @@
     const el = $('panel'), top = el.scrollTop;
     el.innerHTML = html; el.hidden = false; el.scrollTop = top; $('hud').classList.add('panel-open'); live(); layout();
   }
-  function open(p) { panel = p; guard = performance.now() + 380; $('panel').scrollTop = 0; render(); Sfx.play('tap'); }
+  // A panel about a block aims the camera at it once the panel is up, so the block lands in the clear part of the
+  // screen. `home` is where the camera goes back to when that panel closes: the overview, or a spot the player chose.
+  let home = null;
+  const aimAt = (p) => (p.kind === 'block' || p.kind === 'target' ? p.bid : p.kind === 'result' ? p.res.bid : null);
+  function aim() {
+    const bid = panel ? aimAt(panel) : null; if (bid == null) return;
+    if (!home) home = Sc.cam.by === 'user' ? { x: Sc.cam.tx, y: Sc.cam.ty, z: Sc.cam.tz } : 'fit';
+    Sc.focus(S.blocks[bid]);
+  }
+  function open(p) { panel = p; guard = performance.now() + 380; $('panel').scrollTop = 0; render(); if (panel === p) aim(); Sfx.play('tap'); }
   function show(p) { if (Intro.active) { queue.push(p); return; } if (panel && panel.modal) queue.push(p); else open(p); }   // modal panels wait their turn
   function close() {
     panel = null; $('panel').hidden = true; $('hud').classList.remove('panel-open'); guard = performance.now() + 380; layout();
-    if (queue.length) open(queue.shift());
+    if (queue.length) { open(queue.shift()); return; }
+    if (home) { if (Sc.cam.by !== 'user') { if (home === 'fit') Sc.fit(false); else { Sc.cam.tx = home.x; Sc.cam.ty = home.y; Sc.cam.tz = home.z; } } home = null; }
   }
   function layout() {
     const el = $('panel'), w = wide();
     Sc.setInsets({ t: 60, b: panel && !w ? Math.min(root.innerHeight * 0.66, el.offsetHeight + 16) : 74, l: 0, r: panel && w ? el.offsetWidth + 16 : 0 });
   }
-  function openBlock(b, focus) {
-    if (focus !== false) Sc.focus(b);
+  function openBlock(b) {
     if (b.owned) open({ kind: 'block', bid: b.id });
     else { const s = bestReady(b); open({ kind: 'target', bid: b.id, pid: s ? s.id : null }); }
   }
@@ -290,7 +303,7 @@
     const m = mainState(), ex = $('expand'), txt = m.big + '|' + m.small + '|' + m.cls + '|' + (m.pulse ? 1 : 0);
     if (shown.ex !== txt) { shown.ex = txt; ex.className = m.cls + (m.pulse ? ' pulse' : ''); ex.innerHTML = esc(m.big) + '<small>' + esc(m.small) + '</small>'; }
     const bn = $('banner');
-    if (S.horde) { bn.textContent = 'HORDE · TAP THEM ALL · ' + S.horde.left + ' LEFT · ' + clock(S.horde.t1 - S.t); bn.classList.add('on'); } else bn.classList.remove('on');
+    if (S.horde) { bn.textContent = (panel ? 'HORDE · ' : 'HORDE · TAP THEM ALL · ') + S.horde.left + ' LEFT · ' + clock(S.horde.t1 - S.t); bn.classList.add('on'); } else bn.classList.remove('on');
     $('sndOn').style.display = Sfx.isOn() ? '' : 'none';
     live();
   }
@@ -321,20 +334,20 @@
     person(el) { open({ kind: 'person', pid: el.getAttribute('data-id') }); },
     grave(el) { open({ kind: 'grave', gid: el.getAttribute('data-id') }); },
     offer(el) { open({ kind: 'offer', pid: el.getAttribute('data-id') }); },
-    revive(el) { const r = act({ type: 'revive', pid: el.getAttribute('data-id'), pay: el.getAttribute('data-pay') }); if (!r.ok) need(r); else close(); },
+    revive(el) { const mine = panel, r = act({ type: 'revive', pid: el.getAttribute('data-id'), pay: el.getAttribute('data-pay') }); if (!r.ok) need(r); else if (panel === mine) close(); },   // (the offer may have closed itself already and let the next card in)
     bye(el) { open({ kind: 'bye', pid: el.getAttribute('data-id'), modal: true }); },
-    bye2(el) { const r = act({ type: 'goodbye', pid: el.getAttribute('data-id') }); if (r.ok) close(); },
+    bye2(el) { const mine = panel, r = act({ type: 'goodbye', pid: el.getAttribute('data-id') }); if (r.ok && panel === mine) close(); },
     pack() { act({ type: 'pack' }); },
     speed(el) { act({ type: 'lab', op: 'speed', v: +el.getAttribute('data-k') }); },
     grant(el) { const k = el.getAttribute('data-k'); act({ type: 'lab', op: k, n: k === 'sup' ? 200 : 20 }); pop(k === 'sup' ? 'cSup' : 'cFuel'); },
     force(el) { act({ type: 'lab', op: 'force', v: el.getAttribute('data-k') || null }); },
     report(el) { if (S.run) { act({ type: 'lab', op: 'result', win: el.getAttribute('data-k') === 'win', down: false }); close(); } },
     hordeNow() { if (!S.horde && !S.run) { S.hordeAt = S.t; close(); } else toast('Not during a run or another horde.', 'bad'); },
-    reset() { if (resetArmed > performance.now()) { wiped = true; store.del(KEY); if (DEMO) location.hash = ''; else location.reload(); } else { resetArmed = performance.now() + 3000; render(); setTimeout(() => { if (panel && panel.kind === 'lab') render(); }, 3100); } },
+    reset() { if (DEMO) { location.hash = ''; return; } if (resetArmed > performance.now()) { wiped = true; store.del(KEY); location.reload(); } else { resetArmed = performance.now() + 3000; render(); setTimeout(() => { if (panel && panel.kind === 'lab') render(); }, 3100); } },
   };
   function onClick(e) {
-    const el = e.target.closest('[data-do]'); if (!el) return;
     Sfx.unlock();
+    const el = e.target.closest('[data-do]'); if (!el) return;
     if (performance.now() < guard) return;            // a second tap right after a screen change is not a choice
     const f = DO[el.getAttribute('data-do')]; if (f) f(el);
   }
@@ -346,6 +359,7 @@
     if (hit.kind === 'marker') {
       if (hit.what === 'collect') { const b = S.blocks[hit.id], r = act({ type: 'collect', bid: hit.id }); if (r.ok) Sc.float(Sc.lot(b.bx) + 2, Sc.lot(b.by) + 2, 50, '+' + r.data.n + (r.data.fuel ? ' fuel' : ''), r.data.fuel ? '#ff9a8a' : '#ffe9a8'); }
       else if (hit.what === 'down') open({ kind: 'offer', pid: hit.id });
+      else if (hit.what === 'block' && !(panel && panel.modal) && performance.now() >= guard) openBlock(S.blocks[hit.id]);   // a label over a block
       return;
     }
     if (hit.kind === 'zombie') {
@@ -358,6 +372,7 @@
     }
     if (hit.kind === 'far') { if (performance.now() - denyAt > 2500) { denyAt = performance.now(); toast('Too far. Shots only reach walkers near your wall.'); } return; }
     if (panel && panel.modal) return;
+    if (performance.now() < guard) return;            // the tail of a double tap on a card must not land on the town under it
     if (hit.kind === 'person') { open({ kind: E.person(S, hit.id) && E.person(S, hit.id).state === 'down' ? 'offer' : 'person', pid: hit.id }); return; }
     if (hit.kind === 'grave') { open({ kind: 'grave', gid: hit.id }); return; }
     if (hit.kind === 'block') { openBlock(hit.b); return; }
@@ -384,6 +399,7 @@
     $('hud').classList.add('off');
     Intro.start(S, (wallsUp) => {
       act({ type: 'introDone' }); layout(); if (wallsUp) Sc.rebuild(); else Sc.taken(E.hall(S)); Sc.fit(false); Sfx.play('win');
+      guard = performance.now() + 500;                 // a second tap on SKIP must not open what appears in its place
       $('hud').classList.remove('off'); hudAt = 0; save();
       setTimeout(() => toast('The hall is yours. Walkers are coming to the light.', '', 3600), 600);
     });
@@ -399,8 +415,9 @@
     Sc.setState(S); Sc.onTap = onTap; Sc.onHold = (down) => { Sfx.unlock(); if (Intro.active) Intro.hold(down); }; Sc.onShot = () => Sfx.play('shot');
     lastReal = Date.now(); layout();
     document.addEventListener('click', onClick);
-    root.addEventListener('resize', () => { Sc.resize(); layout(); if (!Intro.active) Sc.fit(false); });
-    document.addEventListener('visibilitychange', () => { if (document.hidden) save(); });
+    document.addEventListener('touchend', () => Sfx.unlock(), { passive: true });   // the first finger lifted may start the sound
+    root.addEventListener('resize', () => { Sc.resize(); layout(); if (Intro.active) return; if (panel && aimAt(panel) != null) Sc.focus(S.blocks[aimAt(panel)]); else Sc.fit(false); });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) { save(); Sfx.pause(true); } else Sfx.pause(false); });
     root.addEventListener('hashchange', () => { save(); location.reload(); });      // #demo added or removed by hand
     root.addEventListener('pagehide', save);
     if (!S.intro) startIntro();

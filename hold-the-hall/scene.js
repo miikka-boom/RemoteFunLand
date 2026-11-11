@@ -3,8 +3,8 @@
  * survivors in the yards, the fight of a run, particles, and the markers you tap.
  *
  * HH.Scene: init(canvas) · setState(s) · resize() · frame(dtSec) · fit(snap) · focus(block) · setInsets({ t, b, l, r })
- *   onTap(hit, x, y) / onHold(down, x, y): set by the UI. hit.kind: 'marker' (collect | down | job) · 'zombie' · 'person'
- *   · 'grave' · 'block' · 'none'
+ *   onTap(hit, x, y) / onHold(down, x, y): set by the UI. hit.kind: 'marker' (what: collect | down | block) · 'zombie' ·
+ *   'far' (a walker out of range) · 'person' · 'grave' · 'block' · 'none'
  *   shootAt(z, fromWall) · taken(block) · runStart(run) · runEnd(result) · float(x, y, text, col) · burst · shake
  *   intro: the object intro.js drives while the hall is being taken (see intro.js)
  */
@@ -19,6 +19,7 @@
   const HGT = { hall: 100, tower: 86, home: 38, garden: 16, workshop: 40, clinic: 46, armory: 46, gas: 40, bridge: 26 };
 
   let cv, g, W = 0, H = 0, dpr = 1, S = null, T = 0, reduced = false, seedKey = null;
+  let quality = 2, slow = 0.016, slowT = 0;          // canvas pixels per CSS pixel: at most 2, 1.5 or 1; it steps down on a phone that cannot keep up
   const cam = { x: 0, y: 416, z: 0.7, tx: 0, ty: 416, tz: 0.7 };
   const inset = { t: 60, b: 70, l: 0, r: 0 };
   let groundCv = null, groundKey = '', lightCv = null, lg = null;
@@ -190,13 +191,15 @@
     }
   }
   // what a tap can hit: the story's walkers, a horde anywhere, and any walker close enough to our wall
-  const shootable = (z) => z.st !== 'dead' && (z.kind === 'intro' || z.kind === 'horde' || ((z.kind === 'street' || z.kind === 'yard') && distOwn(z.x, z.y) <= RANGE));
+  const shootable = (z) => z.st !== 'dead' && (z.kind === 'intro' || z.kind === 'horde' || ((z.kind === 'street' || z.kind === 'yard') && distOwn(z.x, z.y) <= RANGE) ||
+    (z.kind === 'yard' && !!api.intro && !api.intro.hall.restored && Math.hypot(z.x - 12.9, z.y - 15.3) < 4.2));   // the story: one that wandered into the light
 
   // ---------------------------------------------------------------- survivors
   function homeLots() { const out = S.blocks.filter((b) => b.owned && b.type !== 'bridge'); out.sort((a, b) => (a.type === 'hall' ? -1 : b.type === 'hall' ? 1 : a.id - b.id)); return out; }
   function stepPeople(dt) {
     const lots = homeLots(); if (!lots.length) return;
     const seen = new Set(), clinic = S.blocks.find((b) => b.owned && b.type === 'clinic' && b.lv >= 1) || lots[0];
+    let downs = 0;
     S.people.forEach((p, i) => {
       seen.add(p.id);
       let f = figs.get(p.id);
@@ -207,7 +210,7 @@
       const max = hallLot ? 2.9 : 6.1;
       if (p.state === 'out' && fight && fight.pid === p.id) { f.x = fight.x + Math.sin(f.t * 1.7) * 0.35; f.y = fight.y + Math.cos(f.t * 1.3) * 0.3; f.pose = fight.fell ? 'down' : 'aim'; f.face = fight.face; return; }
       if (p.state === 'rest') { f.pose = 'sit'; f.u = hallLot ? 0.35 + (i % 4) * 0.42 : clamp(f.u, 0.2, max); }
-      else if (p.state === 'down') { f.pose = 'down'; f.u = hallLot ? 2.4 : 1.2 + (i % 3) * 0.5; }
+      else if (p.state === 'down') { const k = downs++; f.pose = 'down'; f.u = hallLot ? 2.7 - (k % 4) * 0.62 : 0.9 + (k % 5) * 0.62; }
       else {
         f.pose = 'stand';
         if (f.tu == null || Math.abs(f.tu - f.u) < 0.06) { f.wait -= dt; if (f.wait <= 0) { f.tu = rand(0.15, max); f.wait = rand(1.5, 6); } }
@@ -278,6 +281,7 @@
     const z = clamp(Math.min(cw / (x1 - x0), ch / (y1 - y0)), zmin || 0.34, zmax || 1.5);
     cam.tz = z; cam.tx = (x0 + x1) / 2 - (inset.l + cw / 2 - W / 2) / z; cam.ty = (y0 + y1) / 2 - (inset.t + ch / 2 - H / 2) / z;
     if (snap) { cam.x = cam.tx; cam.y = cam.ty; cam.z = cam.tz; }
+    cam.by = 'game';                                  // who aimed the camera last: 'fit' (the overview), 'game' (another view) or 'user'
   }
   function boxOf(blocks, padX, padY) {
     let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
@@ -289,7 +293,7 @@
     if (!S) return;
     const mine = S.blocks.filter((b) => b.owned);
     const bx = boxOf(mine.length ? mine : [E.hall(S)], 170, 62);          // ours, and the near side of each block beside it
-    view(bx[0], bx[1], bx[2], bx[3], snap, 1.5, 0.5);
+    view(bx[0], bx[1], bx[2], bx[3], snap, 1.5, 0.5); cam.by = 'fit';
   }
   function focus(b, zmax, alone) { const bx = boxOf(alone ? [b] : [b].concat(E.neighbours(S, b).filter((n) => n.owned)), alone ? 48 : 40); view(bx[0], bx[1], bx[2], bx[3], false, zmax || 1.25); }
 
@@ -304,10 +308,10 @@
     });
     cv.addEventListener('pointermove', (e) => {
       const p = ptr.get(e.pointerId); if (!p || !gest) return; p.x = e.clientX; p.y = e.clientY;
-      if (gest.pinch && ptr.size >= 2) { const a = [...ptr.values()], d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); if (!api.intro) { cam.z = cam.tz = clamp(gest.z0 * d / gest.pinch, 0.34, 2.2); } return; }
+      if (gest.pinch && ptr.size >= 2) { const a = [...ptr.values()], d = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y); if (!api.intro) { cam.z = cam.tz = clamp(gest.z0 * d / gest.pinch, 0.34, 2.2); cam.by = 'user'; } return; }
       const dx = e.clientX - gest.x0, dy = e.clientY - gest.y0;
       if (!gest.moved && Math.hypot(dx, dy) > 9) gest.moved = true;
-      if (gest.moved && !gest.pinch && !api.intro) { cam.x = cam.tx = gest.cx - dx / cam.z; cam.y = cam.ty = gest.cy - dy / cam.z; clampCam(); }
+      if (gest.moved && !gest.pinch && !api.intro) { cam.x = cam.tx = gest.cx - dx / cam.z; cam.y = cam.ty = gest.cy - dy / cam.z; clampCam(); cam.by = 'user'; }
     });
     const up = (e) => {
       const had = ptr.delete(e.pointerId); if (!had) return;
@@ -316,7 +320,7 @@
       if (ptr.size === 0) gest = null;
     };
     cv.addEventListener('pointerup', up); cv.addEventListener('pointercancel', up);
-    cv.addEventListener('wheel', (e) => { e.preventDefault(); if (api.intro) return; const k = Math.exp(-e.deltaY * 0.0015), w0 = toWorld(e.clientX, e.clientY); cam.z = cam.tz = clamp(cam.z * k, 0.34, 2.2); const w1 = toWorld(e.clientX, e.clientY); cam.x = cam.tx = cam.x + w0[0] - w1[0]; cam.y = cam.ty = cam.y + w0[1] - w1[1]; clampCam(); }, { passive: false });
+    cv.addEventListener('wheel', (e) => { e.preventDefault(); if (api.intro) return; const k = Math.exp(-e.deltaY * 0.0015), w0 = toWorld(e.clientX, e.clientY); cam.z = cam.tz = clamp(cam.z * k, 0.34, 2.2); cam.by = 'user'; const w1 = toWorld(e.clientX, e.clientY); cam.x = cam.tx = cam.x + w0[0] - w1[0]; cam.y = cam.ty = cam.y + w0[1] - w1[1]; clampCam(); }, { passive: false });
   }
   function clampCam() { cam.x = cam.tx = clamp(cam.x, -900, 900); cam.y = cam.ty = clamp(cam.y, -80, 920); }
   function inPoly(pts, x, y) { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const a = pts[i], b = pts[j]; if ((a[1] > y) !== (b[1] > y) && x < (b[0] - a[0]) * (y - a[1]) / (b[1] - a[1]) + a[0]) c = !c; } return c; }
@@ -328,7 +332,8 @@
     // walkers, survivors and graves: whichever the finger is closest to, each measured against its own reach
     let score = 1, out = null;
     const cand = (q, r, res) => { const d = Math.hypot(q[0] - w[0], q[1] - w[1]) * cam.z / r; if (d < score) { score = d; out = res; } };
-    for (const z of zs) if (shootable(z)) cand(P(z.x, z.y, 13 * z.s), z.s > 1.5 ? 44 : 30, { kind: 'zombie', z });
+    const reach = clamp(34 * cam.z, 22, 30);          // zoomed far out, a walker's reach shrinks with it, so the buildings stay tappable
+    for (const z of zs) if (shootable(z)) cand(P(z.x, z.y, 13 * z.s), z.s > 1.5 ? 44 : reach, { kind: 'zombie', z });
     for (const f of figs.values()) cand(P(f.x, f.y, 13), 24, { kind: 'person', id: f.id });
     S.graves.forEach((gr, i) => { const q = graveAt(i); cand(P(q[0], q[1], 7), 18, { kind: 'grave', id: gr.id }); });
     if (out) return out;
@@ -442,17 +447,18 @@
       if (!b.owned && why === null) {
         const busy = S.run && S.run.bid === b.id, best = bestOdds(b), col = busy ? '#ffd27a' : best == null ? '#c9ccd2' : best >= 0.7 ? '#8dffa6' : best >= 0.45 ? '#ffd27a' : '#ff9a8a';
         const bob = reduced ? 0 : Math.sin(T * 3 + b.id) * 2.5, y = s[1] + bob, wide = nTargets <= 4 || b.id === topTarget;
+        hits.push({ what: 'block', id: b.id, x: s[0], y: y - 9, r: 26 });
         if (busy) { const k = clamp((S.t - S.run.t0) / Math.max(1, S.run.t1 - S.run.t0), 0, 1); pill(s[0], y, 'CLEARING', '#20252e', '#ffd27a'); g.fillStyle = '#ffd27a'; g.fillRect(s[0] - 32, y + 2, 64 * k, 3); }
         else {
           pill(s[0], y, best == null ? (wide ? 'EXPAND' : '···') : (wide ? 'EXPAND ' : '') + Math.round(best * 100) + '%', wide ? '#ff8a3c' : 'rgba(32,37,46,.9)', wide ? '#191310' : col);
           for (let i = 0; i < b.hpMax; i++) { g.fillStyle = i < b.hp ? '#ff5a4a' : 'rgba(255,255,255,.3)'; g.beginPath(); g.arc(s[0] - (b.hpMax - 1) * 5 + i * 10, y + 7, 3.2, 0, TAU); g.fill(); }
           if (wide) { g.fillStyle = '#ff8a3c'; g.beginPath(); g.moveTo(s[0] - 5, y + 13); g.lineTo(s[0] + 5, y + 13); g.lineTo(s[0], y + 19); g.fill(); }
         }
-      } else if (!b.owned && why === 'hall' && E.neighbours(S, b).some((n) => n.owned)) pill(s[0], s[1], 'HALL ' + E.needHall(b), 'rgba(32,37,46,.85)', '#9aa3b2');
+      } else if (!b.owned && why === 'hall' && E.neighbours(S, b).some((n) => n.owned)) { pill(s[0], s[1], 'HALL ' + E.needHall(b), 'rgba(32,37,46,.85)', '#9aa3b2'); hits.push({ what: 'block', id: b.id, x: s[0], y: s[1] - 11, r: 24 }); }
       else if (b.owned && b.job) {
         const left = Math.max(0, b.job.t1 - S.t), k = clamp((S.t - b.job.t0) / Math.max(1, b.job.t1 - b.job.t0), 0, 1);
-        pill(s[0], s[1], clock(left), '#20252e', '#ffe9a8'); g.fillStyle = '#ffd27a'; g.fillRect(s[0] - 20, s[1] + 2, 40 * k, 3);
-      } else if (b.owned && b.lv < 1 && b.type !== 'bridge') { pill(s[0], s[1] + (reduced ? 0 : Math.sin(T * 3 + b.id) * 2), 'RESTORE ' + D.TYPES[b.type].cost[0], '#ffd27a', '#191310'); }
+        pill(s[0], s[1], clock(left), '#20252e', '#ffe9a8'); g.fillStyle = '#ffd27a'; g.fillRect(s[0] - 20, s[1] + 2, 40 * k, 3); hits.push({ what: 'block', id: b.id, x: s[0], y: s[1] - 11, r: 24 });
+      } else if (b.owned && b.lv < 1 && b.type !== 'bridge') { pill(s[0], s[1] + (reduced ? 0 : Math.sin(T * 3 + b.id) * 2), 'RESTORE ' + D.TYPES[b.type].cost[0], '#ffd27a', '#191310'); hits.push({ what: 'block', id: b.id, x: s[0], y: s[1] - 11, r: 26 }); }
       else if (b.owned && D.TYPES[b.type].rate) {
         const st = E.stock(S, b), cap = D.TYPES[b.type].cap[b.lv - 1], n = Math.floor(st);
         if (n >= 1 && (b.type === 'gas' || st >= Math.min(12, cap * 0.2))) {
@@ -482,6 +488,8 @@
   function frame(dt) {
     if (!S || !cv) return;
     dt = Math.min(dt, 0.1); T += dt;
+    slow += (dt - slow) * 0.05; slowT += dt;
+    if (slowT > 3 && slow > 0.04 && quality > 0 && (root.devicePixelRatio || 1) > [1, 1.5][quality - 1]) { quality--; slowT = 0; slow = 0.016; resize(); }
     const key = ownedKey(); if (key !== frame.key) { frame.key = key; rebuildTerritory(); }
     // camera
     const e = 1 - Math.exp(-dt * 5); cam.x = lerp(cam.x, cam.tx, e); cam.y = lerp(cam.y, cam.ty, e); cam.z = lerp(cam.z, cam.tz, e);
@@ -505,7 +513,6 @@
       const X = lot(b.bx), Y = lot(b.by), k = reduced ? 0.6 : 0.5 + 0.5 * Math.sin(T * 3 + b.id);
       g.globalAlpha = 0.35 + 0.5 * k; A.poly(g, [P(X + 0.08, Y + 0.08), P(X + 3.92, Y + 0.08), P(X + 3.92, Y + 3.92), P(X + 0.08, Y + 3.92)], 'rgba(255,138,60,.10)', '#ff8a3c', 2.5); g.globalAlpha = 1;
     }
-    if (I && I.ring) { const q = P(I.ring.x, I.ring.y, I.ring.z || 0), k = 0.5 + 0.5 * Math.sin(T * 6); g.strokeStyle = 'rgba(255,170,80,' + (0.5 + 0.5 * k) + ')'; g.lineWidth = 3; g.beginPath(); g.ellipse(q[0], q[1], (I.ring.r || 22) + k * 5, ((I.ring.r || 22) + k * 5) * 0.62, 0, 0, TAU); g.stroke(); }
     const list = [];
     for (const b of S.blocks) list.push({ key: lot(b.bx) + lot(b.by) + 3.5, f: () => drawBlock(b) });
     for (const p of props) list.push({ key: p.x + p.y, f: () => drawProp(p) });
@@ -547,6 +554,10 @@
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     const vg = g.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,.5)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
     if (flashAmt > 0.01) { g.fillStyle = 'rgba(255,240,210,' + flashAmt + ')'; g.fillRect(0, 0, W, H); flashAmt *= Math.exp(-dt * 6); }
+    if (I && I.ring) {                                // the story's "tap here": drawn last, so neither the hall nor the dark hides it
+      const q = P(I.ring.x, I.ring.y, I.ring.z || 0), c = toScreen(q[0], q[1]), k = reduced ? 0.5 : 0.5 + 0.5 * Math.sin(T * 6), r = ((I.ring.r || 22) + k * 5) * cam.z;
+      for (let i = 0; i < 2; i++) { g.strokeStyle = i ? 'rgba(255,176,90,' + (0.65 + 0.35 * k) + ')' : 'rgba(0,0,0,.45)'; g.lineWidth = i ? 3 : 6; g.beginPath(); g.ellipse(c[0], c[1], r, r * 0.62, 0, 0, TAU); g.stroke(); }
+    }
     drawMarkers();
     if (I && I.draw) I.draw(g, toScreen);
     for (const f of floats) { const s = toScreen(f.x, f.y), k = f.t / 1.3; g.globalAlpha = 1 - k * k; g.font = '800 ' + (f.big ? 22 : 16) + 'px ' + FONT; g.textAlign = 'center'; g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.6)'; g.strokeText(f.text, s[0], s[1] - k * 34); g.fillStyle = f.col; g.fillText(f.text, s[0], s[1] - k * 34); }
@@ -556,7 +567,7 @@
   // ---------------------------------------------------------------- set-up
   function resize() {
     if (!cv) return;
-    W = cv.clientWidth || root.innerWidth; H = cv.clientHeight || root.innerHeight; dpr = Math.min(2, root.devicePixelRatio || 1);
+    W = cv.clientWidth || root.innerWidth; H = cv.clientHeight || root.innerHeight; dpr = Math.min([1, 1.5, 2][quality], root.devicePixelRatio || 1);
     cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
     if (!lightCv) { lightCv = document.createElement('canvas'); lg = lightCv.getContext('2d'); }
     lightCv.width = Math.ceil(cv.width / 2); lightCv.height = Math.ceil(cv.height / 2);

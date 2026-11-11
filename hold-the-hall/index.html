@@ -11,7 +11,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700;800&family=Barlow:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
 :root {
-  --bg: #0c1014; --ink: #f3efe6; --soft: #aab1bd; --panel: rgba(17, 21, 28, .95); --chip: rgba(17, 21, 28, .84); --line: rgba(255, 255, 255, .1);
+  --bg: #0c1014; --ink: #f3efe6; --soft: #aab1bd; --panel: #11151c; --chip: rgba(17, 21, 28, .84); --line: rgba(255, 255, 255, .1);
   --amber: #ffd27a; --orange: #ff8a3c; --red: #e5484d; --green: #8dffa6; --fuel: #ff6b57;
   --cond: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif; --body: Barlow, system-ui, -apple-system, "Segoe UI", sans-serif;
   --sat: env(safe-area-inset-top, 0px); --sab: env(safe-area-inset-bottom, 0px); --sal: env(safe-area-inset-left, 0px); --sar: env(safe-area-inset-right, 0px);
@@ -58,7 +58,7 @@ button, a.chip { font: inherit; color: inherit; border: 0; background: none; pad
 .panel-open #expand { display: none; }
 
 /* banner and toasts */
-#banner { position: absolute; left: 50%; top: calc(60px + var(--sat)); transform: translateX(-50%); padding: 7px 14px; border-radius: 12px; background: var(--red); color: #fff; font: 800 17px/1 var(--cond); letter-spacing: .04em; white-space: nowrap; display: none; }
+#banner { position: absolute; left: 50%; top: calc(60px + var(--sat)); transform: translateX(-50%); max-width: calc(100% - 16px); overflow: hidden; text-overflow: ellipsis; padding: 7px 14px; border-radius: 12px; background: var(--red); color: #fff; font: 800 17px/1 var(--cond); letter-spacing: .04em; white-space: nowrap; display: none; }
 #banner.on { display: block; animation: pop .4s; }
 #toasts { position: absolute; left: 50%; top: calc(100px + var(--sat)); transform: translateX(-50%); display: flex; flex-direction: column; gap: 6px; align-items: center; width: min(92vw, 420px); }
 .toast { padding: 7px 13px; border-radius: 11px; background: rgba(17, 21, 28, .92); font: 700 16px/1.15 var(--cond); text-align: center; animation: tin .25s; }
@@ -71,13 +71,13 @@ button, a.chip { font: inherit; color: inherit; border: 0; background: none; pad
 #panel[hidden] { display: none; }
 #panel::after { content: ""; display: block; height: 12px; }
 /* the main action stays in sight while the rest scrolls */
-.foot { position: sticky; bottom: 0; margin: 0 -14px -12px; padding: 1px 14px 12px; background: linear-gradient(rgba(17, 21, 28, 0), rgba(17, 21, 28, .97) 9px); }
+.foot { position: sticky; bottom: 0; margin: 0 -14px -12px; padding: 1px 14px 12px; background: linear-gradient(rgba(17, 21, 28, 0), #11151c 9px); }
 @keyframes up { from { transform: translateY(14px); opacity: 0; } }
 @media (orientation: landscape) {
   #panel { left: auto; top: calc(8px + var(--sat)); width: min(318px, 56vw); max-height: none; }
   .panel-open #bottom { right: calc(min(318px, 56vw) + 24px + var(--sar)); }
   .panel-open #toasts { left: 8px; right: calc(min(318px, 56vw) + 24px + var(--sar)); transform: none; width: auto; }
-  .panel-open #banner { left: calc((100% - min(318px, 56vw) - 16px) / 2); }
+  .panel-open #banner { left: calc((100% - min(318px, 56vw) - 16px) / 2); max-width: calc(100% - min(318px, 56vw) - 32px); }
   .panel-open #top .grow ~ .chip { visibility: hidden; }             /* the panel covers them */
 }
 .ph { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
@@ -97,6 +97,7 @@ p.note { margin: 8px 0 0; color: var(--soft); font-size: 13px; line-height: 1.35
 .btn.off { opacity: .45; }
 .btn:active { transform: translateY(2px); }
 .btns { display: flex; gap: 8px; } .btns .btn { flex: 1; } .btns .btn.next { flex: 0 0 52px; font-size: 22px; }
+.btns.wrap { flex-wrap: wrap; gap: 0 8px; } .btns.wrap .btn { flex: 1 1 auto; }
 .mini { min-height: 40px; margin: -4px 0 -4px 10px; padding: 0 12px; border-radius: 11px; background: var(--orange); color: #1b120c; font: 800 15px/1 var(--cond); letter-spacing: .03em; }
 .pips { display: inline-flex; gap: 4px; vertical-align: middle; } .pips i { width: 10px; height: 10px; border-radius: 50%; background: #ff5a4a; } .pips i.o { background: rgba(255, 255, 255, .22); }
 /* runner cards */
@@ -132,7 +133,9 @@ pre.json { margin: 8px 0 0; padding: 8px; border-radius: 10px; background: rgba(
 #stBack { position: absolute; left: calc(10px + var(--sal)); top: calc(10px + var(--sat)); pointer-events: auto; }
 .noscript { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; text-align: center; background: var(--bg); }
 
+@media (orientation: portrait) { .panel-open #bottom { visibility: hidden; } }   /* the sheet covers the bottom bar */
 @media (max-width: 480px) {
+  #banner { font-size: 15px; letter-spacing: .02em; padding: 7px 10px; }
   .chip { padding: 0 8px; gap: 5px; font-size: 17px; }
   .chip svg { width: 17px; height: 17px; }
   #top { gap: 5px; }
@@ -140,10 +143,11 @@ pre.json { margin: 8px 0 0; padding: 8px; border-radius: 10px; background: rgba(
   #expand { min-width: 118px; font-size: 21px; padding: 6px 10px 8px; }
 }
 @media (max-height: 360px) { #goal { min-height: 46px; } #expand { min-height: 50px; font-size: 21px; } }
-@media (max-height: 350px) and (orientation: landscape) {       /* a very short screen: tighten the panel */
-  .ph { margin-bottom: 4px; } .ph h2 { font-size: 21px; } .ph h2 small { font-size: 13px; line-height: 1.2; }
-  .row { padding: 5px 0; } .card { min-height: 84px; padding: 6px 8px; } .card .od { margin-top: 4px; } .btn { min-height: 44px; margin-top: 7px; }
+@media (max-height: 400px) and (orientation: landscape) {       /* a short screen: tighten the panel */
+  .ph { margin-bottom: 4px; } .ph h2 { font-size: 22px; } .ph h2 small { font-size: 13px; line-height: 1.2; }
+  .row { padding: 5px 0; } .card { min-height: 86px; padding: 7px 8px 6px; } .card .od { margin-top: 4px; } .cards { padding-bottom: 6px; }
 }
+@media (max-height: 350px) and (orientation: landscape) { .ph h2 { font-size: 20px; } .row { padding: 3px 0; } .card { min-height: 82px; padding: 5px 8px; } .btn { min-height: 44px; margin-top: 6px; } }
 @media (prefers-reduced-motion: reduce) { .chip.pop, #expand.pulse, .toast, #panel, #banner.on { animation: none; } }
 </style>
 </head>

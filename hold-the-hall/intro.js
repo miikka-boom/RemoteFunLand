@@ -112,6 +112,11 @@
   function tap(hit) {
     if (!I) return;
     if (step === 'title') { page++; if (page === 1) { t = 0; title('THE TOWN HALL', 'The radio said its generator still runs.<br>Get inside.'); } else go('walkers'); Sfx.play('tap'); return; }
+    if (hit && hit.kind === 'zombie' && hit.z.kind === 'yard' && (step === 'walkers' || step === 'door' || step === 'brute' || step === 'generator')) {
+      const z = hit.z, m = nearest(z);                // one from a yard that wandered into the light: it can be dropped too
+      m.aim = 0.35; m.face = z.x - z.y >= m.x - m.y ? 1 : -1; Sc.shootAt(z, [m.x, m.y]); Sfx.play('shot'); Sfx.play('groan');
+      return;
+    }
     if ((step === 'walkers' || step === 'brute') && hit && hit.kind === 'zombie' && hit.z.kind === 'intro') {
       const z = hit.z, m = step === 'brute' ? I.group[shooter++ % 3] : nearest(z);
       m.aim = 0.35; m.face = z.x - z.y >= m.x - m.y ? 1 : -1;

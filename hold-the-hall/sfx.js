@@ -1,6 +1,6 @@
 /* Hold the Hall: sound. Everything is synthesized with Web Audio; nothing plays before the first tap (unlock()).
- * HH.Sfx: unlock() · play(name) · setOn(bool) · isOn()
- * names: shot, groan, hit, clang, tap, deny, collect, build, win, lose, bell, crank, power, horde, level, door
+ * HH.Sfx: unlock() · play(name) · setOn(bool) · isOn() · pause(hidden): the page went to the background or came back
+ * names: shot, groan, hit, clang, tap, deny, collect, build, win, lose, bell, crank, power, horde, level, door, thud
  */
 (function (root) {
   'use strict';
@@ -55,6 +55,7 @@
   };
   function play(name) { if (!ac || !on || !S[name]) return; try { S[name](); } catch (e) { /* a sound must never break the game */ } }
   function setOn(v) { on = !!v; if (master) master.gain.value = on ? 0.8 : 0; }
+  function pause(hidden) { if (!ac) return; try { if (hidden) ac.suspend(); else ac.resume(); } catch (e) { /* closed */ } }   // nothing plays while the page is hidden
   root.HH = root.HH || {};
-  root.HH.Sfx = { unlock, play, setOn, isOn: () => on, ready: () => !!ac };
+  root.HH.Sfx = { unlock, play, setOn, pause, isOn: () => on, ready: () => !!ac, state: () => (ac ? ac.state : 'none') };
 })(typeof self !== 'undefined' ? self : this);
