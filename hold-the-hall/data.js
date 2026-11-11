@@ -37,10 +37,10 @@
     runMs: 7 * SEC, lossLoot: 0.3, lossXp: 0.4,
     loot0: 12, lootT: 2, bonus0: 20, bonusT: 4,      // per run; the bonus is paid once, when the block is taken
     xp0: 12, xpNeed: 30, maxLv: 10,                  // need = xpNeed x level
-    rest0: 45 * SEC, restT: 10 * SEC, restRing: [1, 1, 2], hurtMul: 3, restMin: 0.4,   // the outer ring is a longer walk
+    rest0: 15 * SEC, restT: 5 * SEC, restRing: [1, 1, 3], hurtMul: 3, restMin: 0.4,     // short beside the hall; the outer ring is a long walk
     reviveSup: 30, reviveFuel: 2, recoverMs: 60 * SEC, reviveEsc: 2,
     ammoMs: 8 * SEC, arriveMs: 150 * SEC, moveInMs: 6 * SEC,
-    hordeFirst: 150 * SEC, hordeGap: [210 * SEC, 300 * SEC], hordeMs: 30 * SEC, hordeN: 8, hordeSup: 30, hordeFuel: 1,
+    hordeFirst: 90 * SEC, hordeGap: [180 * SEC, 270 * SEC], hordeMs: 30 * SEC, hordeN: 8, hordeSup: 30, hordeFuel: 1,
     freeSkipMs: 15 * SEC, skipExp: 0.75, pack: 20, offlineMax: 12 * 60 * MIN,
   };
 

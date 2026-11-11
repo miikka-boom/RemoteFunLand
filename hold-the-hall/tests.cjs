@@ -306,7 +306,7 @@ test('16 pacing: an always-tapping player takes the inner ring in minutes and th
     for (const r of rows) console.log('  ' + JSON.stringify(r));
   }
   ok(m.first < 1, 'the first block inside a minute (' + m.first + ')');
-  ok(m.ring > 7 && m.ring < 30, 'the inner ring in 7 to 30 minutes of non-stop play (' + m.ring + ')');
+  ok(m.ring > 3 && m.ring < 15, 'the inner ring in 3 to 15 minutes of non-stop play (' + m.ring + ')');
   ok(m.won > 2 * 60 && m.won < 12 * 60, 'the whole town in 2 to 12 hours of non-stop play (' + m.won + ')');
   ok(rows.every((r) => r.marks.won != null), 'every seed can be won');
   const downs = rows.reduce((a, r) => a + r.downs, 0) / rows.length;
