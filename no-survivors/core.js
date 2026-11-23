@@ -159,12 +159,55 @@
     return `${p(Math.floor(s / 3600))}:${p(Math.floor((s % 3600) / 60))}:${p(s % 60)}`;
   };
 
+  // Template tokens in score strings: {night}, {prev}, {next}, {countdown} and nothing else.
+  // NS.fill('NIGHT {next} BEGINS IN {countdown}', S). S is optional (S.night, S.now are used if given).
+  NS.fill = function (str, S) {
+    const night = (S && S.night) || NS.night;
+    const now = (S && S.now) || undefined;
+    return String(str)
+      .replace(/\{night\}/g, NS.fmtInt(night))
+      .replace(/\{prev\}/g, NS.fmtInt(night - 1))
+      .replace(/\{next\}/g, NS.fmtInt(night + 1))
+      .replace(/\{countdown\}/g, () => NS.fmtCountdown(NS.nightInfo(now).msToNext));
+  };
+
+  // ---- canvases: every cache canvas comes from here, so the engine can count memory ---------------
+  // NS.makeCanvas(w, h, tag) -> a canvas (w, h rounded, at least 1). NS.freeCanvas(c) releases one.
+  // NS.mem() -> { total, byTag } in bytes (w * h * 4 per live canvas). Budget: 120 MB in all, 40 MB 'horde'.
+  const live = new Map();
+  NS.makeCanvas = function (w, h, tag = 'misc') {
+    const c = document.createElement('canvas');
+    c.width = Math.max(1, Math.round(w));
+    c.height = Math.max(1, Math.round(h));
+    live.set(c, tag);
+    return c;
+  };
+  NS.freeCanvas = function (c) {
+    if (!c) return;
+    live.delete(c);
+    c.width = 0; c.height = 0;
+  };
+  NS.mem = function () {
+    const byTag = {};
+    let total = 0;
+    live.forEach((tag, c) => {
+      const b = c.width * c.height * 4;
+      total += b;
+      byTag[tag] = (byTag[tag] || 0) + b;
+    });
+    return { total, byTag };
+  };
+  // Cache resolution, fixed at boot: 1 on desktop, 0.75 on small or touch-first screens.
+  NS.cacheScale = (Math.min(screen.width || 1280, screen.height || 720) < 600 || matchMedia('(pointer: coarse)').matches) ? 0.75 : 1;
+
   // ---- registries ---------------------------------------------------------------------------------
   // Shots: NS.shot('van', { init(ctxInfo) {...}, draw(ctx, S) {...} }). See SPEC "Scene contract".
   NS.shots = NS.shots || {};
   NS.shot = (name, def) => { NS.shots[name] = def; return def; };
-  // Clues: a scene registers where its clue is best seen, for the evidence board's polaroids.
-  // NS.clue('missing', { t: 41.3, rect: [x, y, w, h] })   (rect in the 1280 x 720 frame)
+  // Clues: SCORE.clues says WHEN (bar = the polaroid frame, hold = the legible span). A scene file says
+  // WHERE, once, at its top level (never inside draw):
+  //   NS.clue('missing', { shot: 'street', rect: [x, y, w, h] })   rect in the 1280 x 720 frame, or a pure
+  //   function (S) => [x, y, w, h] if the clue moves.
   NS.clues = NS.clues || {};
   NS.clue = (id, info) => { NS.clues[id] = Object.assign(NS.clues[id] || {}, info); };
 

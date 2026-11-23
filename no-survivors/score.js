@@ -1,12 +1,13 @@
 // NO SURVIVORS: Keep Them Dancing. The single source of truth for timing, read by the page
-// (window.SCORE) and by the soundtrack synth (tools/no_survivors_audio.py). Everything after the first
-// "=" up to the final ";" is plain JSON: no comments inside the object, double quotes only.
+// (window.SCORE) and by the soundtrack synth (tools/no_survivors_audio.py).
+// Format: the JSON object starts after "window.SCORE = " and ends at the last ";". Parse it with
+// s[s.index("window.SCORE =") + 14 : s.rindex(";")]. Write it with json.dumps(obj, indent=1, ensure_ascii=False).
 //
 // 150 BPM, 4/4, 112 bars = 179.2 s (+0.8 s room tone: the audio is 180.0 s). One beat 0.4 s, one bar
-// 1.6 s, one 16th step 0.1 s. Bars count from 0; "bars": [a, b] are half-open. A "beat" in hits/gaps is
-// a global beat index (bar * 4 + beat in bar). Steps in words/notes are 16ths from the line's bar.
-// Per-bar arrays (energy, chords, bass, each drum lane) have 112 entries. The keys are described in
-// SPEC.md (scratchpad) and in the composer's notes under "notes".
+// 1.6 s, one 16th step 0.1 s. Bars count from 0; "bars": [a, b] are half-open. A "beat" in hits, gaps and
+// spoken[].win is a global beat index (bar * 4 + beat in bar). Steps in words/notes are 16ths from the line's
+// bar. Per-bar arrays (energy, chords, bass, each drum lane) have 112 entries. Strings may contain the tokens
+// {night} {prev} {next} {countdown} (NS.fill). Every on-screen string has exactly one source key.
 window.SCORE = {
  "title": "Keep Them Dancing",
  "band": "No Survivors",
@@ -17,7 +18,7 @@ window.SCORE = {
  "bars": 112,
  "duration": 180.0,
  "end": 179.2,
- "key": "E minor; final chorus F# minor (+2) from bar 92",
+ "key": "E minor; final chorus F# minor (+2) from bar 92; the coda music box is back in E minor",
  "sections": [
   {
    "id": "coldopen",
@@ -25,9 +26,8 @@ window.SCORE = {
     0,
     8
    ],
-   "part": "prologue",
-   "role": "cold open: rain, radio, Lou; Tiny counts in on bar 7",
-   "label": "Cold open"
+   "label": "Cold open",
+   "role": "rain, radio, Lou in four phrases; organ drone + heartbeat choke on \"stop.\"; thunder; Tiny counts in on bar 7"
   },
   {
    "id": "intro",
@@ -35,9 +35,8 @@ window.SCORE = {
     8,
     16
    ],
-   "part": "prologue",
-   "role": "main riff x2, title smash; van crash on bar 15",
-   "label": "Intro"
+   "label": "Intro",
+   "role": "main riff x2 (its stabs are the hook rhythm), title smash; skid and crash on bar 15"
   },
   {
    "id": "verse1a",
@@ -45,9 +44,8 @@ window.SCORE = {
     16,
     24
    ],
-   "part": "streets",
-   "role": "verse riff, instrumental; gang shouts each name",
-   "label": "Intros"
+   "label": "The band",
+   "role": "verse riff; gang shouts each name on its downbeat; a signature lick per member in the 2nd bar"
   },
   {
    "id": "verse1b",
@@ -55,9 +53,8 @@ window.SCORE = {
     24,
     32
    ],
-   "part": "streets",
-   "role": "verse 1 vocals; the Groupie",
-   "label": "Verse 1"
+   "label": "Verse 1",
+   "role": "verse 1 vocals; the Groupie; stop-time on bar 30, shriek on 31"
   },
   {
    "id": "pre1",
@@ -65,9 +62,8 @@ window.SCORE = {
     32,
     36
    ],
-   "part": "streets",
-   "role": "pre-chorus build: here they come",
-   "label": "Pre-chorus"
+   "label": "Pre-chorus",
+   "role": "call and response HERE THEY COME; roots climb A-Bb-B under one sung B3"
   },
   {
    "id": "chorus1",
@@ -75,9 +71,8 @@ window.SCORE = {
     36,
     44
    ],
-   "part": "streets",
-   "role": "chorus 1: the horde",
-   "label": "Chorus"
+   "label": "Chorus",
+   "role": "chorus 1: the horde; the band stops dead on STOPS (bar 40)"
   },
   {
    "id": "post1",
@@ -85,9 +80,8 @@ window.SCORE = {
     44,
     48
    ],
-   "part": "streets",
-   "role": "main riff; run for the red door",
-   "label": "Riff"
+   "label": "Riff",
+   "role": "main riff; the band stab on bar 48 IS the door slam"
   },
   {
    "id": "saferoom",
@@ -95,9 +89,8 @@ window.SCORE = {
     48,
     56
    ],
-   "part": "saferoom",
-   "role": "breakdown: clean arpeggios, heartbeat, pounding door",
-   "label": "Safe room"
+   "label": "Intermission",
+   "role": "breakdown: clean arpeggios, heartbeat, the pounding door as backbeat, music box; all stops at bar 54; the knock gag"
   },
   {
    "id": "verse2",
@@ -105,9 +98,8 @@ window.SCORE = {
     56,
     64
    ],
-   "part": "orpheum",
-   "role": "verse 2 vocals (the mystery verse); arrive at the Orpheum",
-   "label": "Verse 2"
+   "label": "Verse 2",
+   "role": "verse 2 half-time, heard from outside; v2c-v2d sung dry (no megaphone); Noodle plugs in at 61.5"
   },
   {
    "id": "chorus2",
@@ -115,9 +107,8 @@ window.SCORE = {
     64,
     72
    ],
-   "part": "orpheum",
-   "role": "chorus 2 on stage; tape stop at the end",
-   "label": "Chorus"
+   "label": "Chorus",
+   "role": "chorus 2 on stage; the pit grunts HUH!; stop on STOPS (bar 68); tape stop at 71.5"
   },
   {
    "id": "blackout",
@@ -125,9 +116,8 @@ window.SCORE = {
     72,
     74
    ],
-   "part": "orpheum",
-   "role": "silence: power cut",
-   "label": "Blackout"
+   "label": "Blackout",
+   "role": "silence: clicks, phones, the groan, the mirror and a 0.3 s 1987 flashback"
   },
   {
    "id": "crescendo",
@@ -135,9 +125,8 @@ window.SCORE = {
     74,
     82
    ],
-   "part": "orpheum",
-   "role": "drums + chant + generator pulls; the Roadie",
-   "label": "Crescendo"
+   "label": "Crescendo",
+   "role": "acoustic only (no power): toms, bats on road cases, crowd stomps, chant; tuned generator pulls; the Roadie; catch on bar 81"
   },
   {
    "id": "solo",
@@ -145,9 +134,8 @@ window.SCORE = {
     82,
     90
    ],
-   "part": "orpheum",
-   "role": "guitar solo, full spectacle",
-   "label": "Solo"
+   "label": "Solo",
+   "role": "Granny's solo over the riff; pyro; double kick from 86; the DING harmonises with her held B"
   },
   {
    "id": "lift",
@@ -155,9 +143,8 @@ window.SCORE = {
     90,
     92
    ],
-   "part": "encore",
-   "role": "build and modulation to F# minor; the chopper",
-   "label": "Lift"
+   "label": "Lift",
+   "role": "band hit and choke; Lou; EVERYBODY UP! and the whole-tone lift"
   },
   {
    "id": "chorus3",
@@ -165,9 +152,8 @@ window.SCORE = {
     92,
     104
    ],
-   "part": "encore",
-   "role": "final chorus +2 and the one-more-song call and response",
-   "label": "Final chorus"
+   "label": "Final chorus",
+   "role": "final chorus in F# minor; stop on STOPS (bar 96); call and response ONE MORE SONG? / HOW MANY MORE?"
   },
   {
    "id": "ending",
@@ -175,9 +161,8 @@ window.SCORE = {
     104,
     106
    ],
-   "part": "encore",
-   "role": "big rock ending: roll, final hit, cut",
-   "label": "Ending"
+   "label": "Ending",
+   "role": "F#5 tremolo and drum roll, GOOD NIGHT!, final hit on bar 105, the picture burns"
   },
   {
    "id": "coda",
@@ -185,43 +170,8 @@ window.SCORE = {
     106,
     112
    ],
-   "part": "coda",
-   "role": "thermal camera: applause, Lou, music box",
-   "label": "Coda"
-  }
- ],
- "chapters": [
-  {
-   "type": "chapter",
-   "bar": 24,
-   "beat": 0,
-   "beats": 7,
-   "n": "PART ONE",
-   "title": "THE STREETS"
-  },
-  {
-   "type": "chapter",
-   "bar": 48,
-   "beat": 0,
-   "beats": 7,
-   "n": "PART TWO",
-   "title": "THE SAFE ROOM"
-  },
-  {
-   "type": "chapter",
-   "bar": 56,
-   "beat": 0,
-   "beats": 7,
-   "n": "PART THREE",
-   "title": "THE ORPHEUM"
-  },
-  {
-   "type": "chapter",
-   "bar": 90,
-   "beat": 0,
-   "beats": 7,
-   "n": "PART FOUR",
-   "title": "THE ENCORE"
+   "label": "Coda",
+   "role": "thermal: hum, muffled blades, a fan shouts, Lou signs off, the music box runs down before STOPS"
   }
  ],
  "energy": [
@@ -281,14 +231,14 @@ window.SCORE = {
   0.25,
   0.25,
   0.25,
-  0.68,
-  0.68,
-  0.68,
-  0.68,
-  0.68,
-  0.68,
-  0.68,
-  0.68,
+  0.6,
+  0.6,
+  0.6,
+  0.6,
+  0.6,
+  0.6,
+  0.6,
+  0.6,
   0.95,
   0.95,
   0.95,
@@ -299,14 +249,14 @@ window.SCORE = {
   0.95,
   0.0,
   0.0,
-  0.35,
-  0.43,
-  0.51,
-  0.59,
-  0.67,
-  0.75,
-  0.83,
-  0.91,
+  0.3,
+  0.38,
+  0.46,
+  0.54,
+  0.62,
+  0.7,
+  0.78,
+  0.86,
   1.0,
   1.0,
   1.0,
@@ -331,18 +281,18 @@ window.SCORE = {
   1.0,
   0.9,
   0.9,
-  0.08,
-  0.08,
-  0.08,
-  0.08,
-  0.08,
-  0.08
+  0.06,
+  0.06,
+  0.06,
+  0.06,
+  0.06,
+  0.06
  ],
  "chords": null,
- "drums": null,
  "bass": null,
  "riffs": null,
  "arrangement": null,
+ "drums": null,
  "vocals": {
   "lines": [
    {
@@ -350,6 +300,8 @@ window.SCORE = {
     "bar": 16,
     "part": "names",
     "singer": "gang",
+    "fx": "shout",
+    "display": "card",
     "zone": "auto",
     "text": "VEX!",
     "words": [
@@ -358,13 +310,22 @@ window.SCORE = {
       0
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "VEX",
+      0,
+      4,
+      52
+     ]
+    ]
    },
    {
     "id": "g2",
     "bar": 18,
     "part": "names",
     "singer": "gang",
+    "fx": "shout",
+    "display": "card",
     "zone": "auto",
     "text": "GRANNY!",
     "words": [
@@ -373,13 +334,28 @@ window.SCORE = {
       0
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "GRAN",
+      0,
+      2,
+      52
+     ],
+     [
+      "NY",
+      2,
+      4,
+      52
+     ]
+    ]
    },
    {
     "id": "g3",
     "bar": 20,
     "part": "names",
     "singer": "gang",
+    "fx": "shout",
+    "display": "card",
     "zone": "auto",
     "text": "TINY!",
     "words": [
@@ -388,13 +364,28 @@ window.SCORE = {
       0
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "TI",
+      0,
+      2,
+      52
+     ],
+     [
+      "NY",
+      2,
+      4,
+      52
+     ]
+    ]
    },
    {
     "id": "g4",
     "bar": 22,
     "part": "names",
     "singer": "gang",
+    "fx": "shout",
+    "display": "card",
     "zone": "auto",
     "text": "NOODLE!",
     "words": [
@@ -403,13 +394,28 @@ window.SCORE = {
       0
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "NOO",
+      0,
+      2,
+      52
+     ],
+     [
+      "DLE",
+      2,
+      4,
+      52
+     ]
+    ]
    },
    {
     "id": "v1a",
     "bar": 24,
     "part": "verse1",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "Three A.M. on the county line",
     "words": [
@@ -423,28 +429,79 @@ window.SCORE = {
      ],
      [
       "on",
-      4
-     ],
-     [
-      "the",
-      6
-     ],
-     [
-      "county",
       8
      ],
      [
-      "line",
+      "the",
       10
+     ],
+     [
+      "county",
+      12
+     ],
+     [
+      "line",
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "Three",
+      0,
+      2,
+      52
+     ],
+     [
+      "A",
+      2,
+      2,
+      55
+     ],
+     [
+      "M",
+      4,
+      2,
+      55
+     ],
+     [
+      "on",
+      8,
+      2,
+      52
+     ],
+     [
+      "the",
+      10,
+      2,
+      52
+     ],
+     [
+      "coun",
+      12,
+      2,
+      55
+     ],
+     [
+      "ty",
+      14,
+      2,
+      57
+     ],
+     [
+      "line",
+      16,
+      8,
+      59
+     ]
+    ]
    },
    {
     "id": "v1b",
     "bar": 26,
     "part": "verse1",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "Lou on the radio, right on time",
     "words": [
@@ -454,71 +511,199 @@ window.SCORE = {
      ],
      [
       "on",
-      2
-     ],
-     [
-      "the",
       4
      ],
      [
-      "radio,",
+      "the",
       6
      ],
      [
-      "right",
+      "radio,",
       8
      ],
      [
+      "right",
+      12
+     ],
+     [
       "on",
-      10
+      14
      ],
      [
       "time",
-      12
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "Lou",
+      0,
+      4,
+      55
+     ],
+     [
+      "on",
+      4,
+      2,
+      52
+     ],
+     [
+      "the",
+      6,
+      2,
+      52
+     ],
+     [
+      "ra",
+      8,
+      2,
+      55
+     ],
+     [
+      "di",
+      10,
+      1,
+      55
+     ],
+     [
+      "o",
+      11,
+      1,
+      52
+     ],
+     [
+      "right",
+      12,
+      2,
+      55
+     ],
+     [
+      "on",
+      14,
+      2,
+      57
+     ],
+     [
+      "time",
+      16,
+      8,
+      54
+     ]
+    ]
    },
    {
     "id": "v1c",
     "bar": 28,
     "part": "verse1",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "Something's crying in the alley, son",
+    "text": "Girl in the alley says she's number one,",
     "words": [
      [
-      "Something's",
+      "Girl",
       0
      ],
      [
-      "crying",
+      "in",
       2
      ],
      [
-      "in",
+      "the",
+      3
+     ],
+     [
+      "alley",
       4
      ],
      [
-      "the",
-      6
-     ],
-     [
-      "alley,",
+      "says",
       8
      ],
      [
-      "son",
+      "she's",
       10
+     ],
+     [
+      "number",
+      12
+     ],
+     [
+      "one,",
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "Girl",
+      0,
+      2,
+      52
+     ],
+     [
+      "in",
+      2,
+      1,
+      52
+     ],
+     [
+      "the",
+      3,
+      1,
+      52
+     ],
+     [
+      "al",
+      4,
+      2,
+      55
+     ],
+     [
+      "ley",
+      6,
+      2,
+      55
+     ],
+     [
+      "says",
+      8,
+      2,
+      57
+     ],
+     [
+      "she's",
+      10,
+      2,
+      57
+     ],
+     [
+      "num",
+      12,
+      2,
+      59
+     ],
+     [
+      "ber",
+      14,
+      2,
+      57
+     ],
+     [
+      "one",
+      16,
+      8,
+      59
+     ]
+    ]
    },
    {
     "id": "v1d",
     "bar": 30,
     "part": "verse1",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "Don't look, don't touch, don't stop, just RUN!",
     "words": [
@@ -555,15 +740,66 @@ window.SCORE = {
       14
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "Don't",
+      0,
+      2,
+      55
+     ],
+     [
+      "look",
+      2,
+      2,
+      55
+     ],
+     [
+      "don't",
+      4,
+      2,
+      55
+     ],
+     [
+      "touch",
+      6,
+      2,
+      55
+     ],
+     [
+      "don't",
+      8,
+      2,
+      57
+     ],
+     [
+      "stop",
+      10,
+      2,
+      57
+     ],
+     [
+      "just",
+      12,
+      2,
+      57
+     ],
+     [
+      "RUN",
+      14,
+      10,
+      59
+     ]
+    ]
    },
    {
     "id": "p1a",
     "bar": 32,
     "part": "pre",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "Here they come, here they come,",
+    "text": "Here they come,",
     "words": [
      [
       "Here",
@@ -576,27 +812,168 @@ window.SCORE = {
      [
       "come,",
       4
-     ],
+     ]
+    ],
+    "notes": [
      [
-      "here",
-      6
+      "Here",
+      0,
+      2,
+      59
      ],
      [
       "they",
+      2,
+      2,
+      59
+     ],
+     [
+      "come",
+      4,
+      4,
+      59
+     ]
+    ]
+   },
+   {
+    "id": "p1g",
+    "bar": 32,
+    "part": "pre",
+    "singer": "gang",
+    "fx": "shout",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "HERE THEY COME!",
+    "words": [
+     [
+      "HERE",
       8
      ],
      [
-      "come,",
+      "THEY",
       10
+     ],
+     [
+      "COME!",
+      12
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "HERE",
+      8,
+      2,
+      47
+     ],
+     [
+      "THEY",
+      10,
+      2,
+      47
+     ],
+     [
+      "COME",
+      12,
+      4,
+      47
+     ]
+    ]
+   },
+   {
+    "id": "p1a2",
+    "bar": 33,
+    "part": "pre",
+    "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "Here they come,",
+    "words": [
+     [
+      "Here",
+      0
+     ],
+     [
+      "they",
+      2
+     ],
+     [
+      "come,",
+      4
+     ]
+    ],
+    "notes": [
+     [
+      "Here",
+      0,
+      2,
+      59
+     ],
+     [
+      "they",
+      2,
+      2,
+      59
+     ],
+     [
+      "come",
+      4,
+      4,
+      59
+     ]
+    ]
+   },
+   {
+    "id": "p1g2",
+    "bar": 33,
+    "part": "pre",
+    "singer": "gang",
+    "fx": "shout",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "HERE THEY COME!",
+    "words": [
+     [
+      "HERE",
+      8
+     ],
+     [
+      "THEY",
+      10
+     ],
+     [
+      "COME!",
+      12
+     ]
+    ],
+    "notes": [
+     [
+      "HERE",
+      8,
+      2,
+      47
+     ],
+     [
+      "THEY",
+      10,
+      2,
+      47
+     ],
+     [
+      "COME",
+      12,
+      4,
+      47
+     ]
+    ]
    },
    {
     "id": "p1b",
     "bar": 34,
     "part": "pre",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "a thousand feet and a single drum!",
     "words": [
@@ -610,32 +987,89 @@ window.SCORE = {
      ],
      [
       "feet",
-      4
-     ],
-     [
-      "and",
       6
      ],
      [
-      "a",
+      "and",
       8
      ],
      [
-      "single",
+      "a",
       10
      ],
      [
-      "drum!",
+      "single",
       12
+     ],
+     [
+      "drum!",
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "a",
+      0,
+      2,
+      59
+     ],
+     [
+      "thou",
+      2,
+      2,
+      59
+     ],
+     [
+      "sand",
+      4,
+      2,
+      59
+     ],
+     [
+      "feet",
+      6,
+      2,
+      59
+     ],
+     [
+      "and",
+      8,
+      2,
+      59
+     ],
+     [
+      "a",
+      10,
+      2,
+      59
+     ],
+     [
+      "sin",
+      12,
+      2,
+      59
+     ],
+     [
+      "gle",
+      14,
+      2,
+      60
+     ],
+     [
+      "drum",
+      16,
+      12,
+      62
+     ]
+    ]
    },
    {
     "id": "c1a",
     "bar": 36,
     "part": "chorus",
-    "singer": "vex",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "KEEP THEM DANCING!",
     "words": [
@@ -645,20 +1079,47 @@ window.SCORE = {
      ],
      [
       "THEM",
-      2
+      4
      ],
      [
       "DANCING!",
-      4
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "KEEP",
+      0,
+      4,
+      55
+     ],
+     [
+      "THEM",
+      4,
+      4,
+      55
+     ],
+     [
+      "DAN",
+      8,
+      6,
+      59
+     ],
+     [
+      "CING",
+      14,
+      10,
+      57
+     ]
+    ]
    },
    {
     "id": "c1b",
     "bar": 38,
     "part": "chorus",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "KEEP 'EM ON THE BEAT!",
     "words": [
@@ -668,28 +1129,61 @@ window.SCORE = {
      ],
      [
       "'EM",
-      2
-     ],
-     [
-      "ON",
       4
      ],
      [
+      "ON",
+      8
+     ],
+     [
       "THE",
-      6
+      10
      ],
      [
       "BEAT!",
-      8
+      12
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "KEEP",
+      0,
+      4,
+      55
+     ],
+     [
+      "EM",
+      4,
+      4,
+      55
+     ],
+     [
+      "ON",
+      8,
+      2,
+      57
+     ],
+     [
+      "THE",
+      10,
+      2,
+      57
+     ],
+     [
+      "BEAT",
+      12,
+      12,
+      59
+     ]
+    ]
    },
    {
     "id": "c1c",
     "bar": 40,
     "part": "chorus",
-    "singer": "vex",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "IF THE MUSIC STOPS,",
     "words": [
@@ -707,43 +1201,103 @@ window.SCORE = {
      ],
      [
       "STOPS,",
-      6
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "IF",
+      0,
+      2,
+      59
+     ],
+     [
+      "THE",
+      2,
+      2,
+      59
+     ],
+     [
+      "MU",
+      4,
+      2,
+      60
+     ],
+     [
+      "SIC",
+      6,
+      2,
+      59
+     ],
+     [
+      "STOPS",
+      8,
+      2,
+      62
+     ]
+    ]
    },
    {
     "id": "c1d",
     "bar": 42,
     "part": "chorus",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "WE'RE SOMETHING TO EAT!",
+    "text": "WE'RE ALL DEAD MEAT!",
     "words": [
      [
       "WE'RE",
       0
      ],
      [
-      "SOMETHING",
+      "ALL",
       2
      ],
      [
-      "TO",
+      "DEAD",
       4
      ],
      [
-      "EAT!",
-      6
+      "MEAT!",
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "WE'RE",
+      0,
+      2,
+      59
+     ],
+     [
+      "ALL",
+      2,
+      2,
+      59
+     ],
+     [
+      "DEAD",
+      4,
+      4,
+      57
+     ],
+     [
+      "MEAT",
+      8,
+      14,
+      54
+     ]
+    ]
    },
    {
     "id": "v2a",
     "bar": 56,
     "part": "verse2",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "Same old stage and the same old crowd,",
     "words": [
@@ -761,34 +1315,85 @@ window.SCORE = {
      ],
      [
       "and",
-      6
-     ],
-     [
-      "the",
       8
      ],
      [
-      "same",
+      "the",
       10
      ],
      [
-      "old",
+      "same",
       12
      ],
      [
-      "crowd,",
+      "old",
       14
+     ],
+     [
+      "crowd,",
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "Same",
+      0,
+      2,
+      52
+     ],
+     [
+      "old",
+      2,
+      2,
+      52
+     ],
+     [
+      "stage",
+      4,
+      4,
+      55
+     ],
+     [
+      "and",
+      8,
+      2,
+      52
+     ],
+     [
+      "the",
+      10,
+      2,
+      52
+     ],
+     [
+      "same",
+      12,
+      2,
+      55
+     ],
+     [
+      "old",
+      14,
+      2,
+      57
+     ],
+     [
+      "crowd",
+      16,
+      8,
+      59
+     ]
+    ]
    },
    {
     "id": "v2b",
     "bar": 58,
     "part": "verse2",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "same stopped clock, and it's three right now,",
+    "text": "same stopped clock and the same black cloud,",
     "words": [
      [
       "same",
@@ -799,37 +1404,88 @@ window.SCORE = {
       2
      ],
      [
-      "clock,",
+      "clock",
       4
      ],
      [
       "and",
-      6
-     ],
-     [
-      "it's",
       8
      ],
      [
-      "three",
+      "the",
       10
      ],
      [
-      "right",
+      "same",
       12
      ],
      [
-      "now,",
+      "black",
       14
+     ],
+     [
+      "cloud,",
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "same",
+      0,
+      2,
+      55
+     ],
+     [
+      "stopped",
+      2,
+      2,
+      55
+     ],
+     [
+      "clock",
+      4,
+      4,
+      52
+     ],
+     [
+      "and",
+      8,
+      2,
+      52
+     ],
+     [
+      "the",
+      10,
+      2,
+      52
+     ],
+     [
+      "same",
+      12,
+      2,
+      55
+     ],
+     [
+      "black",
+      14,
+      2,
+      57
+     ],
+     [
+      "cloud",
+      16,
+      8,
+      54
+     ]
+    ]
    },
    {
     "id": "v2c",
     "bar": 60,
     "part": "verse2",
     "singer": "vex",
+    "fx": "dry",
+    "display": "lyric",
     "zone": "auto",
     "text": "found my name on the safe-room wall,",
     "words": [
@@ -847,28 +1503,79 @@ window.SCORE = {
      ],
      [
       "on",
-      6
-     ],
-     [
-      "the",
       8
      ],
      [
-      "safe-room",
+      "the",
       10
      ],
      [
-      "wall,",
+      "safe-room",
       12
+     ],
+     [
+      "wall,",
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "found",
+      0,
+      2,
+      52
+     ],
+     [
+      "my",
+      2,
+      2,
+      52
+     ],
+     [
+      "name",
+      4,
+      4,
+      55
+     ],
+     [
+      "on",
+      8,
+      2,
+      52
+     ],
+     [
+      "the",
+      10,
+      2,
+      52
+     ],
+     [
+      "safe",
+      12,
+      2,
+      55
+     ],
+     [
+      "room",
+      14,
+      2,
+      57
+     ],
+     [
+      "wall",
+      16,
+      8,
+      59
+     ]
+    ]
    },
    {
     "id": "v2d",
     "bar": 62,
     "part": "verse2",
     "singer": "vex",
+    "fx": "dry",
+    "display": "lyric",
     "zone": "auto",
     "text": "don't remember writing it at all.",
     "words": [
@@ -882,28 +1589,85 @@ window.SCORE = {
      ],
      [
       "writing",
-      4
-     ],
-     [
-      "it",
-      6
-     ],
-     [
-      "at",
       8
      ],
      [
+      "it",
+      12
+     ],
+     [
+      "at",
+      14
+     ],
+     [
       "all.",
-      10
+      16
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "don't",
+      0,
+      2,
+      52
+     ],
+     [
+      "re",
+      2,
+      2,
+      52
+     ],
+     [
+      "mem",
+      4,
+      2,
+      57
+     ],
+     [
+      "ber",
+      6,
+      2,
+      55
+     ],
+     [
+      "wri",
+      8,
+      2,
+      52
+     ],
+     [
+      "ting",
+      10,
+      2,
+      52
+     ],
+     [
+      "it",
+      12,
+      2,
+      52
+     ],
+     [
+      "at",
+      14,
+      2,
+      54
+     ],
+     [
+      "all",
+      16,
+      12,
+      51
+     ]
+    ]
    },
    {
     "id": "c2a",
     "bar": 64,
     "part": "chorus",
-    "singer": "vex",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "KEEP THEM DANCING!",
     "words": [
@@ -913,20 +1677,47 @@ window.SCORE = {
      ],
      [
       "THEM",
-      2
+      4
      ],
      [
       "DANCING!",
-      4
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "KEEP",
+      0,
+      4,
+      55
+     ],
+     [
+      "THEM",
+      4,
+      4,
+      55
+     ],
+     [
+      "DAN",
+      8,
+      6,
+      59
+     ],
+     [
+      "CING",
+      14,
+      10,
+      57
+     ]
+    ]
    },
    {
     "id": "c2b",
     "bar": 66,
     "part": "chorus",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "KEEP 'EM ON THE BEAT!",
     "words": [
@@ -936,28 +1727,61 @@ window.SCORE = {
      ],
      [
       "'EM",
-      2
-     ],
-     [
-      "ON",
       4
      ],
      [
+      "ON",
+      8
+     ],
+     [
       "THE",
-      6
+      10
      ],
      [
       "BEAT!",
-      8
+      12
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "KEEP",
+      0,
+      4,
+      55
+     ],
+     [
+      "EM",
+      4,
+      4,
+      55
+     ],
+     [
+      "ON",
+      8,
+      2,
+      57
+     ],
+     [
+      "THE",
+      10,
+      2,
+      57
+     ],
+     [
+      "BEAT",
+      12,
+      12,
+      59
+     ]
+    ]
    },
    {
     "id": "c2c",
     "bar": 68,
     "part": "chorus",
-    "singer": "vex",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "IF THE MUSIC STOPS,",
     "words": [
@@ -975,43 +1799,103 @@ window.SCORE = {
      ],
      [
       "STOPS,",
-      6
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "IF",
+      0,
+      2,
+      59
+     ],
+     [
+      "THE",
+      2,
+      2,
+      59
+     ],
+     [
+      "MU",
+      4,
+      2,
+      60
+     ],
+     [
+      "SIC",
+      6,
+      2,
+      59
+     ],
+     [
+      "STOPS",
+      8,
+      2,
+      62
+     ]
+    ]
    },
    {
     "id": "c2d",
     "bar": 70,
     "part": "chorus",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "WE'RE SOMETHING TO EAT!",
+    "text": "WE'RE ALL DEAD MEAT!",
     "words": [
      [
       "WE'RE",
       0
      ],
      [
-      "SOMETHING",
+      "ALL",
       2
      ],
      [
-      "TO",
+      "DEAD",
       4
      ],
      [
-      "EAT!",
-      6
+      "MEAT!",
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "WE'RE",
+      0,
+      2,
+      59
+     ],
+     [
+      "ALL",
+      2,
+      2,
+      59
+     ],
+     [
+      "DEAD",
+      4,
+      4,
+      57
+     ],
+     [
+      "MEAT",
+      8,
+      14,
+      54
+     ]
+    ]
    },
    {
     "id": "z1",
     "bar": 76,
     "part": "chant",
     "singer": "zombies",
+    "fx": "choir",
+    "display": "lyric",
     "zone": "auto",
     "text": "ONE! MORE! SONG!",
     "words": [
@@ -1028,13 +1912,34 @@ window.SCORE = {
       8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "ONE",
+      0,
+      3,
+      48
+     ],
+     [
+      "MORE",
+      4,
+      3,
+      50
+     ],
+     [
+      "SONG",
+      8,
+      6,
+      52
+     ]
+    ]
    },
    {
     "id": "z2",
     "bar": 80,
     "part": "chant",
     "singer": "zombies",
+    "fx": "choir",
+    "display": "lyric",
     "zone": "auto",
     "text": "ONE! MORE! SONG!",
     "words": [
@@ -1051,13 +1956,160 @@ window.SCORE = {
       8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "ONE",
+      0,
+      3,
+      48
+     ],
+     [
+      "MORE",
+      4,
+      3,
+      50
+     ],
+     [
+      "SONG",
+      8,
+      6,
+      52
+     ]
+    ]
+   },
+   {
+    "id": "z3",
+    "bar": 81,
+    "part": "chant",
+    "singer": "zombies",
+    "fx": "choir",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "ONE! MORE! SONG! ONE! MORE! SONG!",
+    "words": [
+     [
+      "ONE!",
+      0
+     ],
+     [
+      "MORE!",
+      2
+     ],
+     [
+      "SONG!",
+      4
+     ],
+     [
+      "ONE!",
+      8
+     ],
+     [
+      "MORE!",
+      10
+     ],
+     [
+      "SONG!",
+      12
+     ]
+    ],
+    "notes": [
+     [
+      "ONE",
+      0,
+      2,
+      48
+     ],
+     [
+      "MORE",
+      2,
+      2,
+      50
+     ],
+     [
+      "SONG",
+      4,
+      3,
+      52
+     ],
+     [
+      "ONE",
+      8,
+      2,
+      48
+     ],
+     [
+      "MORE",
+      10,
+      2,
+      50
+     ],
+     [
+      "SONG",
+      12,
+      4,
+      52
+     ]
+    ]
+   },
+   {
+    "id": "lift",
+    "bar": 91,
+    "part": "lift",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "EVERYBODY UP!",
+    "words": [
+     [
+      "EVERYBODY",
+      0
+     ],
+     [
+      "UP!",
+      8
+     ]
+    ],
+    "notes": [
+     [
+      "EV",
+      0,
+      2,
+      52
+     ],
+     [
+      "ERY",
+      2,
+      2,
+      52
+     ],
+     [
+      "BO",
+      4,
+      2,
+      55
+     ],
+     [
+      "DY",
+      6,
+      2,
+      57
+     ],
+     [
+      "UP",
+      8,
+      8,
+      59
+     ]
+    ]
    },
    {
     "id": "c3a",
     "bar": 92,
     "part": "chorus",
-    "singer": "vex",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "KEEP THEM DANCING!",
     "words": [
@@ -1067,20 +2119,47 @@ window.SCORE = {
      ],
      [
       "THEM",
-      2
+      4
      ],
      [
       "DANCING!",
-      4
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "KEEP",
+      0,
+      4,
+      57
+     ],
+     [
+      "THEM",
+      4,
+      4,
+      57
+     ],
+     [
+      "DAN",
+      8,
+      6,
+      61
+     ],
+     [
+      "CING",
+      14,
+      10,
+      59
+     ]
+    ]
    },
    {
     "id": "c3b",
     "bar": 94,
     "part": "chorus",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "KEEP 'EM ON THE BEAT!",
     "words": [
@@ -1090,28 +2169,61 @@ window.SCORE = {
      ],
      [
       "'EM",
-      2
-     ],
-     [
-      "ON",
       4
      ],
      [
+      "ON",
+      8
+     ],
+     [
       "THE",
-      6
+      10
      ],
      [
       "BEAT!",
-      8
+      12
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "KEEP",
+      0,
+      4,
+      57
+     ],
+     [
+      "EM",
+      4,
+      4,
+      57
+     ],
+     [
+      "ON",
+      8,
+      2,
+      59
+     ],
+     [
+      "THE",
+      10,
+      2,
+      59
+     ],
+     [
+      "BEAT",
+      12,
+      12,
+      61
+     ]
+    ]
    },
    {
     "id": "c3c",
     "bar": 96,
     "part": "chorus",
-    "singer": "vex",
+    "singer": "vex+gang",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
     "text": "IF THE MUSIC STOPS,",
     "words": [
@@ -1129,68 +2241,115 @@ window.SCORE = {
      ],
      [
       "STOPS,",
-      6
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "IF",
+      0,
+      2,
+      61
+     ],
+     [
+      "THE",
+      2,
+      2,
+      61
+     ],
+     [
+      "MU",
+      4,
+      2,
+      62
+     ],
+     [
+      "SIC",
+      6,
+      2,
+      61
+     ],
+     [
+      "STOPS",
+      8,
+      2,
+      64
+     ]
+    ]
    },
    {
     "id": "c3d",
     "bar": 98,
     "part": "chorus",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "WE'RE SOMETHING TO EAT!",
+    "text": "WE'RE DEAD ON OUR FEET!",
     "words": [
      [
       "WE'RE",
       0
      ],
      [
-      "SOMETHING",
+      "DEAD",
       2
      ],
      [
-      "TO",
+      "ON",
       4
      ],
      [
-      "EAT!",
+      "OUR",
       6
+     ],
+     [
+      "FEET!",
+      8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "WE'RE",
+      0,
+      2,
+      61
+     ],
+     [
+      "DEAD",
+      2,
+      2,
+      61
+     ],
+     [
+      "ON",
+      4,
+      2,
+      59
+     ],
+     [
+      "OUR",
+      6,
+      2,
+      59
+     ],
+     [
+      "FEET",
+      8,
+      14,
+      56
+     ]
+    ]
    },
    {
     "id": "r1",
     "bar": 100,
     "part": "call",
     "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
     "zone": "auto",
-    "text": "One more song?",
-    "words": [
-     [
-      "One",
-      0
-     ],
-     [
-      "more",
-      2
-     ],
-     [
-      "song?",
-      4
-     ]
-    ],
-    "notes": null
-   },
-   {
-    "id": "r2",
-    "bar": 101,
-    "part": "response",
-    "singer": "zombies",
-    "zone": "auto",
-    "text": "ONE MORE SONG!",
+    "text": "ONE MORE SONG?",
     "words": [
      [
       "ONE",
@@ -1201,40 +2360,38 @@ window.SCORE = {
       4
      ],
      [
-      "SONG!",
+      "SONG?",
       8
      ]
     ],
-    "notes": null
-   },
-   {
-    "id": "r3",
-    "bar": 102,
-    "part": "call",
-    "singer": "vex",
-    "zone": "auto",
-    "text": "One more song?",
-    "words": [
+    "notes": [
      [
-      "One",
-      0
+      "ONE",
+      0,
+      4,
+      54
      ],
      [
-      "more",
-      2
+      "MORE",
+      4,
+      4,
+      57
      ],
      [
-      "song?",
-      4
+      "SONG",
+      8,
+      8,
+      61
      ]
-    ],
-    "notes": null
+    ]
    },
    {
-    "id": "r4",
-    "bar": 103,
+    "id": "r2",
+    "bar": 101,
     "part": "response",
     "singer": "zombies",
+    "fx": "crowd",
+    "display": "lyric",
     "zone": "auto",
     "text": "ONE! MORE! SONG!",
     "words": [
@@ -1251,18 +2408,182 @@ window.SCORE = {
       8
      ]
     ],
-    "notes": null
+    "notes": [
+     [
+      "ONE",
+      0,
+      3,
+      50
+     ],
+     [
+      "MORE",
+      4,
+      3,
+      52
+     ],
+     [
+      "SONG",
+      8,
+      6,
+      54
+     ]
+    ]
+   },
+   {
+    "id": "r3",
+    "bar": 102,
+    "part": "call",
+    "singer": "vex",
+    "fx": "megaphone",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "HOW MANY MORE?",
+    "words": [
+     [
+      "HOW",
+      0
+     ],
+     [
+      "MANY",
+      4
+     ],
+     [
+      "MORE?",
+      8
+     ]
+    ],
+    "notes": [
+     [
+      "HOW",
+      0,
+      4,
+      54
+     ],
+     [
+      "MA",
+      4,
+      2,
+      57
+     ],
+     [
+      "NY",
+      6,
+      2,
+      57
+     ],
+     [
+      "MORE",
+      8,
+      8,
+      61
+     ]
+    ]
+   },
+   {
+    "id": "r4",
+    "bar": 103,
+    "part": "response",
+    "singer": "zombies+gang",
+    "fx": "crowd",
+    "display": "lyric",
+    "zone": "auto",
+    "text": "ONE! MORE! SONG!",
+    "words": [
+     [
+      "ONE!",
+      0
+     ],
+     [
+      "MORE!",
+      4
+     ],
+     [
+      "SONG!",
+      8
+     ]
+    ],
+    "notes": [
+     [
+      "ONE",
+      0,
+      3,
+      50
+     ],
+     [
+      "MORE",
+      4,
+      3,
+      52
+     ],
+     [
+      "SONG",
+      8,
+      6,
+      54
+     ]
+    ]
    }
   ],
   "spoken": [
    {
-    "id": "lou_open",
-    "bar": 0,
+    "id": "lou_open1",
+    "bar": 1,
+    "beat": 0,
+    "voice": "lou",
+    "fx": "radio",
+    "text": "Welcome back to Last Call Lou, thirteen-thirteen A.M.",
+    "win": [
+     4,
+     11.75
+    ],
+    "words": null,
+    "dur": null,
+    "flite": "Welcome back, to Last Call Lou. Thirteen thirteen, ay em."
+   },
+   {
+    "id": "lou_open2",
+    "bar": 3,
+    "beat": 0,
+    "voice": "lou",
+    "fx": "radio",
+    "text": "Three A.M. Full house again.",
+    "win": [
+     12,
+     16.75
+    ],
+    "words": null,
+    "dur": null,
+    "flite": "Three ay em. Full house, again."
+   },
+   {
+    "id": "lou_open3",
+    "bar": 4,
     "beat": 1,
     "voice": "lou",
     "fx": "radio",
-    "text": "This is Last Call Lou, thirteen-thirteen on your A.M. dial. Three A.M., and they're restless tonight. Rescue's two minutes out. Whatever you do... don't let the music stop.",
-    "words": null
+    "text": "Rescue's two minutes out.",
+    "win": [
+     17,
+     20
+    ],
+    "words": null,
+    "dur": null,
+    "flite": "Rescue's two minutes out."
+   },
+   {
+    "id": "lou_open4",
+    "bar": 5,
+    "beat": 0,
+    "voice": "lou",
+    "fx": "radio",
+    "text": "Whatever you do... don't let the music stop.",
+    "win": [
+     20,
+     25.5
+    ],
+    "words": null,
+    "dur": null,
+    "flite": "Whatever you do. Don't let the music. Stop."
    },
    {
     "id": "tiny_count",
@@ -1271,6 +2592,10 @@ window.SCORE = {
     "voice": "tiny",
     "fx": "shout",
     "text": "ONE! TWO! THREE! FOUR!",
+    "win": [
+     28,
+     32
+    ],
     "words": [
      [
       "ONE!",
@@ -1288,7 +2613,8 @@ window.SCORE = {
       "FOUR!",
       12
      ]
-    ]
+    ],
+    "dur": null
    },
    {
     "id": "groan",
@@ -1297,34 +2623,64 @@ window.SCORE = {
     "voice": "zombie",
     "fx": "dry",
     "text": "one... more...",
+    "win": [
+     292.5,
+     296
+    ],
     "words": [
      [
       "one...",
-      0
+      2
      ],
      [
       "more...",
-      6
+      12
      ]
-    ]
+    ],
+    "dur": null
    },
    {
     "id": "lou_rescue",
-    "bar": 75,
+    "bar": 74,
     "beat": 2,
     "voice": "lou",
     "fx": "radio",
-    "text": "Rescue's two minutes out, kids.",
-    "words": null
+    "text": "Rescue's two minutes out.",
+    "win": [
+     298,
+     302
+    ],
+    "words": null,
+    "dur": null,
+    "take": "lou_open3"
+   },
+   {
+    "id": "roadie_check",
+    "bar": 78,
+    "beat": 1.5,
+    "voice": "roadie",
+    "fx": "dry",
+    "text": "check... one... two...",
+    "win": [
+     313.5,
+     316
+    ],
+    "words": null,
+    "dur": null
    },
    {
     "id": "lou_ride",
     "bar": 90,
-    "beat": 0,
+    "beat": 1,
     "voice": "lou",
     "fx": "radio",
     "text": "Your ride is here, kids.",
-    "words": null
+    "win": [
+     361,
+     364.5
+    ],
+    "words": null,
+    "dur": null
    },
    {
     "id": "vex_goodnight",
@@ -1333,6 +2689,10 @@ window.SCORE = {
     "voice": "vex",
     "fx": "megaphone",
     "text": "GOOD NIGHT!",
+    "win": [
+     418,
+     420
+    ],
     "words": [
      [
       "GOOD",
@@ -1342,7 +2702,22 @@ window.SCORE = {
       "NIGHT!",
       2
      ]
-    ]
+    ],
+    "dur": null
+   },
+   {
+    "id": "fan",
+    "bar": 107,
+    "beat": 0,
+    "voice": "fan",
+    "fx": "distant",
+    "text": "One more song!",
+    "win": [
+     428,
+     431
+    ],
+    "words": null,
+    "dur": null
    },
    {
     "id": "lou_close",
@@ -1351,26 +2726,46 @@ window.SCORE = {
     "voice": "lou",
     "fx": "radio",
     "text": "Great show, kids. Same time tomorrow.",
-    "words": null
+    "win": [
+     432,
+     438
+    ],
+    "words": null,
+    "dur": null
    }
   ]
  },
  "hits": [
   {
    "type": "radioTune",
-   "beat": 0
+   "beat": 0,
+   "toBeat": 1.5,
+   "note": "the sweep crosses 870 kHz and catches 0.5 s of the 1987 bootleg before settling on 1313"
+  },
+  {
+   "type": "radioUp",
+   "beat": 3,
+   "note": "Granny turns the radio up: +6 dB, wider band; Lou comes in clear on bar 1"
   },
   {
    "type": "thunder",
-   "beat": 8
+   "beat": 10,
+   "k": 0.5
   },
   {
    "type": "thunder",
-   "beat": 22
+   "beat": 26,
+   "note": "into the silence after \"stop.\""
+  },
+  {
+   "type": "organChoke",
+   "beat": 24.5,
+   "note": "organ drone and heartbeat stop dead on \"stop.\""
   },
   {
    "type": "countIn",
-   "beat": 28
+   "beat": 28,
+   "toBeat": 32
   },
   {
    "type": "titleHit",
@@ -1400,6 +2795,35 @@ window.SCORE = {
   {
    "type": "carCrash",
    "beat": 62.5
+  },
+  {
+   "type": "lick",
+   "beat": 70,
+   "who": "vex",
+   "note": "megaphone feedback squeal on B4, beats 3-4 of bar 17"
+  },
+  {
+   "type": "lick",
+   "beat": 76,
+   "who": "granny",
+   "note": "16ths E5 G5 A5 Bb5 B5, pinch-harmonic dive bomb"
+  },
+  {
+   "type": "pump",
+   "beat": 79,
+   "note": "Gerald's pump chk-chk"
+  },
+  {
+   "type": "lick",
+   "beat": 84,
+   "who": "tiny",
+   "note": "tom fill with baseball bats (wooden tock) into one crash"
+  },
+  {
+   "type": "lick",
+   "beat": 92,
+   "who": "noodle",
+   "note": "bass lick E2 G2 A2 B2, the B buzzing and sagging a quarter-tone (duct-taped neck)"
   },
   {
    "type": "groupieSob",
@@ -1442,21 +2866,57 @@ window.SCORE = {
   },
   {
    "type": "reload",
-   "beat": 160
+   "beat": 162.75,
+   "note": "inside the STOPS gap: only the reload sounds"
   },
   {
    "type": "doorSlam",
-   "beat": 192
+   "beat": 192,
+   "note": "the band stab on bar 48 is the slam"
   },
   {
    "type": "doorPound",
    "beat": 197,
-   "toBeat": 224,
-   "every": 2
+   "toBeat": 216,
+   "every": 2,
+   "note": "the backbeat of the breakdown"
   },
   {
    "type": "pills",
-   "beat": 198
+   "beat": 198,
+   "toBeat": 206,
+   "note": "the pill bottle as a 16th-note shaker"
+  },
+  {
+   "type": "musicBox",
+   "beat": 192,
+   "toBeat": 215,
+   "note": "the hook at half speed"
+  },
+  {
+   "type": "knock",
+   "beat": 218
+  },
+  {
+   "type": "knock",
+   "beat": 219
+  },
+  {
+   "type": "knock",
+   "beat": 219.5
+  },
+  {
+   "type": "knock",
+   "beat": 220
+  },
+  {
+   "type": "knock",
+   "beat": 221
+  },
+  {
+   "type": "tinyKnock",
+   "beat": 223,
+   "note": "Tiny answers the knock: two bits"
   },
   {
    "type": "doorBurst",
@@ -1464,7 +2924,24 @@ window.SCORE = {
   },
   {
    "type": "sparks",
-   "beat": 246
+   "beat": 246,
+   "note": "Noodle plugs in: ZZZAP, amp-on thunk, mains hum, 2 beats of B4 feedback swelling into the right guitar"
+  },
+  {
+   "type": "crowdHuh",
+   "beat": 263
+  },
+  {
+   "type": "crowdHuh",
+   "beat": 271
+  },
+  {
+   "type": "crowdHuh",
+   "beat": 279
+  },
+  {
+   "type": "zombieHuh",
+   "beat": 275
   },
   {
    "type": "tapeStop",
@@ -1480,24 +2957,65 @@ window.SCORE = {
    "beat": 291
   },
   {
-   "type": "genPull",
-   "beat": 300
+   "type": "phonesUp",
+   "beat": 292.5,
+   "note": "hundreds of phone screens light up on \"one...\""
+  },
+  {
+   "type": "flashback",
+   "beat": 294.25,
+   "toBeat": 295,
+   "note": "0.3 s of the 1987 bootleg: chord, ...MORE SONG!, fire roar, alarm bell; cut by a tape click as the reflection vanishes"
   },
   {
    "type": "genPull",
-   "beat": 308
+   "beat": 300,
+   "pitch": "C3"
   },
   {
    "type": "genPull",
-   "beat": 316
+   "beat": 308,
+   "pitch": "D3"
+  },
+  {
+   "type": "genPull",
+   "beat": 316,
+   "pitch": "D#3"
+  },
+  {
+   "type": "reverseBeep",
+   "beat": 309
+  },
+  {
+   "type": "reverseBeep",
+   "beat": 310
+  },
+  {
+   "type": "reverseBeep",
+   "beat": 311
   },
   {
    "type": "roadieStinger",
-   "beat": 312
+   "beat": 312,
+   "note": "detuned low brass cluster Bb1+E2, sub drop, stomp"
+  },
+  {
+   "type": "stomp",
+   "beat": 313
+  },
+  {
+   "type": "stomp",
+   "beat": 315
   },
   {
    "type": "genCatch",
-   "beat": 324
+   "beat": 324,
+   "note": "locks into an E2 idle with an 8th-note chug"
+  },
+  {
+   "type": "ampsOn",
+   "beat": 326,
+   "note": "click and hum; both guitars feed back up to E5 into the solo"
   },
   {
    "type": "lightsOn",
@@ -1536,21 +3054,64 @@ window.SCORE = {
    "beat": 356
   },
   {
+   "type": "curtainFire",
+   "beat": 344,
+   "toBeat": 360,
+   "note": "the stage-left jet licks the curtain at bar 86; a small flame climbs it"
+  },
+  {
    "type": "frisbee",
    "beat": 354
   },
   {
    "type": "ding",
-   "beat": 356
+   "beat": 356,
+   "pitch": "B5"
+  },
+  {
+   "type": "roadieThud",
+   "beat": 357
+  },
+  {
+   "type": "bandHit",
+   "beat": 360,
+   "note": "B5 hit on beat 1, choked on beat 2; Lou in the hole"
   },
   {
    "type": "chopper",
    "beat": 360,
-   "toBeat": 448
+   "toBeat": 448,
+   "note": "a 16th-note thup locked to the grid, low-passed; replaces the hats in the final chorus; muffled in the coda"
+  },
+  {
+   "type": "fireworks",
+   "beat": 375
+  },
+  {
+   "type": "fireworks",
+   "beat": 383
+  },
+  {
+   "type": "fireworks",
+   "beat": 391
+  },
+  {
+   "type": "fireworks",
+   "beat": 398
+  },
+  {
+   "type": "fireworks",
+   "beat": 399
   },
   {
    "type": "finalHit",
    "beat": 420
+  },
+  {
+   "type": "burn",
+   "beat": 422,
+   "toBeat": 424,
+   "note": "the freeze-frame burns like jammed film"
   },
   {
    "type": "thermalHum",
@@ -1559,24 +3120,57 @@ window.SCORE = {
   },
   {
    "type": "applause",
-   "beat": 428,
-   "toBeat": 448
+   "beat": 426,
+   "toBeat": 447,
+   "note": "real crowd applause and whistles, distant"
   },
   {
-   "type": "musicBox",
-   "beat": 440
+   "type": "hudChirp",
+   "beat": 438,
+   "note": "HEAT SIGNATURES 1,204 -> 1,205"
+  },
+  {
+   "type": "musicBoxCoda",
+   "beat": 440,
+   "toBeat": 447.9,
+   "note": "E minor; slows; the spring runs out with a click before STOPS"
   }
  ],
  "gaps": [
   {
    "fromBeat": 62.75,
    "toBeat": 64,
-   "note": "after the crash: debris and silence, the verse slams in on bar 16"
+   "note": "after the crash: debris only"
+  },
+  {
+   "fromBeat": 162.5,
+   "toBeat": 163.5,
+   "note": "ch1: the band stops on STOPS; only the reload"
+  },
+  {
+   "fromBeat": 216.25,
+   "toBeat": 218,
+   "note": "safe room: everything stops; the handwriting line lands"
+  },
+  {
+   "fromBeat": 221.25,
+   "toBeat": 223,
+   "note": "the pause before Tiny answers the knock"
+  },
+  {
+   "fromBeat": 274.5,
+   "toBeat": 275.5,
+   "note": "ch2: the pit freezes mid-headbang; one zombie huh?"
   },
   {
    "fromBeat": 288,
    "toBeat": 296,
-   "note": "blackout: the band is gone (tape stop ends at bar 72); room tone, clicks, the groan only"
+   "note": "blackout: room tone, two clicks, the groan, the 0.3 s flashback; no band"
+  },
+  {
+   "fromBeat": 386.5,
+   "toBeat": 387.5,
+   "note": "ch3: only the chopper blades"
   },
   {
    "fromBeat": 422,
@@ -1586,9 +3180,9 @@ window.SCORE = {
  ],
  "captions": [
   {
-   "bar": 4,
-   "beat": 2,
-   "beats": 6,
+   "bar": 0,
+   "beat": 1,
+   "beats": 5,
    "who": "GRANNY",
    "text": "Turn it up. I'm old, not dead.",
    "pos": "auto"
@@ -1596,15 +3190,15 @@ window.SCORE = {
   {
    "bar": 12,
    "beat": 0,
-   "beats": 4,
+   "beats": 3,
    "who": "VEX",
-   "text": "Is that... a crowd?",
+   "text": "We SOLD OUT!",
    "pos": "auto"
   },
   {
    "bar": 13,
    "beat": 0,
-   "beats": 4,
+   "beats": 3,
    "who": "TINY",
    "text": "That's a horde.",
    "pos": "auto"
@@ -1612,7 +3206,7 @@ window.SCORE = {
   {
    "bar": 14,
    "beat": 2,
-   "beats": 6,
+   "beats": 4,
    "who": "NOODLE",
    "text": "BRAKES! BRAKES! BRAKES!",
    "pos": "auto"
@@ -1620,33 +3214,17 @@ window.SCORE = {
   {
    "bar": 25,
    "beat": 0,
-   "beats": 6,
-   "who": "NOODLE",
-   "text": "Why are our faces on a MISSING poster?",
-   "pos": "auto"
-  },
-  {
-   "bar": 26,
-   "beat": 2,
-   "beats": 5,
+   "beats": 4,
    "who": "GRANNY",
    "text": "Good photo of me, though.",
    "pos": "auto"
   },
   {
-   "bar": 28,
-   "beat": 2,
-   "beats": 5,
-   "who": "TINY",
-   "text": "Lights off. It's a Groupie.",
-   "pos": "auto"
-  },
-  {
-   "bar": 30,
-   "beat": 2,
-   "beats": 5,
+   "bar": 31,
+   "beat": 0,
+   "beats": 4,
    "who": "GROUPIE",
-   "text": "VEX?! SIGN MY CAST!!!",
+   "text": "VEX!!! SIGN IT AGAIN!!!",
    "pos": "auto"
   },
   {
@@ -1659,22 +3237,22 @@ window.SCORE = {
   },
   {
    "bar": 40,
-   "beat": 0,
-   "beats": 4,
+   "beat": 2.5,
+   "beats": 3,
    "who": "GRANNY",
-   "text": "RELOADING!",
-   "pos": "auto"
-  },
-  {
-   "bar": 42,
-   "beat": 2,
-   "beats": 5,
-   "who": "VEX",
-   "text": "I can't hear the click track!",
+   "text": "Reloading, dear.",
    "pos": "auto"
   },
   {
    "bar": 44,
+   "beat": 0,
+   "beats": 4,
+   "who": "VEX",
+   "text": "Where's my click track?!",
+   "pos": "auto"
+  },
+  {
+   "bar": 45,
    "beat": 0,
    "beats": 4,
    "who": "TINY",
@@ -1683,48 +3261,48 @@ window.SCORE = {
   },
   {
    "bar": 46,
-   "beat": 0,
-   "beats": 6,
+   "beat": 1,
+   "beats": 5,
    "who": "NOODLE",
-   "text": "SAFE ROOM! RED DOOR!",
+   "text": "THE RED DOOR! GO!",
    "pos": "auto"
   },
   {
    "bar": 49,
-   "beat": 2,
-   "beats": 5,
+   "beat": 1,
+   "beats": 3,
    "who": "GRANNY",
-   "text": "PILLS HERE!",
+   "text": "Ooh. Mints.",
    "pos": "auto"
   },
   {
    "bar": 50,
-   "beat": 2,
-   "beats": 5,
+   "beat": 0,
+   "beats": 4,
    "who": "TINY",
    "text": "Those are my heart pills.",
    "pos": "auto"
   },
   {
    "bar": 51,
-   "beat": 3,
-   "beats": 4,
+   "beat": 0,
+   "beats": 3,
    "who": "GRANNY",
    "text": "Not anymore.",
    "pos": "auto"
   },
   {
-   "bar": 52,
-   "beat": 2,
-   "beats": 6,
+   "bar": 53,
+   "beat": 0,
+   "beats": 4,
    "who": "NOODLE",
    "text": "Guys... who's been counting?",
    "pos": "auto"
   },
   {
    "bar": 54,
-   "beat": 2,
-   "beats": 6,
+   "beat": 0,
+   "beats": 5,
    "who": "VEX",
    "text": "...that's my handwriting.",
    "pos": "auto"
@@ -1740,113 +3318,73 @@ window.SCORE = {
   {
    "bar": 59,
    "beat": 0,
-   "beats": 5,
-   "who": "NOODLE",
-   "text": "It says CONDEMNED.",
+   "beats": 4,
+   "who": "GRANNY",
+   "text": "So are we, dear.",
    "pos": "auto"
   },
   {
-   "bar": 60,
+   "bar": 64,
    "beat": 2,
    "beats": 4,
-   "who": "VEX",
-   "text": "So are we, kid.",
+   "who": "TINY",
+   "text": "They know the words.",
    "pos": "auto"
   },
   {
-   "bar": 61,
+   "bar": 70,
    "beat": 2,
    "beats": 3,
-   "who": "NOODLE",
-   "text": "Plugging in... OW.",
-   "pos": "auto"
-  },
-  {
-   "bar": 66,
-   "beat": 0,
-   "beats": 5,
-   "who": "TINY",
-   "text": "They're... headbanging?",
-   "pos": "auto"
-  },
-  {
-   "bar": 67,
-   "beat": 2,
-   "beats": 5,
-   "who": "GRANNY",
-   "text": "They're FANS, sweetie.",
+   "who": "VEX",
+   "text": "They LOVE me.",
    "pos": "auto"
   },
   {
    "bar": 72,
    "beat": 1,
-   "beats": 5,
+   "beats": 3,
    "who": "NOODLE",
    "text": "Who unplugged the—",
    "pos": "auto"
   },
   {
    "bar": 74,
-   "beat": 2,
-   "beats": 4,
-   "who": "TINY",
-   "text": "Generator. NOW.",
-   "pos": "auto"
-  },
-  {
-   "bar": 75,
-   "beat": 1,
-   "beats": 3,
+   "beat": 0,
+   "beats": 2,
    "who": "NOODLE",
-   "text": "PULL!",
+   "text": "Guys, the mirror—",
    "pos": "auto"
   },
   {
    "bar": 77,
-   "beat": 1,
-   "beats": 3,
-   "who": "NOODLE",
-   "text": "It's flooded!",
-   "pos": "auto"
-  },
-  {
-   "bar": 77,
-   "beat": 3,
+   "beat": 0,
    "beats": 4,
-   "who": "TINY",
-   "text": "SO ARE MY PANTS!",
-   "pos": "auto"
-  },
-  {
-   "bar": 79,
-   "beat": 1,
-   "beats": 3,
    "who": "NOODLE",
-   "text": "PULL!!",
+   "text": "It's ALWAYS two minutes!",
    "pos": "auto"
   },
   {
    "bar": 80,
-   "beat": 0,
-   "beats": 4,
+   "beat": 3,
+   "beats": 3,
    "who": "GRANNY",
-   "text": "Kid. Pull it like you mean it.",
+   "text": "Stop choking, sweetie.",
    "pos": "auto"
   },
   {
    "bar": 82,
    "beat": 0,
-   "beats": 4,
+   "beats": 3,
    "who": "GRANNY",
-   "text": "SOLO!!!",
+   "text": "My turn.",
    "pos": "auto"
   },
   {
    "bar": 86,
    "beat": 0,
-   "beats": 4,
+   "beats": 3,
    "who": "VEX",
-   "text": "Big one! Twelve o'clock!",
+   "text": "That's MY move!",
    "pos": "auto"
   },
   {
@@ -1858,51 +3396,35 @@ window.SCORE = {
    "pos": "auto"
   },
   {
-   "bar": 90,
-   "beat": 0,
-   "beats": 5,
-   "who": "LOU",
-   "text": "Your ride is here, kids.",
+   "bar": 89,
+   "beat": 2,
+   "beats": 2,
+   "who": "NOODLE",
+   "text": "Is the curtain supposed to—",
    "pos": "auto"
   },
   {
    "bar": 93,
    "beat": 0,
-   "beats": 5,
+   "beats": 4,
    "who": "NOODLE",
    "text": "We're actually getting out?!",
    "pos": "auto"
   },
   {
    "bar": 94,
-   "beat": 2,
-   "beats": 6,
+   "beat": 3,
+   "beats": 5,
    "who": "GRANNY",
    "text": "Same chopper as last night.",
    "pos": "auto"
   },
   {
    "bar": 96,
-   "beat": 2,
+   "beat": 2.75,
    "beats": 4,
    "who": "NOODLE",
    "text": "There was a LAST night?",
-   "pos": "auto"
-  },
-  {
-   "bar": 99,
-   "beat": 0,
-   "beats": 4,
-   "who": "TINY",
-   "text": "Not without my kit.",
-   "pos": "auto"
-  },
-  {
-   "bar": 108,
-   "beat": 0,
-   "beats": 6,
-   "who": "LOU",
-   "text": "Great show, kids. Same time tomorrow.",
    "pos": "auto"
   }
  ],
@@ -1922,9 +3444,10 @@ window.SCORE = {
    "beat": 0,
    "beats": 8,
    "who": "VEX",
+   "side": "right",
    "name": "VEX",
    "role": "VOCALS",
-   "line": "Has never once read the room."
+   "line": "Hair: immortal."
   },
   {
    "type": "intro",
@@ -1932,9 +3455,10 @@ window.SCORE = {
    "beat": 0,
    "beats": 8,
    "who": "GRANNY",
+   "side": "left",
    "name": "GRANNY GLOOM",
    "role": "LEAD GUITAR",
-   "line": "71. Shotgun named Gerald."
+   "line": "71 for years now. Shotgun: Gerald."
   },
   {
    "type": "intro",
@@ -1942,8 +3466,9 @@ window.SCORE = {
    "beat": 0,
    "beats": 8,
    "who": "TINY",
+   "side": "right",
    "name": "TINY",
-   "role": "DRUMS",
+   "role": "DRUMS & PYRO",
    "line": "Isn't."
   },
   {
@@ -1952,6 +3477,7 @@ window.SCORE = {
    "beat": 0,
    "beats": 8,
    "who": "NOODLE",
+   "side": "left",
    "name": "NOODLE",
    "role": "BASS",
    "line": "Joined for the dental plan."
@@ -1960,200 +3486,465 @@ window.SCORE = {
    "type": "chapter",
    "bar": 24,
    "beat": 0,
-   "beats": 7,
-   "n": "PART ONE",
+   "beats": 4,
+   "n": "ACT ONE",
    "title": "THE STREETS"
   },
   {
    "type": "special",
    "bar": 28,
-   "beat": 0,
+   "beat": 3,
    "beats": 5,
    "name": "THE GROUPIE",
-   "line": "Do not startle."
+   "line": "Biggest fan. No eye contact."
   },
   {
    "type": "warning",
    "bar": 32,
    "beat": 0,
-   "beats": 8,
-   "text": "HERE THEY COME"
+   "beats": 6,
+   "text": "SOLD OUT",
+   "style": "stamp"
   },
   {
    "type": "chapter",
    "bar": 48,
    "beat": 0,
-   "beats": 7,
-   "n": "PART TWO",
+   "beats": 4,
+   "n": "INTERMISSION",
    "title": "THE SAFE ROOM"
   },
   {
    "type": "chapter",
    "bar": 56,
    "beat": 0,
-   "beats": 7,
-   "n": "PART THREE",
+   "beats": 4,
+   "n": "ACT TWO",
    "title": "THE ORPHEUM"
   },
   {
    "type": "special",
    "bar": 78,
    "beat": 0,
-   "beats": 6,
+   "beats": 5,
    "name": "THE ROADIE",
-   "line": "Here for the load-out."
+   "line": "All access. Cargo shorts. No mercy."
   },
   {
    "type": "chapter",
-   "bar": 90,
+   "bar": 91,
    "beat": 0,
-   "beats": 7,
-   "n": "PART FOUR",
-   "title": "THE ENCORE"
+   "beats": 4,
+   "n": "ENCORE",
+   "title": "THE ROOF"
   },
   {
    "type": "end",
-   "bar": 109,
-   "beat": 2,
-   "beats": 10,
+   "bar": 110,
+   "beat": 0,
+   "beats": 8,
+   "stagger": 4,
    "lines": [
-    "NIGHT {night} · COMPLETE",
+    "NIGHT {night} · NO SURVIVORS",
     "NIGHT {next} BEGINS IN {countdown}"
    ]
   }
  ],
  "clues": [
   {
-   "id": "clock",
-   "title": "Every clock says 3:00",
-   "note": "ALWAYS 3:00?",
-   "bar": 3
+   "id": "lou",
+   "hub": "who",
+   "bar": 1.5,
+   "hold": [
+    1,
+    2.75
+   ],
+   "shot": "van",
+   "title": "1313 AM",
+   "note": "who is LOU?"
   },
   {
-   "id": "lou",
-   "title": "1313 AM",
-   "note": "Who is LOU?",
-   "bar": 1
+   "id": "clock",
+   "hub": "when",
+   "bar": 3.25,
+   "hold": [
+    2.75,
+    4.25
+   ],
+   "shot": "van",
+   "title": "Every clock says 3:00",
+   "note": "none of them tick. 3:00... or an L?"
   },
   {
    "id": "missing",
+   "hub": "when",
+   "bar": 25,
+   "hold": [
+    24.5,
+    26.5
+   ],
+   "shot": "street",
    "title": "MISSING since 1987",
-   "note": "that's US??",
-   "bar": 25
+   "note": "Granny hasn't aged a day. LOU PRESENTS?"
   },
   {
-   "id": "wristband",
-   "title": "ADMIT ONE",
-   "note": "they all have TICKETS",
-   "bar": 66
-  },
-  {
-   "id": "notdead",
-   "title": "THEY'RE NOT THE DEAD ONES",
-   "note": "then who is?",
-   "bar": 51
+   "id": "groupie",
+   "hub": "crowd",
+   "bar": 29.5,
+   "hold": [
+    29,
+    30.5
+   ],
+   "shot": "street",
+   "title": "The alley",
+   "note": "candles. flowers. their photo."
   },
   {
    "id": "tally",
+   "hub": "who",
+   "bar": 53.5,
+   "hold": [
+    53,
+    54
+   ],
+   "shot": "saferoom",
    "title": "Who has been counting?",
-   "note": "NIGHT {night}",
-   "bar": 53
+   "note": "{prev} nights. same as night 1."
   },
   {
    "id": "handwriting",
+   "hub": "who",
+   "bar": 54.5,
+   "hold": [
+    54,
+    55.5
+   ],
+   "shot": "saferoom",
    "title": "VEX WAS HERE",
-   "note": "his handwriting",
-   "bar": 54.5
+   "note": "his handwriting. he doesn't remember. LOU LIES?"
   },
   {
    "id": "condemned",
+   "hub": "when",
+   "bar": 58.5,
+   "hold": [
+    58,
+    59.5
+   ],
+   "shot": "orpheum",
    "title": "CONDEMNED · FIRE · 3:00 AM",
-   "note": "31 OCT 1987",
-   "bar": 58.5
+   "note": "31 OCT 1987. same minute as the clocks."
+  },
+  {
+   "id": "wristband",
+   "hub": "crowd",
+   "bar": 66,
+   "hold": [
+    65.5,
+    66.75
+   ],
+   "shot": "stage",
+   "title": "ADMIT ONE",
+   "note": "zombies don't buy tickets."
   },
   {
    "id": "setlist",
+   "hub": "when",
+   "bar": 67.5,
+   "hold": [
+    67,
+    68.25
+   ],
+   "shot": "stage",
    "title": "The setlist",
-   "note": "read it top to bottom",
-   "bar": 67.5
+   "note": "first things first.",
+   "board": "card"
   },
   {
    "id": "mirror",
+   "hub": "when",
+   "bar": 73.55,
+   "hold": [
+    73.375,
+    73.75
+   ],
+   "shot": "blackout",
    "title": "In the mirror",
-   "note": "what did Noodle see?",
-   "bar": 73
+   "note": "that's Granny's beehive."
   },
   {
    "id": "chopper",
+   "hub": "who",
+   "bar": 94,
+   "hold": [
+    93.5,
+    94.75
+   ],
+   "shot": "rooftop",
    "title": "Same chopper as last night",
-   "note": "every night?",
-   "bar": 94
+   "note": "rescue is always two minutes out.",
+   "reply": {
+    "who": "GRANNY",
+    "text": "every night, sweetie."
+   }
   },
   {
    "id": "thermal",
+   "hub": "crowd",
+   "bar": 108.5,
+   "hold": [
+    106.5,
+    111
+   ],
+   "shot": "thermal",
    "title": "Thermal",
-   "note": "THEY'RE WARM. WE'RE COLD.",
-   "bar": 108
+   "note": "1,204 warm. 4 cold."
+  },
+  {
+   "id": "wave",
+   "hub": "crowd",
+   "bar": 109.75,
+   "hold": [
+    109.5,
+    110.5
+   ],
+   "shot": "thermal",
+   "title": "...is that ME?",
+   "note": "is that ME?",
+   "witching": true
   }
  ],
+ "board": {
+  "title": "THINGS THAT DON'T ADD UP",
+  "voice": "one fan, lowercase marker, calls the band \"they\"; observations and questions, never answers",
+  "hubs": [
+   {
+    "id": "when",
+    "q": "WHAT HAPPENED AT 3:00 AM?"
+   },
+   {
+    "id": "crowd",
+    "q": "WHO'S IN THE CROWD?"
+   },
+   {
+    "id": "who",
+    "q": "WHO BOOKED THIS GIG?"
+   }
+  ],
+  "strings": [
+   {
+    "a": "clock",
+    "b": "lou",
+    "label": "3:00... or an L?"
+   },
+   {
+    "a": "condemned",
+    "b": "contract",
+    "label": "3:00 AM / 2:59 AM"
+   },
+   {
+    "a": "wristband",
+    "b": "ticket",
+    "label": "same purple"
+   },
+   {
+    "a": "thermal",
+    "b": "ticket",
+    "label": "1,204 / No. 1,205"
+   },
+   {
+    "a": "handwriting",
+    "b": "contract",
+    "label": "LOU LIES / UNTIL THE MUSIC STOPS"
+   }
+  ]
+ },
+ "contract": {
+  "head": "ENGAGEMENT AGREEMENT",
+  "lines": [
+   "PROMOTER: [mark]",
+   "ARTIST: NO SURVIVORS (4 PIECE)",
+   "VENUE: THE ORPHEUM",
+   "SHOWS: NIGHTLY · DOORS 3:00 AM",
+   "TERM: UNTIL THE MUSIC STOPS",
+   "FEE: ONE MORE ░░░░",
+   "SIGNED 31 OCT 1987 · 2:59 AM"
+  ],
+  "sign": [
+   "Vex",
+   "G. Gloom",
+   "Tiny",
+   "Noodle"
+  ],
+  "witchingLine": "______________ (+1)"
+ },
+ "ticket": {
+  "lines": [
+   "ADMIT ONE · No. 1,205",
+   "NO SURVIVORS · THE ORPHEUM",
+   "NIGHT {next} · DOORS 3:00 AM",
+   "{countdown}"
+  ],
+  "witchingStamp": "YOU CAME BACK"
+ },
+ "numbers": {
+  "capacity": 1204,
+  "ticket": 1205,
+  "station": 1313,
+  "tape": 1204,
+  "numbers": 1031,
+  "bleed": 870,
+  "note": "1,204 = the notice capacity = the thermal HEAT SIGNATURES = the 1987 tape station; 1,205 = the ticket = the +1 at the end"
+ },
+ "texts": {
+  "gate": {
+   "normal": "NIGHT {night} · RECORDED 3:00 AM · NEXT DOORS IN {countdown}",
+   "witching": "NIGHT {night} · LIVE NOW · DOORS ARE OPEN"
+  },
+  "condemned": [
+   "CONDEMNED",
+   "FIRE · 31 OCT 1987 · 3:00 AM",
+   "UNSAFE STRUCTURE · CAPACITY 1,204 · NO ADMITTANCE",
+   "BY ORDER OF THE CITY"
+  ],
+  "missing": [
+   "MISSING",
+   "SINCE 1987",
+   "LAST SEEN: THE ORPHEUM"
+  ],
+  "gigPoster": [
+   "LAST CALL LOU PRESENTS",
+   "NO SURVIVORS",
+   "THE ORPHEUM",
+   "FRI 30 OCT 1987 · ONE NIGHT ONLY",
+   "LIVE ON 1313 AM"
+  ],
+  "wristband": "ADMIT ONE",
+  "stageDoor": "STAGE DOOR",
+  "vigilSign": "ONE MORE SONG",
+  "groupieShirt": "NO SURVIVORS · THE ORPHEUM · OCT '87",
+  "pillLabel": "TINY · HEART · 1 DAILY",
+  "graffiti": [
+   {
+    "text": "THEY DON'T BITE.",
+    "who": "NOODLE",
+    "clue": true
+   },
+   {
+    "text": "THEY CLAP.",
+    "who": "TINY",
+    "clue": true
+   },
+   {
+    "text": "NIGHT {prev}: SAME AS NIGHT 1",
+    "who": "NOODLE",
+    "clue": true
+   },
+   {
+    "text": "VEX WAS HERE ★",
+    "who": "VEX",
+    "clue": true,
+    "signature": true
+   },
+   {
+    "text": "DON'T STOP PLAYING",
+    "who": "VEX",
+    "clue": true
+   },
+   {
+    "text": "LOU LIES",
+    "who": "GRANNY",
+    "clue": true
+   },
+   {
+    "text": "FREE MINTS →",
+    "who": "GRANNY"
+   },
+   {
+    "text": "TINY — TAKE YOUR PILLS ♥ — TINY",
+    "who": "TINY"
+   },
+   {
+    "text": "CHOKE IS ON THE LEFT, NOODLE",
+    "who": "GRANNY"
+   },
+   {
+    "text": "\"TWO MINUTES\" MY FOOT",
+    "who": "GRANNY"
+   },
+   {
+    "text": "SHE JUST WANTS AN AUTOGRAPH",
+    "who": "TINY"
+   },
+   {
+    "text": "NO MORE ENCORES!!",
+    "who": "NOODLE",
+    "struck": true
+   },
+   {
+    "text": "ONE MORE SONG ★",
+    "who": "VEX"
+   }
+  ],
+  "thermalHud": {
+   "tl": "● REC  CAM 1",
+   "tr": "03:00:00",
+   "bl": "HEAT SIGNATURES {heat}",
+   "br": "LADDER 0"
+  },
+  "odometer": "rolls from {prev} to {night} on bar 3 (\"Full house again\")"
+ },
  "setlist": {
-  "header": "NO SURVIVORS · THE ORPHEUM",
+  "header": "NO SURVIVORS · THE ORPHEUM · FRI 30 OCT '87",
   "songs": [
    "Horde Call",
-   "Eat the Rich (Literally)",
+   "Eat Your Heart Out",
    "Last Call Lou",
-   "Pills & Thrills",
-   "Undead Weight",
-   "Safe Room (Don't Knock)"
+   "Pyro Party",
+   "Up in Smoke",
+   "Same Time Tomorrow"
   ],
   "encore": "Keep Them Dancing",
-  "acrostic": "HELPUS"
+  "acrostic": "HELPUS",
+  "note": "taped by the mic stand, in Vex's handwriting; bottom edge charred; encore underlined twice; never highlight the acrostic"
  },
  "radio": [
+  {
+   "id": "bleed",
+   "freq": 870,
+   "voice": "song",
+   "loop": true,
+   "text": "the 1987 audience bootleg of this chorus (DEAD MEAT lyric, E minor): mono cassette, wow, flutter, hiss, the crowd yelling ONE MORE SONG between lines, a fire-alarm bell from its 6th second, feedback, tape cut"
+  },
+  {
+   "id": "numbers",
+   "freq": 1031,
+   "voice": "numbers",
+   "loop": true,
+   "text": "one. zero. three. one. one. nine. eight. seven. zero. three. zero. zero."
+  },
+  {
+   "id": "tape",
+   "freq": 1204,
+   "voice": "tape1987",
+   "loop": true,
+   "reversed": true,
+   "text": "One more, kids. Keep them dancing. I'll take care of the doors.",
+   "bed": "fire bell ringing; the crowd chanting ONE MORE SONG; the band's last chord",
+   "note": "Lou dry and close to the mic (not band-passed): the only time he is not on the radio. Stored forwards; the board plays it reversed by default and its reverse button plays it forwards"
+  },
   {
    "id": "lou",
    "freq": 1313,
    "voice": "lou",
-   "text": "You're still listening. Good. Doors at three. Bring a friend.",
-   "fromSec": null,
-   "toSec": null
+   "text": "You're still listening. Good. Doors at three, kid. Bring a friend."
   },
   {
    "id": "lou3am",
    "freq": 1313,
    "voice": "lou",
    "witching": true,
-   "text": "You came back. The doors are open, kid. Come on in.",
-   "fromSec": null,
-   "toSec": null
-  },
-  {
-   "id": "numbers",
-   "freq": 1031,
-   "voice": "numbers",
-   "text": "one. zero. three. one. one. nine. eight. seven.",
-   "loop": true,
-   "fromSec": null,
-   "toSec": null
-  },
-  {
-   "id": "chant",
-   "freq": 1600,
-   "voice": "zombies",
-   "reversed": true,
-   "text": "one more song, one more song, one more song",
-   "loop": true,
-   "fromSec": null,
-   "toSec": null
-  },
-  {
-   "id": "bleed",
-   "freq": 870,
-   "voice": "song",
-   "text": "(the chorus, bleeding through, lo-fi)",
-   "loop": true,
-   "fromSec": null,
-   "toSec": null
+   "text": "You came back. They always come back. Doors are open, kid."
   }
  ],
  "cues": [
@@ -2245,8 +4036,7 @@ window.SCORE = {
     64
    ],
    "trans": {
-    "type": "flash",
-    "beats": 0.5
+    "type": "cut"
    }
   },
   {
@@ -2308,8 +4098,8 @@ window.SCORE = {
     112
    ],
    "trans": {
-    "type": "glitch",
-    "beats": 1
+    "type": "burn",
+    "beats": 2
    }
   }
  ],
@@ -2317,5 +4107,5 @@ window.SCORE = {
   "text": "Flashing lights: muzzle flashes, lightning and stage lights.",
   "reduce": "Reduce flashing"
  },
- "composerTodo": "chords, drums, bass, riffs, arrangement and every vocals.lines[].notes are filled in by the composer; words may be re-timed to the melody. Delete this key when done."
+ "composerTodo": "Fill chords, bass, riffs, arrangement, drums; finalise every vocals.lines[].notes (seeded from the critique; adjust freely but keep words aligned) and document every key you add under \"notes\". Delete this key when done."
 };
