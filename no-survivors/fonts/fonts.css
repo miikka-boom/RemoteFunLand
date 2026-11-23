@@ -1,0 +1,7 @@
+/* NO SURVIVORS: self-hosted fonts (latin subsets from Google Fonts). Licences in fonts/LICENSES.txt. */
+@font-face { font-family: 'Metal Mania'; src: url(metal-mania.woff2) format('woff2'); font-weight: 400; font-display: block }
+@font-face { font-family: 'Anton'; src: url(anton.woff2) format('woff2'); font-weight: 400; font-display: block }
+@font-face { font-family: 'Bangers'; src: url(bangers.woff2) format('woff2'); font-weight: 400; font-display: block }
+@font-face { font-family: 'Permanent Marker'; src: url(permanent-marker.woff2) format('woff2'); font-weight: 400; font-display: block }
+@font-face { font-family: 'Share Tech Mono'; src: url(share-tech-mono.woff2) format('woff2'); font-weight: 400; font-display: block }
+@font-face { font-family: 'Special Elite'; src: url(special-elite.woff2) format('woff2'); font-weight: 400; font-display: block }
