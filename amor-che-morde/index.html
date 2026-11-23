@@ -1,0 +1,252 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>L’Amor che Morde: a zombie opera</title>
+<meta name="description" content="A zombie opera in three acts, sung by synthesized voices in a toy theatre: a bride is poisoned at her wedding, rises at midnight, and still loves her groom. She is also very hungry.">
+<meta name="theme-color" content="#14060a">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500;1,600&family=Playfair+Display:ital,wght@0,700;0,900;1,700;1,900&display=swap">
+<style>
+:root {
+  --night: #0b0509;
+  --velvet: #7d0f1b;
+  --velvet-deep: #3d060c;
+  --gold: #d9b45a;
+  --gold-pale: #f3dea0;
+  --paper: #f3e8cf;
+  --paper-edge: #e3d2ad;
+  --ink: #26141a;
+  --ink-soft: #5d4646;
+  --sub-en: #fbf3df;
+  --sub-it: #e0c27a;
+  --f-display: "Playfair Display", "Bodoni 72", Didot, Georgia, serif;
+  --f-text: "Cormorant Garamond", Garamond, "Times New Roman", serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; height: 100%; background: var(--night); color: var(--sub-en); overflow: hidden; }
+body { font: 500 18px/1.35 var(--f-text); -webkit-font-smoothing: antialiased; touch-action: manipulation; }
+button { font: inherit; color: inherit; }
+a { color: inherit }
+#stage { position: fixed; inset: 0; width: 100%; height: 100%; display: block; cursor: pointer; }
+.vignette { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(ellipse at 50% 48%, transparent 55%, rgba(0,0,0,.5) 100%); }
+
+/* the way back */
+.back {
+  position: fixed; z-index: 30;
+  top: max(10px, env(safe-area-inset-top)); left: max(12px, env(safe-area-inset-left));
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px 6px 10px;
+  border: 1px solid rgba(217, 180, 90, 0.55); border-radius: 999px;
+  background: rgba(20, 6, 10, 0.72); backdrop-filter: blur(6px);
+  font: 600 15px/1 var(--f-text); letter-spacing: .04em; text-decoration: none; color: var(--gold-pale);
+}
+.back:hover, .back:focus-visible { background: rgba(60, 10, 18, 0.9); outline: none; border-color: var(--gold); }
+
+/* surtitles */
+#subs {
+  position: fixed; z-index: 10; left: 50%; transform: translateX(-50%);
+  width: min(92vw, 900px);
+  display: grid; align-content: center; justify-items: center; gap: 2px;
+  text-align: center; pointer-events: none;
+  transition: opacity .25s ease;
+}
+#subs .it { font: italic 600 15px/1.2 var(--f-text); color: var(--sub-it); letter-spacing: .02em; min-height: 1.2em; }
+#subs .en { font: 600 22px/1.2 var(--f-text); color: var(--sub-en); text-wrap: balance; text-shadow: 0 1px 6px rgba(0,0,0,.6); }
+#subs.title .en { font: 700 21px/1.2 var(--f-display); letter-spacing: .02em; color: var(--gold-pale); }
+#subs.note .en { font-style: italic; color: #e8dcc0; }
+#subs.board { background: none; }
+#subs.band { background: linear-gradient(180deg, rgba(8,3,6,.86), rgba(8,3,6,.7)); border: 1px solid rgba(217,180,90,.35); border-radius: 10px; padding: 8px 14px; }
+#subs.hidden, #subs.empty { opacity: 0; }
+
+/* the programme */
+#programme {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; place-items: center;
+  padding: max(54px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  background: radial-gradient(ellipse at 50% 40%, rgba(20,4,8,.35), rgba(8,2,4,.78));
+  transition: opacity .6s ease, visibility .6s;
+}
+#programme.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+.card {
+  position: relative;
+  width: min(100%, 520px);
+  padding: 26px 26px 22px;
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse at 30% 20%, rgba(255,255,255,.35), transparent 60%),
+    radial-gradient(ellipse at 80% 90%, rgba(150,110,60,.18), transparent 55%),
+    var(--paper);
+  border-radius: 4px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.6), 0 0 0 1px var(--paper-edge) inset;
+}
+.card::before {
+  content: ""; position: absolute; inset: 9px; border: 2px solid var(--velvet); outline: 1px solid var(--velvet); outline-offset: 3px; pointer-events: none; border-radius: 2px;
+}
+.kicker { margin: 4px 0 0; text-align: center; font: 700 12px/1.3 var(--f-text); letter-spacing: .32em; text-transform: uppercase; color: var(--velvet); }
+.season { margin: 2px 0 0; text-align: center; font: italic 500 14px/1.3 var(--f-text); color: var(--ink-soft); }
+h1 {
+  margin: 14px 0 0; text-align: center;
+  font: italic 900 clamp(40px, 10vw, 58px)/.95 var(--f-display); letter-spacing: -.01em; color: var(--velvet);
+}
+.tr { margin: 6px 0 0; text-align: center; font: italic 600 18px/1.2 var(--f-text); color: var(--ink-soft); }
+.rule { display: flex; align-items: center; gap: 10px; margin: 14px 4px; color: var(--velvet); }
+.rule::before, .rule::after { content: ""; flex: 1; height: 1px; background: currentColor; opacity: .6; }
+.rule span { font-size: 14px; }
+.credits { margin: 0; text-align: center; font: 600 16px/1.35 var(--f-text); }
+.credits em { font-weight: 500; color: var(--ink-soft); }
+.cast { margin: 0; padding: 0; list-style: none; display: grid; gap: 4px; }
+.cast li { display: flex; align-items: baseline; gap: 6px; font: 600 16px/1.25 var(--f-text); }
+.cast li .role { flex: 0 1 auto; }
+.cast li .role em { font-weight: 500; color: var(--ink-soft); }
+.cast li .dots { flex: 1; border-bottom: 1px dotted rgba(38,20,26,.45); transform: translateY(-4px); min-width: 12px; }
+.cast li .voice { flex: none; font: italic 600 15px/1.25 var(--f-text); color: var(--velvet); }
+.cast-h { margin: 0 0 8px; text-align: center; font: 700 12px/1 var(--f-text); letter-spacing: .3em; text-transform: uppercase; color: var(--velvet); }
+.go {
+  display: block; width: 100%; margin: 18px 0 0; padding: 13px 16px;
+  border: 0; border-radius: 3px; cursor: pointer;
+  background: linear-gradient(180deg, #a5162a, #6d0a16); color: var(--gold-pale);
+  font: italic 700 22px/1 var(--f-display); letter-spacing: .01em;
+  box-shadow: 0 1px 0 rgba(255,255,255,.25) inset, 0 8px 20px rgba(90,0,10,.35);
+}
+.go:hover, .go:focus-visible { background: linear-gradient(180deg, #b81c32, #7a0c1a); outline: 2px solid var(--gold); outline-offset: 2px; }
+.go:disabled { opacity: .7; cursor: progress; }
+.fine-print { margin: 10px 0 0; text-align: center; font: italic 500 14px/1.35 var(--f-text); color: var(--ink-soft); }
+details { margin: 12px 0 0; font: 500 15.5px/1.4 var(--f-text); }
+summary { cursor: pointer; text-align: center; font: 700 12px/1 var(--f-text); letter-spacing: .26em; text-transform: uppercase; color: var(--velvet); list-style: none; padding: 6px; }
+summary::-webkit-details-marker { display: none; }
+summary::after { content: " ▾"; }
+details[open] summary::after { content: " ▴"; }
+details p { margin: 8px 0 0; }
+details b { font-variant: small-caps; letter-spacing: .05em; color: var(--velvet); }
+.jump { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; margin: 12px 0 0; }
+.jump button { padding: 4px 10px; border: 1px solid rgba(125,15,27,.4); border-radius: 999px; background: transparent; color: var(--velvet); font: 600 14px/1.2 var(--f-text); cursor: pointer; }
+.jump button:hover, .jump button:focus-visible { background: rgba(125,15,27,.08); outline: none; border-color: var(--velvet); }
+
+/* controls */
+#controls {
+  position: fixed; z-index: 15; left: 50%; transform: translateX(-50%);
+  bottom: max(10px, env(safe-area-inset-bottom));
+  width: min(calc(100vw - 20px), 760px);
+  display: grid; grid-template-columns: auto auto 1fr auto auto; align-items: center; gap: 10px;
+  padding: 8px 12px;
+  background: rgba(14, 5, 9, 0.82); backdrop-filter: blur(8px);
+  border: 1px solid rgba(217,180,90,.35); border-radius: 14px;
+  font: 600 15px/1 var(--f-text); color: var(--gold-pale);
+  transition: opacity .35s ease, transform .35s ease;
+}
+#controls.idle { opacity: 0; transform: translateX(-50%) translateY(8px); pointer-events: none; }
+#controls[hidden] { display: none; }
+.ib { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid rgba(217,180,90,.45); border-radius: 50%; background: transparent; cursor: pointer; padding: 0; }
+.ib:hover, .ib:focus-visible { background: rgba(217,180,90,.14); outline: none; }
+.ib svg { width: 16px; height: 16px; fill: var(--gold-pale); }
+.time { font-variant-numeric: tabular-nums; min-width: 86px; font-size: 14px; color: #e6d3a3; }
+.bar { position: relative; height: 26px; cursor: pointer; touch-action: none; }
+.bar .track { position: absolute; left: 0; right: 0; top: 11px; height: 4px; border-radius: 2px; background: rgba(243,222,160,.22); }
+.bar .fill { position: absolute; left: 0; top: 11px; height: 4px; border-radius: 2px; background: var(--gold); }
+.bar .tick { position: absolute; top: 7px; width: 2px; height: 12px; background: rgba(243,222,160,.7); border-radius: 1px; }
+.bar .knob { position: absolute; top: 6px; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: var(--gold-pale); box-shadow: 0 0 0 3px rgba(217,180,90,.25); }
+.chip { padding: 7px 10px; border: 1px solid rgba(217,180,90,.45); border-radius: 999px; background: transparent; cursor: pointer; font: 600 14px/1 var(--f-text); color: var(--gold-pale); white-space: nowrap; }
+.chip:hover, .chip:focus-visible { background: rgba(217,180,90,.14); outline: none; }
+#acts { position: fixed; z-index: 16; bottom: calc(max(10px, env(safe-area-inset-bottom)) + 62px); left: 50%; transform: translateX(-50%); min-width: 230px; padding: 6px; background: rgba(18,6,10,.95); border: 1px solid rgba(217,180,90,.4); border-radius: 12px; display: grid; gap: 2px; }
+#acts[hidden] { display: none; }
+#acts button { text-align: left; padding: 9px 12px; border: 0; border-radius: 8px; background: transparent; cursor: pointer; font: 600 16px/1.1 var(--f-text); color: var(--gold-pale); display: flex; justify-content: space-between; gap: 14px; }
+#acts button span { color: #b9a37a; font-variant-numeric: tabular-nums; font-size: 14px; }
+#acts button:hover, #acts button:focus-visible { background: rgba(217,180,90,.14); outline: none; }
+
+/* the end */
+#fine { position: fixed; inset: 0; z-index: 18; display: grid; place-items: center; padding: 16px; pointer-events: none; opacity: 0; transition: opacity .8s ease; }
+#fine.on { opacity: 1; pointer-events: auto; }
+#fine .card { text-align: center; width: min(100%, 420px); }
+#fine h2 { margin: 6px 0 0; font: italic 900 46px/1 var(--f-display); color: var(--velvet); }
+#fine p { margin: 8px 0 0; font: italic 500 16px/1.35 var(--f-text); color: var(--ink-soft); }
+#fine .row { display: grid; gap: 8px; margin-top: 14px; }
+#fine .alt { background: transparent; color: var(--velvet); border: 1px solid rgba(125,15,27,.5); box-shadow: none; font-size: 19px; }
+#fine a.alt { display: block; padding: 12px; border-radius: 3px; text-decoration: none; font: italic 700 19px/1 var(--f-display); }
+
+.hint { position: fixed; z-index: 12; left: 50%; transform: translateX(-50%); bottom: calc(max(10px, env(safe-area-inset-bottom)) + 66px); padding: 6px 12px; border-radius: 999px; background: rgba(14,5,9,.8); border: 1px solid rgba(217,180,90,.3); font: italic 600 15px/1.2 var(--f-text); color: #f0dfb0; opacity: 0; transition: opacity .5s; pointer-events: none; white-space: nowrap; }
+.hint.on { opacity: 1; }
+
+@media (max-width: 560px) {
+  #controls { grid-template-columns: auto 1fr auto auto; gap: 8px; padding: 7px 9px; }
+  #controls .time { display: none; }
+  #subs .en { font-size: 19px; }
+  #subs .it { font-size: 14px; }
+  .card { padding: 22px 18px 18px; }
+}
+body.thumb .back, body.thumb #controls, body.thumb .hint, body.thumb .vignette { display: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  #programme, #controls, #fine, #subs { transition: none; }
+}
+</style>
+</head>
+<body>
+<canvas id="stage" aria-label="A toy-theatre opera house. The curtain is down." role="img"></canvas>
+<div class="vignette" aria-hidden="true"></div>
+<a class="back" href="../">‹ RemoteFunLand</a>
+
+<div id="subs" class="empty" aria-live="polite"><div class="it"></div><div class="en"></div></div>
+
+<div id="programme">
+  <div class="card" role="dialog" aria-labelledby="ptitle">
+    <p class="kicker">Teatro dei Morti</p>
+    <p class="season">Stagione 1813 – ∞</p>
+    <h1 id="ptitle">L’Amor<br>che Morde</h1>
+    <p class="tr">The Love That Bites · opera in tre atti</p>
+    <div class="rule"><span>✠</span></div>
+    <p class="credits">Musica di <em>Giuseppe Verdastro</em><br>Libretto di <em>Lorenzo Da Tomba</em></p>
+    <div class="rule"><span>☙</span></div>
+    <p class="cast-h">Personaggi</p>
+    <ul class="cast">
+      <li><span class="role">Livia, <em>a bride</em></span><span class="dots"></span><span class="voice">soprano</span></li>
+      <li><span class="role">Amadeo, <em>her groom</em></span><span class="dots"></span><span class="voice">tenore</span></li>
+      <li><span class="role">La Contessa Velena, <em>who saw him first</em></span><span class="dots"></span><span class="voice">mezzosoprano</span></li>
+      <li><span class="role">Ossobuco, <em>the gravedigger</em></span><span class="dots"></span><span class="voice">basso buffo</span></li>
+      <li><span class="role">Villagers; <em>the Dead</em></span><span class="dots"></span><span class="voice">coro</span></li>
+      <li><span class="role">Maestro concertatore</span><span class="dots"></span><span class="voice">Rigor Mortis</span></li>
+    </ul>
+    <button class="go" id="go" type="button">Take your seat</button>
+    <p class="fine-print">Sung in Italian and Latin, with English surtitles · about 7½ minutes · sound on</p>
+    <details>
+      <summary>Synopsis</summary>
+      <p><b>Act One.</b> A village square at sunset. Livia marries Amadeo. The Contessa Velena, who had him first, proposes a toast. The wine is poisoned. Livia dies, at length.</p>
+      <p><b>Act Two.</b> The cemetery at midnight. Ossobuco the gravedigger complains that nobody stays buried any more. Amadeo weeps at Livia’s grave and begs her to come back. She does. She still loves him. She is also very hungry.</p>
+      <p><b>Act Three.</b> The same, a little later. The dead rise in chorus. The villagers arrive with torches, and the Contessa with them, briefly. Amadeo makes Livia an offer she cannot refuse.</p>
+    </details>
+    <div class="jump" id="jump" aria-label="Start from"></div>
+  </div>
+</div>
+
+<div id="controls" hidden>
+  <button class="ib" id="play" type="button" aria-label="Pause"><svg viewBox="0 0 16 16" aria-hidden="true"><path id="playicon" d="M3 2h3.5v12H3zM9.5 2H13v12H9.5z"/></svg></button>
+  <span class="time" id="time">0:00 / 0:00</span>
+  <div class="bar" id="bar" role="slider" aria-label="Position in the opera" tabindex="0" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div class="track"></div><div class="fill" id="fill"></div><div class="knob" id="knob"></div></div>
+  <button class="chip" id="actsbtn" type="button" aria-haspopup="true" aria-expanded="false">Acts</button>
+  <button class="chip" id="subsbtn" type="button" aria-label="Surtitles">IT + EN</button>
+</div>
+<div id="acts" hidden></div>
+<div class="hint" id="hint">Tap the stage to throw a rose</div>
+
+<div id="fine">
+  <div class="card">
+    <p class="kicker">Teatro dei Morti</p>
+    <h2>Fine</h2>
+    <p>Thank you for not groaning during the performance.</p>
+    <div class="row">
+      <button class="go" id="encore" type="button">Encore! (the finale again)</button>
+      <button class="go alt" id="again" type="button">From the top</button>
+      <a class="go alt" href="../">Back to RemoteFunLand</a>
+    </div>
+  </div>
+</div>
+
+<script src="score.js"></script>
+<script src="stage.js"></script>
+<script src="theatre.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
