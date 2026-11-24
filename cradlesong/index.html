@@ -1,0 +1,400 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cradlesong</title>
+<meta name="description" content="Teaser trailer for Cradlesong, a survival horror game: the dead have stopped screaming, and started humming a lullaby only one family knows.">
+<meta name="theme-color" content="#000000">
+<style>
+@font-face { font-family: "Cormorant Garamond"; src: url("fonts/cormorant-garamond-latin.woff2") format("woff2"); font-weight: 300 700; font-style: normal; font-display: swap; }
+@font-face { font-family: "Cormorant Garamond"; src: url("fonts/cormorant-garamond-italic-latin.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: swap; }
+@font-face { font-family: "Caveat"; src: url("fonts/caveat-latin.woff2") format("woff2"); font-weight: 400 700; font-display: swap; }
+@font-face { font-family: "VT323"; src: url("fonts/vt323-latin.woff2") format("woff2"); font-weight: 400; font-display: swap; }
+:root {
+  color-scheme: dark;
+  --ink: #ece4d4;
+  --ink-soft: rgba(236, 228, 212, .66);
+  --blood: #b3302a;
+  --serif: "Cormorant Garamond", Garamond, "Times New Roman", serif;
+  --mono: ui-monospace, Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box }
+html, body { margin: 0; height: 100%; background: #000; overflow: hidden }
+body { color: var(--ink); font: 400 16px/1.45 var(--serif); -webkit-font-smoothing: antialiased; }
+#stage { position: fixed; inset: 0; background: #000; touch-action: manipulation; user-select: none; -webkit-user-select: none }
+#view { position: absolute; display: block; background: #000 }
+.back {
+  position: fixed; z-index: 30;
+  top: max(12px, env(safe-area-inset-top)); left: max(14px, env(safe-area-inset-left));
+  color: var(--ink-soft); text-decoration: none;
+  font: 500 12px/1 var(--mono); letter-spacing: .08em;
+  transition: opacity .4s;
+}
+.back:hover { color: var(--ink) }
+.back:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid #e8c9a0; outline-offset: 3px }
+body.playing.idle .back { opacity: 0; pointer-events: none }
+
+/* the gate: poster, title, play */
+#gate {
+  position: fixed; inset: 0; z-index: 20;
+  display: grid; align-content: end; justify-items: center; text-align: center;
+  padding: 24px max(16px, env(safe-area-inset-right)) max(28px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left));
+  background: linear-gradient(to top, rgba(0,0,0,.92) 0%, rgba(0,0,0,.55) 42%, rgba(0,0,0,.15) 75%, rgba(0,0,0,.35) 100%);
+  transition: opacity .6s;
+}
+#gate.gone { opacity: 0; pointer-events: none }
+.kicker { margin: 0 0 6px; font: 500 11px/1.4 var(--mono); letter-spacing: .22em; color: var(--ink-soft); text-transform: uppercase }
+#gate h1 {
+  margin: 0; font-weight: 600; font-size: clamp(38px, 9vw, 92px); line-height: 1;
+  letter-spacing: .3em; text-indent: .3em; text-transform: uppercase;
+}
+.rule { width: min(260px, 50vw); height: 1px; margin: 16px auto 18px; background: var(--blood) }
+#play {
+  display: inline-flex; align-items: center; gap: 12px;
+  min-height: 52px; padding: 12px 28px 12px 22px;
+  border: 1px solid rgba(236,228,212,.55); border-radius: 999px;
+  background: rgba(10,8,8,.55); color: var(--ink);
+  font: 600 15px/1 var(--mono); letter-spacing: .22em; text-transform: uppercase;
+  cursor: pointer; -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px);
+}
+#play:hover { background: rgba(179,48,42,.55); border-color: rgba(236,228,212,.85) }
+#play[disabled] { opacity: .5; cursor: progress }
+#play svg { width: 16px; height: 16px; fill: currentColor }
+.notes { margin: 14px 0 0; max-width: 46ch; font: 400 12.5px/1.55 var(--mono); color: var(--ink-soft) }
+.notes strong { color: var(--ink); font-weight: 500 }
+.opt { display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; font: 400 12.5px/1 var(--mono); color: var(--ink-soft); cursor: pointer }
+.opt input { width: 16px; height: 16px; accent-color: var(--blood) }
+
+/* transport */
+#ctl {
+  position: fixed; z-index: 25; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; gap: 10px;
+  padding: 18px max(14px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  background: linear-gradient(to top, rgba(0,0,0,.75), rgba(0,0,0,0));
+  transition: opacity .4s;
+}
+#ctl[hidden] { display: none }
+body.playing.idle #ctl { opacity: 0; pointer-events: none }
+.ib {
+  flex: none; width: 40px; height: 40px; display: grid; place-items: center;
+  border: 0; border-radius: 50%; background: transparent; color: var(--ink); cursor: pointer;
+}
+.ib:hover { background: rgba(255,255,255,.08) }
+.ib svg { width: 20px; height: 20px; fill: currentColor }
+.ib[aria-pressed="true"] { color: #f0b49a }
+.ib.txt { width: auto; padding: 0 10px; border-radius: 20px; font: 600 11px/1 var(--mono); letter-spacing: .1em }
+#time { flex: none; font: 500 12px/1 var(--mono); color: var(--ink-soft); font-variant-numeric: tabular-nums; min-width: 84px }
+#seek { flex: 1; min-width: 60px; height: 24px; accent-color: var(--blood); background: transparent; cursor: pointer }
+
+#end {
+  position: fixed; inset: 0; z-index: 22; display: grid; place-content: center; justify-items: center; gap: 14px; text-align: center;
+  padding: 24px 16px; background: rgba(0,0,0,.6);
+}
+#end[hidden] { display: none }
+#end .row { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center }
+#end a { color: var(--ink-soft); font: 500 12px/1 var(--mono); letter-spacing: .12em; text-transform: uppercase; padding: 14px 6px }
+#end a:hover { color: var(--ink) }
+#msg { position: fixed; z-index: 26; left: 50%; top: 18%; transform: translateX(-50%); max-width: 90vw; padding: 8px 14px; border-radius: 6px; background: rgba(0,0,0,.7); font: 400 12.5px/1.4 var(--mono); color: var(--ink-soft); text-align: center }
+#msg[hidden] { display: none }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap }
+body.capture #gate, body.capture #ctl, body.capture .back, body.capture #end, body.capture #msg { display: none !important }
+@media (prefers-reduced-motion: reduce) { #gate, #ctl, .back { transition: none } }
+</style>
+
+<a class="back" href="../">← RemoteFunLand</a>
+<div id="stage">
+  <canvas id="view" aria-label="Cradlesong teaser trailer" role="img"></canvas>
+</div>
+<div id="live" class="sr" aria-live="polite"></div>
+
+<div id="gate">
+  <p class="kicker">A survival horror game · teaser trailer</p>
+  <h1>Cradlesong</h1>
+  <div class="rule"></div>
+  <button id="play" type="button" disabled>
+    <svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 1.5v13l11-6.5z"/></svg>
+    <span id="playLabel">Loading</span>
+  </button>
+  <p class="notes"><strong>2:25 · sound on</strong>, headphones if you can.<br>Contains flashing light, sudden loud sounds and horror imagery.</p>
+  <label class="opt"><input type="checkbox" id="reduce"> Reduce flashing and shake</label>
+</div>
+
+<div id="ctl" hidden>
+  <button class="ib" id="pp" type="button" aria-label="Pause"><svg viewBox="0 0 20 20" aria-hidden="true"><path id="ppIcon" d="M5 3h3.5v14H5zM11.5 3H15v14h-3.5z"/></svg></button>
+  <span id="time">0:00 / 2:25</span>
+  <input id="seek" type="range" min="0" max="145" step="0.1" value="0" aria-label="Seek">
+  <button class="ib txt" id="rf" type="button" aria-pressed="false" title="Reduce flashing and shake">CALM</button>
+  <button class="ib" id="fs" type="button" aria-label="Full screen"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2 2h6v2H4v4H2zM12 2h6v6h-2V4h-4zM2 12h2v4h4v2H2zM16 12h2v6h-6v-2h4z"/></svg></button>
+</div>
+
+<div id="end" hidden>
+  <div class="row">
+    <button id="replay" type="button" style="min-height:48px;padding:12px 24px;border:1px solid rgba(236,228,212,.55);border-radius:999px;background:rgba(10,8,8,.55);color:var(--ink);font:600 14px/1 var(--mono);letter-spacing:.2em;text-transform:uppercase;cursor:pointer">Watch again</button>
+  </div>
+  <a href="../">← Back to RemoteFunLand</a>
+</div>
+<div id="msg" hidden></div>
+
+<script src="score.js"></script>
+<script src="lib.js"></script>
+<script src="shots.js"></script>
+<script src="post.js"></script>
+<script>
+(() => {
+  'use strict';
+  const S = window.SCORE, SHOTS = window.CSHOTS, POST = window.CSPOST;
+  const DUR = S.duration;
+  const $ = (id) => document.getElementById(id);
+  const stage = $('stage'), view = $('view'), gate = $('gate'), playBtn = $('play'), playLabel = $('playLabel');
+  const ctl = $('ctl'), pp = $('pp'), ppIcon = $('ppIcon'), timeEl = $('time'), seek = $('seek'), rf = $('rf'), fsBtn = $('fs');
+  const endEl = $('end'), replay = $('replay'), msg = $('msg'), live = $('live'), reduceBox = $('reduce');
+  const Q = new URLSearchParams(location.search);
+  const capture = Q.has('capture');
+  const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+  const fmt = (t) => { t = Math.max(0, Math.floor(t)); return `${Math.floor(t / 60)}:${String(t % 60).padStart(2, '0')}`; };
+
+  // ---- reduced flashing: from the system setting, remembered if the viewer changes it
+  let reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  try { const v = localStorage.getItem('cradlesong-calm'); if (v !== null) reduced = v === '1'; } catch (e) { /* storage blocked */ }
+  if (Q.has('reduced')) reduced = true;
+  function setReduced(on, store) {
+    reduced = on;
+    reduceBox.checked = on;
+    rf.setAttribute('aria-pressed', String(on));
+    if (store) { try { localStorage.setItem('cradlesong-calm', on ? '1' : '0'); } catch (e) { /* storage blocked */ } }
+    if (!playing) draw(shownT);
+  }
+
+  // ---- canvases: shots draw into `film`, post.js finishes it onto `view`
+  const film = document.createElement('canvas');
+  const coarse = matchMedia('(pointer: coarse)').matches;
+  let maxPx = coarse ? 1.15e6 : 1.7e6, quality = 1;
+  let pic = { x: 0, y: 0, w: 1, h: 1 };
+  function layout() {
+    let w, h;
+    if (capture) { w = +Q.get('w') || 1280; h = +Q.get('h') || 720; pic = { x: 0, y: 0, w, h }; }
+    else {
+      const sw = window.innerWidth, sh = window.innerHeight, a = sw / sh;
+      w = sw; h = sh;
+      if (a > 2.4) w = sh * 2.4;
+      else if (a >= 1.25) { h = sw / 2.2; if (h > sh) { h = sh; w = sh * 2.2; } }
+      pic = { x: Math.round((sw - w) / 2), y: Math.round((sh - h) / 2), w: Math.round(w), h: Math.round(h) };
+    }
+    view.style.left = pic.x + 'px'; view.style.top = pic.y + 'px';
+    view.style.width = pic.w + 'px'; view.style.height = pic.h + 'px';
+    let k = capture ? 1 : Math.min(window.devicePixelRatio || 1, 2);
+    const px = pic.w * pic.h * k * k, cap = maxPx * quality;
+    if (!capture && px > cap) k *= Math.sqrt(cap / px);
+    const fw = Math.max(64, Math.round(pic.w * k)), fh = Math.max(64, Math.round(pic.h * k));
+    film.width = fw; film.height = fh;
+    POST.resize(fw, fh);
+    SHOTS.resize();
+  }
+
+  // ---- audio, and the clock that follows it
+  const audio = new Audio();
+  audio.preload = 'auto';
+  audio.src = 'cradlesong.mp3';
+  let audioOk = true;
+  audio.addEventListener('error', () => { audioOk = false; say('The soundtrack could not load, so this plays silently.', 6000); });
+  let actx = null, outLat = 0;
+  function wakeCtx() {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!actx && AC) { try { actx = new AC(); } catch (e) { actx = null; } }
+    if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+  }
+  function latency() {
+    if (!actx || actx.state !== 'running') return 0;
+    const l = actx.outputLatency || actx.baseLatency || 0;
+    return Number.isFinite(l) ? clamp(l, 0, 0.4) : 0;
+  }
+
+  let playing = false, ended = false, anchor = 0, shownT = 0, raf = 0, lastCap = '';
+  const clock = () => (performance.now() - anchor) / 1000;
+
+  function draw(t) {
+    shownT = t;
+    const p = SHOTS.frame(t, { reduced });
+    if (reduced) { p.weave = 0; }
+    POST.render(film, p);
+    const cap = SHOTS.captionAt(t);
+    if (cap !== lastCap) { lastCap = cap; live.textContent = cap; }
+  }
+
+  // frame-time watch: drop resolution if the device can't keep up
+  let ftAcc = 0, ftN = 0, lastNow = 0;
+  function watchPerf(now) {
+    if (lastNow) { ftAcc += now - lastNow; ftN++; }
+    lastNow = now;
+    if (ftN >= 90) {
+      const avg = ftAcc / ftN;
+      ftAcc = 0; ftN = 0;
+      if (avg > 28 && quality > 0.35) { quality *= 0.78; layout(); }
+    }
+  }
+
+  function loop(now) {
+    raf = 0;
+    if (!playing) return;
+    watchPerf(now);
+    if (audioOk && !audio.paused && audio.readyState >= 2) {
+      const drift = audio.currentTime - clock();
+      if (Math.abs(drift) > 0.09) anchor = performance.now() - audio.currentTime * 1000;
+    }
+    outLat = latency();
+    let t = clock() - outLat;
+    if (t < shownT && shownT - t < 0.25) t = shownT;          // hold rather than step back on a resync
+    if (t >= DUR) { finish(); return; }
+    draw(Math.max(0, t));
+    updateTransport(t);
+    raf = requestAnimationFrame(loop);
+  }
+
+  async function start(from) {
+    ended = false;
+    endEl.hidden = true;
+    from = clamp(from, 0, DUR - 0.5);
+    wakeCtx();
+    if (audioOk) {
+      try { audio.currentTime = from; } catch (e) { /* not seekable yet */ }
+      try { await audio.play(); } catch (e) { say('Tap play again to start the sound.', 4000); }
+    }
+    anchor = performance.now() - (audioOk && !audio.paused ? audio.currentTime : from) * 1000;
+    shownT = from;
+    playing = true;
+    document.body.classList.add('playing');
+    setPP();
+    poke();
+    if (!raf) raf = requestAnimationFrame(loop);
+  }
+  function pause() {
+    if (!playing) return;
+    playing = false;
+    shownT = clamp(clock() - outLat, 0, DUR);
+    audio.pause();
+    document.body.classList.remove('playing', 'idle');
+    setPP();
+    draw(shownT);
+  }
+  function toggle() { if (ended) { start(0); return; } if (playing) pause(); else start(shownT); }
+  function finish() {
+    playing = false; ended = true;
+    audio.pause();
+    document.body.classList.remove('playing', 'idle');
+    draw(DUR - 0.01);
+    setPP();
+    endEl.hidden = false;
+    replay.focus({ preventScroll: true });
+  }
+
+  // ---- transport
+  function setPP() {
+    const on = playing;
+    pp.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    ppIcon.setAttribute('d', on ? 'M5 3h3.5v14H5zM11.5 3H15v14h-3.5z' : 'M5 2.5v15l12-7.5z');
+  }
+  let seeking = false;
+  function updateTransport(t) {
+    if (!seeking) seek.value = t.toFixed(1);
+    const s = `${fmt(t)} / ${fmt(DUR)}`;
+    if (timeEl.textContent !== s) timeEl.textContent = s;
+  }
+  seek.addEventListener('input', () => {
+    seeking = true;
+    const t = +seek.value;
+    if (playing) { pause(); seeking = true; }
+    shownT = t;
+    draw(t);
+    updateTransport(t);
+  });
+  seek.addEventListener('change', () => { seeking = false; start(+seek.value); });
+  pp.addEventListener('click', (e) => { e.stopPropagation(); toggle(); });
+  rf.addEventListener('click', (e) => { e.stopPropagation(); setReduced(!reduced, true); });
+  reduceBox.addEventListener('change', () => setReduced(reduceBox.checked, true));
+  const fsTarget = document.documentElement;
+  if (!(fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen)) fsBtn.hidden = true;
+  fsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else (fsTarget.requestFullscreen || fsTarget.webkitRequestFullscreen).call(fsTarget).catch?.(() => {});
+  });
+  ctl.addEventListener('click', (e) => e.stopPropagation());
+
+  // controls fade out while it plays; any movement brings them back
+  let idleTimer = 0;
+  function poke() {
+    document.body.classList.remove('idle');
+    clearTimeout(idleTimer);
+    if (playing) idleTimer = setTimeout(() => { if (playing) document.body.classList.add('idle'); }, 2200);
+  }
+  ['pointermove', 'pointerdown', 'keydown'].forEach((ev) => window.addEventListener(ev, poke, { passive: true }));
+  stage.addEventListener('pointerup', (e) => {
+    if (!gate.classList.contains('gone') || ended) return;
+    if (e.pointerType !== 'mouse' && document.body.classList.contains('idle')) return;   // first tap shows the controls
+    toggle();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (!gate.classList.contains('gone') || e.target.closest('input[type=checkbox]')) return;
+    if (e.key === ' ' || e.key === 'k') { e.preventDefault(); toggle(); }
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      if (e.target === seek) return;
+      e.preventDefault();
+      const t = clamp(shownT + (e.key === 'ArrowRight' ? 5 : -5), 0, DUR - 0.5);
+      if (playing) start(t); else { shownT = t; draw(t); updateTransport(t); }
+    } else if (e.key === 'f') fsBtn.click();
+  });
+  document.addEventListener('visibilitychange', () => { if (document.hidden && playing) pause(); });
+
+  let msgTimer = 0;
+  function say(text, ms) { msg.textContent = text; msg.hidden = false; clearTimeout(msgTimer); msgTimer = setTimeout(() => { msg.hidden = true; }, ms || 4000); }
+
+  // ---- go
+  function hashStart() { const m = /t=([\d.]+)/.exec(location.hash); return m ? clamp(+m[1], 0, DUR - 0.5) : 0; }
+  playBtn.addEventListener('click', () => {
+    gate.classList.add('gone');
+    ctl.hidden = false;
+    start(hashStart());
+  });
+  replay.addEventListener('click', () => start(0));
+  window.addEventListener('resize', () => { layout(); if (!playing) draw(shownT); });
+
+  async function boot() {
+    if (capture) document.body.classList.add('capture');
+    POST.init(view, Q.has('2d'), capture);
+    layout();
+    SHOTS.init(film);
+    setReduced(reduced, false);
+    const fonts = ['600 40px "Cormorant Garamond"', 'italic 500 40px "Cormorant Garamond"', '600 40px Caveat', '40px VT323'];
+    try { await Promise.race([Promise.all(fonts.map((f) => document.fonts.load(f))), new Promise((r) => setTimeout(r, capture ? 8000 : 2500))]); } catch (e) { /* fall back to system fonts */ }
+    if (capture) {
+      SHOTS.warm(true);
+      window.__capture = {
+        frame(t) { const t0 = performance.now(); draw(t); return { ms: performance.now() - t0, id: SHOTS.shotAt(t).id }; },
+        png() { return view.toDataURL('image/png'); },
+        rgba() {
+          const w = view.width, h = view.height, px = new Uint8Array(w * h * 4);
+          if (POST.mode === 'gl') { const gl = view.getContext('webgl2'); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); }
+          else {
+            const d = view.getContext('2d').getImageData(0, 0, w, h).data;
+            for (let y = 0; y < h; y++) px.set(d.subarray((h - 1 - y) * w * 4, (h - y) * w * 4), y * w * 4);
+          }
+          let s = ''; for (let i = 0; i < px.length; i += 0x8000) s += String.fromCharCode.apply(null, px.subarray(i, i + 0x8000));
+          return btoa(s);
+        },
+      };
+      window.__captureReady = true;
+      return;
+    }
+    // the poster behind the gate
+    const posterT = 39.6;
+    draw(hashStart() || posterT);
+    shownT = hashStart();
+    updateTransport(shownT);
+    playBtn.disabled = false;
+    playLabel.textContent = 'Play trailer';
+    setTimeout(() => SHOTS.warm(), 50);
+  }
+  boot().catch((e) => { console.error(e); window.__captureError = String(e && e.stack || e); });
+})();
+</script>
+</html>
