@@ -578,12 +578,13 @@ def render_drums(score):
     return {k: a[k] + b[k] for k in ('kick', 'snare', 'tom', 'cym', 'room')}
 
 
-def drum_bus(d, cym_db=-5.0, room_db=0.0, comp=0.4):
+def drum_bus(d, cym_db=-6.0, room_db=0.0, comp=0.4):
     """The kit's bus from its stems (pre-bus sum = the kit): cymbals on their own fader (and a softer top), then
     parallel compression and the bus soft clip as in ns_synth.drum_track."""
     cy = S.shelf(np.asarray(d['cym'], float), 7500.0, -2.0, 'high') * S.undb(cym_db)
     sn = S.peq(np.asarray(d['snare'], float), 210.0, 2.0, 1.2)
-    bus = np.asarray(d['kick'], float) + sn + np.asarray(d['tom'], float) + cy + np.asarray(d['room'], float) * S.undb(room_db)
+    kk = S.peq(S.peq(np.asarray(d['kick'], float), 48.0, -2.5, 0.9), 95.0, 1.5, 1.2)
+    bus = kk + sn + np.asarray(d['tom'], float) + cy + np.asarray(d['room'], float) * S.undb(room_db)
     if comp:
         bus = S.parallel_comp(bus, comp, -32.0, 8.0, 0.0015, 0.09)
     return S.softclip(bus * 1.1, 1.2) / 1.1
@@ -595,7 +596,7 @@ def render_perc(score):
     P = score['perc']
     out = np.zeros((N, 2))
     for k, (t, c, v) in enumerate(lane_hits(P['heart'], {'X': 1.0, 'x': 0.62})):
-        S.place(out, heart_thump('lub' if c == 'X' else 'dub', v, seed=k % 5) * 0.9, t)
+        S.place(out, heart_thump('lub' if c == 'X' else 'dub', v, seed=k % 5) * 0.65, t)
     for k, (t, c, v) in enumerate(lane_hits(P['sticks'], {'X': 1.0, 'x': 0.8})):
         S.place(out, bat_clack(v, k), t, 0.8, 0.05)
     for k, (t, c, v) in enumerate(lane_hits(P['stomp'], {'X': 1.0, 'x': 0.8})):
@@ -762,57 +763,58 @@ def sfx_plan(score, boot, boot_info):
                 x = S.radio_tune(dur + 0.25, catches=[(0.32, seg, 0.5)], settle=0.2, seed=13)
                 add(h, beat, S.fades(x, 0.004, 0.03), -16, 0.25)
             elif typ == 'radioUp':
-                add(h, beat, knob_click(seed=3), -30, 0.3)
+                add(h, beat, knob_click(seed=3), -26, 0.3)
             elif typ == 'thunder':
                 dist = float(h.get('k', 0.35 if k else 0.5))
                 x = S.thunder(5.0 if k == 0 else 6.0, distance=dist, seed=21 + k)
-                add(h, beat, S.lp(x, 2500 if k == 0 else 4000, 2), -15 if k == 0 else -12)
+                add(h, beat, S.lp(x, 2500 if k == 0 else 4000, 2), -10 if k == 0 else -8)
             elif typ == 'titleHit':
                 add(h, beat, impact_boom(seed=32), -9, kind='titleBoom')
                 rc = S.reverse_crash(1.2, size=19)
                 add(h, beat, rc, -17, -0.1, anchor=len(rc) / SR, kind='titleRiser')
             elif typ == 'zombieBonk':
                 x = S.stereo(S.body_bonk(pitch=[1.0, 1.25, 0.85, 1.1][k % 4], seed=k))
-                add(h, beat, S.reverb(x, 'street', 0.2, 200.0, None, tail=False), -10, [-0.4, 0.4, -0.2, 0.3][k % 4])
+                add(h, beat, S.reverb(x, 'street', 0.15, 200.0, None, tail=False), -1, [-0.4, 0.4, -0.2, 0.3][k % 4])
             elif typ == 'skid':
-                add(h, beat, S.car_skid(max(1.0, span or 1.0) + 0.15, seed=60), -12, -0.2)
+                add(h, beat, S.car_skid(max(1.0, span or 1.0) + 0.15, seed=60), -6, -0.2)
             elif typ == 'carCrash':
-                add(h, beat, S.car_crash(seed=62), -3, 0.0)
+                add(h, beat, S.car_crash(seed=62), 0, 0.0)
+                add(h, beat, impact_boom(1.4, seed=62), -6, 0.0, kind='crashBoom')
             elif typ == 'lick' and h.get('part') == 'sfx':
-                add(h, beat, megaphone_squeal('B4', 0.78, seed=70), -13, -0.3, kind='vexSqueal')
+                add(h, beat, megaphone_squeal('B4', 0.78, seed=70), -11, -0.3, kind='vexSqueal')
             elif typ == 'pump':
-                add(h, beat, S.shotgun_pump(seed=79), -9, 0.3)
+                add(h, beat, S.shotgun_pump(seed=79), -5, 0.3)
             elif typ == 'shotgun':
-                add(h, beat, S.shotgun(seed=150 + k, space='street'), -5.5, [0.25, -0.2, 0.3, -0.15, 0.2][k % 5])
+                add(h, beat, S.shotgun(seed=150 + k, space='street'), 0.5, [0.25, -0.2, 0.3, -0.15, 0.2][k % 5])
                 if k in (0, 2):
-                    add(h, beat + 1.0, S.shell_tink(seed=151 + k), -17, 0.5, kind='shellTink')
+                    add(h, beat + 1.0, S.shell_tink(seed=151 + k), -7, 0.5, kind='shellTink')
             elif typ == 'reload':
-                add(h, beat, S.shotgun_reload(1, seed=163), -9, 0.3)
+                add(h, beat, S.shotgun_reload(1, seed=163), -3, 0.3)
             elif typ == 'doorSlam':
-                add(h, beat, S.door_slam(seed=192), -5, 0.0)
+                add(h, beat, S.door_slam(seed=192), 0, 0.0)
             elif typ == 'doorPound':
-                add(h, beat, S.stereo(S.door_pound(seed=200 + j % 4)), -13, 0.0)
+                add(h, beat, S.stereo(S.door_pound(seed=200 + j % 4)), -10, 0.0)
             elif typ == 'pills':
                 t0, t1 = tb(h['beat']), tb(h['toBeat'])
                 times = list(np.arange(t0, t1 - 1e-6, STEP))
                 acc = [1.0 if i % 2 == 0 else 0.55 for i in range(len(times))]
                 x = S.pill_shaker([tt_ - t0 + 0.02 for tt_ in times], t1 - t0 + 0.4, accents=acc, seed=198)
-                add(h, beat, x, -22, 0.35, anchor=0.0)
+                add(h, beat, x, -10, 0.35, anchor=0.0)
             elif typ == 'knock':
                 add(h, beat, S.door_knock(seed=218 + k, hard=0.75), -13, 0.0)
             elif typ == 'tinyKnock':
                 for o in (0.0, 0.5):
                     add(h, beat + o, S.door_knock(seed=223 + int(o * 2), hard=1.0), -10, 0.05)
             elif typ == 'doorBurst':
-                add(h, beat, S.door_burst(seed=224), -4, 0.0)
+                add(h, beat, S.door_burst(seed=224), 2, 0.0)
             elif typ == 'sparks':
-                add(h, beat, S.spark_zap(0.7, seed=246), -10, 0.35)
+                add(h, beat, S.spark_zap(0.7, seed=246), 0, 0.35)
                 x = S.amp_power_on(hum_dur=1.0, seed=246)
-                add(h, beat + 0.25, S.fades(x, 0.001, 0.25), -17, 0.4, kind='ampThunk')
+                add(h, beat + 0.25, S.fades(x, 0.001, 0.25), -9, 0.4, kind='ampThunk')
             elif typ == 'flashlightClick':
                 add(h, beat, S.flashlight_click(seed=290 + k), -24, [-0.3, 0.35][k % 2])
             elif typ == 'phonesUp':
-                add(h, beat, phone_blips(seed=292), -38, 0.0)
+                add(h, beat, phone_blips(seed=292), -32, 0.0)
             elif typ == 'flashback':
                 span = tb(h['toBeat'] - h['beat'])
                 song = yells[min(2, len(yells) - 1)]['song']
@@ -824,18 +826,18 @@ def sfx_plan(score, boot, boot_info):
                 x = S.fades(x, 0.004, 0.003)
                 ck = S.bp(np.random.default_rng(5).standard_normal(S.ns(0.006)), 500, 6000, 2) * 0.5
                 S.place(x, ck / (np.abs(ck).max() + 1e-9) * np.abs(x).max() * 0.8, len(x) - S.ns(0.006))
-                add(h, beat, S.peak_norm(x, 0.9), -16, 0.0)
+                add(h, beat, S.peak_norm(x, 0.9), -14, 0.0)
             elif typ == 'genPull':
                 outcome = 'backfire' if k == 2 else 'sputter'
-                add(h, beat, S.generator_pull(h.get('pitch', 'C3'), outcome, pull=0.55, seed=300 + k), -9, 0.35)
+                add(h, beat, S.generator_pull(h.get('pitch', 'C3'), outcome, pull=0.55, seed=300 + k), -2 if k < 2 else -6, 0.35)
             elif typ == 'reverseBeep':
-                add(h, beat, S.reverse_beep(h.get('pitch', 'B4'), 0.42, seed=309 + k, space='theatre'), -15, -0.3)
+                add(h, beat, S.reverse_beep(h.get('pitch', 'B4'), 0.42, seed=309 + k, space='theatre'), -12, -0.3)
             elif typ == 'roadieStinger':
                 pitches = h.get('pitches') or ['Bb1', 'E2']
-                add(h, beat, S.brass_stinger(pitches, 2.2, seed=312), -6, 0.0)
+                add(h, beat, S.brass_stinger(pitches, 2.2, seed=312), -4, 0.0)
                 add(h, beat, roadie_stomp(seed=312), -8, -0.1, kind='roadieStomp')
             elif typ == 'stomp':
-                add(h, beat, roadie_stomp(seed=313 + k), -8, [-0.15, 0.1][k % 2])
+                add(h, beat, roadie_stomp(seed=313 + k), -5, [-0.15, 0.1][k % 2])
             elif typ == 'genCatch':
                 c = S.generator_catch('E2', 2.0, seed=324)
                 idle = S.generator_idle(8.0, 'E2', seed=325)
@@ -843,32 +845,32 @@ def sfx_plan(score, boot, boot_info):
                 S.place(x, c, 0.0)
                 fade = np.clip(1 - S.tt(idle.shape[0]) / 7.5, 0, 1) ** 1.5
                 S.place(x, S.fades(idle, 0.05, 0.5) * fade[:, None] * 0.85, 1.95)
-                add(h, beat, x, -10, 0.3)
+                add(h, beat, x, -4, 0.3)
             elif typ == 'ampsOn':
-                add(h, beat, S.amp_power_on(hum_dur=0.9, seed=326), -14, -0.3)
+                add(h, beat, S.amp_power_on(hum_dur=0.9, seed=326), -8, -0.3)
             elif typ == 'lightsOn':
-                add(h, beat, S.lights_on(seed=328), -14, 0.0)
+                add(h, beat, S.lights_on(seed=328), -10, 0.0)
             elif typ == 'pyro':
-                add(h, beat, S.pyro_whoosh(1.3, seed=328 + k), -12, [-0.5, 0.5][k % 2])
+                add(h, beat, S.pyro_whoosh(1.3, seed=328 + k), -6, [-0.5, 0.5][k % 2])
             elif typ == 'curtainFire':
                 d = tb(h['toBeat'] - h['beat']) + 1.0
                 x = S.fire(d, 0.8, seed=344) * np.linspace(0.3, 1.0, S.ns(d))[:, None]
-                add(h, beat, x, -24, -0.6)
+                add(h, beat, x, -21, -0.6)
             elif typ == 'frisbee':
                 d = tb(356 - beat) if beat < 356 else 0.8
-                add(h, beat, S.frisbee_whoosh(max(0.5, d), seed=354), -13, 0.0)
+                add(h, beat, S.frisbee_whoosh(max(0.5, d), seed=354), -5, 0.0)
             elif typ == 'ding':
-                add(h, beat, S.cymbal_ding(h.get('pitch', 'B5'), 3.0, seed=356), -8, 0.2)
+                add(h, beat, S.cymbal_ding(h.get('pitch', 'B5'), 3.0, seed=356), -4, 0.2)
             elif typ == 'roadieThud':
-                add(h, beat, S.big_thud(seed=357), -6, 0.1)
+                add(h, beat, S.big_thud(seed=357), -4, 0.1)
             elif typ == 'fireworks':
                 wh = k in (0, 2)
                 x = S.firework_boom(crackle=True, whistle=wh, seed=375 + k)
-                add(h, beat, x, -11, [-0.5, 0.45, -0.3, 0.55, -0.6][k % 5], anchor=0.9 if wh else 0.0)
+                add(h, beat, x, -1, [-0.5, 0.45, -0.3, 0.55, -0.6][k % 5], anchor=0.9 if wh else 0.0)
             elif typ == 'finalHit':
                 add(h, beat, impact_boom(2.2, seed=420), -10, kind='finalBoom')
             elif typ == 'burn':
-                add(h, beat, S.film_burn(max(0.8, tb(h['toBeat'] - h['beat'])), seed=422), -16, 0.0)
+                add(h, beat, S.film_burn(max(0.8, tb(h['toBeat'] - h['beat'])), seed=422), -8, 0.0)
             elif typ == 'hudChirp':
                 add(h, beat, S.hud_chirp(seed=438), -22, 0.0)
                 for b in range(3):
@@ -980,13 +982,13 @@ def render_beds(score):
         bed(S.lp(x, 2400, 2), t0, t0 + n0 * STEP + 0.5, -15, 0.01, 0.6)
         xm = S.helicopter(t1 - tc + 0.8, rate=10.0, muffled=True, seed=422)
         xm = S.hp(xm, 55.0, 2)
-        bed(xm, tc, min(DURATION, t1 + 0.8), -23, 0.4, 0.6)
+        bed(xm, tc, min(DURATION, t1 + 0.8), -27, 0.4, 0.6)
     for h in H.get('thermalHum', []):
         a, b = tb(h['beat']), min(DURATION, tb(h['toBeat']) + 0.8)
         bed(S.thermal_hum(b - a, seed=424), a, b, -4, 0.25, 0.4)
     for h in H.get('applause', []):
         a, b = tb(h['beat']), tb(h['toBeat'])
-        bed(S.applause(b - a + 0.5, size=320, distant=True, whistles=3, seed=426), a, b + 0.5, -15, 0.6, 0.8)
+        bed(S.applause(b - a + 0.5, size=320, distant=True, whistles=3, seed=426), a, b + 0.5, -11, 0.6, 0.8)
     # the last 0.8 s after the picture: room tone only (the roof wind under the hum)
     a, b = ts(106), DURATION
     bed(S.room_tone(b - a, 'roof', seed=106), a, b, -12, 0.5, 0.3)
@@ -1056,12 +1058,19 @@ def choke_gain(score, onsets, n=N):
     return g
 
 
-def section_curve(score, values, n=N, ramp=0.03, default=0.0):
-    """Piecewise-constant per-section value (dB) with short ramps at the boundaries -> linear gain."""
+TRIM_EDGES = {'saferoom': 0.45}       # a section's fader ride starts this many s late (the door slam is post1's)
+
+
+def section_curve(score, values, n=N, ramp=0.03, default=0.0, edges=None):
+    """Piecewise-constant per-section value (dB) with short ramps at the boundaries -> linear gain. edges: {section:
+    seconds} to start a section's value later (the previous section's value holds until then)."""
     v = np.full(n, float(default))
-    for sid, a, b in sections(score):
-        if sid in values:
-            v[int(a * SR):int(b * SR)] = values[sid]
+    secs = sections(score)
+    starts = [a + ((edges or {}).get(sid, 0.0)) for sid, a, b in secs]
+    for k, (sid, a, b) in enumerate(secs):
+        a2 = starts[k]
+        b2 = starts[k + 1] if k + 1 < len(secs) and abs(secs[k + 1][1] - b) < 1e-6 else b
+        v[int(a2 * SR):int(b2 * SR)] = values.get(sid, default)
     if ramp:
         k = S.ns(ramp)
         v = np.convolve(v, np.ones(k) / k, mode='same')
@@ -1141,12 +1150,13 @@ def build_mix(score, st, vox, sfx, beds, vreport):
     # ---- bass: kick-keyed duck, mud out, growl kept
     kick = np.asarray(st['kick'], float)
     bs = np.asarray(st['bass'], float)
-    bs = S.eq(S.hp(bs, 33.0, 2), ('peak', 250.0, -2.5, 1.0), ('peak', 900.0, 1.5, 1.0), ('lp', 7000.0))
+    bs = S.eq(S.hp(bs, 33.0, 2), ('ls', 70.0, -2.0), ('peak', 125.0, 2.0, 1.0), ('peak', 250.0, -2.0, 1.0),
+              ('peak', 900.0, 1.5, 1.0), ('lp', 7000.0))
     bs = S.duck(bs, kick, depth_db=3.5, attack=0.002, release=0.09, thr_db=-30.0)
     G['bass'] = S.stereo(bs) * S.undb(-1.0)
     # ---- drums: a little more punch and air
     dr = np.asarray(st['drums'], float)
-    dr = S.eq(dr, ('peak', 62.0, 1.5, 1.0), ('peak', 420.0, -1.5, 1.0), ('peak', 4500.0, 1.0, 0.8), ('hs', 10000.0, 1.0))
+    dr = S.eq(dr, ('peak', 420.0, -1.5, 1.0), ('peak', 4500.0, 1.0, 0.8))
     G['drums'] = dr * S.undb(1.5)
     # ---- perc (heartbeat, clicks, stomps, claps, cases)
     G['perc'] = np.asarray(st['perc'], float) * S.undb(-3.0)
@@ -1218,6 +1228,7 @@ def build_mix(score, st, vox, sfx, beds, vreport):
     vox_bus = sum(V.values())
     G['vox'] = vox_bus
     G['vox_lead'] = V['lead']
+    G['V'] = V
     # ---- FX and beds
     G['sfx'] = np.asarray(sfx, float)
     G['beds'] = np.asarray(beds, float)
@@ -1237,7 +1248,7 @@ def master_chain(score, mix, n_iter=4):
         parts = [z[int(a * SR):int(b * SR)] for sid, a, b in secs if sid in BAND_SECTIONS]
         return S.lufs(np.concatenate(parts))
     for it in range(n_iter):
-        cur = mix * section_curve(score, trims, ramp=0.05)[:, None] * S.undb(g_in)
+        cur = mix * section_curve(score, trims, ramp=0.05, edges=TRIM_EDGES)[:, None] * S.undb(g_in)
         y = S.compressor(cur, -12.0, 1.8, attack=0.03, release=0.25, knee=10.0)
         y = knee_clip(y, 0.72)
         y = S.limiter(y, -1.35, look=0.0015, release=0.06)
@@ -1251,7 +1262,7 @@ def master_chain(score, mix, n_iter=4):
             Ls = S.lufs(y[int(a * SR):int(b * SR)])
             if np.isfinite(Ls):
                 trims[sid] = float(np.clip(trims[sid] + 0.8 * (tgt - Ls - (-11.0 - L)), -6.0, 6.0))
-    cur = mix * section_curve(score, trims, ramp=0.05)[:, None] * S.undb(g_in)
+    cur = mix * section_curve(score, trims, ramp=0.05, edges=TRIM_EDGES)[:, None] * S.undb(g_in)
     y = S.compressor(cur, -12.0, 1.8, attack=0.03, release=0.25, knee=10.0)
     y = knee_clip(y, 0.72)
     y = S.limiter(y, -1.35, look=0.0015, release=0.06)
@@ -1554,6 +1565,14 @@ def analyse(score, master, G, st, vox, sfx_log, vreport, out_dir, mp3_info):
                                note='vowel onset (P-centre)'))
     errs = [abs(x['err_ms']) for x in hl if x['err_ms'] is not None and not x['source'].startswith('voice')]
     verrs = [abs(x['err_ms']) for x in hl if x['err_ms'] is not None and x['source'].startswith('voice')]
+    # FX prominence: each FX against the rest of the mix over its first 0.4 s (does the gag land?)
+    rest = S.hp(S.mono(G['band'] + G['vox'] + G['beds'] + G['musicbox']), 120.0, 2)
+    fxm = S.hp(S.mono(G['sfx']), 120.0, 2)
+    for x in hl:
+        if x['source'] == 'sfx':
+            i0 = int((tb(x['beat']) - 0.01) * SR)
+            i1 = i0 + S.ns(0.4)
+            x['fx_vs_mix_db'] = round(float(10 * np.log10((np.mean(fxm[i0:i1] ** 2) + 1e-20) / (np.mean(rest[i0:i1] ** 2) + 1e-20))), 1)
     rep['hits'] = dict(count=len(hl), max_abs_err_ms=round(max(errs), 2) if errs else None,
                        mean_abs_err_ms=round(float(np.mean(errs)), 2) if errs else None,
                        over_10ms=[x for x in hl if x['err_ms'] is not None and abs(x['err_ms']) > 10 and not x['source'].startswith('voice')],
@@ -1589,6 +1608,35 @@ def analyse(score, master, G, st, vox, sfx_log, vreport, out_dir, mp3_info):
                          pitch_err_cents_median=round(float(np.median(pitch)), 1) if pitch else None,
                          vowel_after_step_ms_median=round(float(np.median(vow)) * 1000, 1) if vow else None,
                          voices_warnings=vreport.get('warnings', []))
+    # presence proxies: a stem against everything else in its window and band (dB)
+    def presence(x, a, b, lo, hi):
+        i0, i1 = int(a * SR), int(b * SR)
+        tot = S.mono(G['band'] + G['sfx'] + G['beds'] + G['musicbox'] + G['vox'])[i0:i1]
+        xs = S.mono(x)[i0:i1]
+        e1 = np.mean(S.bp(xs, lo, hi, 2) ** 2)
+        e2 = np.mean(S.bp(tot - xs, lo, hi, 2) ** 2)
+        return round(float(10 * np.log10((e1 + 1e-20) / (e2 + 1e-20))), 1)
+    V = G['V']
+    rep['presence_db'] = {
+        'lou_coldopen_500_3k': presence(V['lou'], 1.6, 10.2, 500, 3000),
+        'lou_rescue_500_3k': presence(V['lou'], 119.2, 120.4, 500, 3000),
+        'lou_ride_500_3k': presence(V['lou'], 144.4, 145.8, 500, 3000),
+        'lou_close_500_3k': presence(V['lou'], 172.8, 175.2, 500, 3000),
+        'tiny_count_300_3k': presence(V['tiny'], 11.2, 12.8, 300, 3000),
+        'gang_names_300_3k': presence(V['gang'], 25.6, 38.4, 300, 3000),
+        'chant_z1_300_3k': presence(V['zombies'], ts(76), ts(78), 300, 3000),
+        'responses_300_3k': presence(V['zombies'], ts(101), ts(104), 300, 3000),
+        'roadie_check_150_2k': presence(V['roadie'], 125.2, 126.4, 150, 2000),
+        'huh_300_2k': presence(V['huh'], tb(263), tb(264), 300, 2000),
+        'shriek_1k_5k': presence(V['fx_vocal'], tb(124), tb(126), 1000, 5000),
+        'sobs_verse1b_500_3k': presence(V['fx_vocal'], tb(112), tb(124), 500, 3000),
+        'fan_coda_500_3k': presence(V['fan'], 171.2, 172.2, 500, 3000),
+        'solo_lead_1k_5k': presence(G['lead'], ts(82), ts(90), 1000, 5000),
+        'musicbox_saferoom_1k_6k': presence(G['musicbox'], ts(48), ts(54), 1000, 6000),
+        'musicbox_coda_1k_6k': presence(G['musicbox'], ts(110), ts(111, 15), 1000, 6000),
+        'organ_coldopen_100_1k': presence(G['organ'], 1.0, 9.8, 100, 1000),
+        'chopper_chorus3_60_400': presence(G['beds'], ts(92), ts(100), 60, 400),
+        'applause_coda_500_4k': presence(G['beds'], tb(427), tb(440), 500, 4000)}
     rep['mp3'] = mp3_info
     rep['spectral'] = {sid: S.octave_db(master[int(a * SR):int(min(b, a + 10) * SR)]) for sid, a, b in secs if sid in BAND_SECTIONS}
     rep['stereo_corr_band'] = round(float(np.corrcoef(G['gtr'][:, 0][::7], G['gtr'][:, 1][::7])[0, 1]), 3)
@@ -1698,7 +1746,9 @@ def prepare(args):
     st['clean'] = cache.get('clean', [render_clean, track_events], md, lambda: render_clean(score))
     st['musicbox'] = cache.get('musicbox', [render_musicbox, track_events], md, lambda: render_musicbox(score))
     # ---- the 1987 bootleg, FX, beds
-    bkey = dict(md, bootleg_voices=_md5(np.ascontiguousarray(bvox).tobytes())[:12])
+    i0, i1 = int(ts(35) * SR), int(ts(45) * SR)
+    bkey = dict(md, bootleg_voices=_md5(np.ascontiguousarray(bvox).tobytes())[:12],
+                stems=_md5(b''.join(np.ascontiguousarray(st[k][i0:i1], F32).tobytes() for k in ('gtrL', 'gtrR', 'bass', 'drums')))[:12])
     boot = cache.get('bootleg', [render_bootleg], bkey, lambda: render_bootleg(score, st, bvox))
     sfx_box = {}
 
